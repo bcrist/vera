@@ -1,0 +1,32 @@
+(dir pkg/sx
+    (notest)
+    (pkg sx)
+)
+(dir pkg/tempallocator
+    (notest)
+    (pkg temp_allocator)
+)
+(dir pkg
+    (pkg bits)
+    (pkg srec)
+    (pkg rom_compress)
+    (pkg rom_decompress)
+    (pkg deep_hash_map)
+)
+(dir arch
+    (pkg control_signals)
+    (pkg instruction_encoding)
+    (pkg instruction_encoding_data)
+    (pkg microcode_layout)
+    (pkg microcode_rom_serialization)
+    (pkg misc)
+    (exe compile_arch (runStep uc))
+)
+(dir arch/microcode_roms
+    (pkg microcode_roms (path roms))
+)
+(dir microsim
+    (pkg simulator)
+    (pkg register_file)
+    (exe microsim (runStep usim))
+)

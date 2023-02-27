@@ -1,0 +1,3 @@
+root_dir = fs.parent_path(limprc_path)
+file_dir = fs.parent_path(file_path)
+register_include_dir(file_dir)

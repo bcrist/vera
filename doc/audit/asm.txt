@@ -1,0 +1,26 @@
+
+label:
+    THINK (
+        R0|param0
+        B$param1
+        B$
+        R$param2
+        X$param3
+    )
+    
+
+    LD $param1 -> sr0|param1
+    INC |param1
+    ST |param1 -> $param1
+
+    .forget |param1 -- usually not necessary
+
+    XOR r0, r0 -- automatically forgets |param1
+
+
+
+    UNTHINK
+    RET (
+        |result0
+        B$result1
+    )

@@ -1,0 +1,10 @@
+[submodule "pkg/tempallocator"]
+	path = pkg/tempallocator
+	url = https://github.com/bcrist/Zig-TempAllocator
+[submodule "pkg/sx"]
+	path = pkg/sx
+	url = https://github.com/bcrist/Zig-SX
+[submodule "kicad"]
+	path = kicad
+	url = https://github.com/bcrist/cpu-kicad
+	shallow = true
