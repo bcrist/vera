@@ -17,8 +17,8 @@ pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
 
-    const microcode = try arena.allocator().alloc(Control_Signals, 0x10000);
-    std.mem.copy(Control_Signals, microcode, &uc_roms.readCompressedRoms(roms));
+    const microcode = try arena.allocator().alloc(Control_Signals, misc.microcode_length);
+    uc_roms.readCompressedRoms(roms, microcode);
 
     var temp = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     const edb = try ie.EncoderDatabase.init(arena.allocator(), instruction_encoding_data, temp.allocator());

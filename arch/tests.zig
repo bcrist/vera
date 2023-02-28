@@ -15,7 +15,7 @@ const expectEqual = std.testing.expectEqual;
 var arena: std.heap.ArenaAllocator = undefined;
 var ddb: ie.DecoderDatabase = undefined;
 var edb: ie.EncoderDatabase = undefined;
-var microcode: [0x10000]ctrl.Control_Signals = undefined;
+var microcode: []ctrl.Control_Signals = undefined;
 var globals_loaded = false;
 
 fn initSimulator(program: []const ie.Instruction) !sim.Simulator {
@@ -23,7 +23,8 @@ fn initSimulator(program: []const ie.Instruction) !sim.Simulator {
         arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
         ddb = try ie.DecoderDatabase.init(arena.allocator(), ie_data, std.testing.allocator);
         edb = try ie.EncoderDatabase.init(arena.allocator(), ie_data, std.testing.allocator);
-        microcode = uc_roms.readCompressedRoms(rom_data.compressed_data);
+        microcode = try arena.allocator().alloc(ctrl.Control_Signals, misc.microcode_length);
+        uc_roms.readCompressedRoms(rom_data.compressed_data, microcode);
         globals_loaded = true;
     }
 
@@ -46,7 +47,7 @@ fn initSimulator(program: []const ie.Instruction) !sim.Simulator {
         .pipe_0_reset = @sizeOf(misc.Zeropage_Vector_Table),
     };
 
-    var s = try sim.Simulator.init(std.testing.allocator, &microcode);
+    var s = try sim.Simulator.init(std.testing.allocator, microcode);
 
     var flash = s.memory.flashIterator(0x7E_000 * 8);
     _ = flash.writeAll(std.mem.asBytes(&vector_table));

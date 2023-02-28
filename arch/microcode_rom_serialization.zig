@@ -4,6 +4,7 @@ const rom_decompress = @import("rom_decompress");
 const srec = @import("srec");
 const ctrl = @import("control_signals");
 const uc_layout = @import("microcode_layout");
+const misc = @import("misc");
 
 const Control_Signals = ctrl.Control_Signals;
 pub const Roms = [6][]const u8;
@@ -169,7 +170,7 @@ const Rom5Data = packed struct {
     }
 };
 
-fn convertMicrocodeToRomEntries(comptime RomData: type, microcode: *const [0x10000]?*Control_Signals, entries: *std.ArrayList(RomEntry)) !void {
+fn convertMicrocodeToRomEntries(comptime RomData: type, microcode: *const [misc.microcode_length]?*Control_Signals, entries: *std.ArrayList(RomEntry)) !void {
     entries.clearRetainingCapacity();
     for (microcode, 0..) |optional_cs, ua| {
         if (optional_cs) |cs| {
@@ -180,9 +181,9 @@ fn convertMicrocodeToRomEntries(comptime RomData: type, microcode: *const [0x100
     }
 }
 
-pub fn writeCompressedRoms(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, microcode: *const [0x10000]?*Control_Signals) !Roms {
+pub fn writeCompressedRoms(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, microcode: *const [misc.microcode_length]?*Control_Signals) !Roms {
     var result: Roms = undefined;
-    var entries = try std.ArrayList(RomEntry).initCapacity(temp_allocator, 0x10000);
+    var entries = try std.ArrayList(RomEntry).initCapacity(temp_allocator, misc.microcode_length);
     defer entries.deinit();
     inline for ([_]type{ Rom0Data, Rom1Data, Rom2Data, Rom3Data, Rom4Data, Rom5Data }, 0..) |RomData, n| {
         try convertMicrocodeToRomEntries(RomData, microcode, &entries);
@@ -191,9 +192,9 @@ pub fn writeCompressedRoms(result_allocator: std.mem.Allocator, temp_allocator: 
     return result;
 }
 
-fn readCompressedRom(comptime RomData: type, compressed_data: []const u8, cs: *[0x10000]Control_Signals) void {
+fn readCompressedRom(comptime RomData: type, compressed_data: []const u8, cs: []Control_Signals) void {
     const Ctx = struct {
-        cs: *[0x10000]Control_Signals,
+        cs: []Control_Signals,
         d: RomData = undefined,
 
         const Self = @This();
@@ -210,15 +211,14 @@ fn readCompressedRom(comptime RomData: type, compressed_data: []const u8, cs: *[
     rom_decompress.decompress(compressed_data, &ctx);
 }
 
-pub fn readCompressedRoms(roms: Roms) [0x10000]Control_Signals {
-    var cs = [_]Control_Signals{ Control_Signals.init() } ** 0x10000;
+pub fn readCompressedRoms(roms: Roms, microcode: []Control_Signals) void {
+    std.debug.assert(microcode.len >= misc.microcode_length);
     inline for ([_]type{ Rom0Data, Rom1Data, Rom2Data, Rom3Data, Rom4Data, Rom5Data }, 0..) |RomData, n| {
-        readCompressedRom(RomData, roms[n], &cs);
+        readCompressedRom(RomData, roms[n], microcode);
     }
-    return cs;
 }
 
-fn convertMicrocodeToSRec(comptime RomData: type, microcode: *const [0x10000]?*Control_Signals, result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator) ![]u8 {
+fn convertMicrocodeToSRec(comptime RomData: type, microcode: *const [misc.microcode_length]?*Control_Signals, result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator) ![]u8 {
     var rom_name: []const u8 = @typeName(RomData);
     if (std.mem.lastIndexOf(u8, rom_name, ".")) |index| {
         rom_name = rom_name[index + 1 ..];
@@ -258,7 +258,7 @@ fn convertMicrocodeToSRec(comptime RomData: type, microcode: *const [0x10000]?*C
     return result_allocator.dupe(u8, encoder.data.items);
 }
 
-pub fn writeSRecRoms(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, microcode: *const [0x10000]?*Control_Signals) !Roms {
+pub fn writeSRecRoms(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, microcode: *const [misc.microcode_length]?*Control_Signals) !Roms {
     var result: Roms = undefined;
     inline for ([_]type{ Rom0Data, Rom1Data, Rom2Data, Rom3Data, Rom4Data, Rom5Data }, 0..) |RomData, n| {
         result[n] = try convertMicrocodeToSRec(RomData, microcode, result_allocator, temp_allocator);

@@ -124,3 +124,5 @@ pub const Registerset_State = extern struct {
     UXP: u32,
     temp_2: u32,
 };
+
+pub const microcode_length = 0x10000;
