@@ -3,7 +3,7 @@ const bits = @import("bits");
 
 const Range = struct {
     offset: u16,
-    count: u8,
+    count: u16,
     bytes: u8,
 
     fn read(data: []const u8) Range {
@@ -17,7 +17,7 @@ const Range = struct {
         } else if ((initial & 2) == 0) {
             var encoded_count = @truncate(u3, initial >> 2);
             r.bytes = 2;
-            r.count = if (encoded_count == 0) 0 else @as(u7, 1) << (encoded_count - 1);
+            r.count = if (encoded_count == 0) 256 else @as(u7, 1) << (encoded_count - 1);
             r.offset = bits.concat(.{
                 @intCast(u3, initial >> 5),
                 data[1],
@@ -44,7 +44,7 @@ const Range = struct {
 
 const RangeIterator = struct {
     data: []const u8 = &[_]u8{},
-    ranges_remaining: u8 = 0,
+    ranges_remaining: u16 = 0,
 
     fn next(self: *RangeIterator) ?Range {
         if (self.ranges_remaining == 0) return null;

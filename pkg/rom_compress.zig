@@ -9,15 +9,23 @@ const Range = struct {
         var offset = self.offset;
         var count = self.count;
 
+        while (offset > 0xFFFF) {
+            _ = try write(Range{
+                .offset = 0xFFFF,
+                .count = 0,
+            }, dest);
+            offset -= 0xFFFF;
+        }
+
         if (offset < 128 and count == 1) {
             try dest.append(bits.concat(.{
                 @as(u1, 0),
                 @intCast(u7, offset),
             }));
 
-        } else if (offset < 2048 and count <= 64 and @popCount(count) <= 1) {
+        } else if (offset < 2048 and (count == 256 or count <= 64 and @popCount(count) == 1)) {
             const encoded_count: u3 = switch (count) {
-                0 => 0,
+                256 => 0,
                 1 => 1,
                 2 => 2,
                 4 => 3,
@@ -35,14 +43,6 @@ const Range = struct {
             try dest.append(@intCast(u8, offset >> 3));
 
         } else {
-            if (offset > 0xFFFF) {
-                _ = try write(Range {
-                    .offset = offset - 0xFFFF,
-                    .count = 0,
-                }, dest);
-                offset = 0xFFFF;
-            }
-
             if (count > std.math.maxInt(u6)) {
                 count = std.math.maxInt(u6);
             }
