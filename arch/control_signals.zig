@@ -46,9 +46,9 @@ pub const Control_Signals = struct {
     JL_SRC: JL_Source,
     JH_SRC: JH_Source,
     K_SRC: K_Source,
-    SR1_RI: SR1_Index,
-    SR2_RI: SR2_Index,
-    BASE: Any_SR_Index,
+    SR1_RI: SR1Index,
+    SR2_RI: SR2Index,
+    BASE: AnySRIndex,
     OFFSET: Address_Offset,
     ALU_MODE: ALU_Mode,
     BUS_MODE: Bus_Mode,
@@ -60,8 +60,8 @@ pub const Control_Signals = struct {
     LH_SRC: LH_Source,
     JKR_WSEL: Reg_File_Indexing_Source,
     JKR_WMODE: Reg_File_Write_Mode,
-    SR1_WI: SR1_Index,
-    SR2_WI: SR2_Index,
+    SR1_WI: SR1Index,
+    SR2_WI: SR2Index,
     SR1_WSRC: SR1_Write_Data_Source,
     SR2_WSRC: SR2_Write_Data_Source,
     STAT_OP: STAT_Op,
@@ -117,9 +117,9 @@ pub const Control_Signals = struct {
         self.JL_SRC = rnd.enumValue(JL_Source);
         self.JH_SRC = rnd.enumValue(JH_Source);
         self.K_SRC = rnd.enumValue(K_Source);
-        self.SR1_RI = rnd.enumValue(SR1_Index);
-        self.SR2_RI = rnd.enumValue(SR2_Index);
-        self.BASE = rnd.enumValue(Any_SR_Index);
+        self.SR1_RI = rnd.enumValue(SR1Index);
+        self.SR2_RI = rnd.enumValue(SR2Index);
+        self.BASE = rnd.enumValue(AnySRIndex);
         self.OFFSET = rnd.enumValue(Address_Offset);
         self.ALU_MODE = .{ .unknown = rnd.int(u4) };
         self.BUS_MODE = rnd.enumValue(Bus_Mode);
@@ -138,8 +138,8 @@ pub const Control_Signals = struct {
         self.LH_SRC = rnd.enumValue(LH_Source);
         self.JKR_WSEL = rnd.enumValue(Reg_File_Indexing_Source);
         self.JKR_WMODE = rnd.enumValue(Reg_File_Write_Mode);
-        self.SR1_WI = rnd.enumValue(SR1_Index);
-        self.SR2_WI = rnd.enumValue(SR2_Index);
+        self.SR1_WI = rnd.enumValue(SR1Index);
+        self.SR2_WI = rnd.enumValue(SR2Index);
         self.SR1_WSRC = rnd.enumValue(SR1_Write_Data_Source);
         self.SR2_WSRC = rnd.enumValue(SR2_Write_Data_Source);
         self.STAT_OP = rnd.enumValue(STAT_Op);
@@ -209,12 +209,12 @@ pub const Control_Signals = struct {
         try writer.print("\n", .{});
     }
 
-    pub fn address_offset(self: *Control_Signals) misc.Signed_Offset_For_Literal {
+    pub fn address_offset(self: *Control_Signals) misc.SignedOffsetForLiteral {
         return switch (self.OFFSET) {
             .zero => 0,
             .two => 2,
             .LITERAL => self.LITERAL,
-            .LITERAL_minus_64 => @as(misc.Signed_Offset_For_Literal, self.LITERAL) - 64,
+            .LITERAL_minus_64 => @as(misc.SignedOffsetForLiteral, self.LITERAL) - 64,
         };
     }
 };
@@ -267,63 +267,63 @@ pub const K_Source = enum(u3) {
     OB_OA_zx = 7,
 };
 
-pub const SR1_Index = enum(u3) {
+pub const SR1Index = enum(u3) {
     zero = 0,           // 0x0000_0000 (currently not used for anything)
-    RP = 1,             // return pointer
-    SP = 2,             // stack pointer
-    BP = 3,             // stack base pointer
-    fault_UA_DL = 4,            // UA (high 16b) and DL (low 16b) copied when entering a fault handler.
-    fault_RSN_STAT = 5,         // STAT (bits 15:0) copied when entering a fault handler.  previous RSN (bits 21:16) stored when using STRS/LDRS.
-    int_RSN_fault_OB_OA = 6,    // OB/OA (bits 7:0) copied when entering a fault handler.  previous RSN (bits 21:16) stored when entering an interrupt handler.
+    rp = 1,             // return pointer
+    sp = 2,             // stack pointer
+    bp = 3,             // stack base pointer
+    fault_ua_dl = 4,            // UA (high 16b) and DL (low 16b) copied when entering a fault handler.
+    fault_rsn_stat = 5,         // STAT (bits 15:0) copied when entering a fault handler.  previous RSN (bits 21:16) stored when using STRS/LDRS.
+    int_rsn_fault_ob_oa = 6,    // OB/OA (bits 7:0) copied when entering a fault handler.  previous RSN (bits 21:16) stored when entering an interrupt handler.
     temp_1 = 7,
 };
 
-pub const SR2_Index = enum(u3) {
+pub const SR2Index = enum(u3) {
     zero = 0,           // 0x0000_0000 (must never be overwritten)
-    IP = 1,             // instruction pointer
-    ASN = 2,            // address space number
-    next_IP = 3,        // when next instruction is loaded before the last cycle of the current instruction, the next IP is kept here.
-    KXP = 4,            // kernel context pointer
-    UXP = 5,            // user context pointer
-    RS_reserved = 6,    // used only by STRS/LDRS and not stored in Registerset_State.  If a fault occurs during one of these instructions, the faulting registerset cannot be STRS/LDRS'd and then resumed.
+    ip = 1,             // instruction pointer
+    asn = 2,            // address space number
+    next_ip = 3,        // when next instruction is loaded before the last cycle of the current instruction, the next IP is kept here.
+    kxp = 4,            // kernel context pointer
+    uxp = 5,            // user context pointer
+    rs_reserved = 6,    // used only by STRS/LDRS and not stored in Registerset_State.  If a fault occurs during one of these instructions, the faulting registerset cannot be STRS/LDRS'd and then resumed.
     temp_2 = 7,
 };
 
-pub const Any_SR_Index = enum(u4) {
-    zero = @enumToInt(SR2_Index.zero),
-    IP = @enumToInt(SR2_Index.IP),
-    next_IP = @enumToInt(SR2_Index.next_IP),
-    ASN = @enumToInt(SR2_Index.ASN),
-    KXP = @enumToInt(SR2_Index.KXP),
-    UXP = @enumToInt(SR2_Index.UXP),
-    RS_reserved = @enumToInt(SR2_Index.RS_reserved),
-    temp_2 = @enumToInt(SR2_Index.temp_2),
+pub const AnySRIndex = enum(u4) {
+    zero = @enumToInt(SR2Index.zero),
+    ip = @enumToInt(SR2Index.ip),
+    next_ip = @enumToInt(SR2Index.next_ip),
+    asn = @enumToInt(SR2Index.asn),
+    kxp = @enumToInt(SR2Index.kxp),
+    uxp = @enumToInt(SR2Index.uxp),
+    rs_reserved = @enumToInt(SR2Index.rs_reserved),
+    temp_2 = @enumToInt(SR2Index.temp_2),
 
-    SR1_zero = @as(u4, @enumToInt(SR1_Index.zero)) + 8,
-    RP = @as(u4, @enumToInt(SR1_Index.RP)) + 8,
-    SP = @as(u4, @enumToInt(SR1_Index.SP)) + 8,
-    BP = @as(u4, @enumToInt(SR1_Index.BP)) + 8,
-    fault_UA_DL = @as(u4, @enumToInt(SR1_Index.fault_UA_DL)) + 8,
-    fault_RSN_STAT = @as(u4, @enumToInt(SR1_Index.fault_RSN_STAT)) + 8,
-    int_RSN_fault_OB_OA = @as(u4, @enumToInt(SR1_Index.int_RSN_fault_OB_OA)) + 8,
-    temp_1 = @as(u4, @enumToInt(SR1_Index.temp_1)) + 8,
+    sr1_zero = @as(u4, @enumToInt(SR1Index.zero)) + 8,
+    rp = @as(u4, @enumToInt(SR1Index.rp)) + 8,
+    sp = @as(u4, @enumToInt(SR1Index.sp)) + 8,
+    bp = @as(u4, @enumToInt(SR1Index.bp)) + 8,
+    fault_ua_dl = @as(u4, @enumToInt(SR1Index.fault_ua_dl)) + 8,
+    fault_rsn_stat = @as(u4, @enumToInt(SR1Index.fault_rsn_stat)) + 8,
+    int_rsn_fault_ob_oa = @as(u4, @enumToInt(SR1Index.int_rsn_fault_ob_oa)) + 8,
+    temp_1 = @as(u4, @enumToInt(SR1Index.temp_1)) + 8,
 };
 
-pub fn addressBaseToSR1(base: Any_SR_Index) ?SR1_Index {
+pub fn addressBaseToSR1(base: AnySRIndex) ?SR1Index {
     const ord = @enumToInt(base);
     if (ord >= 8) {
-        return @intToEnum(SR1_Index, ord - 8);
+        return @intToEnum(SR1Index, ord - 8);
     } else {
         return null;
     }
 }
 
-pub fn addressBaseToSR2(base: Any_SR_Index) ?SR2_Index {
+pub fn addressBaseToSR2(base: AnySRIndex) ?SR2Index {
     const ord = @enumToInt(base);
     if (ord >= 8) {
         return null;
     } else {
-        return @intToEnum(SR2_Index, ord);
+        return @intToEnum(SR2Index, ord);
     }
 }
 

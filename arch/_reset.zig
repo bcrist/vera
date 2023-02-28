@@ -4,6 +4,7 @@ const misc = @import("misc");
 const uc_layout = @import("microcode_layout");
 const ib = @import("instruction_builder.zig");
 const cb = @import("cycle_builder.zig");
+const physical_address = @import("physical_address");
 
 const assert = std.debug.assert;
 
@@ -82,7 +83,7 @@ pub fn _continuation_200() void {
 
         // First we need to configure the block transfer register.
         // We do that by writing a value to an address near misc.Device_Frames.sys_block_transfer_config (0x801_000)
-        const base_block_transfer_address = misc.frameToPhysicalAddress(@enumToInt(misc.Device_Frames.sys_block_transfer_config));
+        const base_block_transfer_address = physical_address.fromFrame(@enumToInt(physical_address.DeviceFrame.sys_block_transfer_config));
 
         literal_to_LL(@intCast(i17, base_block_transfer_address >> 16));
         LL_to_reg(1);
@@ -158,14 +159,14 @@ pub fn _continuation_201() void {
     } else {
         // Done with the block transfer!
         // Time to read the reset vector:
-        read_to_D(.zero, @offsetOf(misc.Zeropage_Vector_Table, "pipe_0_reset"), .word, .raw);
+        read_to_D(.zero, @offsetOf(misc.ZeropageVectorTable, "pipe_0_reset"), .word, .raw);
         D_to_L(.zx);
-        L_to_SR(.next_IP);
+        L_to_SR(.next_ip);
         // Ensure that sleep mode is disabled:
         STAT_OP(.clear_S);
         next_cycle();
 
-        branch(.next_IP, 0);
+        branch(.next_ip, 0);
 
         // Initialization of GPRs, SP, etc. is the responsibility of the startup routine/OS.
         // Reset automatically sets exec_mode to .interrupt_fault in hardware.
@@ -179,7 +180,7 @@ pub fn _continuation_202() void {
     if (zero()) {
         // We are pipe 1.
         // Our job is to initialize the .zero registers for all registersets.
-        literal_to_L(std.math.maxInt(misc.RSN));
+        literal_to_L(std.math.maxInt(misc.RegistersetNumber));
         LL_to_RSN();
         L_to_SR(.temp_1);
         STAT_OP(.ZN_from_LL);

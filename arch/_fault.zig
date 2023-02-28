@@ -60,21 +60,21 @@ fn vectored_fault_handler(zeropage_vector: u5) void {
     // Store the UC address of the faulted cycle and the contents of DL into SR1:
     LH_SRC(.prev_UA);
     DL_to_LL();
-    L_to_SR1(.fault_UA_DL);
+    L_to_SR1(.fault_ua_dl);
     next_cycle();
 
     // Store STAT into SR1 (without disturbing high byte):
-    SR1H_to_JH(.fault_RSN_STAT);
+    SR1H_to_JH(.fault_rsn_stat);
     JH_to_LH();
     STAT_to_LL();
-    L_to_SR1(.fault_RSN_STAT);
+    L_to_SR1(.fault_rsn_stat);
     next_cycle();
 
     // Store OB/OA into SR1 (without disturbing high byte):
-    SR1H_to_JH(.int_RSN_fault_OB_OA);
+    SR1H_to_JH(.int_rsn_fault_ob_oa);
     JH_to_LH();
     OB_OA_to_LL();
-    L_to_SR1(.int_RSN_fault_OB_OA);
+    L_to_SR1(.int_rsn_fault_ob_oa);
     next_cycle();
 
     // Switch to fault registerset:
@@ -101,42 +101,42 @@ pub fn _handler_1() void {
     // page fault
     //desc("Triggered when address translation is performed but there is no matching entry");
     assert(uc_address() == @enumToInt(uc_layout.UC_Vectors.page_fault));
-    vectored_fault_handler(@intCast(u5, @offsetOf(misc.Zeropage_Vector_Table, "page_fault")));
+    vectored_fault_handler(@intCast(u5, @offsetOf(misc.ZeropageVectorTable, "page_fault")));
 }
 
 pub fn _handler_2() void {
     // access fault
     //desc("Triggered when address translation is performed in user-mode, and the matching entry does not have the user flag set");
     assert(uc_address() == @enumToInt(uc_layout.UC_Vectors.access_fault));
-    vectored_fault_handler(@intCast(u5, @offsetOf(misc.Zeropage_Vector_Table, "access_fault")));
+    vectored_fault_handler(@intCast(u5, @offsetOf(misc.ZeropageVectorTable, "access_fault")));
 }
 
 pub fn _handler_3() void {
     // page align fault
     //desc("Triggered when reading or writing a word that stradles the boundary between two 4KB pages");
     assert(uc_address() == @enumToInt(uc_layout.UC_Vectors.page_align_fault));
-    vectored_fault_handler(@intCast(u5, @offsetOf(misc.Zeropage_Vector_Table, "page_align_fault")));
+    vectored_fault_handler(@intCast(u5, @offsetOf(misc.ZeropageVectorTable, "page_align_fault")));
 }
 
 pub fn _handler_4() void {
     // instruction protection fault
     //desc("Triggered when attempting to execute a kernel-only instruction in user mode");
     assert(uc_address() == @enumToInt(uc_layout.UC_Vectors.instruction_protection_fault));
-    vectored_fault_handler(@intCast(u5, @offsetOf(misc.Zeropage_Vector_Table, "instruction_protection_fault")));
+    vectored_fault_handler(@intCast(u5, @offsetOf(misc.ZeropageVectorTable, "instruction_protection_fault")));
 }
 
 pub fn _handler_5() void {
     // invalid instruction
     //desc("Triggered when attempting to execute an opcode that does not correspond to a valid instruction");
     assert(uc_address() == @enumToInt(uc_layout.UC_Vectors.invalid_instruction));
-    vectored_fault_handler(@intCast(u5, @offsetOf(misc.Zeropage_Vector_Table, "invalid_instruction")));
+    vectored_fault_handler(@intCast(u5, @offsetOf(misc.ZeropageVectorTable, "invalid_instruction")));
 }
 
 pub fn _handler_6() void {
     // double fault
     //desc("Triggered when a fault occurs, but exec_state is already .fault or .interrupt_fault");
     assert(uc_address() == @enumToInt(uc_layout.UC_Vectors.double_fault));
-    vectored_fault_handler(@intCast(u5, @offsetOf(misc.Zeropage_Vector_Table, "double_fault")));
+    vectored_fault_handler(@intCast(u5, @offsetOf(misc.ZeropageVectorTable, "double_fault")));
 }
 
 pub fn _018D() void {
@@ -152,16 +152,16 @@ pub fn _018D() void {
     next_cycle();
 
     reload_ASN();
-    SR1_to_L(.fault_RSN_STAT);
+    SR1_to_L(.fault_rsn_stat);
     LL_to_STAT();
     next_cycle();
 
-    SR1_to_L(.int_RSN_fault_OB_OA);
+    SR1_to_L(.int_rsn_fault_ob_oa);
     LL_to_D();
     D_to_OB_OA();
     next_cycle();
 
-    SR1_to_L(.fault_UA_DL);
+    SR1_to_L(.fault_ua_dl);
     LL_to_D();
     D_to_DL();
     // If a page fault occurs during an instruction preceeded by SYNC,
@@ -203,17 +203,17 @@ pub fn _FD00_FDFF() void {
     next_cycle();
 
     // switch RSN, copy base address to .RS_reserved:
-    RSN_to_SR1H(.fault_RSN_STAT);
+    RSN_to_SR1H(.fault_rsn_stat);
     op_reg_to_LL(.OB);
     LL_to_RSN();
-    SR2_to_SR2(.temp_2, .RS_reserved);
+    SR2_to_SR2(.temp_2, .rs_reserved);
     OB_OA_OP(.clear_OB);
     next_cycle();
 
     // Load the GPR data
     var r: u5 = 0;
     while (r < 16) : (r += 1) {
-        read_to_D(.RS_reserved, r * 2, .word, .data);
+        read_to_D(.rs_reserved, r * 2, .word, .data);
         D_to_L(.zx);
         LL_to_op_reg(.OB);
         OB_OA_OP(.increment_OB);
@@ -221,36 +221,36 @@ pub fn _FD00_FDFF() void {
     }
 
     // offset .RS_reserved to avoid overflowing the literal offset:
-    SR_plus_literal_to_L(.RS_reserved, 32, .fresh, .no_flags);
-    L_to_SR(.RS_reserved);
+    SR_plus_literal_to_L(.rs_reserved, 32, .fresh, .no_flags);
+    L_to_SR(.rs_reserved);
     next_cycle();
 
     // Load the SR data
     inline for ([_][]const u8{
-        "RP", "SP", "BP", "fault_UA_DL", "fault_RSN_STAT", "int_RSN_fault_OB_OA",
-        "IP", "next_IP", "ASN", "KXP", "UXP", "temp_2", "temp_1",
+        "rp", "sp", "bp", "fault_ua_dl", "fault_rsn_stat", "int_rsn_fault_ob_oa",
+        "ip", "next_ip", "asn", "kxp", "uxp", "temp_2", "temp_1",
     }) |reg| {
-        const offset = @offsetOf(misc.Registerset_State, reg) - 32;
+        const offset = @offsetOf(misc.RegistersetState, reg) - 32;
 
-        read_to_D(.RS_reserved, offset, .word, .data);
+        read_to_D(.rs_reserved, offset, .word, .data);
         D_to_L(.zx);
         L_to_SR1(.temp_1);
         next_cycle();
 
-        read_to_D(.RS_reserved, offset + 2, .word, .data);
+        read_to_D(.rs_reserved, offset + 2, .word, .data);
         SR1_to_J(.temp_1);
         JL_to_LL();
         D_to_LH();
-        if (@hasField(ctrl.SR1_Index, reg)) {
-            L_to_SR1(@field(ctrl.SR1_Index, reg));
+        if (@hasField(ctrl.SR1Index, reg)) {
+            L_to_SR1(@field(ctrl.SR1Index, reg));
         } else {
-            L_to_SR2(@field(ctrl.SR2_Index, reg));
+            L_to_SR2(@field(ctrl.SR2Index, reg));
         }
         next_cycle();
     }
 
-    // Restore RSN from SR1.fault_RSN_STAT
-    SRH_to_LL(.fault_RSN_STAT);
+    // Restore RSN from SR1.fault_rsn_stat
+    SRH_to_LL(.fault_rsn_stat);
     LL_to_RSN();
     next_cycle();
 
@@ -272,10 +272,10 @@ pub fn _FE00_FEFF() void {
     next_cycle();
 
     // switch RSN, copy base address to .RS_reserved:
-    RSN_to_SR1H(.fault_RSN_STAT);
+    RSN_to_SR1H(.fault_rsn_stat);
     op_reg_to_LL(.OB);
     LL_to_RSN();
-    SR2_to_SR2(.temp_2, .RS_reserved);
+    SR2_to_SR2(.temp_2, .rs_reserved);
     OB_OA_OP(.clear_OB);
     next_cycle();
 
@@ -283,44 +283,44 @@ pub fn _FE00_FEFF() void {
     var r: u5 = 0;
     while (r < 16) : (r += 1) {
         op_reg_to_LL(.OB);
-        write_from_LL(.RS_reserved, r * 2, .word, .data);
+        write_from_LL(.rs_reserved, r * 2, .word, .data);
         OB_OA_OP(.increment_OB);
         next_cycle();
     }
 
-    // offset .RS_reserved to avoid overflowing the literal offset:
-    SR_plus_literal_to_L(.RS_reserved, 32, .fresh, .no_flags);
-    L_to_SR(.RS_reserved);
+    // offset .rs_reserved to avoid overflowing the literal offset:
+    SR_plus_literal_to_L(.rs_reserved, 32, .fresh, .no_flags);
+    L_to_SR(.rs_reserved);
     next_cycle();
 
     // Store the SR data
     inline for ([_][]const u8{
-        "RP", "SP", "BP", "fault_UA_DL", "fault_RSN_STAT", "int_RSN_fault_OB_OA",
-        "IP", "next_IP", "ASN", "KXP", "UXP", "temp_2", "temp_1",
+        "rp", "sp", "bp", "fault_ua_dl", "fault_rsn_stat", "int_rsn_fault_ob_oa",
+        "ip", "next_ip", "asn", "kxp", "uxp", "temp_2", "temp_1",
     }) |reg| {
-        const offset = @offsetOf(misc.Registerset_State, reg) - 32;
+        const offset = @offsetOf(misc.RegistersetState, reg) - 32;
 
-        if (@hasField(ctrl.SR1_Index, reg)) {
-            SR1_to_J(@field(ctrl.SR1_Index, reg));
+        if (@hasField(ctrl.SR1Index, reg)) {
+            SR1_to_J(@field(ctrl.SR1Index, reg));
         } else {
-            SR2_to_J(@field(ctrl.SR2_Index, reg));
+            SR2_to_J(@field(ctrl.SR2Index, reg));
         }
         JL_to_LL();
-        write_from_LL(.RS_reserved, offset, .word, .data);
+        write_from_LL(.rs_reserved, offset, .word, .data);
         next_cycle();
 
-        if (@hasField(ctrl.SR1_Index, reg)) {
-            SR1_to_J(@field(ctrl.SR1_Index, reg));
+        if (@hasField(ctrl.SR1Index, reg)) {
+            SR1_to_J(@field(ctrl.SR1Index, reg));
         } else {
-            SR2_to_J(@field(ctrl.SR2_Index, reg));
+            SR2_to_J(@field(ctrl.SR2Index, reg));
         }
         JH_to_LL();
-        write_from_LL(.RS_reserved, offset + 2, .word, .data);
+        write_from_LL(.rs_reserved, offset + 2, .word, .data);
         next_cycle();
     }
 
-    // Restore RSN from SR1.fault_RSN_STAT
-    SRH_to_LL(.fault_RSN_STAT);
+    // Restore RSN from SR1.fault_rsn_stat
+    SRH_to_LL(.fault_rsn_stat);
     LL_to_RSN();
     next_cycle();
 
@@ -338,8 +338,8 @@ pub fn _FA00_FA0F() void {
 
     // Increment IP so that if/when someone switches back to this registerset,
     // this instruction doesn't get executed a second time.
-    SR_plus_literal_to_L(.IP, 2, .fresh, .no_flags);
-    L_to_SR(.IP);
+    SR_plus_literal_to_L(.ip, 2, .fresh, .no_flags);
+    L_to_SR(.ip);
     next_cycle();
 
     // switch RSN, copy base address to .RS_reserved:
@@ -352,5 +352,5 @@ pub fn _FA00_FA0F() void {
     next_cycle();
 
     // Assume IP points to the first instruction that we want to execute in the new registerset:
-    branch(.IP, 0);
+    branch(.ip, 0);
 }

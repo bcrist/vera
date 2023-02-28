@@ -50,15 +50,15 @@ const InstructionData = struct {
     OA_state: InstructionRegState,
     OB_state: InstructionRegState,
 
-    next_unread_insn_offset: misc.Signed_Offset_For_Literal = -1,
-    next_insn_offset: misc.Signed_Offset_For_Literal = 0,
+    next_unread_insn_offset: misc.SignedOffsetForLiteral = -1,
+    next_insn_offset: misc.SignedOffsetForLiteral = 0,
     next_insn_executed: bool = false,
 
-    pub fn onIPRelativeAccess(self: *InstructionData, offset: misc.Signed_Offset_For_Literal, size: u2) void {
+    pub fn onIPRelativeAccess(self: *InstructionData, offset: misc.SignedOffsetForLiteral, size: u2) void {
         self.next_unread_insn_offset = std.math.max(self.next_unread_insn_offset, offset + size);
     }
 
-    pub fn setNextInsnOffset(self: *InstructionData, offset: misc.Signed_Offset_For_Literal) void {
+    pub fn setNextInsnOffset(self: *InstructionData, offset: misc.SignedOffsetForLiteral) void {
         self.next_insn_offset = offset;
     }
 
@@ -198,10 +198,10 @@ pub fn parameter(index: usize) ParameterEncoding {
     } else panic("Not currently processing an instruction", .{});
 }
 
-pub fn getParameterOffset(param_index: usize) misc.Signed_Offset_For_Literal {
+pub fn getParameterOffset(param_index: usize) misc.SignedOffsetForLiteral {
     if (insn) |i| {
         if (i.encoding) |enc| {
-            return instruction_encoding.getParameterOffsetForOpcode(misc.Signed_Offset_For_Literal, enc, enc.params[param_index], opcode());
+            return instruction_encoding.getParameterOffsetForOpcode(misc.SignedOffsetForLiteral, enc, enc.params[param_index], opcode());
         } else panic("Encoding has not been specified yet for this instruction!", .{});
     } else panic("Not currently processing an instruction", .{});
 }
@@ -269,7 +269,7 @@ pub fn opcode_low() u8 {
     panic("Not currently processing an instruction", .{});
 }
 
-pub fn OA() misc.OA {
+pub fn OA() misc.OperandA {
     if (insn) |i| {
         if (uc_layout.getOAForAddress(i.initial_uc_address)) |v| {
             i.queried_opcode = true;
@@ -281,7 +281,7 @@ pub fn OA() misc.OA {
     panic("Not currently processing an instruction", .{});
 }
 
-pub fn OB() misc.OB {
+pub fn OB() misc.OperandB {
     if (insn) |i| {
         if (uc_layout.getOBForAddress(i.initial_uc_address)) |v| {
             i.queried_opcode = true;
@@ -621,8 +621,8 @@ const ProcessResult = struct {
     initial_cycle: *Control_Signals,
     queried_opcode: bool,
     queried_flags: UC_Flag_Set,
-    next_unread_insn_offset: misc.Signed_Offset_For_Literal,
-    next_insn_offset: misc.Signed_Offset_For_Literal,
+    next_unread_insn_offset: misc.SignedOffsetForLiteral,
+    next_insn_offset: misc.SignedOffsetForLiteral,
     next_insn_executed: bool,
 };
 

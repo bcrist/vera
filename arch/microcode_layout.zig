@@ -201,38 +201,38 @@ pub fn getOpcodeForAddress(ua: UC_Address) ?Opcode {
     }
 }
 
-pub fn getOAForAddress(ua: UC_Address) ?misc.OA {
+pub fn getOAForAddress(ua: UC_Address) ?misc.OperandA {
     if ((ua & 0x8000) == 0x8000) {
         // CNKZ or VNKZ opcode
-        return @truncate(misc.OA, ua >> 7);
+        return @truncate(misc.OperandA, ua >> 7);
     } else if ((ua & 0x4000) == 0x4000) {
         // conditional continuation cycle
         return null;
     } else if ((ua & 0x2000) == 0x2000) {
         // KZ opcode
-        return @truncate(misc.OA, ua >> 7);
+        return @truncate(misc.OperandA, ua >> 7);
     } else {
         // K opcode or unconditional continuation cycle
         return null;
     }
 }
 
-pub fn getOBForAddress(ua: UC_Address) ?misc.OB {
+pub fn getOBForAddress(ua: UC_Address) ?misc.OperandB {
     if ((ua & 0x8000) == 0x8000) {
         // CNKZ or VNKZ opcode
-        return @truncate(misc.OB, ua);
+        return @truncate(misc.OperandB, ua);
     } else if ((ua & 0x4000) == 0x4000) {
         // conditional continuation cycle
         return null;
     } else if ((ua & 0x2000) == 0x2000) {
         // KZ opcode
-        return @truncate(misc.OB, ua);
+        return @truncate(misc.OperandB, ua);
     } else if ((ua & 0x0780) == 0) {
         // unconditional continuation cycle
         return null;
     } else {
         // K opcode
-        return @truncate(misc.OB, ua);
+        return @truncate(misc.OperandB, ua);
     }
 }
 

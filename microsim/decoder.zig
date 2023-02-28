@@ -3,9 +3,10 @@ const stat = @import("stat.zig");
 const faults = @import("faults.zig");
 const uc_layout = @import("microcode_layout");
 const misc = @import("misc");
+const bus = @import("bus");
 
 pub const TransactInputs = struct {
-    exec_mode: misc.Execution_Mode,
+    exec_mode: misc.ExecutionMode,
     ua: uc_layout.UC_Address,
     reset: bool,
     want_atomic: bool,
@@ -13,8 +14,8 @@ pub const TransactInputs = struct {
     fault: faults.ComputeOutputs,
     interrupt_pending: bool,
     stat: stat.LoopState,
-    dl: misc.DL,
-    lh: misc.LH_Bus,
+    dl: bus.D,
+    lh: bus.LHigh,
     ALLOW_INT: bool,
     SEQ_OP: ctrl.Sequencer_Op,
     NEXT_UOP: uc_layout.UC_Continuation,
@@ -22,7 +23,7 @@ pub const TransactInputs = struct {
 };
 
 pub const TransactOutputs = struct {
-    exec_mode: misc.Execution_Mode,
+    exec_mode: misc.ExecutionMode,
     ua: uc_layout.UC_Address,
 };
 

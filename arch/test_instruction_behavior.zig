@@ -2,12 +2,11 @@ const std = @import("std");
 const ie = @import("instruction_encoding");
 const ctrl = @import("control_signals");
 const uc_roms = @import("microcode_rom_serialization.zig");
-const sim = @import("simulator");
 const register_file = @import("register_file");
 const misc = @import("misc");
-
 const rom_data = @import("microcode_roms/roms.zig");
 const ie_data = @import("instruction_encoding_data").data;
+const Simulator = @import("Simulator");
 
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
@@ -18,7 +17,7 @@ var edb: ie.EncoderDatabase = undefined;
 var microcode: []ctrl.Control_Signals = undefined;
 var globals_loaded = false;
 
-fn initSimulator(program: []const ie.Instruction) !sim.Simulator {
+fn initSimulator(program: []const ie.Instruction) !Simulator {
     if (!globals_loaded) {
         arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
         ddb = try ie.DecoderDatabase.init(arena.allocator(), ie_data, std.testing.allocator);
@@ -37,17 +36,17 @@ fn initSimulator(program: []const ie.Instruction) !sim.Simulator {
         try encoder.encode(insn, insn_iter.next().?);
     }
 
-    const vector_table = misc.Zeropage_Vector_Table{
+    const vector_table = misc.ZeropageVectorTable{
         .double_fault = 0xFFFE,
         .page_fault = 0xFFFD,
         .access_fault = 0xFFFC,
         .page_align_fault = 0xFFFB,
         .instruction_protection_fault = 0xFFFA,
         .invalid_instruction = 0xFFF9,
-        .pipe_0_reset = @sizeOf(misc.Zeropage_Vector_Table),
+        .pipe_0_reset = @sizeOf(misc.ZeropageVectorTable),
     };
 
-    var s = try sim.Simulator.init(std.testing.allocator, microcode);
+    var s = try Simulator.init(std.testing.allocator, microcode);
 
     var flash = s.memory.flashIterator(0x7E_000 * 8);
     _ = flash.writeAll(std.mem.asBytes(&vector_table));
@@ -57,7 +56,7 @@ fn initSimulator(program: []const ie.Instruction) !sim.Simulator {
     return s;
 }
 
-fn deinitSimulator(simulator: *sim.Simulator) void {
+fn deinitSimulator(simulator: *Simulator) void {
     simulator.deinit();
 }
 

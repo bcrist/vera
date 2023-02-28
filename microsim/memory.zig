@@ -1,10 +1,10 @@
 const std = @import("std");
 const bits = @import("bits");
-const sim = @import("simulator");
-const misc = @import("misc");
+const sim = @import("Simulator");
+const bus = @import("bus");
+const physical_address = @import("physical_address");
 
-const PhysicalAddress = sim.PhysicalAddress;
-const BusControl = sim.BusControl;
+const SystemBusControl = @import("SystemBusControl.zig");
 
 const cy7c1061g_address_bits = 20;   //  8MB (4x CY7C1061G; directly accessible)
 const is66wve4m16_address_bits = 22; // 32MB (4x IS66WVE4M16E; accessible via aligned 8 byte block transfers to/from SRAM)
@@ -20,11 +20,11 @@ const cy7c1061g_size = std.math.maxInt(CY7C1061G_Address) + 1;
 const is66wve4m16_size = std.math.maxInt(IS66WVE4M16_Address) + 1;
 const sst39vf802c_size = std.math.maxInt(SST39VF802C_Address) + 1;
 
-const last_frame = misc.physicalAddressToFrame(misc.Special_Physical_Address.ram_end);
+const last_frame = physical_address.toFrame(physical_address.ram_end);
 
 comptime {
-    std.debug.assert(misc.Special_Physical_Address.ram_start == 0);
-    std.debug.assert(misc.Special_Physical_Address.ram_end == cy7c1061g_size * 8 - 1);
+    std.debug.assert(physical_address.ram_start == 0);
+    std.debug.assert(physical_address.ram_end == cy7c1061g_size * 8 - 1);
 }
 
 fn high8(word: u16) u8 {
@@ -65,17 +65,17 @@ pub const Memory = struct {
         self.block_ptr = rnd.int(Block_Address);
     }
 
-    pub fn read(self: *Memory, bus_ctrl: BusControl, address: PhysicalAddress) ?u16 {
-        if (!bus_ctrl.read or address.frame > last_frame) return null;
+    pub fn read(self: *Memory, bus_ctrl: SystemBusControl) ?u16 {
+        if (!bus_ctrl.read or bus_ctrl.address.frame > last_frame) return null;
 
-        const even_group = @truncate(u1, address.even_offset) * @as(u2, 2);
-        const odd_group = @truncate(u1, address.odd_offset) * @as(u2, 2) + 1;
+        const even_group = @truncate(u1, bus_ctrl.even_offset) * @as(u2, 2);
+        const odd_group = @truncate(u1, bus_ctrl.odd_offset) * @as(u2, 2) + 1;
 
-        const even_high_byte = 0 != (address.even_offset & 2);
-        const odd_high_byte = 0 != (address.odd_offset & 2);
+        const even_high_byte = 0 != (bus_ctrl.even_offset & 2);
+        const odd_high_byte = 0 != (bus_ctrl.odd_offset & 2);
 
-        const even_addr = @intCast(CY7C1061G_Address, bits.concat2(@intCast(u9, address.even_offset >> 2), address.frame));
-        const odd_addr = @intCast(CY7C1061G_Address, bits.concat2(@intCast(u9, address.odd_offset >> 2), address.frame));
+        const even_addr = @intCast(CY7C1061G_Address, bits.concat2(@intCast(u9, bus_ctrl.even_offset >> 2), bus_ctrl.address.frame));
+        const odd_addr = @intCast(CY7C1061G_Address, bits.concat2(@intCast(u9, bus_ctrl.odd_offset >> 2), bus_ctrl.address.frame));
 
         const sram = &self.sram;
         const even16 = sram[even_group][even_addr];
@@ -84,19 +84,19 @@ pub const Memory = struct {
         const even = if (even_high_byte) high8(even16) else low8(even16);
         const odd = if (odd_high_byte) high8(odd16) else low8(odd16);
 
-        if (address.swap_bytes) {
+        if (bus_ctrl.swap_bytes) {
             return bits.concat2(odd, even);
         } else {
             return bits.concat2(even, odd);
         }
     }
 
-    pub fn write(self: *Memory, bus_ctrl: BusControl, address: PhysicalAddress, data: misc.D_Bus, block_transfer: bool) void {
-        switch (@intToEnum(misc.Device_Frames, address.frame)) {
+    pub fn write(self: *Memory, bus_ctrl: SystemBusControl, data: bus.D, block_transfer: bool) void {
+        switch (@intToEnum(physical_address.DeviceFrame, bus_ctrl.address.frame)) {
             .sys_block_transfer_config => if (bus_ctrl.write) {
-                self.block_ptr = @truncate(Block_Address, bits.concat2(data, address.offset));
-                self.block_advance = 0 != (address.offset & 0x800);
-                switch (@truncate(u2, address.offset >> 9)) {
+                self.block_ptr = @truncate(Block_Address, bits.concat2(data, bus_ctrl.address.offset));
+                self.block_advance = 0 != (bus_ctrl.address.offset & 0x800);
+                switch (@truncate(u2, bus_ctrl.address.offset >> 9)) {
                     1 => {
                         self.block_flash = true;
                     },
@@ -111,12 +111,12 @@ pub const Memory = struct {
             },
             else => {},
         }
-        if (address.frame > last_frame) return;
+        if (bus_ctrl.address.frame > last_frame) return;
 
         if (bus_ctrl.write) {
             if (block_transfer) {
                 const sram = &self.sram;
-                const sram_addr = @intCast(CY7C1061G_Address, bits.concat2(@intCast(u9, address.offset >> 3), address.frame));
+                const sram_addr = @intCast(CY7C1061G_Address, bits.concat2(@intCast(u9, bus_ctrl.address.offset >> 3), bus_ctrl.address.frame));
                 if (self.block_flash) {
                     const flash = &self.flash;
                     const flash_addr = @truncate(SST39VF802C_Address, self.block_ptr);
@@ -139,25 +139,25 @@ pub const Memory = struct {
             } else {
                 var even_data = low8(data);
                 var odd_data = high8(data);
-                if (address.swap_bytes) {
+                if (bus_ctrl.swap_bytes) {
                     even_data = odd_data;
                     odd_data = low8(data);
                 }
 
                 const sram = &self.sram;
                 if (bus_ctrl.write_even) {
-                    const group = @truncate(u1, address.even_offset) * @as(u2, 2);
-                    const high_byte = 0 != (address.even_offset & 2);
-                    const addr = @intCast(CY7C1061G_Address, bits.concat2(@intCast(u9, address.even_offset >> 2), address.frame));
+                    const group = @truncate(u1, bus_ctrl.even_offset) * @as(u2, 2);
+                    const high_byte = 0 != (bus_ctrl.even_offset & 2);
+                    const addr = @intCast(CY7C1061G_Address, bits.concat2(@intCast(u9, bus_ctrl.even_offset >> 2), bus_ctrl.address.frame));
                     sram[group][addr] = if (high_byte)
                         bits.concat2(low8(sram[group][addr]), even_data)
                     else
                         bits.concat2(even_data, high8(sram[group][addr]));
                 }
                 if (bus_ctrl.write_odd) {
-                    const group = @truncate(u1, address.odd_offset) * @as(u2, 2) + 1;
-                    const high_byte = 0 != (address.odd_offset & 2);
-                    const addr = @intCast(CY7C1061G_Address, bits.concat2(@intCast(u9, address.odd_offset >> 2), address.frame));
+                    const group = @truncate(u1, bus_ctrl.odd_offset) * @as(u2, 2) + 1;
+                    const high_byte = 0 != (bus_ctrl.odd_offset & 2);
+                    const addr = @intCast(CY7C1061G_Address, bits.concat2(@intCast(u9, bus_ctrl.odd_offset >> 2), bus_ctrl.address.frame));
                     sram[group][addr] = if (high_byte)
                         bits.concat2(low8(sram[group][addr]), odd_data)
                     else
@@ -166,7 +166,7 @@ pub const Memory = struct {
             }
         } else if (bus_ctrl.read and block_transfer) {
             const sram = &self.sram;
-            const sram_addr = @intCast(CY7C1061G_Address, bits.concat2(@intCast(u9, address.offset >> 3), address.frame));
+            const sram_addr = @intCast(CY7C1061G_Address, bits.concat2(@intCast(u9, bus_ctrl.address.offset >> 3), bus_ctrl.address.frame));
             if (self.block_flash) {
                 const flash = &self.flash;
                 const flash_addr = @truncate(SST39VF802C_Address, self.block_ptr);

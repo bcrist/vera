@@ -314,7 +314,7 @@ pub fn K_SRC(value: ctrl.K_Source) void {
     assigned_signals.insert(.K_SRC);
 }
 
-pub fn SR1_RI(value: ctrl.SR1_Index) void {
+pub fn SR1_RI(value: ctrl.SR1Index) void {
     if (is_set(.SR1_RI) and cycle.SR1_RI != value) {
         panic("Can't assign {} to SR1_RI; already has value {}", .{ value, cycle.SR1_RI });
     }
@@ -322,7 +322,7 @@ pub fn SR1_RI(value: ctrl.SR1_Index) void {
     assigned_signals.insert(.SR1_RI);
 }
 
-pub fn SR2_RI(value: ctrl.SR2_Index) void {
+pub fn SR2_RI(value: ctrl.SR2Index) void {
     if (is_set(.SR2_RI) and cycle.SR2_RI != value) {
         panic("Can't assign {} to SR2_RI; already has value {}", .{ value, cycle.SR2_RI });
     }
@@ -330,7 +330,7 @@ pub fn SR2_RI(value: ctrl.SR2_Index) void {
     assigned_signals.insert(.SR2_RI);
 }
 
-pub fn BASE(value: ctrl.Any_SR_Index) void {
+pub fn BASE(value: ctrl.AnySRIndex) void {
     if (is_set(.BASE) and cycle.BASE != value) {
         panic("Can't assign {} to BASE; already has value {}", .{ value, cycle.BASE });
     }
@@ -429,7 +429,7 @@ pub fn JKR_WMODE(value: ctrl.Reg_File_Write_Mode) void {
     assigned_signals.insert(.JKR_WMODE);
 }
 
-pub fn SR1_WI(value: ctrl.SR1_Index) void {
+pub fn SR1_WI(value: ctrl.SR1Index) void {
     if (is_set(.SR1_WI) and cycle.SR1_WI != value) {
         panic("Can't assign {} to SR1_WI; already has value {}", .{ value, cycle.SR1_WI });
     }
@@ -437,7 +437,7 @@ pub fn SR1_WI(value: ctrl.SR1_Index) void {
     assigned_signals.insert(.SR1_WI);
 }
 
-fn _SR2_WI(value: ctrl.SR2_Index) void {
+fn _SR2_WI(value: ctrl.SR2Index) void {
     if (is_set(.SR2_WI) and cycle.SR2_WI != value) {
         panic("Can't assign {} to SR2_WI; already has value {}", .{ value, cycle.SR2_WI });
     }
@@ -445,9 +445,9 @@ fn _SR2_WI(value: ctrl.SR2_Index) void {
     assigned_signals.insert(.SR2_WI);
 }
 
-pub fn SR2_WI(value: ctrl.SR2_Index) void {
+pub fn SR2_WI(value: ctrl.SR2Index) void {
     _SR2_WI(value);
-    if (value == .IP) {
+    if (value == .ip) {
         if (ib.insn) |i| {
             i.setNextInsnOffset(-1);
         }
@@ -535,7 +535,7 @@ pub fn NEXT_UOP(value: uc_layout.UC_Continuation) void {
     assigned_signals.insert(.NEXT_UOP);
 }
 
-pub fn address(base: ctrl.Any_SR_Index, offset: misc.Signed_Offset_For_Literal) void {
+pub fn address(base: ctrl.AnySRIndex, offset: misc.SignedOffsetForLiteral) void {
     BASE(base);
 
     if (offset == 0) {
@@ -658,43 +658,43 @@ pub fn OB_OA_to_LH() void {
     LH_SRC(.logic);
 }
 
-pub fn SR1H_to_JH(index: ctrl.SR1_Index) void {
+pub fn SR1H_to_JH(index: ctrl.SR1Index) void {
     SR1_RI(index);
     JH_SRC(.SR1H);
 }
 
-pub fn SR1_to_J(index: ctrl.SR1_Index) void {
+pub fn SR1_to_J(index: ctrl.SR1Index) void {
     SR1_RI(index);
     JL_SRC(.SR1L);
     JH_SRC(.SR1H);
 }
-pub fn SR1L_to_K(index: ctrl.SR1_Index) void {
+pub fn SR1L_to_K(index: ctrl.SR1Index) void {
     SR1_RI(index);
     K_SRC(.SR1L);
 }
 
-pub fn SR1_to_L(index: ctrl.SR1_Index) void {
+pub fn SR1_to_L(index: ctrl.SR1Index) void {
     SR1_to_J(index);
     J_to_L();
 }
 
-pub fn SR2_to_J(index: ctrl.SR2_Index) void {
+pub fn SR2_to_J(index: ctrl.SR2Index) void {
     SR2_RI(index);
     JL_SRC(.SR2L);
     JH_SRC(.SR2H);
 }
 
-pub fn SR2L_to_K(index: ctrl.SR2_Index) void {
+pub fn SR2L_to_K(index: ctrl.SR2Index) void {
     SR2_RI(index);
     K_SRC(.SR2L);
 }
 
-pub fn SR2_to_L(index: ctrl.SR2_Index) void {
+pub fn SR2_to_L(index: ctrl.SR2Index) void {
     SR2_to_J(index);
     J_to_L();
 }
 
-pub fn SR_to_J(which: ctrl.Any_SR_Index) void {
+pub fn SR_to_J(which: ctrl.AnySRIndex) void {
     if (ctrl.addressBaseToSR1(which)) |sr1| {
         SR1_to_J(sr1);
     } else if (ctrl.addressBaseToSR2(which)) |sr2| {
@@ -702,7 +702,7 @@ pub fn SR_to_J(which: ctrl.Any_SR_Index) void {
     }
 }
 
-pub fn SRL_to_K(which: ctrl.Any_SR_Index) void {
+pub fn SRL_to_K(which: ctrl.AnySRIndex) void {
     if (ctrl.addressBaseToSR1(which)) |sr1| {
         SR1L_to_K(sr1);
     } else if (ctrl.addressBaseToSR2(which)) |sr2| {
@@ -710,7 +710,7 @@ pub fn SRL_to_K(which: ctrl.Any_SR_Index) void {
     }
 }
 
-pub fn SR_to_L(which: ctrl.Any_SR_Index) void {
+pub fn SR_to_L(which: ctrl.AnySRIndex) void {
     if (ctrl.addressBaseToSR1(which)) |sr1| {
         SR1_to_L(sr1);
     } else if (ctrl.addressBaseToSR2(which)) |sr2| {
@@ -718,7 +718,7 @@ pub fn SR_to_L(which: ctrl.Any_SR_Index) void {
     }
 }
 
-pub fn SRL_to_LL(which: ctrl.Any_SR_Index) void {
+pub fn SRL_to_LL(which: ctrl.AnySRIndex) void {
     if (ctrl.addressBaseToSR1(which)) |sr1| {
         SR1_to_J(sr1);
     } else if (ctrl.addressBaseToSR2(which)) |sr2| {
@@ -727,7 +727,7 @@ pub fn SRL_to_LL(which: ctrl.Any_SR_Index) void {
     JL_to_LL();
 }
 
-pub fn SRH_to_LL(which: ctrl.Any_SR_Index) void {
+pub fn SRH_to_LL(which: ctrl.AnySRIndex) void {
     if (ctrl.addressBaseToSR1(which)) |sr1| {
         SR1_to_J(sr1);
     } else if (ctrl.addressBaseToSR2(which)) |sr2| {
@@ -736,7 +736,7 @@ pub fn SRH_to_LL(which: ctrl.Any_SR_Index) void {
     JH_to_LL();
 }
 
-pub fn reg_to_J(register: misc.Register_Index, ext: ZX_SX_or_1X) void {
+pub fn reg_to_J(register: misc.RegisterIndex, ext: ZX_SX_or_1X) void {
     if (register == 0) {
         JR_RSEL(.zero);
         JR_RX(false);
@@ -760,7 +760,7 @@ pub fn reg_to_J(register: misc.Register_Index, ext: ZX_SX_or_1X) void {
     });
 }
 
-pub fn reg_to_K(register: misc.Register_Index) void {
+pub fn reg_to_K(register: misc.RegisterIndex) void {
     if (register == 0) {
         KR_RSEL(.zero);
         KR_RX(false);
@@ -779,17 +779,17 @@ pub fn reg_to_K(register: misc.Register_Index) void {
     K_SRC(.KR);
 }
 
-pub fn reg_to_L(register: misc.Register_Index, ext: ZX_SX_or_1X) void {
+pub fn reg_to_L(register: misc.RegisterIndex, ext: ZX_SX_or_1X) void {
     reg_to_J(register, ext);
     J_to_L();
 }
 
-pub fn reg_to_LL(register: misc.Register_Index) void {
+pub fn reg_to_LL(register: misc.RegisterIndex) void {
     reg_to_J(register, .zx);
     JL_to_LL();
 }
 
-pub fn reg32_to_J(register: misc.Register_Index) void {
+pub fn reg32_to_J(register: misc.RegisterIndex) void {
     if (register == 0) {
         JR_RSEL(.zero);
         JR_RX(false);
@@ -809,7 +809,7 @@ pub fn reg32_to_J(register: misc.Register_Index) void {
     JH_SRC(.JRH);
 }
 
-pub fn reg32_to_L(register: misc.Register_Index) void {
+pub fn reg32_to_L(register: misc.RegisterIndex) void {
     reg32_to_J(register);
     J_to_L();
 }
@@ -939,17 +939,17 @@ pub fn last_mmu_op_to_L() void {
     LH_SRC(.last_mmu_op_H);
 }
 
-pub fn PN_to_SR1(index: ctrl.SR1_Index) void {
+pub fn PN_to_SR1(index: ctrl.SR1Index) void {
     SR1_WI(index);
     SR1_WSRC(.PN);
 }
 
-pub fn PN_to_SR2(index: ctrl.SR2_Index) void {
+pub fn PN_to_SR2(index: ctrl.SR2Index) void {
     SR2_WI(index);
     SR2_WSRC(.PN);
 }
 
-pub fn PN_to_SR(which: ctrl.Any_SR_Index) void {
+pub fn PN_to_SR(which: ctrl.AnySRIndex) void {
     if (ctrl.addressBaseToSR1(which)) |sr1| {
         PN_to_SR1(sr1);
     } else if (ctrl.addressBaseToSR2(which)) |sr2| {
@@ -957,17 +957,17 @@ pub fn PN_to_SR(which: ctrl.Any_SR_Index) void {
     }
 }
 
-pub fn SR_to_PN(base: ctrl.Any_SR_Index, offset: misc.Signed_Offset_For_Literal) void {
+pub fn SR_to_PN(base: ctrl.AnySRIndex, offset: misc.SignedOffsetForLiteral) void {
     address(base, offset);
 }
 
-pub fn read_to_D(base: ctrl.Any_SR_Index, offset: misc.Signed_Offset_For_Literal, width: ctrl.Bus_Width, mode: ctrl.Bus_Mode) void {
+pub fn read_to_D(base: ctrl.AnySRIndex, offset: misc.SignedOffsetForLiteral, width: ctrl.Bus_Width, mode: ctrl.Bus_Mode) void {
     address(base, offset);
     AT_OP(.translate);
     BUS_MODE(mode);
     BUS_BYTE(width);
     BUS_RW(.read);
-    if (base == .IP and mode == .insn) {
+    if (base == .ip and mode == .insn) {
         if (ib.insn) |i| {
             i.onIPRelativeAccess(offset, switch (width) {
                 .byte => 1,
@@ -977,11 +977,11 @@ pub fn read_to_D(base: ctrl.Any_SR_Index, offset: misc.Signed_Offset_For_Literal
     }
 }
 
-pub fn IP_read_to_D(offset: misc.Signed_Offset_For_Literal, width: ctrl.Bus_Width) void {
-    read_to_D(.IP, offset, width, .insn);
+pub fn IP_read_to_D(offset: misc.SignedOffsetForLiteral, width: ctrl.Bus_Width) void {
+    read_to_D(.ip, offset, width, .insn);
 }
 
-pub fn write_from_LL(base: ctrl.Any_SR_Index, offset: misc.Signed_Offset_For_Literal, width: ctrl.Bus_Width, mode: ctrl.Bus_Mode) void {
+pub fn write_from_LL(base: ctrl.AnySRIndex, offset: misc.SignedOffsetForLiteral, width: ctrl.Bus_Width, mode: ctrl.Bus_Mode) void {
     address(base, offset);
     AT_OP(.translate);
     BUS_MODE(mode);
@@ -990,7 +990,7 @@ pub fn write_from_LL(base: ctrl.Any_SR_Index, offset: misc.Signed_Offset_For_Lit
     DL_OP(.hold);
 }
 
-pub fn write_from_DL(base: ctrl.Any_SR_Index, offset: misc.Signed_Offset_For_Literal, width: ctrl.Bus_Width, mode: ctrl.Bus_Mode) void {
+pub fn write_from_DL(base: ctrl.AnySRIndex, offset: misc.SignedOffsetForLiteral, width: ctrl.Bus_Width, mode: ctrl.Bus_Mode) void {
     address(base, offset);
     AT_OP(.translate);
     BUS_MODE(mode);
@@ -1058,17 +1058,17 @@ pub fn DL_to_LL() void {
     LL_SRC(.D16);
 }
 
-pub fn L_to_SR1(index: ctrl.SR1_Index) void {
+pub fn L_to_SR1(index: ctrl.SR1Index) void {
     SR1_WI(index);
     SR1_WSRC(.L);
 }
 
-pub fn L_to_SR2(index: ctrl.SR2_Index) void {
+pub fn L_to_SR2(index: ctrl.SR2Index) void {
     SR2_WI(index);
     SR2_WSRC(.L);
 }
 
-pub fn L_to_SR(which: ctrl.Any_SR_Index) void {
+pub fn L_to_SR(which: ctrl.AnySRIndex) void {
     if (ctrl.addressBaseToSR1(which)) |sr1| {
         L_to_SR1(sr1);
     } else if (ctrl.addressBaseToSR2(which)) |sr2| {
@@ -1078,13 +1078,13 @@ pub fn L_to_SR(which: ctrl.Any_SR_Index) void {
     }
 }
 
-// pub fn SR1_to_SR1(src_index: ctrl.SR1_Index, dest_index: ctrl.SR1_Index) void {
+// pub fn SR1_to_SR1(src_index: ctrl.SR1Index, dest_index: ctrl.SR1Index) void {
 //     SR1_RI(src_index);
 //     SR1_WI(dest_index);
 //     SR1_WSRC(.SR1);
 // }
 
-pub fn SR2_to_SR2(src_index: ctrl.SR2_Index, dest_index: ctrl.SR2_Index) void {
+pub fn SR2_to_SR2(src_index: ctrl.SR2Index, dest_index: ctrl.SR2Index) void {
     SR2_RI(src_index);
     SR2_WI(dest_index);
     SR2_WSRC(.SR2);
@@ -1106,15 +1106,15 @@ pub fn toggle_RSN() void {
     SPECIAL(.toggle_RSN);
 }
 
-pub fn RSN_to_SR1H(index: ctrl.SR1_Index) void {
+pub fn RSN_to_SR1H(index: ctrl.SR1Index) void {
     SR1_RI(index);
     SR1_WI(index);
     SR1_WSRC(.RSN_SR1);
 }
 
 pub fn reload_ASN() void {
-    SR2_RI(.ASN);
-    SR2_WI(.ASN);
+    SR2_RI(.asn);
+    SR2_WI(.asn);
     SR2_WSRC(.SR2);
 }
 
@@ -1138,7 +1138,7 @@ pub fn LL_to_op_reg(which: OA_or_OB_xor) void {
     });
 }
 
-pub fn LL_to_reg(register: misc.Register_Index) void {
+pub fn LL_to_reg(register: misc.RegisterIndex) void {
     if (register == 0) {
         JKR_WSEL(.zero);
         JKR_WMODE(.write_16);
@@ -1164,7 +1164,7 @@ pub fn L_to_op_reg32(which: OA_or_OB) void {
     });
 }
 
-pub fn L_to_reg32(register: misc.Register_Index) void {
+pub fn L_to_reg32(register: misc.RegisterIndex) void {
     JKR_WMODE(.write_32);
     if (register == 0) {
         JKR_WSEL(.zero);
@@ -1174,19 +1174,19 @@ pub fn L_to_reg32(register: misc.Register_Index) void {
     }
 }
 
-pub fn load_next_insn(ip_offset: misc.Signed_Offset_For_Literal) void {
-    address(.IP, ip_offset);
+pub fn load_next_insn(ip_offset: misc.SignedOffsetForLiteral) void {
+    address(.ip, ip_offset);
     AT_OP(.translate);
     BUS_MODE(.insn);
     BUS_BYTE(.word);
     BUS_RW(.read);
     DL_OP(.from_D);
-    SR2_WI(.next_IP);
+    SR2_WI(.next_ip);
     SR2_WSRC(.PN);
     assume_next_insn_loaded(ip_offset);
 }
 
-pub fn assume_next_insn_loaded(ip_offset: misc.Signed_Offset_For_Literal) void {
+pub fn assume_next_insn_loaded(ip_offset: misc.SignedOffsetForLiteral) void {
     if (ib.insn) |i| {
         i.DL_state = .next_insn;
         i.setNextInsnOffset(ip_offset);
@@ -1194,14 +1194,14 @@ pub fn assume_next_insn_loaded(ip_offset: misc.Signed_Offset_For_Literal) void {
 }
 
 pub fn exec_next_insn() void {
-    if (is_set(.SR2_RI) and cycle.SR2_RI != .next_IP) {
-        address(.next_IP, 0);
+    if (is_set(.SR2_RI) and cycle.SR2_RI != .next_ip) {
+        address(.next_ip, 0);
         SR2_WSRC(.PN);
     } else {
-        SR2_RI(.next_IP);
+        SR2_RI(.next_ip);
         SR2_WSRC(.SR2);
     }
-    _SR2_WI(.IP);
+    _SR2_WI(.ip);
     OB_OA_OP(.from_DL);
     ALLOW_INT(true);
     SEQ_OP(.next_instruction);
@@ -1221,15 +1221,15 @@ pub fn exec_next_insn() void {
     }
 }
 
-pub fn branch(base: ctrl.Any_SR_Index, offset: misc.Signed_Offset_For_Literal) void {
+pub fn branch(base: ctrl.AnySRIndex, offset: misc.SignedOffsetForLiteral) void {
     address(base, offset);
     AT_OP(.translate);
     BUS_MODE(.insn);
     BUS_BYTE(.word);
     BUS_RW(.read);
     DL_OP(.from_D);
-    if (base != .IP or offset != 0) {
-        SR2_WI(.IP);
+    if (base != .ip or offset != 0) {
+        SR2_WI(.ip);
         SR2_WSRC(.PN);
     }
     OB_OA_OP(.from_DL);
@@ -1245,8 +1245,8 @@ pub fn branch(base: ctrl.Any_SR_Index, offset: misc.Signed_Offset_For_Literal) v
     }
 }
 
-pub fn load_and_exec_next_insn(ip_offset: misc.Signed_Offset_For_Literal) void {
-    branch(.IP, ip_offset);
+pub fn load_and_exec_next_insn(ip_offset: misc.SignedOffsetForLiteral) void {
+    branch(.ip, ip_offset);
     if (ib.insn) |i| {
         i.DL_state = .next_insn;
         i.OA_state = .next_insn;
@@ -1337,45 +1337,45 @@ pub fn sub_to_L(ext: ZX_SX_or_1X, freshness: ALU_Freshness, flags: ALU_Flag_Mode
     }
 }
 
-pub fn SR_plus_literal_to_L(left: ctrl.Any_SR_Index, right: i17, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn SR_plus_literal_to_L(left: ctrl.AnySRIndex, right: i17, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
     SR_to_J(left);
     literal_to_K(right);
     add_to_L(if (right < 0) ._1x else .zx, freshness, flags);
 }
-pub fn SR_minus_literal_to_L(left: ctrl.Any_SR_Index, right: i17, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn SR_minus_literal_to_L(left: ctrl.AnySRIndex, right: i17, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
     SR_to_J(left);
     literal_to_K(right);
     sub_to_L(if (right < 0) ._1x else .zx, freshness, flags);
 }
 
-pub fn SR_plus_op_reg_to_L(left: ctrl.Any_SR_Index, right: OA_or_OB_xor, ext: ZX_SX_or_1X, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn SR_plus_op_reg_to_L(left: ctrl.AnySRIndex, right: OA_or_OB_xor, ext: ZX_SX_or_1X, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
     SR_to_J(left);
     op_reg_to_K(right);
     add_to_L(ext, freshness, flags);
 }
-pub fn SR_minus_op_reg_to_L(left: ctrl.Any_SR_Index, right: OA_or_OB_xor, ext: ZX_SX_or_1X, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn SR_minus_op_reg_to_L(left: ctrl.AnySRIndex, right: OA_or_OB_xor, ext: ZX_SX_or_1X, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
     SR_to_J(left);
     op_reg_to_K(right);
     sub_to_L(ext, freshness, flags);
 }
 
-pub fn SR_plus_SRL_to_L(left: ctrl.Any_SR_Index, right: ctrl.Any_SR_Index, ext: ZX_SX_or_1X, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn SR_plus_SRL_to_L(left: ctrl.AnySRIndex, right: ctrl.AnySRIndex, ext: ZX_SX_or_1X, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
     SR_to_J(left);
     SRL_to_K(right);
     add_to_L(ext, freshness, flags);
 }
-pub fn SR_minus_SRL_to_L(left: ctrl.Any_SR_Index, right: ctrl.Any_SR_Index, ext: ZX_SX_or_1X, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn SR_minus_SRL_to_L(left: ctrl.AnySRIndex, right: ctrl.AnySRIndex, ext: ZX_SX_or_1X, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
     SR_to_J(left);
     SRL_to_K(right);
     sub_to_L(ext, freshness, flags);
 }
 
-pub fn op_reg32_plus_SRL_to_L(left: OA_or_OB_xor, right: ctrl.Any_SR_Index, ext: ZX_SX_or_1X, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn op_reg32_plus_SRL_to_L(left: OA_or_OB_xor, right: ctrl.AnySRIndex, ext: ZX_SX_or_1X, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
     op_reg32_to_J(left);
     SRL_to_K(right);
     add_to_L(ext, freshness, flags);
 }
-pub fn op_reg32_minus_SRL_to_L(left: OA_or_OB_xor, right: ctrl.Any_SR_Index, ext: ZX_SX_or_1X, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn op_reg32_minus_SRL_to_L(left: OA_or_OB_xor, right: ctrl.AnySRIndex, ext: ZX_SX_or_1X, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
     op_reg32_to_J(left);
     SRL_to_K(right);
     sub_to_L(ext, freshness, flags);
@@ -1409,7 +1409,7 @@ pub fn zero_minus_op_reg_to_LL(right: OA_or_OB_xor, freshness: ALU_Freshness, fl
     sub_to_LL(freshness, flags);
 }
 
-pub fn SRL_minus_op_reg_to_LL(left: ctrl.Any_SR_Index, right: OA_or_OB_xor, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn SRL_minus_op_reg_to_LL(left: ctrl.AnySRIndex, right: OA_or_OB_xor, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
     SR_to_J(left);
     op_reg_to_K(right);
     sub_to_LL(freshness, flags);
@@ -1426,12 +1426,12 @@ pub fn op_reg_minus_literal_to_LL(left: OA_or_OB_xor, right: i17, freshness: ALU
     sub_to_LL(freshness, flags);
 }
 
-pub fn op_reg_plus_SRL_to_LL(left: OA_or_OB_xor, right: ctrl.Any_SR_Index, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn op_reg_plus_SRL_to_LL(left: OA_or_OB_xor, right: ctrl.AnySRIndex, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
     op_reg_to_J(left, .zx);
     SRL_to_K(right);
     add_to_LL(freshness, flags);
 }
-pub fn op_reg_minus_SRL_to_LL(left: OA_or_OB_xor, right: ctrl.Any_SR_Index, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn op_reg_minus_SRL_to_LL(left: OA_or_OB_xor, right: ctrl.AnySRIndex, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
     op_reg_to_J(left, .zx);
     SRL_to_K(right);
     sub_to_LL(freshness, flags);
@@ -1463,7 +1463,7 @@ pub fn logic_to_LL(mode: ctrl.Logic_Mode, freshness: ALU_Freshness, flags: ALU_F
     }
 }
 
-pub fn SRL_logic_literal_to_LL(left: ctrl.Any_SR_Index, mode: ctrl.Logic_Mode, right: i17, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn SRL_logic_literal_to_LL(left: ctrl.AnySRIndex, mode: ctrl.Logic_Mode, right: i17, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
     SR_to_J(left);
     literal_to_K(right);
     logic_to_LL(mode, freshness, flags);
@@ -1481,7 +1481,7 @@ pub fn op_reg_logic_op_reg_to_LL(left: OA_or_OB_xor, mode: ctrl.Logic_Mode, righ
     logic_to_LL(mode, freshness, flags);
 }
 
-pub fn op_reg_logic_SRL_to_LL(left: OA_or_OB_xor, mode: ctrl.Logic_Mode, right: ctrl.Any_SR_Index, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn op_reg_logic_SRL_to_LL(left: OA_or_OB_xor, mode: ctrl.Logic_Mode, right: ctrl.AnySRIndex, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
     op_reg_to_J(left, .zx);
     SRL_to_K(right);
     logic_to_LL(mode, freshness, flags);
@@ -1534,7 +1534,7 @@ pub fn mult_to_LL(left_ext: ZX_or_SX, right_ext: ZX_or_SX, swap: Swap_Halves, fl
     }
 }
 
-pub fn op_reg_mult_SRL_to_L(left: OA_or_OB_xor, left_ext: ZX_or_SX, right: ctrl.Any_SR_Index, right_ext: ZX_or_SX, flags: ALU_Flag_Mode) void {
+pub fn op_reg_mult_SRL_to_L(left: OA_or_OB_xor, left_ext: ZX_or_SX, right: ctrl.AnySRIndex, right_ext: ZX_or_SX, flags: ALU_Flag_Mode) void {
     op_reg_to_J(left, .zx);
     SRL_to_K(right);
     mult_to_L(left_ext, right_ext, flags);
@@ -1546,7 +1546,7 @@ pub fn op_reg_mult_op_reg_to_L(left: OA_or_OB_xor, left_ext: ZX_or_SX, right: OA
     mult_to_L(left_ext, right_ext, flags);
 }
 
-pub fn op_reg_mult_SRL_to_LL(left: OA_or_OB_xor, left_ext: ZX_or_SX, right: ctrl.Any_SR_Index, right_ext: ZX_or_SX, swap: Swap_Halves, flags: ALU_Flag_Mode) void {
+pub fn op_reg_mult_SRL_to_LL(left: OA_or_OB_xor, left_ext: ZX_or_SX, right: ctrl.AnySRIndex, right_ext: ZX_or_SX, swap: Swap_Halves, flags: ALU_Flag_Mode) void {
     op_reg_to_J(left, .zx);
     SRL_to_K(right);
     mult_to_LL(left_ext, right_ext, swap, flags);
@@ -1585,7 +1585,7 @@ pub fn shift_to_LL(dir: Shift_Dir, flags: ALU_Flag_Mode) void {
     }
 }
 
-pub fn SR_shift_literal_to_L(left: ctrl.Any_SR_Index, dir: Shift_Dir, right: i5, flags: ALU_Flag_Mode) void {
+pub fn SR_shift_literal_to_L(left: ctrl.AnySRIndex, dir: Shift_Dir, right: i5, flags: ALU_Flag_Mode) void {
     SR_to_J(left);
     literal_to_K(right);
     shift_to_L(dir, flags);
@@ -1645,7 +1645,7 @@ pub fn invalid_instruction() void {
     NEXT_UOP(@enumToInt(uc_layout.UC_Vectors.invalid_instruction));
 }
 
-pub fn block_transfer_to_ram(base: ctrl.Any_SR_Index, preincrement: i7, bus_mode: ctrl.Bus_Mode) void {
+pub fn block_transfer_to_ram(base: ctrl.AnySRIndex, preincrement: i7, bus_mode: ctrl.Bus_Mode) void {
     address(base, preincrement);
     AT_OP(.translate);
     BUS_MODE(bus_mode);
@@ -1655,7 +1655,7 @@ pub fn block_transfer_to_ram(base: ctrl.Any_SR_Index, preincrement: i7, bus_mode
     PN_to_SR(base);
 }
 
-pub fn block_transfer_from_ram(base: ctrl.Any_SR_Index, preincrement: i7, bus_mode: ctrl.Bus_Mode) void {
+pub fn block_transfer_from_ram(base: ctrl.AnySRIndex, preincrement: i7, bus_mode: ctrl.Bus_Mode) void {
     address(base, preincrement);
     AT_OP(.translate);
     BUS_MODE(bus_mode);

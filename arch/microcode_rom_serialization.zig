@@ -45,8 +45,8 @@ const Rom0Data = packed struct {
 const Rom1Data = packed struct {
     JH_SRC: ctrl.JH_Source, // 3
     K_SRC: ctrl.K_Source, // 3
-    SR1_RI: ctrl.SR1_Index, // 3
-    SR2_RI: ctrl.SR2_Index, // 3
+    SR1_RI: ctrl.SR1Index, // 3
+    SR2_RI: ctrl.SR2Index, // 3
     LL_SRC: ctrl.LL_Source, // 4
 
     fn init(cs: Control_Signals) Rom1Data {
@@ -104,8 +104,8 @@ const Rom3Data = packed struct {
     LH_SRC: ctrl.LH_Source, // 4
     JKR_WSEL: ctrl.Reg_File_Indexing_Source, // 2
     JKR_WMODE: ctrl.Reg_File_Write_Mode, // 2
-    SR1_WI: ctrl.SR1_Index, // 3
-    SR2_WI: ctrl.SR2_Index, // 3
+    SR1_WI: ctrl.SR1Index, // 3
+    SR2_WI: ctrl.SR2Index, // 3
 
     fn init(cs: Control_Signals) Rom3Data {
         return .{
@@ -155,7 +155,7 @@ const Rom4Data = packed struct {
 
 const Rom5Data = packed struct {
     NEXT_UOP: uc_layout.UC_Continuation, // 10
-    BASE: ctrl.Any_SR_Index, // 4
+    BASE: ctrl.AnySRIndex, // 4
     _: u2 = 0, // 2
 
     fn init(cs: Control_Signals) Rom5Data {

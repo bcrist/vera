@@ -1,5 +1,5 @@
 const std = @import("std");
-const simulator = @import("simulator");
+const Simulator = @import("Simulator");
 const uc_roms = @import("microcode_rom_serialization");
 const ctrl = @import("control_signals");
 const ie = @import("instruction_encoding");
@@ -41,17 +41,17 @@ pub fn main() !void {
         try encoder.encode(insn, insn_iter.next().?);
     }
 
-    const vector_table = misc.Zeropage_Vector_Table{
+    const vector_table = misc.ZeropageVectorTable{
         .double_fault = 0xFFFE,
         .page_fault = 0xFFFD,
         .access_fault = 0xFFFC,
         .page_align_fault = 0xFFFB,
         .instruction_protection_fault = 0xFFFA,
         .invalid_instruction = 0xFFF9,
-        .pipe_0_reset = @sizeOf(misc.Zeropage_Vector_Table),
+        .pipe_0_reset = @sizeOf(misc.ZeropageVectorTable),
     };
 
-    var sim = try simulator.Simulator.init(arena.allocator(), microcode);
+    var sim = try Simulator.init(arena.allocator(), microcode);
     var xo = std.rand.Xoshiro256.init(12345);
     sim.randomizeState(xo.random());
 

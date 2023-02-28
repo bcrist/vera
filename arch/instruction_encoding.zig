@@ -287,8 +287,8 @@ pub const ParameterEncoding = struct {
     offset_src: ParameterSource = .implicit,
     arrow: bool = false,
     default_to_param: i8 = -1, // TODO!!!
-    min_reg: misc.Register_Index = 0,
-    max_reg: misc.Register_Index = 15,
+    min_reg: misc.RegisterIndex = 0,
+    max_reg: misc.RegisterIndex = 15,
     constant_reverse: bool = false, // store constant as `N - value` instead of `value`
     constant_align: u3 = 1,
     constant_ranges: []const ConstantRange = &.{},
@@ -978,7 +978,7 @@ pub const Instruction = struct {
     }
 };
 
-fn writeOB(buf: []u8, val: misc.OB) void {
+fn writeOB(buf: []u8, val: misc.OperandB) void {
     assert(buf.len >= 1);
     buf[0] = bits.concat(.{
         @truncate(u4, buf[0]),
@@ -986,7 +986,7 @@ fn writeOB(buf: []u8, val: misc.OB) void {
     });
 }
 
-fn writeOA(buf: []u8, val: misc.OA) void {
+fn writeOA(buf: []u8, val: misc.OperandA) void {
     assert(buf.len >= 1);
     buf[0] = bits.concat(.{
         val,
@@ -994,12 +994,12 @@ fn writeOA(buf: []u8, val: misc.OA) void {
     });
 }
 
-fn writeOBOA(buf: []u8, val: misc.OB_OA) void {
+fn writeOBOA(buf: []u8, val: misc.CombinedOperands) void {
     assert(buf.len >= 1);
     buf[0] = val;
 }
 
-fn writeImmOB(buf: []u8, val: misc.OB) void {
+fn writeImmOB(buf: []u8, val: misc.OperandB) void {
     assert(buf.len >= 3);
     buf[2] = bits.concat(.{
         @truncate(u4, buf[2]),
@@ -1007,7 +1007,7 @@ fn writeImmOB(buf: []u8, val: misc.OB) void {
     });
 }
 
-fn writeImmOA(buf: []u8, val: misc.OA) void {
+fn writeImmOA(buf: []u8, val: misc.OperandA) void {
     assert(buf.len >= 3);
     buf[2] = bits.concat(.{
         val,
@@ -1044,11 +1044,11 @@ fn writeParamConstant(buf: []u8, val: i64, src: ParameterSource, opcode_base: Op
     const uval = @bitCast(u64, val);
     switch (src) {
         .implicit => {}, // nothing to store
-        .OA => writeOA(buf, @truncate(misc.OA, uval)),
-        .OB => writeOB(buf, @truncate(misc.OB, uval)),
-        .OB_OA => writeOBOA(buf, @truncate(misc.OB_OA, uval)),
-        .IP_plus_2_OA => writeImmOA(buf, @truncate(misc.OA, uval)),
-        .IP_plus_2_OB => writeImmOB(buf, @truncate(misc.OB, uval)),
+        .OA => writeOA(buf, @truncate(misc.OperandA, uval)),
+        .OB => writeOB(buf, @truncate(misc.OperandB, uval)),
+        .OB_OA => writeOBOA(buf, @truncate(misc.CombinedOperands, uval)),
+        .IP_plus_2_OA => writeImmOA(buf, @truncate(misc.OperandA, uval)),
+        .IP_plus_2_OB => writeImmOB(buf, @truncate(misc.OperandB, uval)),
         .IP_plus_2_8 => writeImm8(buf, @truncate(u8, uval)),
         .IP_plus_2_16 => writeImm16(buf, @truncate(u16, uval), 2),
         .IP_plus_4_16 => writeImm16(buf, @truncate(u16, uval), 4),
@@ -1259,29 +1259,29 @@ pub fn checkInstructionMatchesEncoding(insn: Instruction, encoding: InstructionE
     return true;
 }
 
-fn readOB(buf: []const u8) misc.OB {
+fn readOB(buf: []const u8) misc.OperandB {
     assert(buf.len >= 1);
-    return @intCast(misc.OB, buf[0] >> 4);
+    return @intCast(misc.OperandB, buf[0] >> 4);
 }
 
-fn readOA(buf: []const u8) misc.OA {
+fn readOA(buf: []const u8) misc.OperandA {
     assert(buf.len >= 1);
-    return @truncate(misc.OA, buf[0]);
+    return @truncate(misc.OperandA, buf[0]);
 }
 
-fn readOBOA(buf: []const u8) misc.OB_OA {
+fn readOBOA(buf: []const u8) misc.CombinedOperands {
     assert(buf.len >= 1);
     return buf[0];
 }
 
-fn readImmOB(buf: []const u8) misc.OB {
+fn readImmOB(buf: []const u8) misc.OperandB {
     assert(buf.len >= 3);
-    return @intCast(misc.OB, buf[2] >> 4);
+    return @intCast(misc.OperandB, buf[2] >> 4);
 }
 
-fn readImmOA(buf: []const u8) misc.OA {
+fn readImmOA(buf: []const u8) misc.OperandA {
     assert(buf.len >= 3);
-    return @truncate(misc.OA, buf[2]);
+    return @truncate(misc.OperandA, buf[2]);
 }
 
 fn readOpcode(buf: []const u8) Opcode {
@@ -1468,8 +1468,8 @@ pub const InstructionEncodingParser = struct {
                     } else if (try self.reader.expression("rev")) {
                         param.constant_reverse = true;
                     } else if (try self.reader.expression("reg")) {
-                        param.min_reg = try self.reader.requireAnyInt(misc.Register_Index, 10);
-                        param.max_reg = try self.reader.requireAnyInt(misc.Register_Index, 10);
+                        param.min_reg = try self.reader.requireAnyInt(misc.RegisterIndex, 10);
+                        param.max_reg = try self.reader.requireAnyInt(misc.RegisterIndex, 10);
                     } else if (try self.reader.expression("range")) {
                         try self.temp_constant_ranges.append(self.temp_allocator, .{
                             .min = try self.reader.requireAnyInt(i64, 10),

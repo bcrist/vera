@@ -1,4 +1,4 @@
-const sim = @import("simulator");
+const sim = @import("Simulator");
 const ctrl = @import("control_signals");
 
 pub const ComputeInputs = struct {

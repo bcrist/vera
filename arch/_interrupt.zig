@@ -4,6 +4,7 @@ const cb = @import("cycle_builder.zig");
 const ctrl = @import("control_signals");
 const misc = @import("misc");
 const uc_layout = @import("microcode_layout");
+const physical_address = @import("physical_address");
 
 const encoding = ib.encoding;
 const desc = ib.desc;
@@ -36,17 +37,17 @@ pub fn _handler_7() void {
     //syntax("(interrupt)");
     //desc("Interrupt handler");
     assert(uc_address() == @enumToInt(uc_layout.UC_Vectors.interrupt));
-    const vector_register = misc.frameToPhysicalAddress(@enumToInt(misc.Device_Frames.sys_interrupt_controller));
+    const vector_register = physical_address.fromFrame(@enumToInt(physical_address.DeviceFrame.sys_interrupt_controller));
 
     // Persist STAT for when we return
-    SR1_to_J(.fault_RSN_STAT);
+    SR1_to_J(.fault_rsn_stat);
     JH_to_LH();
     STAT_to_LL();
-    L_to_SR1(.fault_RSN_STAT);
+    L_to_SR1(.fault_rsn_stat);
     next_cycle();
 
     // Switch to RSN 0/1/2 depending on which pipe we're in, storing the old RSN in SR1
-    RSN_to_SR1H(.int_RSN_fault_OB_OA);
+    RSN_to_SR1H(.int_rsn_fault_ob_oa);
     pipe_id_to_LL();
     LL_to_RSN();
     next_cycle();
@@ -61,11 +62,11 @@ pub fn _handler_7() void {
     // Read the interrupt vector from the interrupt controller
     read_to_D(.temp_1, @intCast(i7, vector_register & 0xFFFF), .word, .raw);
     D_to_L(.zx);
-    L_to_SR2(.next_IP);
+    L_to_SR2(.next_ip);
     next_cycle();
 
     // Start executing the interrupt handler
-    branch(.next_IP, 0);
+    branch(.next_ip, 0);
 }
 
 pub fn _018C() void {
@@ -78,16 +79,16 @@ pub fn _018C() void {
         return;
     }
 
-    SR1_to_J(.int_RSN_fault_OB_OA);
+    SR1_to_J(.int_rsn_fault_ob_oa);
     JH_to_LL();
     LL_to_RSN();
     next_cycle();
 
     reload_ASN();
-    SRL_to_LL(.fault_RSN_STAT);
+    SRL_to_LL(.fault_rsn_stat);
     LL_to_STAT();
     SEQ_OP(.next_uop_force_normal);
     next_cycle();
 
-    branch(.IP, 0);
+    branch(.ip, 0);
 }

@@ -1,18 +1,16 @@
 const std = @import("std");
-const sim = @import("simulator");
+const sim = @import("Simulator");
 const bits = @import("bits");
 const ctrl = @import("control_signals");
 const misc = @import("misc");
+const bus = @import("bus");
 
-const Split_L_Bus = sim.Split_L_Bus;
-const VirtualAddress = sim.VirtualAddress;
-const PhysicalAddress = sim.PhysicalAddress;
-const BusControl = sim.BusControl;
+const SystemBusControl = @import("SystemBusControl.zig");
 
-const VirtualAddressParts = packed struct {
-    offset: misc.N_Bus,
+const OffsetSlotAndTag = packed struct {
+    offset: bus.PageOffset,
     slot: u6,
-    tag: misc.AT_Tag,
+    tag: misc.address_translator.Tag,
 };
 
 pub const OperationInfo = struct {
@@ -21,7 +19,7 @@ pub const OperationInfo = struct {
     BUS_MODE: ctrl.Bus_Mode,
     AT_OP: ctrl.AT_Op,
     slot: u6,
-    tag: misc.AT_Tag,
+    tag: misc.address_translator.Tag,
 
     pub fn init() OperationInfo {
         return .{
@@ -41,7 +39,7 @@ pub const OperationInfo = struct {
             .BUS_MODE = rnd.enumValue(ctrl.Bus_Mode),
             .AT_OP = rnd.enumValue(ctrl.AT_Op),
             .slot = rnd.int(u6),
-            .tag = rnd.int(misc.AT_Tag),
+            .tag = rnd.int(misc.address_translator.Tag),
         };
     }
 
@@ -66,21 +64,21 @@ pub const AccessPolicy = enum(u2) {
 };
 
 pub const Entry = packed struct {
-    frame: misc.F_Bus = 0,
+    frame: bus.Frame = 0,
     wait_states: u2 = 0,
     update_frame_state: bool = false,
     present: bool = false,
     access: AccessPolicy = .unprivileged,
-    tag: misc.AT_Tag = 0,
+    tag: misc.address_translator.Tag = 0,
 
     pub fn random(rnd: std.rand.Random) Entry {
         return .{
-            .frame = rnd.int(misc.F_Bus),
+            .frame = rnd.int(bus.Frame),
             .wait_states = rnd.int(u2),
             .update_frame_state = rnd.boolean(),
             .present = rnd.boolean(),
             .access = rnd.enumValue(AccessPolicy),
-            .tag = rnd.int(misc.AT_Tag),
+            .tag = rnd.int(misc.address_translator.Tag),
         };
     }
 };
@@ -101,8 +99,8 @@ pub const State = struct {
 };
 
 pub const ComputeInputs = struct {
-    virtual_address: VirtualAddress,
-    asn: misc.AT_ASN,
+    virtual_address: bus.VirtualAddressParts,
+    asn: misc.address_translator.AddressSpaceNumber,
     matching_entry: Entry,
     other_entry: Entry,
     enable_flag: bool,
@@ -113,15 +111,14 @@ pub const ComputeInputs = struct {
     BUS_BYTE: ctrl.Bus_Width,
     LL_SRC: ctrl.LL_Source,
     AT_OP: ctrl.AT_Op,
-    SR2_WI: ctrl.SR2_Index,
+    SR2_WI: ctrl.SR2Index,
     SR2_WSRC: ctrl.SR2_Write_Data_Source,
 };
 
 pub const ComputeOutputs = struct {
     op: OperationInfo,
-    physical_address: PhysicalAddress,
-    bus_ctrl: BusControl,
-    slot: misc.AT_Slot,
+    bus_ctrl: SystemBusControl,
+    slot: misc.address_translator.Slot,
     matching_entry: Entry,
     other_entry: Entry,
     page_fault: bool,
@@ -140,7 +137,7 @@ pub fn compute(state: *const State, in: ComputeInputs) ComputeOutputs {
         .insn => @as(u2, 3),
     };
 
-    const virtual = @bitCast(VirtualAddressParts, in.virtual_address);
+    const virtual = @bitCast(OffsetSlotAndTag, in.virtual_address);
 
     const slot: u12 = bits.concat(.{
         virtual.slot,
@@ -169,7 +166,7 @@ pub fn compute(state: *const State, in: ComputeInputs) ComputeOutputs {
     }
 
     const real_bus_op = in.AT_OP == .translate and in.LL_SRC != .AT_ME_L and in.LL_SRC != .AT_OE_L;
-    const insn_load = real_bus_op and in.SR2_WSRC == .PN and (in.SR2_WI == .IP or in.SR2_WI == .next_IP);
+    const insn_load = real_bus_op and in.SR2_WSRC == .PN and (in.SR2_WI == .ip or in.SR2_WI == .next_ip);
 
     const enabled = in.enable_flag and in.BUS_MODE != .raw;
 
@@ -179,18 +176,24 @@ pub fn compute(state: *const State, in: ComputeInputs) ComputeOutputs {
     const page_fault = enabled_translate and !any_match;
     var page_align_fault = false;
     var access_fault = false;
-    var physical = PhysicalAddress{
-        .frame = @truncate(u12, in.virtual_address.page),
-        .offset = virtual.offset,
+    var bus_ctrl = SystemBusControl{
+        .address = .{
+            .offset = virtual.offset,
+            .frame = @truncate(u12, in.virtual_address.page),
+        },
+        .read = false,
+        .write = false,
+        .write_odd = false,
+        .write_even = false,
+        .wait_states = 0,
         .even_offset = @intCast(u11, virtual.offset >> 1),
         .odd_offset = @intCast(u11, virtual.offset >> 1),
         .swap_bytes = false,
     };
-    var bus_ctrl = BusControl.init();
     var new_kernel_flag = in.kernel_flag;
 
     if (enabled_translate and any_match) {
-        physical.frame = matching.frame;
+        bus_ctrl.address.frame = matching.frame;
         if (real_bus_op) {
             bus_ctrl.wait_states = matching.wait_states;
         }
@@ -233,9 +236,9 @@ pub fn compute(state: *const State, in: ComputeInputs) ComputeOutputs {
     }
 
     if ((virtual.offset & 1) == 1) {
-        physical.swap_bytes = true;
+        bus_ctrl.swap_bytes = true;
         if (in.BUS_BYTE == .word) {
-            physical.even_offset +%= 1;
+            bus_ctrl.even_offset +%= 1;
             if (virtual.offset == 0xFFFF) {
                 page_align_fault = true;
             }
@@ -267,7 +270,6 @@ pub fn compute(state: *const State, in: ComputeInputs) ComputeOutputs {
             .slot = virtual.slot,
             .tag = virtual.tag,
         },
-        .physical_address = physical,
         .bus_ctrl = bus_ctrl,
         .slot = slot,
         .matching_entry = matching,
@@ -283,9 +285,9 @@ pub const TransactInputs = struct {
     inhibit_writes: bool,
     matching_entry: Entry,
     other_entry: Entry,
-    slot: misc.AT_Slot,
-    l: Split_L_Bus,
-    tag: misc.AT_Tag,
+    slot: misc.address_translator.Slot,
+    l: bus.LParts,
+    tag: misc.address_translator.Tag,
     AT_OP: ctrl.AT_Op,
 };
 

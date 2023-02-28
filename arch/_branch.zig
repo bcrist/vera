@@ -79,14 +79,14 @@ pub fn _0100_013C() void {
     //syntax("B IP+immba[3,63]");
     desc("IP-relative unconditional branch");
 
-    branch(.IP, getParameterOffset(0));
+    branch(.ip, getParameterOffset(0));
 }
 pub fn _013D_017B() void {
     encoding(.B, .{ IP_relative(.imm_n64_n2) });
     //syntax("B IP+immba[-64,-2]");
     desc("IP-relative unconditional branch");
 
-    branch(.IP, getParameterOffset(0));
+    branch(.ip, getParameterOffset(0));
 }
 pub fn alias_0100() void {
     encoding(.NOPE, .{});
@@ -103,11 +103,11 @@ pub fn _017C() void {
     L_to_SR(.temp_1);
     next_cycle();
 
-    SR_plus_SRL_to_L(.IP, .temp_1, .zx, .fresh, .no_flags);
-    L_to_SR(.next_IP);
+    SR_plus_SRL_to_L(.ip, .temp_1, .zx, .fresh, .no_flags);
+    L_to_SR(.next_ip);
     next_cycle();
 
-    branch(.next_IP, 63);
+    branch(.next_ip, 63);
 }
 
 pub fn _017D() void {
@@ -120,11 +120,11 @@ pub fn _017D() void {
     L_to_SR(.temp_1);
     next_cycle();
 
-    SR_minus_SRL_to_L(.IP, .temp_1, .zx, .fresh, .no_flags);
-    L_to_SR(.next_IP);
+    SR_minus_SRL_to_L(.ip, .temp_1, .zx, .fresh, .no_flags);
+    L_to_SR(.next_ip);
     next_cycle();
 
-    branch(.next_IP, -64);
+    branch(.next_ip, -64);
 }
 
 pub fn _017E() void {
@@ -137,11 +137,11 @@ pub fn _017E() void {
     L_to_SR(.temp_1);
     next_cycle();
 
-    SR_plus_SRL_to_L(.IP, .temp_1, .zx, .fresh, .no_flags);
-    L_to_SR(.next_IP);
+    SR_plus_SRL_to_L(.ip, .temp_1, .zx, .fresh, .no_flags);
+    L_to_SR(.next_ip);
     next_cycle();
 
-    branch(.next_IP, 0);
+    branch(.next_ip, 0);
 }
 
 pub fn _017F() void {
@@ -154,11 +154,11 @@ pub fn _017F() void {
     L_to_SR(.temp_1);
     next_cycle();
 
-    SR_plus_SRL_to_L(.IP, .temp_1, ._1x, .fresh, .no_flags);
-    L_to_SR(.next_IP);
+    SR_plus_SRL_to_L(.ip, .temp_1, ._1x, .fresh, .no_flags);
+    L_to_SR(.next_ip);
     next_cycle();
 
-    branch(.next_IP, 0);
+    branch(.next_ip, 0);
 }
 
 pub fn _FA90_FA9F() void {
@@ -166,11 +166,11 @@ pub fn _FA90_FA9F() void {
     //syntax("B IP+URa");
     desc("IP-relative unsigned register unconditional branch");
 
-    SR_plus_op_reg_to_L(.IP, .OA, .zx, .fresh, .no_flags);
-    L_to_SR(.next_IP);
+    SR_plus_op_reg_to_L(.ip, .OA, .zx, .fresh, .no_flags);
+    L_to_SR(.next_ip);
     next_cycle();
 
-    branch(.next_IP, 0);
+    branch(.next_ip, 0);
 }
 
 pub fn _FAA0_FAAF() void {
@@ -178,11 +178,11 @@ pub fn _FAA0_FAAF() void {
     //syntax("B IP+SRa");
     desc("IP-relative signed register unconditional branch");
 
-    SR_plus_op_reg_to_L(.IP, .OA, .sx, .fresh, .no_flags);
-    L_to_SR(.next_IP);
+    SR_plus_op_reg_to_L(.ip, .OA, .sx, .fresh, .no_flags);
+    L_to_SR(.next_ip);
     next_cycle();
 
-    branch(.next_IP, 0);
+    branch(.next_ip, 0);
 }
 
 pub fn _FAB0_FABF() void {
@@ -191,10 +191,10 @@ pub fn _FAB0_FABF() void {
     desc("Register unconditional branch");
 
     op_reg32_to_L(.OA);
-    L_to_SR(.next_IP);
+    L_to_SR(.next_ip);
     next_cycle();
 
-    branch(.next_IP, 0);
+    branch(.next_ip, 0);
 }
 
 pub fn _0180() void {
@@ -211,10 +211,10 @@ pub fn _0180() void {
     SR_to_J(.temp_1);
     JL_to_LL();
     D_to_LH();
-    L_to_SR(.next_IP);
+    L_to_SR(.next_ip);
     next_cycle();
 
-    branch(.next_IP, 0);
+    branch(.next_ip, 0);
 }
 
 pub fn _0200_023C() void {
@@ -223,7 +223,7 @@ pub fn _0200_023C() void {
     desc("IP-relative branch if zero");
 
     if (zero()) {
-        branch(.IP, getParameterOffset(0));
+        branch(.ip, getParameterOffset(0));
     } else {
         SPECIAL(.none); // don't clear atomic state
         load_and_exec_next_insn(2);
@@ -235,7 +235,7 @@ pub fn _023D_027B() void {
     desc("IP-relative branch if zero");
 
     if (zero()) {
-        branch(.IP, getParameterOffset(0));
+        branch(.ip, getParameterOffset(0));
     } else {
         SPECIAL(.none); // don't clear atomic state
         load_and_exec_next_insn(2);
@@ -248,7 +248,7 @@ pub fn _0300_033C() void {
     desc("IP-relative branch if nonzero");
 
     if (!zero()) {
-        branch(.IP, getParameterOffset(0));
+        branch(.ip, getParameterOffset(0));
     } else {
         SPECIAL(.none); // don't clear atomic state
         load_and_exec_next_insn(2);
@@ -260,7 +260,7 @@ pub fn _033D_037B() void {
     desc("IP-relative branch if nonzero");
 
     if (!zero()) {
-        branch(.IP, getParameterOffset(0));
+        branch(.ip, getParameterOffset(0));
     } else {
         SPECIAL(.none); // don't clear atomic state
         load_and_exec_next_insn(2);
@@ -343,7 +343,7 @@ fn conditional_n6_14(comptime condition: MnemonicSuffix) void {
     var should_branch = conditionFunc();
     if (comptime conditionIsInverse(condition)) should_branch = !should_branch;
     if (should_branch) {
-        branch(.IP, getParameterOffset(0));
+        branch(.ip, getParameterOffset(0));
     } else {
         SPECIAL(.none); // don't clear atomic state
         load_and_exec_next_insn(2);
@@ -378,11 +378,11 @@ fn conditional_15_270(comptime condition: MnemonicSuffix) void {
         L_to_SR(.temp_1);
         next_cycle();
 
-        SR_plus_SRL_to_L(.IP, .temp_1, .zx, .fresh, .no_flags);
-        L_to_SR(.next_IP);
+        SR_plus_SRL_to_L(.ip, .temp_1, .zx, .fresh, .no_flags);
+        L_to_SR(.next_ip);
         next_cycle();
 
-        branch(.next_IP, 15);
+        branch(.next_ip, 15);
     } else {
         SPECIAL(.none); // don't clear atomic state
         load_and_exec_next_insn(3);
@@ -402,11 +402,11 @@ fn conditional_n262_n7(comptime condition: MnemonicSuffix) void {
         L_to_SR(.temp_1);
         next_cycle();
 
-        SR_minus_SRL_to_L(.IP, .temp_1, .zx, .fresh, .no_flags);
-        L_to_SR(.next_IP);
+        SR_minus_SRL_to_L(.ip, .temp_1, .zx, .fresh, .no_flags);
+        L_to_SR(.next_ip);
         next_cycle();
 
-        branch(.next_IP, -7);
+        branch(.next_ip, -7);
     } else {
         SPECIAL(.none); // don't clear atomic state
         load_and_exec_next_insn(3);
@@ -459,11 +459,11 @@ fn conditional_s16(comptime condition: MnemonicSuffix) void {
         L_to_SR(.temp_1);
         next_cycle();
 
-        SR_plus_SRL_to_L(.IP, .temp_1, .sx, .fresh, .no_flags);
-        L_to_SR(.next_IP);
+        SR_plus_SRL_to_L(.ip, .temp_1, .sx, .fresh, .no_flags);
+        L_to_SR(.next_ip);
         next_cycle();
 
-        branch(.next_IP, 0);
+        branch(.next_ip, 0);
     } else {
         SPECIAL(.none); // don't clear atomic state
         load_and_exec_next_insn(4);
@@ -492,12 +492,12 @@ pub fn _0184() void {
     //syntax("BP");
     desc("Branch to start of current page");
 
-    SRL_logic_literal_to_LL(.IP, .JL_and_K, 0xF000, .fresh, .no_flags);
+    SRL_logic_literal_to_LL(.ip, .JL_and_K, 0xF000, .fresh, .no_flags);
     LH_SRC(.JH);
-    L_to_SR(.next_IP);
+    L_to_SR(.next_ip);
     next_cycle();
 
-    branch(.next_IP, 0);
+    branch(.next_ip, 0);
 }
 
 pub fn _0185() void {
@@ -505,12 +505,12 @@ pub fn _0185() void {
     //syntax("BPN");
     desc("Branch to start of next page");
 
-    SRL_logic_literal_to_LL(.IP, .JL_or_not_K, 0xF000, .fresh, .no_flags);
+    SRL_logic_literal_to_LL(.ip, .JL_or_not_K, 0xF000, .fresh, .no_flags);
     LH_SRC(.JH);
-    L_to_SR(.next_IP);
+    L_to_SR(.next_ip);
     next_cycle();
 
-    branch(.next_IP, 1);
+    branch(.next_ip, 1);
 }
 
 // pub fn _0186() void {
@@ -518,12 +518,12 @@ pub fn _0185() void {
 //     //syntax("BB");
 //     desc("Branch to start of current 256-byte-aligned block");
 
-//     SRL_logic_literal_to_LL(.IP, .JL_and_K, 0xFF00, .fresh, .no_flags);
+//     SRL_logic_literal_to_LL(.ip, .JL_and_K, 0xFF00, .fresh, .no_flags);
 //     LH_SRC(.JH);
-//     L_to_SR(.next_IP);
+//     L_to_SR(.next_ip);
 //     next_cycle();
 
-//     branch(.next_IP, 0);
+//     branch(.next_ip, 0);
 // }
 
 // pub fn _0187() void {
@@ -531,12 +531,12 @@ pub fn _0185() void {
 //     //syntax("BBN");
 //     desc("Branch to start of next 256-byte-aligned block");
 
-//     SRL_logic_literal_to_LL(.IP, .JL_or_K, 0xFF, .fresh, .no_flags);
+//     SRL_logic_literal_to_LL(.ip, .JL_or_K, 0xFF, .fresh, .no_flags);
 //     LH_SRC(.JH);
-//     L_to_SR(.next_IP);
+//     L_to_SR(.next_ip);
 //     next_cycle();
 
-//     branch(.next_IP, 1);
+//     branch(.next_ip, 1);
 // }
 
 pub fn _0188() void {
@@ -550,11 +550,11 @@ pub fn _0188() void {
     }
 
     reg32_to_L(0);
-    L_to_SR(.next_IP);
+    L_to_SR(.next_ip);
     STAT_OP(.set_A);
     next_cycle();
 
-    branch(.next_IP, 0);
+    branch(.next_ip, 0);
 }
 
 pub fn _0189() void {
@@ -568,11 +568,11 @@ pub fn _0189() void {
     }
 
     reg32_to_L(0);
-    L_to_SR(.next_IP);
+    L_to_SR(.next_ip);
     STAT_OP(.clear_A);
     next_cycle();
 
-    branch(.next_IP, 0);
+    branch(.next_ip, 0);
 }
 
 fn firstCondition(comptime condition: MnemonicSuffix) MnemonicSuffix {
@@ -624,11 +624,11 @@ fn conditional_double_branch_s16(comptime condition: MnemonicSuffix) void {
     L_to_SR(.temp_1);
     next_cycle();
 
-    SR_plus_SRL_to_L(.IP, .temp_1, .sx, .fresh, .no_flags);
-    L_to_SR(.next_IP);
+    SR_plus_SRL_to_L(.ip, .temp_1, .sx, .fresh, .no_flags);
+    L_to_SR(.next_ip);
     next_cycle();
 
-    branch(.next_IP, 0);
+    branch(.next_ip, 0);
 }
 
 pub fn _0898() void { conditional_double_branch_s16(.LU_GU); }

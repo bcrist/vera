@@ -1,10 +1,9 @@
-const sim = @import("simulator");
+const sim = @import("Simulator");
 const ctrl = @import("control_signals");
 const misc = @import("misc");
+const bus = @import("bus");
 const uc_layout = @import("microcode_layout");
 const arith = @import("arith.zig");
-
-const Split_L_Bus = sim.Split_L_Bus;
 
 pub const LoopState = struct {
     c: bool,
@@ -40,7 +39,7 @@ pub const LoopState = struct {
 pub const Inputs = struct {
     state: LoopState,
     inhibit_writes: bool,
-    l: Split_L_Bus,
+    l: bus.LParts,
     shift_c: bool,
     arith_z: bool,
     arith_n: bool,
@@ -55,7 +54,7 @@ pub const Inputs = struct {
     LITERAL: ctrl.Literal,
 };
 
-pub fn transact(in: Inputs, power: *misc.Power_Mode) LoopState {
+pub fn transact(in: Inputs, power: *misc.PowerMode) LoopState {
     if (in.inhibit_writes) {
         return in.state;
     }
@@ -121,14 +120,14 @@ pub fn transact(in: Inputs, power: *misc.Power_Mode) LoopState {
             state.c = in.arith_c;
         },
         .load_ZNVC_from_LL, .load_ZNVCKA_from_LL => {
-            const ll_bits = @bitCast(misc.STAT_Bits, in.l.low);
-            state.z = ll_bits.Z;
-            state.n = ll_bits.N;
-            state.v = ll_bits.V;
-            state.c = ll_bits.C;
+            const ll_bits = @bitCast(misc.StatusBits, in.l.low);
+            state.z = ll_bits.z;
+            state.n = ll_bits.n;
+            state.v = ll_bits.v;
+            state.c = ll_bits.c;
             if (in.STAT_OP == .load_ZNVCKA_from_LL) {
-                state.k = ll_bits.K;
-                state.a = ll_bits.A;
+                state.k = ll_bits.k;
+                state.a = ll_bits.a;
             }
         },
         .clear_A => state.a = false,

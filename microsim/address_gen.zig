@@ -1,8 +1,8 @@
-const sim = @import("simulator");
+const sim = @import("Simulator");
 const ctrl = @import("control_signals");
-const misc = @import("misc");
+const bus = @import("bus");
 
-pub fn setup(in: SetupInputs) sim.VirtualAddress {
+pub fn setup(in: SetupInputs) bus.VirtualAddressParts {
     const address_offset: i32 = switch (in.OFFSET) {
         .zero => 0,
         .two => 2,
@@ -13,13 +13,13 @@ pub fn setup(in: SetupInputs) sim.VirtualAddress {
     const address = in.base +% @bitCast(u32, address_offset);
 
     return .{
-        .offset = @truncate(misc.N_Bus, address),
-        .page = @intCast(misc.P_Bus, address >> 12),
+        .offset = @truncate(bus.PageOffset, address),
+        .page = @intCast(bus.Page, address >> 12),
     };
 }
 
 pub const SetupInputs = struct {
-    base: misc.Virtual_Address,
+    base: bus.VirtualAddress,
     OFFSET: ctrl.Address_Offset,
     LITERAL: ctrl.Literal,
 };

@@ -31,13 +31,13 @@ pub fn _0181() void {
     L_to_SR(.temp_1);
     next_cycle();
 
-    SR_plus_SRL_to_L(.IP, .temp_1, .zx, .fresh, .no_flags);
-    L_to_SR(.next_IP);
+    SR_plus_SRL_to_L(.ip, .temp_1, .zx, .fresh, .no_flags);
+    L_to_SR(.next_ip);
     next_cycle();
 
-    SR_plus_literal_to_L(.IP, 4, .fresh, .no_flags);
-    L_to_SR(.RP);
-    branch(.next_IP, 0);
+    SR_plus_literal_to_L(.ip, 4, .fresh, .no_flags);
+    L_to_SR(.rp);
+    branch(.next_ip, 0);
 }
 
 pub fn _0182() void {
@@ -50,13 +50,13 @@ pub fn _0182() void {
     L_to_SR(.temp_1);
     next_cycle();
 
-    SR_plus_SRL_to_L(.IP, .temp_1, ._1x, .fresh, .no_flags);
-    L_to_SR(.next_IP);
+    SR_plus_SRL_to_L(.ip, .temp_1, ._1x, .fresh, .no_flags);
+    L_to_SR(.next_ip);
     next_cycle();
 
-    SR_plus_literal_to_L(.IP, 4, .fresh, .no_flags);
-    L_to_SR(.RP);
-    branch(.next_IP, 0);
+    SR_plus_literal_to_L(.ip, 4, .fresh, .no_flags);
+    L_to_SR(.rp);
+    branch(.next_ip, 0);
 }
 
 pub fn _0183() void {
@@ -73,12 +73,12 @@ pub fn _0183() void {
     D_to_LH();
     SR_to_J(.temp_1);
     JL_to_LL();
-    L_to_SR(.next_IP);
+    L_to_SR(.next_ip);
     next_cycle();
 
-    SR_plus_literal_to_L(.IP, 6, .fresh, .no_flags);
-    L_to_SR(.RP);
-    branch(.next_IP, 0);
+    SR_plus_literal_to_L(.ip, 6, .fresh, .no_flags);
+    L_to_SR(.rp);
+    branch(.next_ip, 0);
 }
 
 pub fn _FA80_FA8F() void {
@@ -87,12 +87,12 @@ pub fn _FA80_FA8F() void {
     desc("Call register-addressed subroutine");
 
     op_reg32_to_L(.OA);
-    L_to_SR(.next_IP);
+    L_to_SR(.next_ip);
     next_cycle();
 
-    SR_plus_literal_to_L(.IP, 2, .fresh, .no_flags);
-    L_to_SR(.RP);
-    branch(.next_IP, 0);
+    SR_plus_literal_to_L(.ip, 2, .fresh, .no_flags);
+    L_to_SR(.rp);
+    branch(.next_ip, 0);
 }
 
 pub fn _018F() void {
@@ -101,6 +101,6 @@ pub fn _018F() void {
     desc("Return from subroutine");
 
     zero_to_L();
-    L_to_SR(.RP);
-    branch(.RP, 0);
+    L_to_SR(.rp);
+    branch(.rp, 0);
 }

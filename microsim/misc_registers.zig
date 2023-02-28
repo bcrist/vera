@@ -1,11 +1,11 @@
-const sim = @import("simulator");
+const sim = @import("Simulator");
 const ctrl = @import("control_signals");
 const misc = @import("misc");
+const bus = @import("bus");
 
-const BusControl = sim.BusControl;
-const OB_OA = sim.OB_OA;
+const SystemBusControl = @import("SystemBusControl.zig");
 
-pub fn readDL(dl: u16, DL_OP: ctrl.Data_Latch_Op, bus_ctrl: BusControl) ?u16 {
+pub fn readDL(dl: u16, DL_OP: ctrl.Data_Latch_Op, bus_ctrl: SystemBusControl) ?u16 {
     if (DL_OP == .to_D and !bus_ctrl.read) {
         return dl;
     } else {
@@ -14,28 +14,31 @@ pub fn readDL(dl: u16, DL_OP: ctrl.Data_Latch_Op, bus_ctrl: BusControl) ?u16 {
 }
 
 pub const TransactInputs = struct {
-    dl: misc.DL,
-    oboa: OB_OA,
-    rsn: misc.RSN,
+    dl: bus.D,
+    oa: misc.OperandA,
+    ob: misc.OperandB,
+    rsn: misc.RegistersetNumber,
     inhibit_writes: bool,
-    data: misc.D_Bus,
-    ll: misc.LL_Bus,
+    data: bus.D,
+    ll: bus.LLow,
     DL_OP: ctrl.Data_Latch_Op,
     OB_OA_OP: ctrl.Operand_Reg_Op,
     SPECIAL: ctrl.Special_Op,
 };
 
 pub const TransactOutputs = struct {
-    dl: misc.DL,
-    oboa: OB_OA,
-    rsn: misc.RSN,
+    dl: bus.D,
+    oa: misc.OperandA,
+    ob: misc.OperandB,
+    rsn: misc.RegistersetNumber,
 };
 
 pub fn transact(in: TransactInputs) TransactOutputs {
     if (in.inhibit_writes) {
         return .{
             .dl = in.dl,
-            .oboa = in.oboa,
+            .oa = in.oa,
+            .ob = in.ob,
             .rsn = in.rsn,
         };
     }
@@ -43,27 +46,26 @@ pub fn transact(in: TransactInputs) TransactOutputs {
         .from_D => in.data,
         .hold, .to_D => in.dl,
     };
-    const oboa = switch (in.OB_OA_OP) {
-        .hold => in.oboa,
-        .from_DL => @bitCast(OB_OA, @truncate(u8, dl)),
-        .increment_OB => OB_OA{
-            .oa = in.oboa.oa,
-            .ob = in.oboa.ob +% 1,
-        },
-        .clear_OB => OB_OA{
-            .oa = in.oboa.oa,
-            .ob = 0,
-        },
+    const oa = switch (in.OB_OA_OP) {
+        .hold, .increment_OB, .clear_OB => in.oa,
+        .from_DL => @truncate(misc.OperandA, dl),
     };
-    const rsn: misc.RSN = switch (in.SPECIAL) {
-        .load_RSN_from_LL => @truncate(misc.RSN, in.ll),
+    const ob = switch (in.OB_OA_OP) {
+        .hold => in.ob,
+        .from_DL => @truncate(misc.OperandB, dl >> 4),
+        .increment_OB => in.ob +% 1,
+        .clear_OB => 0,
+    };
+    const rsn: misc.RegistersetNumber = switch (in.SPECIAL) {
+        .load_RSN_from_LL => @truncate(misc.RegistersetNumber, in.ll),
         .toggle_RSN => in.rsn ^ 0x20,
         else => in.rsn,
     };
 
     return .{
         .dl = dl,
-        .oboa = oboa,
+        .oa = oa,
+        .ob = ob,
         .rsn = rsn,
     };
 }

@@ -3,6 +3,7 @@ const ctrl = @import("control_signals");
 const uc_layout = @import("microcode_layout");
 const bits = @import("bits");
 const misc = @import("misc");
+const bus = @import("bus");
 const register_file = @import("register_file");
 const address_gen = @import("address_gen.zig");
 const arith = @import("arith.zig");
@@ -19,259 +20,183 @@ const Memory = @import("memory.zig").Memory;
 const device_sys = @import("device_sys.zig");
 const assert = std.debug.assert;
 
-pub const Simulator = struct {
-    allocator: std.mem.Allocator,
-    microcode: []const ctrl.Control_Signals,
-    exec_state: ExecutionState,
-    reg_file: *register_file.State,
-    mmu_state: *mmu.State,
-    memory: *Memory,
-    device_sys_state: *device_sys.State,
+const SystemBusControl = @import("SystemBusControl.zig");
 
-    s: SetupInputs = SetupInputs.init(),
-    c: ComputeInputs = ComputeInputs.init(),
-    t: TransactInputs = TransactInputs.init(),
+const Simulator = @This();
 
-    microcycle_count: u64,
+allocator: std.mem.Allocator,
+microcode: []const ctrl.Control_Signals,
+exec_state: ExecutionState,
+reg_file: *register_file.State,
+mmu_state: *mmu.State,
+memory: *Memory, 
+device_sys_state: *device_sys.State,
+s: SetupInputs = SetupInputs.init(),
+c: ComputeInputs = ComputeInputs.init(),
+t: TransactInputs = TransactInputs.init(),
+microcycle_count: u64,
 
-    pub fn init(allocator: std.mem.Allocator, microcode: []const ctrl.Control_Signals) !Simulator {
-        const memory = try allocator.create(Memory);
-        errdefer allocator.destroy(memory);
-        const reg_file_state = try allocator.create(register_file.State);
-        errdefer allocator.destroy(reg_file_state);
-        const mmu_state = try allocator.create(mmu.State);
-        errdefer allocator.destroy(mmu_state);
-        const device_sys_state = try allocator.create(device_sys.State);
-        errdefer allocator.destroy(device_sys_state);
+pub fn init(allocator: std.mem.Allocator, microcode: []const ctrl.Control_Signals) !Simulator {
+    const memory = try allocator.create(Memory);
+    errdefer allocator.destroy(memory);
+    const reg_file_state = try allocator.create(register_file.State);
+    errdefer allocator.destroy(reg_file_state);
+    const mmu_state = try allocator.create(mmu.State);
+    errdefer allocator.destroy(mmu_state);
+    const device_sys_state = try allocator.create(device_sys.State);
+    errdefer allocator.destroy(device_sys_state);
 
-        memory.reset();
-        reg_file_state.reset();
-        mmu_state.reset();
-        device_sys_state.reset();
+    memory.reset();
+    reg_file_state.reset();
+    mmu_state.reset();
+    device_sys_state.reset();
 
-        return Simulator{
-            .allocator = allocator,
-            .microcode = microcode,
-            .exec_state = ExecutionState.init(),
-            .reg_file = reg_file_state,
-            .mmu_state = mmu_state,
-            .memory = memory,
-            .device_sys_state = device_sys_state,
-            .microcycle_count = 0,
-        };
+    return Simulator{
+        .allocator = allocator,
+        .microcode = microcode,
+        .exec_state = ExecutionState.init(),
+        .reg_file = reg_file_state,
+        .mmu_state = mmu_state,
+        .memory = memory,
+        .device_sys_state = device_sys_state,
+        .microcycle_count = 0,
+    };
+}
+
+pub fn deinit(self: *Simulator) void {
+    self.allocator.destroy(self.device_sys_state);
+    self.allocator.destroy(self.mmu_state);
+    self.allocator.destroy(self.reg_file);
+    self.allocator.destroy(self.memory);
+}
+
+pub fn randomizeState(self: *Simulator, rnd: std.rand.Random) void {
+    self.memory.randomize(rnd);
+    self.reg_file.randomize(rnd);
+    self.mmu_state.randomize(rnd);
+    self.device_sys_state.randomize(rnd);
+    self.s.randomize(rnd);
+    self.c.randomize(rnd);
+    self.t.randomize(rnd);
+}
+
+pub fn microcycle(self: *Simulator, n: u64) void {
+    var i: u64 = 0;
+    while (i < n) : (i += 1) {
+        self.exec_state.pipe = self.exec_state.pipe.next();
+
+        const atomic_comp = self.c.want_atomic and !self.c.stall_atomic;
+        const atomic_trans = self.t.want_atomic and !self.t.stall_atomic;
+
+        var next_c = simulate_setup(self.reg_file, self.s, atomic_comp, atomic_trans);
+        var next_t = simulate_compute(self.mmu_state, self.exec_state, self.c);
+        var next_s = simulate_transact(self.microcode, self.memory, self.reg_file, self.mmu_state, self.device_sys_state, &self.exec_state, self.t);
+
+        self.s = next_s;
+        self.c = next_c;
+        self.t = next_t;
+
+        self.microcycle_count += 1;
     }
+}
 
-    pub fn deinit(self: *Simulator) void {
-        self.allocator.destroy(self.device_sys_state);
-        self.allocator.destroy(self.mmu_state);
-        self.allocator.destroy(self.reg_file);
-        self.allocator.destroy(self.memory);
-    }
+pub fn cycle(self: *Simulator, n: u64) void {
+    self.microcycle(n * 3);
+}
 
-    pub fn randomizeState(self: *Simulator, rnd: std.rand.Random) void {
-        self.memory.randomize(rnd);
-        self.reg_file.randomize(rnd);
-        self.mmu_state.randomize(rnd);
-        self.device_sys_state.randomize(rnd);
-        self.s.randomize(rnd);
-        self.c.randomize(rnd);
-        self.t.randomize(rnd);
-    }
+pub fn debugCycle(self: *Simulator, n: u64, pipe: ctrl.Pipe_ID) !void {
+    var writer = std.io.getStdErr().writer();
+    try self.printState(writer, pipe);
 
-    pub fn microcycle(self: *Simulator, n: u64) void {
-        var i: u64 = 0;
-        while (i < n) : (i += 1) {
-            self.exec_state.pipe = self.exec_state.pipe.next();
-
-            const atomic_comp = self.c.want_atomic and !self.c.stall_atomic;
-            const atomic_trans = self.t.want_atomic and !self.t.stall_atomic;
-
-            var next_c = simulate_setup(self.reg_file, self.s, atomic_comp, atomic_trans);
-            var next_t = simulate_compute(self.mmu_state, self.exec_state, self.c);
-            var next_s = simulate_transact(self.microcode, self.memory, self.reg_file, self.mmu_state, self.device_sys_state, &self.exec_state, self.t);
-
-            self.s = next_s;
-            self.c = next_c;
-            self.t = next_t;
-
-            self.microcycle_count += 1;
-        }
-    }
-
-    pub fn cycle(self: *Simulator, n: u64) void {
-        self.microcycle(n * 3);
-    }
-
-    pub fn debugCycle(self: *Simulator, n: u64, pipe: ctrl.Pipe_ID) !void {
-        var writer = std.io.getStdErr().writer();
+    var i: usize = 0;
+    while (i < n) : (i += 1) {
+        self.cycle(1);
         try self.printState(writer, pipe);
-
-        var i: usize = 0;
-        while (i < n) : (i += 1) {
-            self.cycle(1);
-            try self.printState(writer, pipe);
-        }
     }
+}
 
-    pub fn reset(self: *Simulator) void {
-        self.exec_state.reset = true;
-        self.microcycle(switch (self.exec_state.pipe) {
-            .zero => 4,
-            .one => 3,
-            .two => 5,
-        });
-        self.exec_state.reset = false;
+pub fn reset(self: *Simulator) void {
+    self.exec_state.reset = true;
+    self.microcycle(switch (self.exec_state.pipe) {
+        .zero => 4,
+        .one => 3,
+        .two => 5,
+    });
+    self.exec_state.reset = false;
+}
+
+pub fn resetAndStart(self: *Simulator) void {
+    self.reset();
+    while (self.s.pipe != .zero) {
+        self.microcycle(1);
     }
-
-    pub fn resetAndStart(self: *Simulator) void {
-        self.reset();
-        while (self.s.pipe != .zero) {
-            self.microcycle(1);
-        }
-        while (self.s.cs.SEQ_OP != .next_instruction) {
-            self.cycle(1);
-        }
+    while (self.s.cs.SEQ_OP != .next_instruction) {
         self.cycle(1);
     }
+    self.cycle(1);
+}
 
-    pub fn printState(self: *Simulator, writer: anytype, pipe: misc.Pipe_ID) !void {
-        try writer.print("c{}", .{ self.microcycle_count });
-        if (self.exec_state.reset) try writer.writeAll(" RESET");
-        if (self.exec_state.sleep) try writer.writeAll(" SLEEP");
-        for (self.exec_state.interrupt_pending, 0..) |int_pending, pipe_index| {
-            if (int_pending) {
-                try writer.print(" INT{}", .{ pipe_index + 1 });
-            }
-        }
-
-        try writer.writeAll("\n");
-
-        switch (self.exec_state.pipe) {
-            .zero => switch (pipe) {
-                .zero => try self.printT(writer),
-                .one => try self.printC(writer),
-                .two => try self.printS(writer),
-            },
-            .one => switch (pipe) {
-                .zero => try self.printS(writer),
-                .one => try self.printT(writer),
-                .two => try self.printC(writer),
-            },
-            .two => switch (pipe) {
-                .zero => try self.printC(writer),
-                .one => try self.printS(writer),
-                .two => try self.printT(writer),
-            },
+pub fn printState(self: *Simulator, writer: anytype, pipe: misc.PipeID) !void {
+    try writer.print("c{}", .{ self.microcycle_count });
+    if (self.exec_state.reset) try writer.writeAll(" RESET");
+    if (self.exec_state.sleep) try writer.writeAll(" SLEEP");
+    for (self.exec_state.interrupt_pending, 0..) |int_pending, pipe_index| {
+        if (int_pending) {
+            try writer.print(" INT{}", .{ pipe_index + 1 });
         }
     }
 
-    fn printS(self: *Simulator, writer: anytype) !void {
-        try writer.print("Pipe:{s}  RSN:{}  T -> Setup\n", .{ @tagName(self.s.pipe), self.s.reg.rsn });
-        try self.s.cs.print(writer);
-        try self.printRegs(self.s.reg, writer);
+    try writer.writeAll("\n");
+
+    switch (self.exec_state.pipe) {
+        .zero => switch (pipe) {
+            .zero => try self.printT(writer),
+            .one => try self.printC(writer),
+            .two => try self.printS(writer),
+        },
+        .one => switch (pipe) {
+            .zero => try self.printS(writer),
+            .one => try self.printT(writer),
+            .two => try self.printC(writer),
+        },
+        .two => switch (pipe) {
+            .zero => try self.printC(writer),
+            .one => try self.printS(writer),
+            .two => try self.printT(writer),
+        },
     }
-    fn printC(self: *Simulator, writer: anytype) !void {
-        try writer.print("Pipe:{s}  RSN:{}  S -> Compute\n", .{ @tagName(self.c.pipe), self.c.reg.rsn });
-        try self.c.cs.print(writer);
-        try self.printRegs(self.c.reg, writer);
-    }
-    fn printT(self: *Simulator, writer: anytype) !void {
-        try writer.print("Pipe:{s}  RSN:{}  C -> Transact\n", .{ @tagName(self.t.pipe), self.t.reg.rsn });
-        try self.t.cs.print(writer);
-        try self.printRegs(self.t.reg, writer);
-    }
-    fn printRegs(self: *Simulator, reg: LoopRegisters, writer: anytype) !void {
-        try writer.print("      UA: {X:0>4}  DL: {X:0>4}   OA: {X:0>1}  OB: {X:0>1}  ", .{
-            reg.ua, reg.dl, reg.oboa.oa, reg.oboa.ob,
-        });
-        try reg.stat.print(writer);
-        try writer.writeAll("\n");
-        try register_file.RegisterView.init(self.reg_file, reg.rsn).printRegs(writer);
-    }
-};
+}
 
-pub const Split_J_Bus = packed struct {
-    low: misc.JL_Bus,
-    high: misc.JH_Bus,
-
-    const zero = Split_J_Bus{
-        .low = 0,
-        .high = 0,
-    };
-};
-
-pub const Split_L_Bus = packed struct {
-    low: misc.LL_Bus,
-    high: misc.LH_Bus,
-
-    const zero = Split_L_Bus{
-        .low = 0,
-        .high = 0,
-    };
-};
-
-pub const OB_OA = packed struct {
-    oa: misc.OA,
-    ob: misc.OB,
-
-    const zero = OB_OA{
-        .oa = 0,
-        .ob = 0,
-    };
-};
-
-pub const VirtualAddress = packed struct {
-    offset: misc.N_Bus,
-    page: misc.P_Bus,
-
-    pub const zero = VirtualAddress{
-        .offset = 0,
-        .page = 0,
-    };
-};
-
-pub const PhysicalAddress = struct {
-    offset: misc.N_Bus,
-    even_offset: OffsetType,
-    odd_offset: OffsetType,
-    frame: misc.F_Bus,
-    swap_bytes: bool,
-
-    const OffsetType = std.meta.Int(.unsigned, @bitSizeOf(misc.N_Bus) - 1);
-
-    pub const zero = PhysicalAddress{
-        .offset = 0,
-        .even_offset = 0,
-        .odd_offset = 0,
-        .frame = 0,
-        .swap_bytes = false,
-    };
-};
-
-pub const BusControl = struct {
-    read: bool,
-    write: bool,
-    write_even: bool,
-    write_odd: bool,
-    wait_states: u2,
-
-    pub fn init() BusControl {
-        return .{
-            .read = false,
-            .write = false,
-            .write_even = false,
-            .write_odd = false,
-            .wait_states = 0,
-        };
-    }
-};
+fn printS(self: *Simulator, writer: anytype) !void {
+    try writer.print("Pipe:{s}  RSN:{}  T -> Setup\n", .{ @tagName(self.s.pipe), self.s.reg.rsn });
+    try self.s.cs.print(writer);
+    try self.printRegs(self.s.reg, writer);
+}
+fn printC(self: *Simulator, writer: anytype) !void {
+    try writer.print("Pipe:{s}  RSN:{}  S -> Compute\n", .{ @tagName(self.c.pipe), self.c.reg.rsn });
+    try self.c.cs.print(writer);
+    try self.printRegs(self.c.reg, writer);
+}
+fn printT(self: *Simulator, writer: anytype) !void {
+    try writer.print("Pipe:{s}  RSN:{}  C -> Transact\n", .{ @tagName(self.t.pipe), self.t.reg.rsn });
+    try self.t.cs.print(writer);
+    try self.printRegs(self.t.reg, writer);
+}
+fn printRegs(self: *Simulator, reg: LoopRegisters, writer: anytype) !void {
+    try writer.print("      UA: {X:0>4}  DL: {X:0>4}   OA: {X:0>1}  OB: {X:0>1}  ", .{
+        reg.ua, reg.dl, reg.oa, reg.ob,
+    });
+    try reg.stat.print(writer);
+    try writer.writeAll("\n");
+    try register_file.RegisterView.init(self.reg_file, reg.rsn).printRegs(writer);
+}
 
 const ExecutionState = struct {
     reset: bool,
     sleep: bool,
     interrupt_pending: [3]bool,
-    pipe: misc.Pipe_ID, // The pipe ID currently in the transact stage
-    power: misc.Power_Mode,
+    pipe: misc.PipeID, // The pipe ID currently in the transact stage
+    power: misc.PowerMode,
 
     pub fn init() ExecutionState {
         return .{
@@ -285,13 +210,14 @@ const ExecutionState = struct {
 };
 
 const LoopRegisters = struct {
-    exec_mode: misc.Execution_Mode,
-    rsn: misc.RSN,
+    exec_mode: misc.ExecutionMode,
+    rsn: misc.RegistersetNumber,
     ua: uc_layout.UC_Address,
-    dl: misc.DL,
-    oboa: OB_OA,
+    dl: bus.D,
+    oa: misc.OperandA,
+    ob: misc.OperandB,
     stat: stat.LoopState,
-    asn: misc.AT_ASN,
+    asn: misc.address_translator.AddressSpaceNumber,
     last_mmu_op: mmu.OperationInfo,
     mmu_matching_entry: mmu.Entry,
     mmu_other_entry: mmu.Entry,
@@ -302,7 +228,8 @@ const LoopRegisters = struct {
             .rsn = 0,
             .ua = 0,
             .dl = 0,
-            .oboa = OB_OA.zero,
+            .oa = 0,
+            .ob = 0,
             .stat = .{
                 .c = false,
                 .v = false,
@@ -320,14 +247,12 @@ const LoopRegisters = struct {
     }
 
     pub fn randomize(self: *LoopRegisters, rnd: std.rand.Random) void {
-        self.exec_mode = rnd.enumValue(misc.Execution_Mode);
-        self.rsn = rnd.int(misc.RSN);
+        self.exec_mode = rnd.enumValue(misc.ExecutionMode);
+        self.rsn = rnd.int(misc.RegistersetNumber);
         self.ua = rnd.int(uc_layout.UC_Address);
-        self.dl = rnd.int(misc.DL);
-        self.oboa = .{
-            .oa = rnd.int(misc.OA),
-            .ob = rnd.int(misc.OB),
-        };
+        self.dl = rnd.int(bus.D);
+        self.oa = rnd.int(misc.OperandA);
+        self.ob = rnd.int(misc.OperandB);
         self.stat = .{
             .c = rnd.boolean(),
             .v = rnd.boolean(),
@@ -337,7 +262,7 @@ const LoopRegisters = struct {
             .k = true, // This must be guaranteed by reset logic
             .a = rnd.boolean(),
         };
-        self.asn = rnd.int(misc.AT_ASN);
+        self.asn = rnd.int(misc.address_translator.AddressSpaceNumber);
         self.last_mmu_op = mmu.OperationInfo.random(rnd);
         self.mmu_matching_entry = mmu.Entry.random(rnd);
         self.mmu_other_entry = mmu.Entry.random(rnd);
@@ -345,7 +270,7 @@ const LoopRegisters = struct {
 };
 
 const SetupInputs = struct {
-    pipe: misc.Pipe_ID,
+    pipe: misc.PipeID,
     cs: ctrl.Control_Signals,
     reg: LoopRegisters,
     want_atomic: bool,
@@ -360,7 +285,7 @@ const SetupInputs = struct {
     }
 
     pub fn randomize(self: *SetupInputs, rnd: std.rand.Random) void {
-        self.pipe = rnd.enumValue(misc.Pipe_ID);
+        self.pipe = rnd.enumValue(misc.PipeID);
         self.cs.randomize(rnd);
         self.reg.randomize(rnd);
         self.want_atomic = rnd.boolean();
@@ -368,16 +293,16 @@ const SetupInputs = struct {
 };
 
 const ComputeInputs = struct {
-    pipe: misc.Pipe_ID,
+    pipe: misc.PipeID,
     cs: ctrl.Control_Signals,
     reg: LoopRegisters,
     want_atomic: bool,
     stall_atomic: bool,
-    sr1: Split_J_Bus,
-    sr2: Split_J_Bus,
-    j: Split_J_Bus,
-    k: misc.K_Bus,
-    virtual_address: VirtualAddress,
+    sr1: bus.JParts,
+    sr2: bus.JParts,
+    j: bus.JParts,
+    k: bus.K,
+    virtual_address: bus.VirtualAddressParts,
 
     pub fn init() ComputeInputs {
         return .{
@@ -386,61 +311,60 @@ const ComputeInputs = struct {
             .reg = LoopRegisters.init(),
             .want_atomic = false,
             .stall_atomic = false,
-            .sr1 = Split_J_Bus.zero,
-            .sr2 = Split_J_Bus.zero,
-            .j = Split_J_Bus.zero,
+            .sr1 = bus.JParts.zero,
+            .sr2 = bus.JParts.zero,
+            .j = bus.JParts.zero,
             .k = 0,
-            .virtual_address = VirtualAddress.zero,
+            .virtual_address = bus.VirtualAddressParts.zero,
         };
     }
 
     pub fn randomize(self: *ComputeInputs, rnd: std.rand.Random) void {
-        self.pipe = rnd.enumValue(misc.Pipe_ID);
+        self.pipe = rnd.enumValue(misc.PipeID);
         self.cs.randomize(rnd);
         self.reg.randomize(rnd);
         self.want_atomic = rnd.boolean();
         self.stall_atomic = rnd.boolean();
         self.sr1 = .{
-            .low = rnd.int(misc.JL_Bus),
-            .high = rnd.int(misc.JH_Bus),
+            .low = rnd.int(bus.JLow),
+            .high = rnd.int(bus.JHigh),
         };
         self.sr2 = .{
-            .low = rnd.int(misc.JL_Bus),
-            .high = rnd.int(misc.JH_Bus),
+            .low = rnd.int(bus.JLow),
+            .high = rnd.int(bus.JHigh),
         };
         self.j = .{
-            .low = rnd.int(misc.JL_Bus),
-            .high = rnd.int(misc.JH_Bus),
+            .low = rnd.int(bus.JLow),
+            .high = rnd.int(bus.JHigh),
         };
-        self.k = rnd.int(misc.K_Bus);
+        self.k = rnd.int(bus.K);
         self.virtual_address = .{
-            .offset = rnd.int(misc.N_Bus),
-            .page = rnd.int(misc.P_Bus),
+            .offset = rnd.int(bus.PageOffset),
+            .page = rnd.int(bus.Page),
         };
     }
 };
 
 const TransactInputs = struct {
-    pipe: misc.Pipe_ID,
+    pipe: misc.PipeID,
     cs: ctrl.Control_Signals,
     reg: LoopRegisters,
     want_atomic: bool,
     stall_atomic: bool,
-    sr1: Split_J_Bus,
-    sr2: Split_J_Bus,
+    sr1: bus.JParts,
+    sr2: bus.JParts,
     arith: arith.Outputs,
     shift: shift.Outputs,
     mult: mult.Outputs,
     logic: logic.Outputs,
     bitcount: bitcount.Outputs,
-    virtual_address: VirtualAddress,
-    physical_address: PhysicalAddress,
+    virtual_address: bus.VirtualAddressParts,
     mmu_op: mmu.OperationInfo,
-    mmu_slot_address: misc.AT_Slot,
+    mmu_slot_address: misc.address_translator.Slot,
     mmu_matching_entry: mmu.Entry,
     mmu_other_entry: mmu.Entry,
     mmu_k: bool,
-    bus_ctrl: BusControl,
+    bus_ctrl: SystemBusControl,
     fault: faults.ComputeOutputs,
     inhibit_writes: bool,
 
@@ -451,36 +375,35 @@ const TransactInputs = struct {
             .reg = LoopRegisters.init(),
             .want_atomic = false,
             .stall_atomic = false,
-            .sr1 = Split_J_Bus.zero,
-            .sr2 = Split_J_Bus.zero,
+            .sr1 = bus.JParts.zero,
+            .sr2 = bus.JParts.zero,
             .arith = .{
-                .data = Split_L_Bus.zero,
+                .data = bus.LParts.zero,
                 .z = false,
                 .n = false,
                 .c = false,
                 .v = false,
             },
             .shift = .{
-                .data = Split_L_Bus.zero,
+                .data = bus.LParts.zero,
                 .c = false,
             },
             .mult = .{
-                .data = Split_L_Bus.zero,
+                .data = bus.LParts.zero,
             },
             .logic = .{
-                .data = Split_L_Bus.zero,
+                .data = bus.LParts.zero,
             },
             .bitcount = .{
                 .data = 0,
             },
-            .virtual_address = VirtualAddress.zero,
-            .physical_address = PhysicalAddress.zero,
+            .virtual_address = bus.VirtualAddressParts.zero,
             .mmu_op = mmu.OperationInfo.init(),
             .mmu_slot_address = 0,
             .mmu_matching_entry = mmu.Entry{},
             .mmu_other_entry = mmu.Entry{},
             .mmu_k = false,
-            .bus_ctrl = BusControl.init(),
+            .bus_ctrl = SystemBusControl.init(),
             .fault = .{
                 .any = false,
                 .page = false,
@@ -493,23 +416,23 @@ const TransactInputs = struct {
     }
 
     pub fn randomize(self: *TransactInputs, rnd: std.rand.Random) void {
-        self.pipe = rnd.enumValue(misc.Pipe_ID);
+        self.pipe = rnd.enumValue(misc.PipeID);
         self.cs.randomize(rnd);
         self.reg.randomize(rnd);
         self.want_atomic = rnd.boolean();
         self.stall_atomic = rnd.boolean();
         self.sr1 = .{
-            .low = rnd.int(misc.JL_Bus),
-            .high = rnd.int(misc.JH_Bus),
+            .low = rnd.int(bus.JLow),
+            .high = rnd.int(bus.JHigh),
         };
         self.sr2 = .{
-            .low = rnd.int(misc.JL_Bus),
-            .high = rnd.int(misc.JH_Bus),
+            .low = rnd.int(bus.JLow),
+            .high = rnd.int(bus.JHigh),
         };
         self.arith = .{
             .data = .{
-                .low = rnd.int(misc.LL_Bus),
-                .high = rnd.int(misc.LH_Bus),
+                .low = rnd.int(bus.LLow),
+                .high = rnd.int(bus.LHigh),
             },
             .z = rnd.boolean(),
             .n = rnd.boolean(),
@@ -518,46 +441,31 @@ const TransactInputs = struct {
         };
         self.shift = .{
             .data = .{
-                .low = rnd.int(misc.LL_Bus),
-                .high = rnd.int(misc.LH_Bus),
+                .low = rnd.int(bus.LLow),
+                .high = rnd.int(bus.LHigh),
             },
             .c = rnd.boolean(),
         };
         self.mult.data = .{
-            .low = rnd.int(misc.LL_Bus),
-            .high = rnd.int(misc.LH_Bus),
+            .low = rnd.int(bus.LLow),
+            .high = rnd.int(bus.LHigh),
         };
         self.logic.data = .{
-            .low = rnd.int(misc.LL_Bus),
-            .high = rnd.int(misc.LH_Bus),
+            .low = rnd.int(bus.LLow),
+            .high = rnd.int(bus.LHigh),
         };
         self.bitcount = .{
             .data = rnd.int(u16),
         };
         self.virtual_address = .{
-            .offset = rnd.int(misc.N_Bus),
-            .page = rnd.int(misc.P_Bus),
+            .offset = rnd.int(bus.PageOffset),
+            .page = rnd.int(bus.Page),
         };
-        self.physical_address = .{
-            .offset = rnd.int(misc.N_Bus),
-            .even_offset = 0,
-            .odd_offset = 0,
-            .frame = rnd.int(misc.F_Bus),
-            .swap_bytes = rnd.boolean(),
-        };
-        self.physical_address.odd_offset = @intCast(u11, self.physical_address.offset >> 1);
-        self.physical_address.even_offset = @intCast(u11, self.physical_address.odd_offset + (self.physical_address.offset & 1));
         self.mmu_op = mmu.OperationInfo.random(rnd);
-        self.mmu_slot_address = rnd.int(misc.AT_Slot);
+        self.mmu_slot_address = rnd.int(misc.address_translator.Slot);
         self.mmu_matching_entry = mmu.Entry.random(rnd);
         self.mmu_other_entry = mmu.Entry.random(rnd);
-        self.bus_ctrl = .{
-            .read = rnd.boolean(),
-            .write = rnd.boolean(),
-            .write_even = rnd.boolean(),
-            .write_odd = rnd.boolean(),
-            .wait_states = rnd.int(u2),
-        };
+        self.bus_ctrl = SystemBusControl.random(rnd);
         self.fault = .{
             .any = false,
             .page = rnd.boolean(),
@@ -573,7 +481,8 @@ const TransactInputs = struct {
 fn simulate_setup(reg_file: *const register_file.State, in: SetupInputs, atomic_comp: bool, atomic_trans: bool) ComputeInputs {
     const rf = register_file.setup(reg_file, .{
         .rsn = in.reg.rsn,
-        .oboa = in.reg.oboa,
+        .oa = in.reg.oa,
+        .ob = in.reg.ob,
         .JR_RSEL = in.cs.JR_RSEL,
         .KR_RSEL = in.cs.KR_RSEL,
         .JR_RX = in.cs.JR_RX,
@@ -660,13 +569,11 @@ fn simulate_compute(mmu_state: *const mmu.State, es: ExecutionState, in: Compute
     const inhibit_writes = in.stall_atomic or fault.any;
 
     if (inhibit_writes) {
-        mmu_out.bus_ctrl = .{
-            .read = false,
-            .write = false,
-            .write_even = false,
-            .write_odd = false,
-            .wait_states = 0,
-        };
+        mmu_out.bus_ctrl.read = false;
+        mmu_out.bus_ctrl.write = false;
+        mmu_out.bus_ctrl.write_even = false;
+        mmu_out.bus_ctrl.write_odd = false;
+        mmu_out.bus_ctrl.wait_states = 0;
     }
 
     return .{
@@ -683,7 +590,6 @@ fn simulate_compute(mmu_state: *const mmu.State, es: ExecutionState, in: Compute
         .logic = logic_out,
         .bitcount = bitcount_out,
         .virtual_address = in.virtual_address,
-        .physical_address = mmu_out.physical_address,
         .mmu_op = mmu_out.op,
         .mmu_slot_address = mmu_out.slot,
         .mmu_matching_entry = mmu_out.matching_entry,
@@ -696,12 +602,12 @@ fn simulate_compute(mmu_state: *const mmu.State, es: ExecutionState, in: Compute
 }
 
 fn simulate_transact(microcode: []const ctrl.Control_Signals, memory: *Memory, reg_file: *register_file.State, mmu_state: *mmu.State, sys_state: *device_sys.State, es: *ExecutionState, in: TransactInputs) SetupInputs {
-    const mem_d = memory.read(in.bus_ctrl, in.physical_address);
-    const sys_d = device_sys.read(sys_state, in.bus_ctrl, in.physical_address);
+    const mem_d = memory.read(in.bus_ctrl);
+    const sys_d = device_sys.read(sys_state, in.bus_ctrl);
     const dl_d = misc_registers.readDL(in.reg.dl, in.cs.DL_OP, in.bus_ctrl);
     // :NewDevice: handle read here
 
-    var d: misc.D_Bus = 0;
+    var d: bus.D = 0;
     var num_d_drivers: usize = 0;
 
     if (mem_d) |dd| {
@@ -722,7 +628,7 @@ fn simulate_transact(microcode: []const ctrl.Control_Signals, memory: *Memory, r
     // Note this happens even if in.inhibit_writes is true
     const new_last_mmu_op = if (in.cs.AT_OP == .hold) in.reg.last_mmu_op else in.mmu_op;
 
-    var l: Split_L_Bus = undefined;
+    var l: bus.LParts = undefined;
     l.low = switch (in.cs.LL_SRC) {
         .zero => 0,
         .logic => in.logic.data.low,
@@ -731,20 +637,20 @@ fn simulate_transact(microcode: []const ctrl.Control_Signals, memory: *Memory, r
         .mult_L => in.mult.data.low,
         .bitcount => in.bitcount.data,
         .D16 => d,
-        .D8_sx => bits.sx(misc.LL_Bus, @truncate(u8, d)),
+        .D8_sx => bits.sx(bus.LLow, @truncate(u8, d)),
         .AT_ME_L => @truncate(u16, @bitCast(u32, in.mmu_matching_entry)),
         .AT_OE_L => @truncate(u16, @bitCast(u32, in.mmu_other_entry)),
         .last_mmu_op_L => @truncate(u16, new_last_mmu_op.toU32()),
-        .STAT => @bitCast(u16, misc.STAT_Bits{
-            .Z = in.reg.stat.z,
-            .N = in.reg.stat.n,
-            .C = in.reg.stat.c,
-            .V = in.reg.stat.v,
-            .K = in.reg.stat.k,
-            .A = in.reg.stat.a,
-            .PIPE = in.pipe,
-            .MODE = in.reg.exec_mode,
-            .PWR = es.power,
+        .STAT => @bitCast(u16, misc.StatusBits{
+            .z = in.reg.stat.z,
+            .n = in.reg.stat.n,
+            .c = in.reg.stat.c,
+            .v = in.reg.stat.v,
+            .k = in.reg.stat.k,
+            .a = in.reg.stat.a,
+            .pipe = in.pipe,
+            .mode = in.reg.exec_mode,
+            .pwr = es.power,
         }),
         .pipe_ID => @enumToInt(in.pipe),
     };
@@ -755,7 +661,7 @@ fn simulate_transact(microcode: []const ctrl.Control_Signals, memory: *Memory, r
         .arith_H => in.arith.data.high,
         .mult_H => in.mult.data.high,
         .D16 => d,
-        .sx => bits.sx(misc.LH_Bus, @truncate(u1, l.low >> 15)),
+        .sx => bits.sx(bus.LHigh, @truncate(u1, l.low >> 15)),
         .JH => in.logic.data.high,
         .AT_ME_H => @intCast(u16, @bitCast(u32, in.mmu_matching_entry) >> 16),
         .AT_OE_H => @intCast(u16, @bitCast(u32, in.mmu_other_entry) >> 16),
@@ -772,13 +678,13 @@ fn simulate_transact(microcode: []const ctrl.Control_Signals, memory: *Memory, r
 
     assert(num_d_drivers <= 1);
 
-    memory.write(in.bus_ctrl, in.physical_address, d, in.cs.SPECIAL == .block_transfer);
-    device_sys.write(sys_state, in.bus_ctrl, in.physical_address, d, in.mmu_matching_entry.update_frame_state);
+    memory.write(in.bus_ctrl, d, in.cs.SPECIAL == .block_transfer);
+    device_sys.write(sys_state, in.bus_ctrl, d, in.mmu_matching_entry.update_frame_state);
     // :NewDevice: handle write here
 
     var next_asn = in.reg.asn;
-    if (!in.inhibit_writes and in.cs.SR2_WI == .ASN) {
-        next_asn = @truncate(misc.AT_ASN, l.low);
+    if (!in.inhibit_writes and in.cs.SR2_WI == .asn) {
+        next_asn = @truncate(misc.address_translator.AddressSpaceNumber, l.low);
     }
 
     const mmu_out = mmu.transact(mmu_state, .{
@@ -812,7 +718,8 @@ fn simulate_transact(microcode: []const ctrl.Control_Signals, memory: *Memory, r
         .rsn = in.reg.rsn,
         .ll = l.low,
         .dl = in.reg.dl,
-        .oboa = in.reg.oboa,
+        .oa = in.reg.oa,
+        .ob = in.reg.ob,
         .inhibit_writes = in.inhibit_writes,
         .data = d,
         .DL_OP = in.cs.DL_OP,
@@ -823,7 +730,8 @@ fn simulate_transact(microcode: []const ctrl.Control_Signals, memory: *Memory, r
     register_file.transact(reg_file, .{
         .rsn = misc_out.rsn,
         .read_rsn = in.reg.rsn,
-        .oboa = in.reg.oboa,
+        .oa = in.reg.oa,
+        .ob = in.reg.ob,
         .inhibit_writes = in.inhibit_writes,
         .l = l,
         .virtual_address = in.virtual_address,
@@ -875,7 +783,8 @@ fn simulate_transact(microcode: []const ctrl.Control_Signals, memory: *Memory, r
             .exec_mode = decode_out.exec_mode,
             .ua = decode_out.ua,
             .dl = misc_out.dl,
-            .oboa = misc_out.oboa,
+            .oa = misc_out.oa,
+            .ob = misc_out.ob,
             .rsn = misc_out.rsn,
             .stat = stat_out,
             .asn = next_asn,

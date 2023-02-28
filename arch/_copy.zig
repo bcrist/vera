@@ -1,7 +1,7 @@
 const ib = @import("instruction_builder.zig");
 const cb = @import("cycle_builder.zig");
 
-const Signed_Offset_For_Literal = @import("misc").Signed_Offset_For_Literal;
+const SignedOffsetForLiteral = @import("misc").SignedOffsetForLiteral;
 
 const encoding = ib.encoding;
 const getParameterConstant = ib.getParameterConstant;
@@ -86,7 +86,7 @@ pub fn _4C00_4CFF() void {
     //syntax("C IP+SRa -> Xb");
     desc("Copy IP-relative address to 32b register");
 
-    SR_plus_op_reg_to_L(.IP, .OA, .sx, .fresh, .no_flags);
+    SR_plus_op_reg_to_L(.ip, .OA, .sx, .fresh, .no_flags);
     L_to_op_reg32(.OB);
     load_and_exec_next_insn(2);
 }
@@ -96,7 +96,7 @@ pub fn _4D00_4DFF() void {
     //syntax("C SP+SRa -> Xb");
     desc("Copy SP-relative address to 32b register");
 
-    SR_plus_op_reg_to_L(.SP, .OA, .sx, .fresh, .no_flags);
+    SR_plus_op_reg_to_L(.sp, .OA, .sx, .fresh, .no_flags);
     L_to_op_reg32(.OB);
     load_and_exec_next_insn(2);
 }
@@ -107,7 +107,7 @@ pub fn _4E00_4EFF() void {
     desc("Copy IP-relative (immediate offset) address to 32b register");
 
     const offset = getParameterOffset(0);
-    SR_plus_literal_to_L(.IP, offset, .fresh, .no_flags);
+    SR_plus_literal_to_L(.ip, offset, .fresh, .no_flags);
     L_to_op_reg32(.OA);
     load_and_exec_next_insn(2);
 }
@@ -118,7 +118,7 @@ pub fn _4F00_4FFF() void {
     desc("Copy SP-relative (immediate offset) address to 32b register");
 
     const offset = getParameterOffset(0);
-    SR_plus_literal_to_L(.SP, offset, .fresh, .no_flags);
+    SR_plus_literal_to_L(.sp, offset, .fresh, .no_flags);
     L_to_op_reg32(.OA);
     load_and_exec_next_insn(2);
 }
@@ -133,7 +133,7 @@ pub fn _5800_580F() void {
     L_to_SR(.temp_1);
     next_cycle();
 
-    SR_plus_SRL_to_L(.IP, .temp_1, .zx, .fresh, .no_flags);
+    SR_plus_SRL_to_L(.ip, .temp_1, .zx, .fresh, .no_flags);
     L_to_op_reg32(.OA);
     load_and_exec_next_insn(4);
 }
@@ -147,7 +147,7 @@ pub fn _5810_581F() void {
     L_to_SR(.temp_1);
     next_cycle();
 
-    SR_plus_SRL_to_L(.IP, .temp_1, ._1x, .fresh, .no_flags);
+    SR_plus_SRL_to_L(.ip, .temp_1, ._1x, .fresh, .no_flags);
     L_to_op_reg32(.OA);
     load_and_exec_next_insn(4);
 }
@@ -162,7 +162,7 @@ pub fn _5820_582F() void {
     L_to_SR(.temp_2);
     next_cycle();
 
-    SR_plus_SRL_to_L(.SP, .temp_2, .zx, .fresh, .no_flags);
+    SR_plus_SRL_to_L(.sp, .temp_2, .zx, .fresh, .no_flags);
     L_to_op_reg32(.OA);
     load_and_exec_next_insn(4);
 }
@@ -176,7 +176,7 @@ pub fn _5830_583F() void {
     L_to_SR(.temp_2);
     next_cycle();
 
-    SR_plus_SRL_to_L(.SP, .temp_2, ._1x, .fresh, .no_flags);
+    SR_plus_SRL_to_L(.sp, .temp_2, ._1x, .fresh, .no_flags);
     L_to_op_reg32(.OA);
     load_and_exec_next_insn(4);
 }
@@ -186,7 +186,7 @@ pub fn _5C00_5CFF() void {
     //syntax("C imm4[0,15] -> Ra");
     desc("Copy immediate to 16b register");
 
-    literal_to_LL(getParameterConstant(Signed_Offset_For_Literal, 0));
+    literal_to_LL(getParameterConstant(SignedOffsetForLiteral, 0));
     LL_to_op_reg(.OA);
     load_and_exec_next_insn(2);
 }
@@ -195,7 +195,7 @@ pub fn _5D00_5DFF() void {
     //syntax("C imm4[-16,-1] -> Ra");
     desc("Copy immediate to 16b register");
 
-    literal_to_LL(getParameterConstant(Signed_Offset_For_Literal, 0));
+    literal_to_LL(getParameterConstant(SignedOffsetForLiteral, 0));
     LL_to_op_reg(.OA);
     load_and_exec_next_insn(2);
 }
@@ -205,7 +205,7 @@ pub fn _5E00_5EFF() void {
     //syntax("C imm4[0,15] -> Xa");
     desc("Copy immediate to 32b register");
 
-    literal_to_L(getParameterConstant(Signed_Offset_For_Literal, 0));
+    literal_to_L(getParameterConstant(SignedOffsetForLiteral, 0));
     L_to_op_reg32(.OA);
     load_and_exec_next_insn(2);
 }
@@ -214,7 +214,7 @@ pub fn _5F00_5FFF() void {
     //syntax("C imm4[-16,-1] -> Xa");
     desc("Copy immediate to 32b register");
 
-    literal_to_L(getParameterConstant(Signed_Offset_For_Literal, 0));
+    literal_to_L(getParameterConstant(SignedOffsetForLiteral, 0));
     L_to_op_reg32(.OA);
     load_and_exec_next_insn(2);
 }
@@ -402,7 +402,7 @@ pub fn _FAE0_FAEF() void {
     //syntax("C RP -> Xa");
     desc("Copy return pointer to 32b register");
 
-    SR_to_L(.RP);
+    SR_to_L(.rp);
     L_to_op_reg32(.OA);
     load_and_exec_next_insn(2);
 }
@@ -413,7 +413,7 @@ pub fn _FAF0_FAFF() void {
     desc("Copy 32b register to return pointer");
 
     op_reg32_to_L(.OA);
-    L_to_SR(.RP);
+    L_to_SR(.rp);
     load_and_exec_next_insn(2);
 }
 
@@ -422,7 +422,7 @@ pub fn _FBF0_FBFF() void {
     //syntax("C BP -> Xa");
     desc("Copy base pointer to 32b register");
 
-    SR_to_L(.BP);
+    SR_to_L(.bp);
     L_to_op_reg32(.OA);
     load_and_exec_next_insn(2);
 }
@@ -433,7 +433,7 @@ pub fn _E4F0_E4FF() void {
     desc("Copy 32b register to base pointer");
 
     op_reg32_to_L(.OA);
-    L_to_SR(.BP);
+    L_to_SR(.bp);
     load_and_exec_next_insn(2);
 }
 
@@ -447,7 +447,7 @@ pub fn _E460_E46F() void {
         return;
     }
 
-    SR_to_L(.ASN);
+    SR_to_L(.asn);
     L_to_op_reg32(.OA);
     load_and_exec_next_insn(2);
 }
@@ -463,7 +463,7 @@ pub fn _E470_E47F() void {
     }
 
     op_reg32_to_L(.OA);
-    L_to_SR(.ASN);
+    L_to_SR(.asn);
     next_cycle();
 
     load_and_exec_next_insn(2);
@@ -479,7 +479,7 @@ pub fn _93B0_93BF() void {
         return;
     }
 
-    SR_to_L(.KXP);
+    SR_to_L(.kxp);
     L_to_op_reg32(.OA);
     load_and_exec_next_insn(2);
 }
@@ -495,7 +495,7 @@ pub fn _93C0_93CF() void {
     }
 
     op_reg32_to_L(.OA);
-    L_to_SR(.KXP);
+    L_to_SR(.kxp);
     next_cycle();
 
     load_and_exec_next_insn(2);
@@ -506,7 +506,7 @@ pub fn _93D0_93DF() void {
     //syntax("C UXP -> Xa");
     desc("Copy user context pointer to 32b register");
 
-    SR_to_L(.UXP);
+    SR_to_L(.uxp);
     L_to_op_reg32(.OA);
     load_and_exec_next_insn(2);
 }
@@ -517,7 +517,7 @@ pub fn _93E0_93EF() void {
     desc("Copy 32b register to user context pointer");
 
     op_reg32_to_L(.OA);
-    L_to_SR(.UXP);
+    L_to_SR(.uxp);
     next_cycle();
 
     load_and_exec_next_insn(2);

@@ -20,13 +20,15 @@
     (pkg microcode_layout)
     (pkg microcode_rom_serialization)
     (pkg misc)
+    (pkg bus)
+    (pkg physical_address)
     (exe compile_arch (runStep uc))
 )
 (dir arch/microcode_roms
     (pkg microcode_roms (path roms))
 )
 (dir microsim
-    (pkg simulator)
+    (pkg Simulator)
     (pkg register_file)
     (exe microsim (runStep usim))
 )

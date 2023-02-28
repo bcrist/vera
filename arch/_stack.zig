@@ -39,7 +39,7 @@ pub fn _FB80_FB8F() void {
     desc("Copy 32b register to stack pointer");
 
     op_reg32_to_L(.OA);
-    L_to_SR(.SP);
+    L_to_SR(.sp);
     load_and_exec_next_insn(2);
 }
 
@@ -48,8 +48,8 @@ pub fn _FB90_FB9F() void {
     //syntax("UNFRAME SRa");
     desc("Add 16b register to stack pointer");
 
-    SR_plus_op_reg_to_L(.SP, .OA, .sx, .fresh, .no_flags);
-    L_to_SR(.SP);
+    SR_plus_op_reg_to_L(.sp, .OA, .sx, .fresh, .no_flags);
+    L_to_SR(.sp);
     load_and_exec_next_insn(2);
 }
 
@@ -58,8 +58,8 @@ pub fn _FBA0_FBAF() void {
     //syntax("FRAME SRa");
     desc("Subtract 16b register from stack pointer");
 
-    SR_minus_op_reg_to_L(.SP, .OA, .sx, .fresh, .no_flags);
-    L_to_SR(.SP);
+    SR_minus_op_reg_to_L(.sp, .OA, .sx, .fresh, .no_flags);
+    L_to_SR(.sp);
     load_and_exec_next_insn(2);
 }
 
@@ -68,19 +68,19 @@ pub fn _FBB0_FBBF() void {
     //syntax("UNTHINK SRa");
     desc("Load RP from stack, add 16b register to stack pointer");
 
-    read_to_D(.SP, 0, .word, .stack);
+    read_to_D(.sp, 0, .word, .stack);
     D_to_L(.zx);
     L_to_SR(.temp_2);
     next_cycle();
 
-    read_to_D(.SP, 2, .word, .stack);
+    read_to_D(.sp, 2, .word, .stack);
     D_to_LH();
     SRL_to_LL(.temp_2);
-    L_to_SR(.RP);
+    L_to_SR(.rp);
     next_cycle();
 
-    SR_plus_op_reg_to_L(.SP, .OA, .sx, .fresh, .no_flags);
-    L_to_SR(.SP);
+    SR_plus_op_reg_to_L(.sp, .OA, .sx, .fresh, .no_flags);
+    L_to_SR(.sp);
     load_and_exec_next_insn(2);
 }
 
@@ -89,17 +89,17 @@ pub fn _FBC0_FBCF() void {
     //syntax("THINK SRa");
     desc("Subtract 16b register from stack pointer, write RP to stack");
 
-    SR_minus_op_reg_to_L(.SP, .OA, .sx, .fresh, .no_flags);
-    L_to_SR(.SP);
+    SR_minus_op_reg_to_L(.sp, .OA, .sx, .fresh, .no_flags);
+    L_to_SR(.sp);
     load_next_insn(2);
     next_cycle();
 
-    SR_to_L(.RP);
-    write_from_LL(.SP, 0, .word, .stack);
+    SR_to_L(.rp);
+    write_from_LL(.sp, 0, .word, .stack);
     next_cycle();
 
-    SRH_to_LL(.RP);
-    write_from_LL(.SP, 2, .word, .stack);
+    SRH_to_LL(.rp);
+    write_from_LL(.sp, 2, .word, .stack);
     exec_next_insn();
 }
 
@@ -108,10 +108,10 @@ pub fn _5A00_5AFF() void {
     //syntax("UNFRAME immba[0,255]");
     desc("Add immediate to stack pointer");
 
-    SR_to_J(.SP);
+    SR_to_J(.sp);
     OB_OA_to_K();
     add_to_L(.zx, .fresh, .no_flags);
-    L_to_SR(.SP);
+    L_to_SR(.sp);
     load_and_exec_next_insn(2);
 }
 
@@ -120,10 +120,10 @@ pub fn _5B00_5BFF() void {
     //syntax("FRAME immba[0,255]");
     desc("Subtract immediate from stack pointer");
 
-    SR_to_J(.SP);
+    SR_to_J(.sp);
     OB_OA_to_K();
     sub_to_L(.zx, .fresh, .no_flags);
-    L_to_SR(.SP);
+    L_to_SR(.sp);
     load_and_exec_next_insn(2);
 }
 
@@ -132,21 +132,21 @@ pub fn _6A00_6AFF() void {
     //syntax("UNTHINK immba[0,255]");
     desc("Load RP from stack, add immediate to stack pointer");
 
-    read_to_D(.SP, 0, .word, .stack);
+    read_to_D(.sp, 0, .word, .stack);
     D_to_L(.zx);
     L_to_SR(.temp_2);
     next_cycle();
 
-    read_to_D(.SP, 2, .word, .stack);
+    read_to_D(.sp, 2, .word, .stack);
     D_to_LH();
     SRL_to_LL(.temp_2);
-    L_to_SR(.RP);
+    L_to_SR(.rp);
     next_cycle();
 
-    SR_to_J(.SP);
+    SR_to_J(.sp);
     OB_OA_to_K();
     add_to_L(.zx, .fresh, .no_flags);
-    L_to_SR(.SP);
+    L_to_SR(.sp);
     load_and_exec_next_insn(2);
 }
 
@@ -155,19 +155,19 @@ pub fn _6B00_6BFF() void {
     //syntax("THINK immba[0,255]");
     desc("Subtract immediate from stack pointer, write RP to stack");
 
-    SR_to_J(.SP);
+    SR_to_J(.sp);
     OB_OA_to_K();
     sub_to_L(.zx, .fresh, .no_flags);
-    L_to_SR(.SP);
+    L_to_SR(.sp);
     load_next_insn(2);
     next_cycle();
 
-    SR_to_L(.RP);
-    write_from_LL(.SP, 0, .word, .stack);
+    SR_to_L(.rp);
+    write_from_LL(.sp, 0, .word, .stack);
     next_cycle();
 
-    SRH_to_LL(.RP);
-    write_from_LL(.SP, 2, .word, .stack);
+    SRH_to_LL(.rp);
+    write_from_LL(.sp, 2, .word, .stack);
     exec_next_insn();
 }
 
@@ -181,10 +181,10 @@ pub fn _0004() void {
     L_to_SR(.temp_2);
     next_cycle();
 
-    SR_to_J(.SP);
+    SR_to_J(.sp);
     SRL_to_K(.temp_2);
     add_to_L(.zx, .fresh, .no_flags);
-    L_to_SR(.SP);
+    L_to_SR(.sp);
     load_and_exec_next_insn(4);
 }
 
@@ -198,10 +198,10 @@ pub fn _0005() void {
     L_to_SR(.temp_2);
     next_cycle();
 
-    SR_to_J(.SP);
+    SR_to_J(.sp);
     SRL_to_K(.temp_2);
     sub_to_L(.zx, .fresh, .no_flags);
-    L_to_SR(.SP);
+    L_to_SR(.sp);
     load_and_exec_next_insn(4);
 }
 
@@ -210,15 +210,15 @@ pub fn _0006() void {
     //syntax("UNTHINK imm16[0,65535]");
     desc("Load RP from stack, add immediate to stack pointer");
 
-    read_to_D(.SP, 0, .word, .stack);
+    read_to_D(.sp, 0, .word, .stack);
     D_to_L(.zx);
     L_to_SR(.temp_2);
     next_cycle();
 
-    read_to_D(.SP, 2, .word, .stack);
+    read_to_D(.sp, 2, .word, .stack);
     D_to_LH();
     SRL_to_LL(.temp_2);
-    L_to_SR(.RP);
+    L_to_SR(.rp);
     next_cycle();
 
     IP_read_to_D(2, .word);
@@ -226,10 +226,10 @@ pub fn _0006() void {
     L_to_SR(.temp_2);
     next_cycle();
 
-    SR_to_J(.SP);
+    SR_to_J(.sp);
     SRL_to_K(.temp_2);
     add_to_L(.zx, .fresh, .no_flags);
-    L_to_SR(.SP);
+    L_to_SR(.sp);
     load_and_exec_next_insn(4);
 }
 
@@ -243,19 +243,19 @@ pub fn _0007() void {
     L_to_SR(.temp_2);
     next_cycle();
 
-    SR_to_J(.SP);
+    SR_to_J(.sp);
     SRL_to_K(.temp_2);
     sub_to_L(.zx, .fresh, .no_flags);
-    L_to_SR(.SP);
+    L_to_SR(.sp);
     load_next_insn(4);
     next_cycle();
 
-    SR_to_L(.RP);
-    write_from_LL(.SP, 0, .word, .stack);
+    SR_to_L(.rp);
+    write_from_LL(.sp, 0, .word, .stack);
     next_cycle();
 
-    SRH_to_LL(.RP);
-    write_from_LL(.SP, 2, .word, .stack);
+    SRH_to_LL(.rp);
+    write_from_LL(.sp, 2, .word, .stack);
     exec_next_insn();
 }
 
@@ -277,13 +277,13 @@ pub fn _E480_E49F() void {
         else => unreachable,
     }
 
-    read_to_D(.SP, 0, .byte, .stack);
+    read_to_D(.sp, 0, .byte, .stack);
     D_to_L(ext);
     LL_to_op_reg(.OA);
     next_cycle();
 
-    SR_plus_literal_to_L(.SP, 1, .fresh, .no_flags);
-    L_to_SR(.SP);
+    SR_plus_literal_to_L(.sp, 1, .fresh, .no_flags);
+    L_to_SR(.sp);
     load_and_exec_next_insn(2);
 }
 
@@ -292,13 +292,13 @@ pub fn _E4A0_E4AF() void {
     //syntax("POP Ra");
     desc("Pop word from stack to 16b register");
 
-    read_to_D(.SP, 0, .word, .stack);
+    read_to_D(.sp, 0, .word, .stack);
     D_to_L(.zx);
     LL_to_op_reg(.OA);
     next_cycle();
 
-    SR_plus_literal_to_L(.SP, 2, .fresh, .no_flags);
-    L_to_SR(.SP);
+    SR_plus_literal_to_L(.sp, 2, .fresh, .no_flags);
+    L_to_SR(.sp);
     load_and_exec_next_insn(2);
 }
 
@@ -307,19 +307,19 @@ pub fn _E4B0_E4BF() void {
     //syntax("POP Xa");
     desc("Pop double word from stack to 32b register");
 
-    read_to_D(.SP, 0, .word, .stack);
+    read_to_D(.sp, 0, .word, .stack);
     D_to_L(.zx);
     L_to_SR(.temp_2);
     next_cycle();
 
-    read_to_D(.SP, 2, .word, .stack);
+    read_to_D(.sp, 2, .word, .stack);
     D_to_LH();
     SRL_to_LL(.temp_2);
     L_to_op_reg32(.OA);
     next_cycle();
 
-    SR_plus_literal_to_L(.SP, 4, .fresh, .no_flags);
-    L_to_SR(.SP);
+    SR_plus_literal_to_L(.sp, 4, .fresh, .no_flags);
+    L_to_SR(.sp);
     load_and_exec_next_insn(2);
 }
 
@@ -329,11 +329,11 @@ pub fn _E4C0_E4CF() void {
     desc("Push byte to stack from 16b register");
 
     op_reg_to_LL(.OA);
-    write_from_LL(.SP, -1, .byte, .stack);
+    write_from_LL(.sp, -1, .byte, .stack);
     next_cycle();
 
-    SR_minus_literal_to_L(.SP, 1, .fresh, .no_flags);
-    L_to_SR(.SP);
+    SR_minus_literal_to_L(.sp, 1, .fresh, .no_flags);
+    L_to_SR(.sp);
     load_and_exec_next_insn(2);
 }
 
@@ -343,11 +343,11 @@ pub fn _E4D0_E4DF() void {
     desc("Push word to stack from 16b register");
 
     op_reg_to_LL(.OA);
-    write_from_LL(.SP, -2, .word, .stack);
+    write_from_LL(.sp, -2, .word, .stack);
     next_cycle();
 
-    SR_minus_literal_to_L(.SP, 2, .fresh, .no_flags);
-    L_to_SR(.SP);
+    SR_minus_literal_to_L(.sp, 2, .fresh, .no_flags);
+    L_to_SR(.sp);
     load_and_exec_next_insn(2);
 }
 
@@ -357,14 +357,14 @@ pub fn _E4E0_E4EF() void {
     desc("Push double word to stack from 32b register");
 
     op_reg_to_LL(.OA);
-    write_from_LL(.SP, -4, .word, .stack);
+    write_from_LL(.sp, -4, .word, .stack);
     next_cycle();
 
     op_reg_to_LL(.OAxor1);
-    write_from_LL(.SP, -2, .word, .stack);
+    write_from_LL(.sp, -2, .word, .stack);
     next_cycle();
 
-    SR_minus_literal_to_L(.SP, 4, .fresh, .no_flags);
-    L_to_SR(.SP);
+    SR_minus_literal_to_L(.sp, 4, .fresh, .no_flags);
+    L_to_SR(.sp);
     load_and_exec_next_insn(2);
 }

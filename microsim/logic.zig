@@ -1,9 +1,7 @@
-const sim = @import("simulator");
+const sim = @import("Simulator");
 const ctrl = @import("control_signals");
 const misc = @import("misc");
-
-const Split_J_Bus = sim.Split_J_Bus;
-const Split_L_Bus = sim.Split_L_Bus;
+const bus = @import("bus");
 
 pub fn compute(in: Inputs) Outputs {
     const mode_bits = @bitCast(ctrl.Logic_Mode_Bits, in.ALU_MODE.raw());
@@ -19,11 +17,11 @@ pub fn compute(in: Inputs) Outputs {
 }
 
 pub const Inputs = struct {
-    j: Split_J_Bus,
-    k: misc.K_Bus,
+    j: bus.JParts,
+    k: bus.K,
     ALU_MODE: ctrl.ALU_Mode,
 };
 
 pub const Outputs = struct {
-    data: Split_L_Bus,
+    data: bus.LParts,
 };
