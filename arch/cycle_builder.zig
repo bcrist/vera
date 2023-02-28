@@ -2,7 +2,7 @@ const std = @import("std");
 const bits = @import("bits");
 const ctrl = @import("control_signals");
 const misc = @import("misc");
-const uc_layout = @import("microcode_layout");
+const uc = @import("microcode");
 const ib = @import("instruction_builder.zig");
 const panic = ib.panic;
 
@@ -527,7 +527,7 @@ pub fn SEQ_OP(value: ctrl.Sequencer_Op) void {
     assigned_signals.insert(.SEQ_OP);
 }
 
-pub fn NEXT_UOP(value: uc_layout.UC_Continuation) void {
+pub fn NEXT_UOP(value: uc.Continuation) void {
     if (is_set(.NEXT_UOP) and cycle.NEXT_UOP != value) {
         panic("Can't assign {} to NEXT_UOP; already has value {}", .{ value, cycle.NEXT_UOP });
     }
@@ -1636,13 +1636,13 @@ pub fn bitcount_op_reg_to_LL(which: OA_or_OB_xor, mode: Bitcount_Mode, polarity:
 pub fn illegal_instruction() void {
     SPECIAL(.trigger_fault);
     SEQ_OP(.next_uop);
-    NEXT_UOP(@enumToInt(uc_layout.UC_Vectors.instruction_protection_fault));
+    NEXT_UOP(@enumToInt(uc.Vectors.instruction_protection_fault));
 }
 
 pub fn invalid_instruction() void {
     SPECIAL(.trigger_fault);
     SEQ_OP(.next_uop);
-    NEXT_UOP(@enumToInt(uc_layout.UC_Vectors.invalid_instruction));
+    NEXT_UOP(@enumToInt(uc.Vectors.invalid_instruction));
 }
 
 pub fn block_transfer_to_ram(base: ctrl.AnySRIndex, preincrement: i7, bus_mode: ctrl.Bus_Mode) void {

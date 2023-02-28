@@ -26,8 +26,8 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    const microcode_layout = b.createModule(.{
-        .source_file = .{ .path = "arch/microcode_layout.zig" },
+    const microcode = b.createModule(.{
+        .source_file = .{ .path = "arch/microcode.zig" },
         .dependencies = &.{
             .{ .name = "bits", .module = bits },
             .{ .name = "misc", .module = misc },
@@ -37,7 +37,7 @@ pub fn build(b: *std.Build) void {
     const control_signals = b.createModule(.{
         .source_file = .{ .path = "arch/control_signals.zig" },
         .dependencies = &.{
-            .{ .name = "microcode_layout", .module = microcode_layout },
+            .{ .name = "microcode", .module = microcode },
             .{ .name = "misc", .module = misc },
         },
     });
@@ -64,7 +64,7 @@ pub fn build(b: *std.Build) void {
     Simulator.dependencies.put("bits", bits) catch unreachable;
     Simulator.dependencies.put("bus", bus) catch unreachable;
     Simulator.dependencies.put("control_signals", control_signals) catch unreachable;
-    Simulator.dependencies.put("microcode_layout", microcode_layout) catch unreachable;
+    Simulator.dependencies.put("microcode", microcode) catch unreachable;
     Simulator.dependencies.put("misc", misc) catch unreachable;
     Simulator.dependencies.put("physical_address", physical_address) catch unreachable;
     Simulator.dependencies.put("register_file", register_file) catch unreachable;
@@ -83,7 +83,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "bits", .module = bits },
             .{ .name = "control_signals", .module = control_signals },
             .{ .name = "deep_hash_map", .module = deep_hash_map },
-            .{ .name = "microcode_layout", .module = microcode_layout },
+            .{ .name = "microcode", .module = microcode },
             .{ .name = "misc", .module = misc },
             .{ .name = "sx", .module = sx },
         },
@@ -116,7 +116,7 @@ pub fn build(b: *std.Build) void {
         .source_file = .{ .path = "arch/microcode_rom_serialization.zig" },
         .dependencies = &.{
             .{ .name = "control_signals", .module = control_signals },
-            .{ .name = "microcode_layout", .module = microcode_layout },
+            .{ .name = "microcode", .module = microcode },
             .{ .name = "misc", .module = misc },
             .{ .name = "rom_compress", .module = rom_compress },
             .{ .name = "rom_decompress", .module = rom_decompress },
@@ -141,7 +141,7 @@ pub fn build(b: *std.Build) void {
     compile_arch.addModule("bits", bits);
     compile_arch.addModule("control_signals", control_signals);
     compile_arch.addModule("instruction_encoding", instruction_encoding);
-    compile_arch.addModule("microcode_layout", microcode_layout);
+    compile_arch.addModule("microcode", microcode);
     compile_arch.addModule("misc", misc);
     compile_arch.addModule("physical_address", physical_address);
     compile_arch.addModule("rom_compress", rom_compress);
@@ -185,7 +185,7 @@ pub fn build(b: *std.Build) void {
     tests2.addModule("control_signals", control_signals);
     tests2.addModule("instruction_encoding", instruction_encoding);
     tests2.addModule("instruction_encoding_data", instruction_encoding_data);
-    tests2.addModule("microcode_layout", microcode_layout);
+    tests2.addModule("microcode", microcode);
     tests2.addModule("misc", misc);
     tests2.addModule("register_file", register_file);
     tests2.addModule("rom_compress", rom_compress);

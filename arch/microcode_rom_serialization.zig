@@ -3,7 +3,7 @@ const rom_compress = @import("rom_compress");
 const rom_decompress = @import("rom_decompress");
 const srec = @import("srec");
 const ctrl = @import("control_signals");
-const uc_layout = @import("microcode_layout");
+const uc = @import("microcode");
 const misc = @import("misc");
 
 const Control_Signals = ctrl.Control_Signals;
@@ -154,7 +154,7 @@ const Rom4Data = packed struct {
 };
 
 const Rom5Data = packed struct {
-    NEXT_UOP: uc_layout.UC_Continuation, // 10
+    NEXT_UOP: uc.Continuation, // 10
     BASE: ctrl.AnySRIndex, // 4
     _: u2 = 0, // 2
 

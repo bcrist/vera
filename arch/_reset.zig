@@ -1,7 +1,7 @@
 const std = @import("std");
 const ctrl = @import("control_signals");
 const misc = @import("misc");
-const uc_layout = @import("microcode_layout");
+const uc = @import("microcode");
 const ib = @import("instruction_builder.zig");
 const cb = @import("cycle_builder.zig");
 const physical_address = @import("physical_address");
@@ -55,7 +55,7 @@ const JL_SRC = cb.JL_SRC;
 
 pub fn _handler_0() void {
     //desc("Initialization/reset entry point");
-    assert(uc_address() == @enumToInt(uc_layout.UC_Vectors.reset));
+    assert(uc_address() == @enumToInt(uc.Vectors.reset));
 
     // The very start is a bit tricky.
     // We can't rely on most registers because the other pipes might be using the same RSN.

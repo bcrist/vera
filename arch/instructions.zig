@@ -2,7 +2,7 @@ const std = @import("std");
 const allocators = @import("allocators.zig");
 const sx = @import("sx");
 const misc = @import("misc");
-const uc_layout = @import("microcode_layout");
+const uc = @import("microcode");
 const instruction_encoding = @import("instruction_encoding");
 
 const Opcode = misc.Opcode;
@@ -19,7 +19,7 @@ fn getOrCreateInstruction(in: InstructionEncoding) *InstructionEncoding {
     const last_opcode = in.opcodes.max;
 
     if (first_opcode > 0) {
-        var prev = instructions[first_opcode - uc_layout.getOpcodeGranularity(first_opcode)];
+        var prev = instructions[first_opcode - uc.getOpcodeGranularity(first_opcode)];
         if (prev) |p| {
             if (instruction_encoding.eql(in, p.*)) {
                 p.opcodes.max = last_opcode;
@@ -41,7 +41,7 @@ pub fn recordInstruction(insn: InstructionEncoding, desc: ?[]const u8) void {
 
     var ptr = getOrCreateInstruction(insn);
 
-    var iter = uc_layout.opcodeIterator(insn.opcodes.min, insn.opcodes.max);
+    var iter = uc.opcodeIterator(insn.opcodes.min, insn.opcodes.max);
     while (iter.next()) |cur_opcode| {
         if (instructions[cur_opcode]) |existing| {
             std.debug.print("Opcode {X} has already been assigned to {s}\n", .{

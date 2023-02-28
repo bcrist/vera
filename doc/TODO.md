@@ -36,6 +36,6 @@ Then you don't need separate raw read/write instructions, maybe can reuse encodi
 ## cycle_builder.branch(): check that either base is .zero, or RSN is not being loaded this cycle
 ## Add instruction parameters to instruction_builder.print_cycle_path()
 ## ParameterEncoding.default_to_param
-## microcode.zig: use conditional slots if we run out of unconditional ones.
+## microcode_builder.zig: use conditional slots if we run out of unconditional ones.
 ## Documentation
 ## Improve SST39VF802C emulation accuracy in memory.zig (timing, status polling, IDs, write protection, etc.)

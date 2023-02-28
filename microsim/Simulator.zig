@@ -1,6 +1,6 @@
 const std = @import("std");
 const ctrl = @import("control_signals");
-const uc_layout = @import("microcode_layout");
+const uc = @import("microcode");
 const bits = @import("bits");
 const misc = @import("misc");
 const bus = @import("bus");
@@ -212,7 +212,7 @@ const ExecutionState = struct {
 const LoopRegisters = struct {
     exec_mode: misc.ExecutionMode,
     rsn: misc.RegistersetNumber,
-    ua: uc_layout.UC_Address,
+    ua: uc.Address,
     dl: bus.D,
     oa: misc.OperandA,
     ob: misc.OperandB,
@@ -249,7 +249,7 @@ const LoopRegisters = struct {
     pub fn randomize(self: *LoopRegisters, rnd: std.rand.Random) void {
         self.exec_mode = rnd.enumValue(misc.ExecutionMode);
         self.rsn = rnd.int(misc.RegistersetNumber);
-        self.ua = rnd.int(uc_layout.UC_Address);
+        self.ua = rnd.int(uc.Address);
         self.dl = rnd.int(bus.D);
         self.oa = rnd.int(misc.OperandA);
         self.ob = rnd.int(misc.OperandB);

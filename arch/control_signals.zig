@@ -1,5 +1,5 @@
 const std = @import("std");
-const uc_layout = @import("microcode_layout");
+const uc = @import("microcode");
 const misc = @import("misc");
 
 pub const Control_Signal = enum {
@@ -69,7 +69,7 @@ pub const Control_Signals = struct {
     OB_OA_OP: Operand_Reg_Op,
     ALLOW_INT: bool,
     SEQ_OP: Sequencer_Op,
-    NEXT_UOP: uc_layout.UC_Continuation,
+    NEXT_UOP: uc.Continuation,
 
     pub fn init() Control_Signals {
         return .{
@@ -147,7 +147,7 @@ pub const Control_Signals = struct {
         self.OB_OA_OP = rnd.enumValue(Operand_Reg_Op);
         self.ALLOW_INT = rnd.boolean();
         self.SEQ_OP = rnd.enumValue(Sequencer_Op);
-        self.NEXT_UOP = rnd.int(uc_layout.UC_Continuation);
+        self.NEXT_UOP = rnd.int(uc.Continuation);
     }
 
     pub fn print(self: *const Control_Signals, writer: anytype) !void {

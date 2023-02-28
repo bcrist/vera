@@ -2,7 +2,7 @@ const sim = @import("Simulator");
 const ctrl = @import("control_signals");
 const misc = @import("misc");
 const bus = @import("bus");
-const uc_layout = @import("microcode_layout");
+const uc = @import("microcode");
 const arith = @import("arith.zig");
 
 pub const LoopState = struct {
@@ -14,8 +14,8 @@ pub const LoopState = struct {
     next_k: bool,
     a: bool,
 
-    pub fn toUCFlags(self: LoopState) uc_layout.UC_Flag_Set {
-        var uc_flags = uc_layout.UC_Flag_Set{};
+    pub fn toUCFlags(self: LoopState) uc.FlagSet {
+        var uc_flags = uc.FlagSet{};
         if (self.n) uc_flags.insert(.N);
         if (self.k) uc_flags.insert(.K);
         if (self.z) uc_flags.insert(.Z);

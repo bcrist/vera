@@ -1,20 +1,16 @@
 const std = @import("std");
 const allocators = @import("allocators.zig");
-const uc_layout = @import("microcode_layout");
+const uc = @import("microcode");
 const ctrl = @import("control_signals");
 const misc = @import("misc");
 const instruction_encoding = @import("instruction_encoding");
-const microcode = @import("microcode.zig");
+const microcode_builder = @import("microcode_builder.zig");
 const instructions = @import("instructions.zig");
 const cycle_builder = @import("cycle_builder.zig");
 
 const assert = std.debug.assert;
 
 const Opcode = misc.Opcode;
-const UC_Address = uc_layout.UC_Address;
-const UC_Continuation = uc_layout.UC_Continuation;
-const UC_Flags = uc_layout.UC_Flags;
-const UC_Flag_Set = uc_layout.UC_Flag_Set;
 const Control_Signals = ctrl.Control_Signals;
 
 const Mnemonic = instruction_encoding.Mnemonic;
@@ -36,15 +32,15 @@ pub const InstructionRegState = enum(u2) {
 
 const InstructionData = struct {
     original_opcode_range: ?instruction_encoding.OpcodeRange,
-    initial_uc_address: UC_Address,
-    allowed_flags: UC_Flag_Set,
-    flags: UC_Flag_Set,
+    initial_uc_address: uc.Address,
+    allowed_flags: uc.FlagSet,
+    flags: uc.FlagSet,
 
     encoding: ?InstructionEncoding = null,
     description: ?[]const u8 = null,
     cycle_started: bool = false,
     queried_opcode: bool = false,
-    queried_flags: UC_Flag_Set = .{},
+    queried_flags: uc.FlagSet = .{},
 
     DL_state: InstructionRegState,
     OA_state: InstructionRegState,
@@ -231,7 +227,7 @@ pub fn desc(s: []const u8) void {
     }
 }
 
-pub fn uc_address() UC_Address {
+pub fn uc_address() uc.Address {
     if (insn) |i| {
         i.queried_opcode = true;
         return i.initial_uc_address;
@@ -241,7 +237,7 @@ pub fn uc_address() UC_Address {
 
 pub fn opcode() Opcode {
     if (insn) |i| {
-        if (uc_layout.getOpcodeForAddress(i.initial_uc_address)) |v| {
+        if (uc.getOpcodeForAddress(i.initial_uc_address)) |v| {
             i.queried_opcode = true;
             return v;
         }
@@ -251,7 +247,7 @@ pub fn opcode() Opcode {
 
 pub fn opcode_high() u8 {
     if (insn) |i| {
-        if (uc_layout.getOpcodeForAddress(i.initial_uc_address)) |v| {
+        if (uc.getOpcodeForAddress(i.initial_uc_address)) |v| {
             i.queried_opcode = true;
             return @intCast(u8, v >> 8);
         }
@@ -261,7 +257,7 @@ pub fn opcode_high() u8 {
 
 pub fn opcode_low() u8 {
     if (insn) |i| {
-        if (uc_layout.getOpcodeForAddress(i.initial_uc_address)) |v| {
+        if (uc.getOpcodeForAddress(i.initial_uc_address)) |v| {
             i.queried_opcode = true;
             return @truncate(u8, v);
         }
@@ -271,7 +267,7 @@ pub fn opcode_low() u8 {
 
 pub fn OA() misc.OperandA {
     if (insn) |i| {
-        if (uc_layout.getOAForAddress(i.initial_uc_address)) |v| {
+        if (uc.getOAForAddress(i.initial_uc_address)) |v| {
             i.queried_opcode = true;
             return v;
         } else {
@@ -283,7 +279,7 @@ pub fn OA() misc.OperandA {
 
 pub fn OB() misc.OperandB {
     if (insn) |i| {
-        if (uc_layout.getOBForAddress(i.initial_uc_address)) |v| {
+        if (uc.getOBForAddress(i.initial_uc_address)) |v| {
             i.queried_opcode = true;
             return v;
         } else {
@@ -293,7 +289,7 @@ pub fn OB() misc.OperandB {
     panic("Not currently processing an instruction", .{});
 }
 
-fn checkFlags(flags_to_check: []const UC_Flags) UC_Flag_Set {
+fn checkFlags(flags_to_check: []const uc.Flags) uc.FlagSet {
     if (insn) |i| {
         for (flags_to_check) |f| {
             if (!i.allowed_flags.contains(f)) {
@@ -311,47 +307,47 @@ fn checkFlags(flags_to_check: []const UC_Flags) UC_Flag_Set {
 }
 
 pub fn zero() bool {
-    return checkFlags(&[_]UC_Flags{ .Z }).contains(.Z);
+    return checkFlags(&[_]uc.Flags{ .Z }).contains(.Z);
 }
 
 pub fn negative() bool {
-    return checkFlags(&[_]UC_Flags{ .N }).contains(.N);
+    return checkFlags(&[_]uc.Flags{ .N }).contains(.N);
 }
 
 pub fn positive() bool {
-    var flags = checkFlags(&[_]UC_Flags{ .Z, .N });
+    var flags = checkFlags(&[_]uc.Flags{ .Z, .N });
     return !flags.contains(.Z) and !flags.contains(.N);
 }
 
 pub fn carry_borrow() bool {
-    return checkFlags(&[_]UC_Flags{ .C }).contains(.C);
+    return checkFlags(&[_]uc.Flags{ .C }).contains(.C);
 }
 
 pub fn overflow() bool {
-    return checkFlags(&[_]UC_Flags{ .V }).contains(.V);
+    return checkFlags(&[_]uc.Flags{ .V }).contains(.V);
 }
 
 pub fn kernel() bool {
-    return checkFlags(&[_]UC_Flags{ .K }).contains(.K);
+    return checkFlags(&[_]uc.Flags{ .K }).contains(.K);
 }
 
 pub fn unsigned_less_than() bool {
-    var flags = checkFlags(&[_]UC_Flags{ .Z, .C });
+    var flags = checkFlags(&[_]uc.Flags{ .Z, .C });
     return flags.contains(.C) and !flags.contains(.Z);
 }
 
 pub fn unsigned_greater_than() bool {
-    var flags = checkFlags(&[_]UC_Flags{ .Z, .C });
+    var flags = checkFlags(&[_]uc.Flags{ .Z, .C });
     return !flags.contains(.C) and !flags.contains(.Z);
 }
 
 pub fn signed_less_than() bool {
-    var flags = checkFlags(&[_]UC_Flags{ .Z, .N, .V });
+    var flags = checkFlags(&[_]uc.Flags{ .Z, .N, .V });
     return !flags.contains(.Z) and (flags.contains(.N) != flags.contains(.V));
 }
 
 pub fn signed_greater_than() bool {
-    var flags = checkFlags(&[_]UC_Flags{ .Z, .N, .V });
+    var flags = checkFlags(&[_]uc.Flags{ .Z, .N, .V });
     return !flags.contains(.Z) and (flags.contains(.N) == flags.contains(.V));
 }
 
@@ -370,10 +366,10 @@ pub fn processScope(comptime T: type) !void {
             }
 
             if (comptime std.mem.startsWith(u8, decl.name, "_handler_")) {
-                var handler: UC_Address = try std.fmt.parseUnsigned(UC_Address, decl.name[9..], 16);
+                var handler: uc.Address = try std.fmt.parseUnsigned(uc.Address, decl.name[9..], 16);
                 processHandler(handler, @field(T, decl.name));
             } else if (comptime std.mem.startsWith(u8, decl.name, "_continuation_")) {
-                var continuation = try std.fmt.parseUnsigned(UC_Continuation, decl.name[14..], 16);
+                var continuation = try std.fmt.parseUnsigned(uc.Continuation, decl.name[14..], 16);
                 processContinuation(continuation, @field(T, decl.name));
             } else {
                 var first_opcode: Opcode = undefined;
@@ -387,7 +383,7 @@ pub fn processScope(comptime T: type) !void {
                 if (iter.next()) |last| {
                     last_opcode = try std.fmt.parseUnsigned(Opcode, last, 16);
                 } else {
-                    last_opcode = @intCast(Opcode, @as(u32, first_opcode) + uc_layout.getOpcodeGranularity(first_opcode) - 1);
+                    last_opcode = @intCast(Opcode, @as(u32, first_opcode) + uc.getOpcodeGranularity(first_opcode) - 1);
                 }
 
                 processOpcodes(first_opcode, last_opcode, @field(T, decl.name));
@@ -396,7 +392,7 @@ pub fn processScope(comptime T: type) !void {
     }
 }
 
-pub fn processHandler(handler: UC_Address, func: *const fn () void) void {
+pub fn processHandler(handler: uc.Address, func: *const fn () void) void {
     allocators.temp_arena.reset();
 
     _ = process(.{
@@ -409,16 +405,16 @@ pub fn processHandler(handler: UC_Address, func: *const fn () void) void {
     });
 }
 
-pub fn processContinuation(continuation: UC_Continuation, func: *const fn () void) void {
+pub fn processContinuation(continuation: uc.Continuation, func: *const fn () void) void {
     allocators.temp_arena.reset();
 
-    const initial_uc_address = uc_layout.getAddressForContinuation(continuation, .{});
+    const initial_uc_address = uc.getAddressForContinuation(continuation, .{});
 
     var config = ProcessConfig{
         .func = func,
         .original_opcode_range = null,
         .initial_uc_address = initial_uc_address,
-        .allowed_flags = uc_layout.getCheckedFlagsForAddress(initial_uc_address),
+        .allowed_flags = uc.getCheckedFlagsForAddress(initial_uc_address),
         .flags = .{},
         .initial_DL_OBOA_state = .unknown,
     };
@@ -431,10 +427,10 @@ pub fn processContinuation(continuation: UC_Continuation, func: *const fn () voi
     // Don't allow new flags to be queried on subsequent processing, since that will mess up our unqueried_flags handling
     config.allowed_flags = result.queried_flags;
 
-    var queried_permutations = uc_layout.flagPermutationIterator(result.queried_flags);
+    var queried_permutations = uc.flagPermutationIterator(result.queried_flags);
     _ = queried_permutations.next(); // we already processed the no-flags case
     while (queried_permutations.next()) |queried_flag_permutation| {
-        config.initial_uc_address = uc_layout.getAddressForContinuation(continuation, queried_flag_permutation);
+        config.initial_uc_address = uc.getAddressForContinuation(continuation, queried_flag_permutation);
         config.flags = queried_flag_permutation;
         var permutation_result = process(config);
 
@@ -449,21 +445,21 @@ pub fn processContinuation(continuation: UC_Continuation, func: *const fn () voi
     }
 }
 
-fn storeInitialContinuationCycleFlagPermutations(continuation: UC_Continuation, initial_cycle: *Control_Signals, queried_flag_permutation: UC_Flag_Set, unqueried_flags: UC_Flag_Set) void {
-    var unqueried_permutations = uc_layout.flagPermutationIterator(unqueried_flags);
+fn storeInitialContinuationCycleFlagPermutations(continuation: uc.Continuation, initial_cycle: *Control_Signals, queried_flag_permutation: uc.FlagSet, unqueried_flags: uc.FlagSet) void {
+    var unqueried_permutations = uc.flagPermutationIterator(unqueried_flags);
     _ = unqueried_permutations.next(); // we already processed the no-flags case
     while (unqueried_permutations.next()) |unqueried_flag_permutation| {
         var combined_flags = queried_flag_permutation;
         combined_flags.setUnion(unqueried_flag_permutation);
-        microcode.putNoDedup(uc_layout.getAddressForContinuation(continuation, combined_flags), initial_cycle);
+        microcode_builder.putNoDedup(uc.getAddressForContinuation(continuation, combined_flags), initial_cycle);
     }
 }
 
 pub fn processOpcodes(first_opcode: Opcode, last_opcode: Opcode, func: *const fn () void) void {
     allocators.temp_arena.reset();
 
-    const first_granularity = uc_layout.getOpcodeGranularity(first_opcode);
-    const last_granularity = uc_layout.getOpcodeGranularity(last_opcode);
+    const first_granularity = uc.getOpcodeGranularity(first_opcode);
+    const last_granularity = uc.getOpcodeGranularity(last_opcode);
 
     if (first_opcode % first_granularity != 0) {
         panic("First opcode {X:0>4} should be aligned to granularity {}", .{ first_opcode, first_granularity });
@@ -478,26 +474,26 @@ pub fn processOpcodes(first_opcode: Opcode, last_opcode: Opcode, func: *const fn
     }, first_opcode, func);
 
     if (!result.queried_opcode) {
-        var checked_flags = uc_layout.getCheckedFlagsForOpcode(first_opcode);
+        var checked_flags = uc.getCheckedFlagsForOpcode(first_opcode);
         {
-            var opIter = uc_layout.opcodeIterator(first_opcode, last_opcode);
+            var opIter = uc.opcodeIterator(first_opcode, last_opcode);
             _ = opIter.next();
             while (opIter.next()) |cur_opcode| {
-                if (!std.meta.eql(checked_flags, uc_layout.getCheckedFlagsForOpcode(cur_opcode))) {
+                if (!std.meta.eql(checked_flags, uc.getCheckedFlagsForOpcode(cur_opcode))) {
                     panic("Opcode {X:0>4} has different flags than opcode {X:0>4}", .{ cur_opcode, first_opcode });
                 }
             }
         }
         {
-            var flagIter = uc_layout.flagPermutationIterator(checked_flags);
+            var flagIter = uc.flagPermutationIterator(checked_flags);
             while (flagIter.next()) |flag_variant| {
-                const cycle = microcode.get(uc_layout.getAddressForOpcode(first_opcode, flag_variant)).?;
+                const cycle = microcode_builder.get(uc.getAddressForOpcode(first_opcode, flag_variant)).?;
 
-                var opIter = uc_layout.opcodeIterator(first_opcode, last_opcode);
+                var opIter = uc.opcodeIterator(first_opcode, last_opcode);
                 _ = opIter.next();
                 while (opIter.next()) |cur_opcode| {
-                    const address = uc_layout.getAddressForOpcode(cur_opcode, flag_variant);
-                    microcode.putNoDedup(address, cycle);
+                    const address = uc.getAddressForOpcode(cur_opcode, flag_variant);
+                    microcode_builder.putNoDedup(address, cycle);
                 }
             }
         }
@@ -510,7 +506,7 @@ pub fn processOpcodes(first_opcode: Opcode, last_opcode: Opcode, func: *const fn
         result.encoding.opcodes.max = first_opcode + first_granularity - 1;
         instructions.recordInstruction(result.encoding, result.description);
 
-        var opIter = uc_layout.opcodeIterator(first_opcode, last_opcode);
+        var opIter = uc.opcodeIterator(first_opcode, last_opcode);
         _ = opIter.next();
         while (opIter.next()) |cur_opcode| {
             result = processOpcode(.{
@@ -518,7 +514,7 @@ pub fn processOpcodes(first_opcode: Opcode, last_opcode: Opcode, func: *const fn
                 .max = last_opcode,
             }, cur_opcode, func);
             result.encoding.opcodes.min = cur_opcode;
-            result.encoding.opcodes.max = cur_opcode + uc_layout.getOpcodeGranularity(cur_opcode) - 1;
+            result.encoding.opcodes.max = cur_opcode + uc.getOpcodeGranularity(cur_opcode) - 1;
             instructions.recordInstruction(result.encoding, result.description);
         }
     }
@@ -534,8 +530,8 @@ fn processOpcode(original_range: instruction_encoding.OpcodeRange, the_opcode: O
     var config = ProcessConfig{
         .func = func,
         .original_opcode_range = original_range,
-        .initial_uc_address = uc_layout.getAddressForOpcode(the_opcode, .{}),
-        .allowed_flags = uc_layout.getCheckedFlagsForOpcode(the_opcode),
+        .initial_uc_address = uc.getAddressForOpcode(the_opcode, .{}),
+        .allowed_flags = uc.getCheckedFlagsForOpcode(the_opcode),
         .flags = .{},
         .initial_DL_OBOA_state = .current_insn,
     };
@@ -548,10 +544,10 @@ fn processOpcode(original_range: instruction_encoding.OpcodeRange, the_opcode: O
     // Don't allow new flags to be queried on subsequent processing, since that will mess up our unqueried_flags handling
     config.allowed_flags = result.queried_flags;
 
-    var queried_permutations = uc_layout.flagPermutationIterator(result.queried_flags);
+    var queried_permutations = uc.flagPermutationIterator(result.queried_flags);
     _ = queried_permutations.next(); // we already processed the no-flags case
     while (queried_permutations.next()) |queried_flag_permutation| {
-        config.initial_uc_address = uc_layout.getAddressForOpcode(the_opcode, queried_flag_permutation);
+        config.initial_uc_address = uc.getAddressForOpcode(the_opcode, queried_flag_permutation);
         config.flags = queried_flag_permutation;
         var permutation_result = process(config);
 
@@ -585,7 +581,7 @@ fn processOpcode(original_range: instruction_encoding.OpcodeRange, the_opcode: O
     }
 
     if (result.next_insn_executed and result.next_insn_offset != result.next_unread_insn_offset) {
-        printCyclePath(uc_layout.getAddressForOpcode(the_opcode, .{}), result.encoding);
+        printCyclePath(uc.getAddressForOpcode(the_opcode, .{}), result.encoding);
         panic("Expected next instruction to be loaded from an offset of {} but it was actually from {}", .{ result.next_unread_insn_offset, result.next_insn_offset });
     }
 
@@ -596,22 +592,22 @@ fn processOpcode(original_range: instruction_encoding.OpcodeRange, the_opcode: O
     };
 }
 
-fn storeInitialCycleFlagPermutations(the_opcode: Opcode, initial_cycle: *Control_Signals, queried_flag_permutation: UC_Flag_Set, unqueried_flags: UC_Flag_Set) void {
-    var unqueried_permutations = uc_layout.flagPermutationIterator(unqueried_flags);
+fn storeInitialCycleFlagPermutations(the_opcode: Opcode, initial_cycle: *Control_Signals, queried_flag_permutation: uc.FlagSet, unqueried_flags: uc.FlagSet) void {
+    var unqueried_permutations = uc.flagPermutationIterator(unqueried_flags);
     _ = unqueried_permutations.next(); // we already processed the no-flags case
     while (unqueried_permutations.next()) |unqueried_flag_permutation| {
         var combined_flags = queried_flag_permutation;
         combined_flags.setUnion(unqueried_flag_permutation);
-        microcode.putNoDedup(uc_layout.getAddressForOpcode(the_opcode, combined_flags), initial_cycle);
+        microcode_builder.putNoDedup(uc.getAddressForOpcode(the_opcode, combined_flags), initial_cycle);
     }
 }
 
 const ProcessConfig = struct {
     func: *const fn () void,
     original_opcode_range: ?instruction_encoding.OpcodeRange,
-    initial_uc_address: UC_Address,
-    allowed_flags: UC_Flag_Set,
-    flags: UC_Flag_Set,
+    initial_uc_address: uc.Address,
+    allowed_flags: uc.FlagSet,
+    flags: uc.FlagSet,
     initial_DL_OBOA_state: InstructionRegState,
 };
 
@@ -620,7 +616,7 @@ const ProcessResult = struct {
     description: ?[]const u8,
     initial_cycle: *Control_Signals,
     queried_opcode: bool,
-    queried_flags: UC_Flag_Set,
+    queried_flags: uc.FlagSet,
     next_unread_insn_offset: misc.SignedOffsetForLiteral,
     next_insn_offset: misc.SignedOffsetForLiteral,
     next_insn_executed: bool,
@@ -657,15 +653,15 @@ fn process(config: ProcessConfig) ProcessResult {
     var c = cycles.len - 1;
     while (c > 0) : (c -= 1) {
         const cycle = &cycles[c];
-        const ua = microcode.getOrCreateUnconditionalContinuation(cycle);
-        cycles[c - 1].NEXT_UOP = uc_layout.getContinuationNumberForAddress(ua).?;
+        const ua = microcode_builder.getOrCreateUnconditionalContinuation(cycle);
+        cycles[c - 1].NEXT_UOP = uc.getContinuationNumberForAddress(ua).?;
     }
 
-    if (!uc_layout.isContinuationOrHandler(config.initial_uc_address)) {
+    if (!uc.isContinuationOrHandler(config.initial_uc_address)) {
         if (i.encoding == null) panic("Encoding not specified!", .{});
     }
 
-    const cs = microcode.put(i.initial_uc_address, &cycles[0]);
+    const cs = microcode_builder.put(i.initial_uc_address, &cycles[0]);
 
     return .{
         .encoding = i.encoding,
@@ -689,20 +685,20 @@ pub fn panic(comptime format: []const u8, args: anytype) noreturn {
     std.os.exit(0);
 }
 
-fn printCyclePath(initial_uc_address: UC_Address, insn_encoding: ?InstructionEncoding) void {
+fn printCyclePath(initial_uc_address: uc.Address, insn_encoding: ?InstructionEncoding) void {
     var stderr = std.io.getStdErr().writer();
 
-    if (uc_layout.getOpcodeForAddress(initial_uc_address)) |op| {
+    if (uc.getOpcodeForAddress(initial_uc_address)) |op| {
         stderr.print("opcode {X:0>4}", .{ op }) catch @panic("IO Error");
     } else {
         stderr.print("address {X:0>4}", .{ initial_uc_address }) catch @panic("IO Error");
     }
 
-    var checked_flags = uc_layout.getCheckedFlagsForAddress(initial_uc_address);
+    var checked_flags = uc.getCheckedFlagsForAddress(initial_uc_address);
     if (checked_flags.count() > 0) {
         stderr.print(" flags ", .{}) catch @panic("IO Error");
 
-        var initial_flags = uc_layout.getFlagsForAddress(initial_uc_address);
+        var initial_flags = uc.getFlagsForAddress(initial_uc_address);
         var iter = checked_flags.iterator();
         while (iter.next()) |f| {
             if (initial_flags.contains(f)) {

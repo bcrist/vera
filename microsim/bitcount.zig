@@ -1,5 +1,6 @@
 const sim = @import("Simulator");
 const ctrl = @import("control_signals");
+const bus = @import("bus");
 
 const SplitBus = sim.SplitBus;
 
@@ -15,10 +16,10 @@ pub fn compute(in: Inputs) Outputs {
 }
 
 pub const Inputs = struct {
-    j: u16,
+    j: bus.JLow,
     ALU_MODE: ctrl.ALU_Mode,
 };
 
 pub const Outputs = struct {
-    data: u16,
+    data: bus.LLow,
 };

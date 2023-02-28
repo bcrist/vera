@@ -17,7 +17,7 @@
     (pkg control_signals)
     (pkg instruction_encoding)
     (pkg instruction_encoding_data)
-    (pkg microcode_layout)
+    (pkg microcode)
     (pkg microcode_rom_serialization)
     (pkg misc)
     (pkg bus)

@@ -1,7 +1,7 @@
 const ib = @import("instruction_builder.zig");
 const cb = @import("cycle_builder.zig");
 const ctrl = @import("control_signals");
-const uc_layout = @import("microcode_layout");
+const uc = @import("microcode");
 
 const encodingWithSuffix = ib.encodingWithSuffix;
 const desc = ib.desc;

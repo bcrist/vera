@@ -3,7 +3,7 @@ const ib = @import("instruction_builder.zig");
 const cb = @import("cycle_builder.zig");
 const ctrl = @import("control_signals");
 const misc = @import("misc");
-const uc_layout = @import("microcode_layout");
+const uc = @import("microcode");
 
 const Xa_relative = ib.Xa_relative;
 const encoding = ib.encoding;
@@ -100,42 +100,42 @@ fn vectored_fault_handler(zeropage_vector: u5) void {
 pub fn _handler_1() void {
     // page fault
     //desc("Triggered when address translation is performed but there is no matching entry");
-    assert(uc_address() == @enumToInt(uc_layout.UC_Vectors.page_fault));
+    assert(uc_address() == @enumToInt(uc.Vectors.page_fault));
     vectored_fault_handler(@intCast(u5, @offsetOf(misc.ZeropageVectorTable, "page_fault")));
 }
 
 pub fn _handler_2() void {
     // access fault
     //desc("Triggered when address translation is performed in user-mode, and the matching entry does not have the user flag set");
-    assert(uc_address() == @enumToInt(uc_layout.UC_Vectors.access_fault));
+    assert(uc_address() == @enumToInt(uc.Vectors.access_fault));
     vectored_fault_handler(@intCast(u5, @offsetOf(misc.ZeropageVectorTable, "access_fault")));
 }
 
 pub fn _handler_3() void {
     // page align fault
     //desc("Triggered when reading or writing a word that stradles the boundary between two 4KB pages");
-    assert(uc_address() == @enumToInt(uc_layout.UC_Vectors.page_align_fault));
+    assert(uc_address() == @enumToInt(uc.Vectors.page_align_fault));
     vectored_fault_handler(@intCast(u5, @offsetOf(misc.ZeropageVectorTable, "page_align_fault")));
 }
 
 pub fn _handler_4() void {
     // instruction protection fault
     //desc("Triggered when attempting to execute a kernel-only instruction in user mode");
-    assert(uc_address() == @enumToInt(uc_layout.UC_Vectors.instruction_protection_fault));
+    assert(uc_address() == @enumToInt(uc.Vectors.instruction_protection_fault));
     vectored_fault_handler(@intCast(u5, @offsetOf(misc.ZeropageVectorTable, "instruction_protection_fault")));
 }
 
 pub fn _handler_5() void {
     // invalid instruction
     //desc("Triggered when attempting to execute an opcode that does not correspond to a valid instruction");
-    assert(uc_address() == @enumToInt(uc_layout.UC_Vectors.invalid_instruction));
+    assert(uc_address() == @enumToInt(uc.Vectors.invalid_instruction));
     vectored_fault_handler(@intCast(u5, @offsetOf(misc.ZeropageVectorTable, "invalid_instruction")));
 }
 
 pub fn _handler_6() void {
     // double fault
     //desc("Triggered when a fault occurs, but exec_state is already .fault or .interrupt_fault");
-    assert(uc_address() == @enumToInt(uc_layout.UC_Vectors.double_fault));
+    assert(uc_address() == @enumToInt(uc.Vectors.double_fault));
     vectored_fault_handler(@intCast(u5, @offsetOf(misc.ZeropageVectorTable, "double_fault")));
 }
 

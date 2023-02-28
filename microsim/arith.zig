@@ -56,7 +56,7 @@ pub fn compute(in: Inputs) Outputs {
 
 pub const Inputs = struct {
     j: bus.JParts,
-    k: u16,
+    k: bus.K,
     c: bool,
     ALU_MODE: ctrl.ALU_Mode,
 };

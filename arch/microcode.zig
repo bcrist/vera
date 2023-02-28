@@ -1,96 +1,379 @@
 const std = @import("std");
-const allocators = @import("allocators.zig");
-const ctrl = @import("control_signals");
-const uc_layout = @import("microcode_layout");
-const instructions = @import("instructions.zig");
-const panic = @import("instruction_builder.zig").panic;
+const bits = @import("bits");
+const misc = @import("misc");
 
-const Control_Signals = ctrl.Control_Signals;
-const UC_Address = uc_layout.UC_Address;
+const Opcode = misc.Opcode;
 
-const gpa = &allocators.global_gpa;
-const perm_arena = &allocators.global_arena;
+pub const Address = u16;
+pub const Continuation = u10;
+pub const Flags = enum { Z, N, C, V, K };
+pub const FlagSet = std.EnumSet(Flags);
 
-const CycleContext = struct {
-    pub fn hash(self: @This(), cs: *Control_Signals) u64 {
-        _ = self;
-        var hasher = std.hash.Wyhash.init(0);
-        std.hash.autoHash(&hasher, cs.*);
-        return hasher.final();
-    }
-    pub fn eql(self: @This(), a: *Control_Signals, b: *Control_Signals) bool {
-        _ = self;
-        return std.meta.eql(a.*, b.*);
+pub const Vectors = enum(Address) {
+    reset = 0,
+    page_fault = 1,
+    access_fault = 2,
+    page_align_fault = 3,
+    instruction_protection_fault = 4,
+    invalid_instruction = 5,
+    double_fault = 6,
+    interrupt = 7,
+
+    pub const last = Vectors.interrupt;
+};
+
+// Use this to safely iterate over ranges of opcodes that might end on 0xFFFF
+pub fn opcodeIterator(first: Opcode, last: Opcode) OpcodeIterator {
+    return .{ .opcode = first, .last = last };
+}
+pub const OpcodeIterator = struct {
+    opcode: u17,
+    last: u17,
+
+    pub fn next(self: *OpcodeIterator) ?Opcode {
+        if (self.opcode <= self.last) {
+            const opcode = @intCast(Opcode, self.opcode);
+            self.opcode += getOpcodeGranularity(opcode);
+            return opcode;
+        } else {
+            return null;
+        }
     }
 };
-var cycle_dedup = std.HashMap(*Control_Signals, *Control_Signals, CycleContext, 75).init(gpa.allocator());
-var unconditional_continuations = std.HashMap(*Control_Signals, UC_Address, CycleContext, 75).init(gpa.allocator());
-pub var microcode: [65536]?*Control_Signals = [_]?*Control_Signals { null } ** 65536;
 
-var next_unconditional_continuation: uc_layout.UC_Continuation = 0x1FF;
-
-pub fn getOrCreateUnconditionalContinuation(cycle: *Control_Signals) UC_Address {
-    if (unconditional_continuations.get(cycle)) |ua| {
-        return ua;
-    } else {
-        const min_n = @enumToInt(uc_layout.UC_Vectors.interrupt) + 1;
-
-        var n = next_unconditional_continuation;
-        var ua = uc_layout.getAddressForContinuation(n, .{});
-
-        while (n >= min_n and microcode[ua] != null) {
-            n -= 1;
-            ua = uc_layout.getAddressForContinuation(n, .{});
-        }
-
-        if (n < min_n) {
-            // TODO use conditional slots?
-            std.debug.panic("No more continuations left!", .{});
-        }
-        next_unconditional_continuation = n - 1;
-
-        const deduped = put(ua, cycle);
-        unconditional_continuations.put(deduped, ua) catch @panic("Out of memory!");
-        return ua;
-    }
+pub fn flagPermutationIterator(flags: FlagSet) UCFlagSetPermutationIterator {
+    return .{ .all = flags };
 }
 
-pub fn getContinuationsLeft() usize {
-    const min_n = @enumToInt(uc_layout.UC_Vectors.interrupt) + 1;
-    return next_unconditional_continuation - min_n + 1;
-}
+pub const UCFlagSetPermutationIterator = struct {
+    all: FlagSet,
+    permutation: FlagSet = .{},
+    done: bool = false,
 
-pub fn get(ua: UC_Address) ?*Control_Signals {
-    return microcode[ua];
-}
+    pub fn next(self: *UCFlagSetPermutationIterator) ?FlagSet {
+        if (self.done) return null;
 
-pub fn put(ua: UC_Address, cycle: *Control_Signals) *Control_Signals {
-    var deduped = cycle;
-    if (cycle_dedup.get(cycle)) |c| {
-        deduped = c;
-    } else {
-        deduped = perm_arena.allocator().create(Control_Signals) catch @panic("Out of memory!");
-        deduped.* = cycle.*;
-        cycle_dedup.put(deduped, deduped) catch @panic("Out of memory!");
-    }
+        var it = self.all.iterator();
+        var to_return = self.permutation;
+        var updated = to_return;
+        while (it.next()) |flag| {
+            if (!updated.contains(flag)) {
+                // set the new bit
+                updated.insert(flag);
 
-    putNoDedup(ua, deduped);
-    return deduped;
-}
+                // reset all the lower bits
+                var it2 = self.all.iterator();
+                while (it2.next()) |flag2| {
+                    if (flag2 != flag) {
+                        updated.remove(flag2);
+                    } else {
+                        break;
+                    }
+                }
 
-// provided cycle should be from perm_arena
-pub fn putNoDedup(ua: UC_Address, cycle: *Control_Signals) void {
-    if (microcode[ua] != null) {
-        if (uc_layout.getOpcodeForAddress(ua)) |opcode| {
-            if (instructions.getInstructionByOpcode(opcode)) |insn| {
-                panic("Microcode address {X} (opcode {X}) is already in use by {}", .{ ua, opcode, insn.mnemonic });
-            } else {
-                panic("Microcode address {X} (opcode {X}) is already in use", .{ ua, opcode });
+                self.permutation = updated;
+                return to_return;
             }
+        }
+
+        self.done = true;
+        return to_return;
+    }
+};
+
+pub fn getCheckedFlagsForOpcode(opcode: Opcode) FlagSet {
+    var flags = FlagSet{};
+
+    if ((opcode & 0xF000) == 0) {
+        if ((opcode & 0x0800) == 0) {
+            // KZ opcode
+            flags.insert(.K);
+            flags.insert(.Z);
+        } else if ((opcode & 0x0400) == 0) {
+            // CNKZ opcode
+            flags.insert(.C);
+            flags.insert(.N);
+            flags.insert(.K);
+            flags.insert(.Z);
         } else {
-            panic("Microcode address {X} is already in use", .{ ua });
+            // VNKZ opcode
+            flags.insert(.V);
+            flags.insert(.N);
+            flags.insert(.K);
+            flags.insert(.Z);
         }
     } else {
-        microcode[ua] = cycle;
+        // K opcode
+        flags.insert(.K);
     }
+
+    return flags;
+}
+
+pub fn getAddressForOpcode(opcode: Opcode, flags: FlagSet) Address {
+    var ua: Address = undefined;
+    if ((opcode & 0xF000) == 0) {
+        const dcba = @truncate(u4, opcode);
+        const kjihgfe = @truncate(u7, opcode >> 4);
+        ua = bits.concat(.{
+            kjihgfe,
+            dcba,
+        });
+
+        if ((opcode & 0x0800) == 0) {
+            // KZ opcode
+            ua |= 0x2000;
+            if (flags.contains(.K)) ua |= 0x1000;
+            if (flags.contains(.Z)) ua |= 0x800;
+        } else if ((opcode & 0x0400) == 0) {
+            // CNKZ opcode
+            ua |= 0x8000;
+            if (flags.contains(.C)) ua |= 0x4000;
+            if (flags.contains(.N)) ua |= 0x2000;
+            if (flags.contains(.K)) ua |= 0x1000;
+            if (flags.contains(.Z)) ua |= 0x800;
+        } else {
+            // VNKZ opcode
+            ua |= 0x8000;
+            if (flags.contains(.V)) ua |= 0x4000;
+            if (flags.contains(.N)) ua |= 0x2000;
+            if (flags.contains(.K)) ua |= 0x1000;
+            if (flags.contains(.Z)) ua |= 0x800;
+        }
+    } else {
+        // K opcode
+        const kjihgfe = @truncate(u7, opcode >> 4);
+        const l = @truncate(u1, opcode >> 11);
+        const ponm = @truncate(u4, opcode >> 12);
+        ua = bits.concat(.{
+            kjihgfe,
+            ponm,
+            l,
+        });
+        if (flags.contains(.K)) ua |= 0x1000;
+    }
+    return ua;
+}
+
+pub fn getOpcodeGranularity(opcode: Opcode) Opcode {
+    if ((opcode & 0xF000) != 0) {
+        // low 4 bits (OA) are not included in the Address for this opcode range
+        return 16;
+    } else {
+        return 1;
+    }
+}
+
+pub fn getOpcodeForAddress(ua: Address) ?Opcode {
+    if ((ua & 0x8000) == 0x8000) {
+        // CNKZ or VNKZ opcode
+        const dcba = @truncate(u4, ua >> 7);
+        const kjihgfe = @truncate(u7, ua);
+        return bits.concat(.{
+            dcba,
+            kjihgfe,
+            @as(u5, 1),
+        });
+    } else if ((ua & 0x4000) == 0x4000) {
+        // conditional continuation cycle
+        return null;
+    } else if ((ua & 0x2000) == 0x2000) {
+        // KZ opcode
+        const dcba = @truncate(u4, ua >> 7);
+        const kjihgfe = @truncate(u7, ua);
+        return bits.concat(.{
+            dcba,
+            kjihgfe,
+            @as(u5, 0),
+        });
+    } else if ((ua & 0x0780) == 0) {
+        // unconditional continuation cycle
+        return null;
+    } else {
+        // K opcode
+        const l = @truncate(u1, ua >> 11);
+        const ponm = @truncate(u4, ua >> 7);
+        const kjihgfe = @truncate(u7, ua);
+        return bits.concat(.{
+            @as(u4, 0),
+            kjihgfe,
+            l,
+            ponm,
+        });
+    }
+}
+
+pub fn getOAForAddress(ua: Address) ?misc.OperandA {
+    if ((ua & 0x8000) == 0x8000) {
+        // CNKZ or VNKZ opcode
+        return @truncate(misc.OperandA, ua >> 7);
+    } else if ((ua & 0x4000) == 0x4000) {
+        // conditional continuation cycle
+        return null;
+    } else if ((ua & 0x2000) == 0x2000) {
+        // KZ opcode
+        return @truncate(misc.OperandA, ua >> 7);
+    } else {
+        // K opcode or unconditional continuation cycle
+        return null;
+    }
+}
+
+pub fn getOBForAddress(ua: Address) ?misc.OperandB {
+    if ((ua & 0x8000) == 0x8000) {
+        // CNKZ or VNKZ opcode
+        return @truncate(misc.OperandB, ua);
+    } else if ((ua & 0x4000) == 0x4000) {
+        // conditional continuation cycle
+        return null;
+    } else if ((ua & 0x2000) == 0x2000) {
+        // KZ opcode
+        return @truncate(misc.OperandB, ua);
+    } else if ((ua & 0x0780) == 0) {
+        // unconditional continuation cycle
+        return null;
+    } else {
+        // K opcode
+        return @truncate(misc.OperandB, ua);
+    }
+}
+
+pub fn isContinuationOrHandler(ua: Address) bool {
+    if ((ua & 0x8000) == 0x8000) {
+        // CNKZ or VNKZ opcode
+        return false;
+    } else if ((ua & 0x4000) == 0x4000) {
+        // conditional continuation cycle
+        return true;
+    } else if ((ua & 0x2000) == 0x2000) {
+        // KZ opcode
+        return false;
+    } else if ((ua & 0x0780) == 0) {
+        // unconditional continuation cycle
+        return true;
+    } else {
+        // K opcode
+        return false;
+    }
+}
+
+pub fn getAddressForContinuation(n: Continuation, flags: FlagSet) Address {
+    if ((n & 0x200) == 0) {
+        // unconditional continuation cycle
+        const ih = @truncate(u2, n >> 7);
+        const gfedcba = @truncate(u7, n);
+        return bits.concat(.{
+            gfedcba,
+            @as(u4, 0),
+            ih,
+        });
+    } else {
+        // conditional continuation cycle
+        const ihgfedcba = @truncate(u9, n);
+        const V = @boolToInt(flags.contains(.V));
+        const C = @boolToInt(flags.contains(.C));
+        const Z = @boolToInt(flags.contains(.Z));
+        const K = @boolToInt(flags.contains(.K));
+        const N = @boolToInt(flags.contains(.N));
+        return bits.concat(.{
+            ihgfedcba,
+            V,
+            C,
+            Z,
+            K,
+            N,
+            @as(u1, 1),
+        });
+    }
+}
+
+pub fn getContinuationNumberForAddress(ua: Address) ?Continuation {
+    if ((ua & 0x8000) == 0x8000) {
+        // CNKZ or VNKZ opcode
+        return null;
+    } else if ((ua & 0x4000) == 0x4000) {
+        // conditional continuation cycle
+        return bits.concat(.{
+            @truncate(u9, ua),
+            @as(u1, 1),
+        });
+    } else if ((ua & 0x2000) == 0x2000) {
+        // KZ opcode
+        return null;
+    } else if ((ua & 0x0780) == 0) {
+        // unconditional continuation cycle
+        return bits.concat(.{
+            @truncate(u7, ua),
+            @truncate(u2, ua >> 11),
+        });
+    } else {
+        // K opcode
+        return null;
+    }
+}
+
+pub fn getCheckedFlagsForAddress(ua: Address) FlagSet {
+    var result = FlagSet{};
+
+    if ((ua & 0x8000) == 0x8000) {
+        // CNKZ or VNKZ opcode
+        result.insert(.N);
+        result.insert(.K);
+        result.insert(.Z);
+        if ((ua & 0x0040) == 0x0400) {
+            result.insert(.V);
+        } else {
+            result.insert(.C);
+        }
+    } else if ((ua & 0x4000) == 0x4000) {
+        // conditional continuation cycle
+        result.insert(.N);
+        result.insert(.K);
+        result.insert(.Z);
+        result.insert(.C);
+        result.insert(.V);
+    } else if ((ua & 0x2000) == 0x2000) {
+        // KZ opcode
+        result.insert(.K);
+        result.insert(.Z);
+    } else if ((ua & 0x0780) == 0) {
+        // unconditional continuation cycle
+
+    } else {
+        // K opcode
+        result.insert(.K);
+    }
+
+    return result;
+}
+
+pub fn getFlagsForAddress(ua: Address) FlagSet {
+    var result = FlagSet{};
+
+    if ((ua & 0x8000) == 0x8000) {
+        // CNKZ or VNKZ opcode
+        if ((ua & 0x4000) == 0x4000) result.insert(if ((ua & 0x0040) == 0x0400) .V else .C);
+        if ((ua & 0x2000) == 0x2000) result.insert(.N);
+        if ((ua & 0x1000) == 0x1000) result.insert(.K);
+        if ((ua & 0x0800) == 0x0800) result.insert(.Z);
+    } else if ((ua & 0x4000) == 0x4000) {
+        // conditional continuation cycle
+        if ((ua & 0x2000) == 0x2000) result.insert(.N);
+        if ((ua & 0x1000) == 0x1000) result.insert(.K);
+        if ((ua & 0x0800) == 0x0800) result.insert(.Z);
+        if ((ua & 0x0400) == 0x0400) result.insert(.C);
+        if ((ua & 0x0200) == 0x0200) result.insert(.V);
+    } else if ((ua & 0x2000) == 0x2000) {
+        // KZ opcode
+        if ((ua & 0x1000) == 0x1000) result.insert(.K);
+        if ((ua & 0x0800) == 0x0800) result.insert(.Z);
+    } else if ((ua & 0x0780) == 0) {
+        // unconditional continuation cycle
+
+    } else {
+        // K opcode
+        if ((ua & 0x1000) == 0x1000) result.insert(.K);
+    }
+
+    return result;
 }

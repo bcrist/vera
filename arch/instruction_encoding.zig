@@ -2,7 +2,7 @@ const std = @import("std");
 const bits = @import("bits");
 const deep_hash_map = @import("deep_hash_map");
 const sx = @import("sx");
-const uc_layout = @import("microcode_layout");
+const uc = @import("microcode");
 const misc = @import("misc");
 const ctrl = @import("control_signals");
 
@@ -674,13 +674,13 @@ fn getParameterValueForOpcode(comptime T: type, insn: InstructionEncoding, encod
     var raw: i64 = undefined;
     switch (src) {
         .OA, .OB, .OB_OA => {
-            const ua = uc_layout.getAddressForOpcode(opcode, .{});
+            const ua = uc.getAddressForOpcode(opcode, .{});
             raw = switch (src) {
-                .OA => uc_layout.getOAForAddress(ua) orelse unreachable,
-                .OB => uc_layout.getOBForAddress(ua) orelse unreachable,
+                .OA => uc.getOAForAddress(ua) orelse unreachable,
+                .OB => uc.getOBForAddress(ua) orelse unreachable,
                 .OB_OA => bits.concat(.{
-                    uc_layout.getOAForAddress(ua) orelse unreachable,
-                    uc_layout.getOBForAddress(ua) orelse unreachable,
+                    uc.getOAForAddress(ua) orelse unreachable,
+                    uc.getOBForAddress(ua) orelse unreachable,
                 }),
                 else => unreachable,
             };

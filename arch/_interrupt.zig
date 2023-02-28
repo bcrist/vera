@@ -3,7 +3,7 @@ const ib = @import("instruction_builder.zig");
 const cb = @import("cycle_builder.zig");
 const ctrl = @import("control_signals");
 const misc = @import("misc");
-const uc_layout = @import("microcode_layout");
+const uc = @import("microcode");
 const physical_address = @import("physical_address");
 
 const encoding = ib.encoding;
@@ -36,7 +36,7 @@ const SEQ_OP = cb.SEQ_OP;
 pub fn _handler_7() void {
     //syntax("(interrupt)");
     //desc("Interrupt handler");
-    assert(uc_address() == @enumToInt(uc_layout.UC_Vectors.interrupt));
+    assert(uc_address() == @enumToInt(uc.Vectors.interrupt));
     const vector_register = physical_address.fromFrame(@enumToInt(physical_address.DeviceFrame.sys_interrupt_controller));
 
     // Persist STAT for when we return
