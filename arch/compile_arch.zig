@@ -4,8 +4,7 @@ const allocators = @import("allocators.zig");
 const ib = @import("instruction_builder.zig");
 const cb = @import("cycle_builder.zig");
 const uc = @import("microcode");
-const microcode_builder = @import("microcode_builder.zig");
-const instructions = @import("instructions.zig");
+const arch = @import("arch_builder.zig");
 const uc_serialization = @import("microcode_rom_serialization.zig");
 
 pub fn main() !void {
@@ -25,15 +24,15 @@ pub fn main() !void {
 
     assignReservedOpcodes();
 
-    std.debug.print("{} continuations left\n", .{ microcode_builder.getContinuationsLeft() });
+    std.debug.print("{} continuations left\n", .{ arch.getContinuationsLeft() });
 
     {
         var f = try std.fs.cwd().createFile("arch/instruction_encoding.sx", .{});
         defer f.close();
-        try instructions.writeInstructionData(f.writer());
+        try arch.writeInstructionData(f.writer());
     }
 
-    var rom_data = try uc_serialization.writeCompressedRoms(allocators.temp_arena.allocator(), allocators.temp_arena.allocator(), &microcode_builder.microcode);
+    var rom_data = try uc_serialization.writeCompressedRoms(allocators.temp_arena.allocator(), allocators.temp_arena.allocator(), &arch.microcode);
 
     for (rom_data, 0..) |data, n| {
         std.debug.print("ROM {}: {} bytes compressed\n", .{ n, data.len });
@@ -46,7 +45,7 @@ pub fn main() !void {
         try af.finish();
     }
 
-    rom_data = try uc_serialization.writeSRecRoms(allocators.temp_arena.allocator(), allocators.temp_arena.allocator(), &microcode_builder.microcode);
+    rom_data = try uc_serialization.writeSRecRoms(allocators.temp_arena.allocator(), allocators.temp_arena.allocator(), &arch.microcode);
     for (rom_data, 0..) |data, n| {
         var path_buf: [32]u8 = undefined;
         var path = try std.fmt.bufPrint(&path_buf, "arch/microcode_roms/rom_{}.srec", .{ n });
@@ -66,7 +65,7 @@ fn reserved() void {
 fn assignReservedOpcodes() void {
     var opIter = uc.opcodeIterator(0x0000, 0xFFFF);
     while (opIter.next()) |cur_opcode| {
-        if (microcode_builder.get(uc.getAddressForOpcode(cur_opcode, .{})) == null) {
+        if (arch.getMicrocodeCycle(uc.getAddressForOpcode(cur_opcode, .{})) == null) {
             const granularity = uc.getOpcodeGranularity(cur_opcode);
             const last_opcode = cur_opcode +% granularity -% 1;
             ib.processOpcodes(cur_opcode, last_opcode, reserved);

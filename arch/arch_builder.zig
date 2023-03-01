@@ -1,18 +1,99 @@
 const std = @import("std");
 const allocators = @import("allocators.zig");
-const sx = @import("sx");
-const misc = @import("misc");
+const ControlSignals = @import("ControlSignals");
 const uc = @import("microcode");
+const sx = @import("sx");
 const instruction_encoding = @import("instruction_encoding");
-
-const Opcode = misc.Opcode;
-const InstructionEncoding = instruction_encoding.InstructionEncoding;
+const misc = @import("misc");
+const deep_hash_map = @import("deep_hash_map");
+const panic = @import("instruction_builder.zig").panic;
 
 const gpa = &allocators.global_gpa;
 const perm_arena = &allocators.global_arena;
 
+const Opcode = misc.Opcode;
+const InstructionEncoding = instruction_encoding.InstructionEncoding;
+
 var instructions: [65536]?*InstructionEncoding = .{ null } ** 65536;
 var descriptions: [65536]?[]const u8 = .{ null } ** 65536;
+
+var cycle_dedup = deep_hash_map.DeepAutoHashMap(*ControlSignals, *ControlSignals).init(gpa.allocator());
+var unconditional_continuations = deep_hash_map.DeepAutoHashMap(*ControlSignals, uc.Address).init(gpa.allocator());
+pub var microcode: [65536]?*ControlSignals = [_]?*ControlSignals { null } ** 65536;
+
+var next_unconditional_continuation: uc.Continuation = 0x1FF;
+
+pub fn getOrCreateUnconditionalContinuation(cycle: *ControlSignals) uc.Address {
+    if (unconditional_continuations.get(cycle)) |ua| {
+        return ua;
+    } else {
+        const min_n = @enumToInt(uc.Vectors.last) + 1;
+
+        var n = next_unconditional_continuation;
+        var ua = uc.getAddressForContinuation(n, .{});
+
+        while (n >= min_n and microcode[ua] != null) {
+            n -= 1;
+            ua = uc.getAddressForContinuation(n, .{});
+        }
+
+        // occasionally useful for debugging changes that cause unexpected increases in continuation use:
+        // if (@import("instruction_builder.zig").insn) |i| {
+        //     std.debug.print("Allocating continuation {}:\n", .{ n });
+        //     @import("instruction_builder.zig").printCyclePath(i.initial_uc_address, i.encoding);
+        // }
+
+        if (n < min_n) {
+            // TODO use conditional slots?
+            std.debug.panic("No more continuations left!", .{});
+        }
+        next_unconditional_continuation = n - 1;
+
+        const deduped = putMicrocodeCycle(ua, cycle);
+        unconditional_continuations.put(deduped, ua) catch @panic("Out of memory!");
+        return ua;
+    }
+}
+
+pub fn getContinuationsLeft() usize {
+    const min_n = @enumToInt(uc.Vectors.last) + 1;
+    return next_unconditional_continuation - min_n + 1;
+}
+
+pub fn getMicrocodeCycle(ua: uc.Address) ?*ControlSignals {
+    return microcode[ua];
+}
+
+pub fn putMicrocodeCycle(ua: uc.Address, cycle: *ControlSignals) *ControlSignals {
+    var deduped = cycle;
+    if (cycle_dedup.get(cycle)) |c| {
+        deduped = c;
+    } else {
+        deduped = perm_arena.allocator().create(ControlSignals) catch @panic("Out of memory!");
+        deduped.* = cycle.*;
+        cycle_dedup.put(deduped, deduped) catch @panic("Out of memory!");
+    }
+
+    putMicrocodeCycleNoDedup(ua, deduped);
+    return deduped;
+}
+
+// provided cycle should be from perm_arena
+pub fn putMicrocodeCycleNoDedup(ua: uc.Address, cycle: *ControlSignals) void {
+    if (microcode[ua] != null) {
+        if (uc.getOpcodeForAddress(ua)) |opcode| {
+            if (getInstructionByOpcode(opcode)) |insn| {
+                panic("Microcode address {X} (opcode {X}) is already in use by {}", .{ ua, opcode, insn.mnemonic });
+            } else {
+                panic("Microcode address {X} (opcode {X}) is already in use", .{ ua, opcode });
+            }
+        } else {
+            panic("Microcode address {X} is already in use", .{ ua });
+        }
+    } else {
+        microcode[ua] = cycle;
+    }
+}
 
 fn getOrCreateInstruction(in: InstructionEncoding) *InstructionEncoding {
     const first_opcode = in.opcodes.min;

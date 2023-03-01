@@ -4,8 +4,7 @@ const uc = @import("microcode");
 const ControlSignals = @import("ControlSignals");
 const misc = @import("misc");
 const instruction_encoding = @import("instruction_encoding");
-const microcode_builder = @import("microcode_builder.zig");
-const instructions = @import("instructions.zig");
+const arch = @import("arch_builder.zig");
 const cycle_builder = @import("cycle_builder.zig");
 
 const assert = std.debug.assert;
@@ -485,7 +484,7 @@ fn storeInitialContinuationCycleFlagPermutations(continuation: uc.Continuation, 
     while (unqueried_permutations.next()) |unqueried_flag_permutation| {
         var combined_flags = queried_flag_permutation;
         combined_flags.setUnion(unqueried_flag_permutation);
-        microcode_builder.putNoDedup(uc.getAddressForContinuation(continuation, combined_flags), initial_cycle);
+        arch.putMicrocodeCycleNoDedup(uc.getAddressForContinuation(continuation, combined_flags), initial_cycle);
     }
 }
 
@@ -521,24 +520,24 @@ pub fn processOpcodes(first_opcode: Opcode, last_opcode: Opcode, func: *const fn
         {
             var flagIter = uc.flagPermutationIterator(checked_flags);
             while (flagIter.next()) |flag_variant| {
-                const cycle = microcode_builder.get(uc.getAddressForOpcode(first_opcode, flag_variant)).?;
+                const cycle = arch.getMicrocodeCycle(uc.getAddressForOpcode(first_opcode, flag_variant)).?;
 
                 var opIter = uc.opcodeIterator(first_opcode, last_opcode);
                 _ = opIter.next();
                 while (opIter.next()) |cur_opcode| {
                     const address = uc.getAddressForOpcode(cur_opcode, flag_variant);
-                    microcode_builder.putNoDedup(address, cycle);
+                    arch.putMicrocodeCycleNoDedup(address, cycle);
                 }
             }
         }
 
         assert(result.encoding.opcodes.min == first_opcode);
         assert(result.encoding.opcodes.max == last_opcode);
-        instructions.recordInstruction(result.encoding, result.description);
+        arch.recordInstruction(result.encoding, result.description);
     } else {
         result.encoding.opcodes.min = first_opcode;
         result.encoding.opcodes.max = first_opcode + first_granularity - 1;
-        instructions.recordInstruction(result.encoding, result.description);
+        arch.recordInstruction(result.encoding, result.description);
 
         var opIter = uc.opcodeIterator(first_opcode, last_opcode);
         _ = opIter.next();
@@ -549,7 +548,7 @@ pub fn processOpcodes(first_opcode: Opcode, last_opcode: Opcode, func: *const fn
             }, cur_opcode, func);
             result.encoding.opcodes.min = cur_opcode;
             result.encoding.opcodes.max = cur_opcode + uc.getOpcodeGranularity(cur_opcode) - 1;
-            instructions.recordInstruction(result.encoding, result.description);
+            arch.recordInstruction(result.encoding, result.description);
         }
     }
 }
@@ -632,7 +631,7 @@ fn storeInitialCycleFlagPermutations(the_opcode: Opcode, initial_cycle: *Control
     while (unqueried_permutations.next()) |unqueried_flag_permutation| {
         var combined_flags = queried_flag_permutation;
         combined_flags.setUnion(unqueried_flag_permutation);
-        microcode_builder.putNoDedup(uc.getAddressForOpcode(the_opcode, combined_flags), initial_cycle);
+        arch.putMicrocodeCycleNoDedup(uc.getAddressForOpcode(the_opcode, combined_flags), initial_cycle);
     }
 }
 
@@ -687,7 +686,7 @@ fn process(config: ProcessConfig) ProcessResult {
     var c = cycles.len - 1;
     while (c > 0) : (c -= 1) {
         const cycle = &cycles[c];
-        const ua = microcode_builder.getOrCreateUnconditionalContinuation(cycle);
+        const ua = arch.getOrCreateUnconditionalContinuation(cycle);
         cycles[c - 1].next_uop = uc.getContinuationNumberForAddress(ua).?;
     }
 
@@ -695,7 +694,7 @@ fn process(config: ProcessConfig) ProcessResult {
         if (i.encoding == null) panic("Encoding not specified!", .{});
     }
 
-    const cs = microcode_builder.put(i.initial_uc_address, &cycles[0]);
+    const cs = arch.putMicrocodeCycle(i.initial_uc_address, &cycles[0]);
 
     return .{
         .encoding = i.encoding,
@@ -719,7 +718,7 @@ pub fn panic(comptime format: []const u8, args: anytype) noreturn {
     std.os.exit(0);
 }
 
-fn printCyclePath(initial_uc_address: uc.Address, insn_encoding: ?InstructionEncoding) void {
+pub fn printCyclePath(initial_uc_address: uc.Address, insn_encoding: ?InstructionEncoding) void {
     var stderr = std.io.getStdErr().writer();
 
     if (uc.getOpcodeForAddress(initial_uc_address)) |op| {

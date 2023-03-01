@@ -4,7 +4,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const mode = b.standardOptimizeOption(.{});
 
-    //[[!! include 'build' !! 209 ]]
+    //[[!! include 'build' !! 210 ]]
     //[[ ################# !! GENERATED CODE -- DO NOT MODIFY !! ################# ]]
 
     const bits = b.createModule(.{
@@ -140,6 +140,7 @@ pub fn build(b: *std.Build) void {
     });
     compile_arch.addModule("ControlSignals", ControlSignals);
     compile_arch.addModule("bits", bits);
+    compile_arch.addModule("deep_hash_map", deep_hash_map);
     compile_arch.addModule("instruction_encoding", instruction_encoding);
     compile_arch.addModule("microcode", microcode);
     compile_arch.addModule("misc", misc);
@@ -169,28 +170,28 @@ pub fn build(b: *std.Build) void {
     _ = makeRunStep(b, microsim, "usim", "run microsim");
 
     const tests1 = b.addTest(.{
-        .root_source_file = .{ .path = "arch/test_instruction_encoding.zig"},
-        .target = target,
-        .optimize = mode,
-    });
-    tests1.addModule("instruction_encoding", instruction_encoding);
-    tests1.addModule("instruction_encoding_data", instruction_encoding_data);
-
-    const tests2 = b.addTest(.{
         .root_source_file = .{ .path = "arch/test_instruction_behavior.zig"},
         .target = target,
         .optimize = mode,
     });
-    tests2.addModule("ControlSignals", ControlSignals);
-    tests2.addModule("Simulator", Simulator);
+    tests1.addModule("ControlSignals", ControlSignals);
+    tests1.addModule("Simulator", Simulator);
+    tests1.addModule("instruction_encoding", instruction_encoding);
+    tests1.addModule("instruction_encoding_data", instruction_encoding_data);
+    tests1.addModule("microcode", microcode);
+    tests1.addModule("misc", misc);
+    tests1.addModule("register_file", register_file);
+    tests1.addModule("rom_compress", rom_compress);
+    tests1.addModule("rom_decompress", rom_decompress);
+    tests1.addModule("srec", srec);
+
+    const tests2 = b.addTest(.{
+        .root_source_file = .{ .path = "arch/test_instruction_encoding.zig"},
+        .target = target,
+        .optimize = mode,
+    });
     tests2.addModule("instruction_encoding", instruction_encoding);
     tests2.addModule("instruction_encoding_data", instruction_encoding_data);
-    tests2.addModule("microcode", microcode);
-    tests2.addModule("misc", misc);
-    tests2.addModule("register_file", register_file);
-    tests2.addModule("rom_compress", rom_compress);
-    tests2.addModule("rom_decompress", rom_decompress);
-    tests2.addModule("srec", srec);
 
     const tests3 = b.addTest(.{
         .root_source_file = .{ .path = "pkg/bits.zig"},
