@@ -99,7 +99,7 @@ const Rom2Data = packed struct {
 };
 
 const Rom3Data = packed struct {
-    ob_oa_op: ControlSignals.Operand_Reg_Op, // 2
+    ob_oa_op: ControlSignals.OperandRegOp, // 2
     lh_src: ControlSignals.LHSource, // 4
     jkr_wsel: ControlSignals.RegFileIndexingSource, // 2
     jkr_wmode: ControlSignals.RegFileWriteMode, // 2

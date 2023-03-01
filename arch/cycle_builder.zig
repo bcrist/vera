@@ -277,11 +277,11 @@ pub fn setControlSignal(comptime signal: ControlSignals.SignalName, raw_value: a
         .ob_oa_op => if (ib.insn) |i| {
             switch (value) {
                 .hold => {},
-                .from_DL => {
+                .from_dl => {
                     i.OA_state = .loaded;
                     i.OB_state = .loaded;
                 },
-                .increment_OB, .clear_OB => {
+                .increment_ob, .clear_ob => {
                     i.OB_state = .loaded;
                 },
             }
@@ -1483,7 +1483,7 @@ pub fn allow_interrupt() void {
 }
 
 pub fn clear_OB() void {
-    setControlSignal(.ob_oa_op, .clear_OB);
+    setControlSignal(.ob_oa_op, .clear_ob);
 
     if (ib.insn) |i| {
         i.OB_state = .loaded;
@@ -1491,7 +1491,7 @@ pub fn clear_OB() void {
 }
 
 pub fn increment_OB() void {
-    setControlSignal(.ob_oa_op, .increment_OB);
+    setControlSignal(.ob_oa_op, .increment_ob);
 
     if (ib.insn) |i| {
         i.OB_state = .loaded;
@@ -1499,7 +1499,7 @@ pub fn increment_OB() void {
 }
 
 pub fn decodeOperands() void {
-    setControlSignal(.ob_oa_op, .from_DL);
+    setControlSignal(.ob_oa_op, .from_dl);
 
     if (ib.insn) |i| {
         i.OA_state = i.DL_state;

@@ -32,7 +32,7 @@ sr1_wsrc: SR1WriteDataSource,
 sr2_wsrc: SR2WriteDataSource,
 stat_op: STAT_Op,
 dl_op: DataLatchOp,
-ob_oa_op: Operand_Reg_Op,
+ob_oa_op: OperandRegOp,
 allow_int: bool,
 seq_op: Sequencer_Op,
 next_uop: uc.Continuation,
@@ -145,7 +145,7 @@ pub fn randomize(self: *ControlSignals, rnd: std.rand.Random) void {
     self.sr2_wsrc = rnd.enumValue(SR2WriteDataSource);
     self.stat_op = rnd.enumValue(STAT_Op);
     self.dl_op = rnd.enumValue(DataLatchOp);
-    self.ob_oa_op = rnd.enumValue(Operand_Reg_Op);
+    self.ob_oa_op = rnd.enumValue(OperandRegOp);
     self.allow_int = rnd.boolean();
     self.seq_op = rnd.enumValue(Sequencer_Op);
     self.next_uop = rnd.int(uc.Continuation);
@@ -380,11 +380,11 @@ pub const DataLatchOp = enum(u2) {
     to_d = 2,
 };
 
-pub const Operand_Reg_Op = enum(u2) {
+pub const OperandRegOp = enum(u2) {
     hold = 0,
-    from_DL = 1,
-    increment_OB = 2,
-    clear_OB = 3,
+    from_dl = 1,
+    increment_ob = 2,
+    clear_ob = 3,
 };
 
 pub const BusDirection = enum(u1) {
