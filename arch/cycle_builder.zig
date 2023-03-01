@@ -6,63 +6,57 @@ const uc = @import("microcode");
 const ib = @import("instruction_builder.zig");
 const panic = ib.panic;
 
-var cycle = ControlSignals.init();
-var assigned_signals: std.EnumSet(ControlSignals.SignalName) = .{};
-
-pub const ALU_Flag_Mode = enum {
+pub const FlagsMode = enum {
     no_flags,
     flags,
 };
 
-pub const ALU_Freshness = enum {
+pub const Freshness = enum {
     fresh,
     cont,
 };
 
-pub const ZX_or_SX = enum {
+pub const ZeroOrSignExtension = enum {
     zx,
     sx,
 };
 
-pub const ZX_SX_or_1X = enum {
+pub const ZeroSignOrOneExtension = enum {
     zx,
     sx,
     _1x,
 };
 
-pub const OA_or_OB = enum {
+pub const OperandSelection = enum {
     OA,
     OB,
 };
 
-pub const OA_or_OB_xor = enum {
+pub const OperandSelectionWithXor = enum {
     OA,
     OB,
     OAxor1,
     OBxor1,
 };
 
-pub const Shift_Dir = enum {
+pub const ShiftDirection = enum {
     left,
     right,
 };
 
-pub const Swap_Halves = enum {
+pub const SwapHalves = enum {
     normal,
     swap,
 };
 
-pub const Bitcount_Mode = enum {
+pub const BitcountDirection = enum {
     all,
     leading,
     trailing,
 };
 
-pub const Set_Clear_Hold = enum {
-    set,
-    clear,
-    hold,
-};
+var cycle = ControlSignals.init();
+var assigned_signals: std.EnumSet(ControlSignals.SignalName) = .{};
 
 pub fn start() void {
     cycle = ControlSignals.init();
@@ -271,18 +265,18 @@ pub fn setControlSignal(comptime signal: ControlSignals.SignalName, raw_value: a
         },
         .dl_op => if (value == .from_d) {
             if (ib.insn) |i| {
-                i.DL_state = .loaded;
+                i.dl_state = .loaded;
             }
         },
         .ob_oa_op => if (ib.insn) |i| {
             switch (value) {
                 .hold => {},
                 .from_dl => {
-                    i.OA_state = .loaded;
-                    i.OB_state = .loaded;
+                    i.oa_state = .same_as_dl;
+                    i.ob_state = .same_as_dl;
                 },
                 .increment_ob, .clear_ob => {
-                    i.OB_state = .loaded;
+                    i.ob_state = .loaded;
                 },
             }
         },
@@ -510,7 +504,7 @@ pub fn SRH_to_LL(which: ControlSignals.AnySRIndex) void {
     JH_to_LL();
 }
 
-pub fn reg_to_J(register: misc.RegisterIndex, ext: ZX_SX_or_1X) void {
+pub fn reg_to_J(register: misc.RegisterIndex, ext: ZeroSignOrOneExtension) void {
     if (register == 0) {
         setControlSignal(.jr_rsel, .zero);
         setControlSignal(.jr_rx, false);
@@ -553,7 +547,7 @@ pub fn reg_to_K(register: misc.RegisterIndex) void {
     setControlSignal(.k_src, .kr);
 }
 
-pub fn reg_to_L(register: misc.RegisterIndex, ext: ZX_SX_or_1X) void {
+pub fn reg_to_L(register: misc.RegisterIndex, ext: ZeroSignOrOneExtension) void {
     reg_to_J(register, ext);
     J_to_L();
 }
@@ -588,7 +582,7 @@ pub fn reg32_to_L(register: misc.RegisterIndex) void {
     J_to_L();
 }
 
-pub fn op_reg_to_J(which: OA_or_OB_xor, ext: ZX_SX_or_1X) void {
+pub fn op_reg_to_J(which: OperandSelectionWithXor, ext: ZeroSignOrOneExtension) void {
     switch (which) {
         .OA, .OAxor1 => setControlSignal(.jr_rsel, .oa),
         .OB, .OBxor1 => setControlSignal(.jr_rsel, .ob),
@@ -605,7 +599,7 @@ pub fn op_reg_to_J(which: OA_or_OB_xor, ext: ZX_SX_or_1X) void {
     }
 }
 
-pub fn op_reg_to_K(which: OA_or_OB_xor) void {
+pub fn op_reg_to_K(which: OperandSelectionWithXor) void {
     switch (which) {
         .OA, .OAxor1 => setControlSignal(.kr_rsel, .oa),
         .OB, .OBxor1 => setControlSignal(.kr_rsel, .ob),
@@ -617,17 +611,17 @@ pub fn op_reg_to_K(which: OA_or_OB_xor) void {
     setControlSignal(.k_src, .kr);
 }
 
-pub fn op_reg_to_L(which: OA_or_OB_xor, ext: ZX_SX_or_1X) void {
+pub fn op_reg_to_L(which: OperandSelectionWithXor, ext: ZeroSignOrOneExtension) void {
     op_reg_to_J(which, ext);
     J_to_L();
 }
 
-pub fn op_reg_to_LL(which: OA_or_OB_xor) void {
+pub fn op_reg_to_LL(which: OperandSelectionWithXor) void {
     op_reg_to_J(which, .zx);
     JL_to_LL();
 }
 
-pub fn op_reg32_to_J(which: OA_or_OB_xor) void {
+pub fn op_reg32_to_J(which: OperandSelectionWithXor) void {
     switch (which) {
         .OA, .OAxor1 => setControlSignal(.jr_rsel, .oa),
         .OB, .OBxor1 => setControlSignal(.jr_rsel, .ob),
@@ -640,7 +634,7 @@ pub fn op_reg32_to_J(which: OA_or_OB_xor) void {
     setControlSignal(.jh_src, .jrh);
 }
 
-pub fn op_reg32_to_L(which: OA_or_OB_xor) void {
+pub fn op_reg32_to_L(which: OperandSelectionWithXor) void {
     op_reg32_to_J(which);
     J_to_L();
 }
@@ -688,7 +682,7 @@ pub fn J_to_L() void {
     setControlSignal(.lh_src, .arith_h);
 }
 
-pub fn K_to_L(ext: ZX_SX_or_1X) void {
+pub fn K_to_L(ext: ZeroSignOrOneExtension) void {
     zero_to_J();
     setControlSignal(.compute_mode, .{ .arith = switch (ext) {
         .zx => .add_J_K_zx,
@@ -780,7 +774,7 @@ pub fn LL_to_D() void {
     setControlSignal(.bus_rw, .write);
 }
 
-pub fn D_to_L(ext: ZX_SX_or_1X) void {
+pub fn D_to_L(ext: ZeroSignOrOneExtension) void {
     switch (ext) {
         .zx => {
             setControlSignal(.ll_src, .d16);
@@ -819,15 +813,11 @@ pub fn D_to_LL() void {
 
 pub fn D_to_DL() void {
     setControlSignal(.dl_op, .from_d);
-
-    if (ib.insn) |i| {
-        i.DL_state = .loaded;
-    }
 }
 
 pub fn D_to_OB_OA() void {
     D_to_DL();
-    decodeOperands();
+    decode_operands();
 }
 
 pub fn DL_to_LL() void {
@@ -868,7 +858,7 @@ pub fn SR2_to_SR2(src_index: ControlSignals.SR2Index, dest_index: ControlSignals
     setControlSignal(.sr2_wsrc, .sr2);
 }
 
-pub fn ZN_from_LL(freshness: ALU_Freshness) void {
+pub fn ZN_from_LL(freshness: Freshness) void {
     switch (freshness) {
         .fresh => setControlSignal(.stat_op, .zn_from_ll),
         .cont => setControlSignal(.stat_op, .zn_from_ll_no_set_z),
@@ -883,17 +873,17 @@ pub fn LL_to_STAT() void {
     setControlSignal(.stat_op, .load_znvcka_from_ll);
 }
 
-pub fn enableSleep() void {
+pub fn enable_sleep() void {
     setControlSignal(.stat_op, .set_s);
 }
-pub fn disableSleep() void {
+pub fn disable_sleep() void {
     setControlSignal(.stat_op, .clear_s);
 }
 
-pub fn enableAddressTranslation() void {
+pub fn enable_address_translation() void {
     setControlSignal(.stat_op, .set_a);
 }
-pub fn disableAddressTranslation() void {
+pub fn disable_address_translation() void {
     setControlSignal(.stat_op, .clear_a);
 }
 
@@ -926,7 +916,7 @@ pub fn pipe_id_to_L() void {
     zero_to_LH();
 }
 
-pub fn LL_to_op_reg(which: OA_or_OB_xor) void {
+pub fn LL_to_op_reg(which: OperandSelectionWithXor) void {
     setControlSignal(.jkr_wmode, switch (which) {
         .OA, .OB => ControlSignals.RegFileWriteMode.write_16,
         .OAxor1, .OBxor1 => ControlSignals.RegFileWriteMode.write_16_xor1,
@@ -955,7 +945,7 @@ pub fn LL_to_reg(register: misc.RegisterIndex) void {
     }
 }
 
-pub fn L_to_op_reg32(which: OA_or_OB) void {
+pub fn L_to_op_reg32(which: OperandSelection) void {
     setControlSignal(.jkr_wmode, .write_32);
     switch (which) {
         .OA => setControlSignal(.jkr_wsel, .oa),
@@ -987,7 +977,7 @@ pub fn load_next_insn(ip_offset: misc.SignedOffsetForLiteral) void {
 
 pub fn assume_next_insn_loaded(ip_offset: misc.SignedOffsetForLiteral) void {
     if (ib.insn) |i| {
-        i.DL_state = .next_insn;
+        i.dl_state = .next_insn;
         i.setNextInsnOffset(ip_offset);
     }
 }
@@ -1001,7 +991,7 @@ pub fn exec_next_insn() void {
         setControlSignal(.sr2_wsrc, .sr2);
     }
     setControlSignal(.sr2_wi, .ip);
-    execLatchedInsn();
+    exec_latched_insn();
 
     if (ib.insn) |i| {
         i.setNextInsnExecuted();
@@ -1020,11 +1010,11 @@ pub fn branch(base: ControlSignals.AnySRIndex, offset: misc.SignedOffsetForLiter
         setSR2WriteIndex(.ip);
         setControlSignal(.sr2_wsrc, .virtual_address);
     }
-    execLatchedInsn();
+    exec_latched_insn();
 }
 
-pub fn execLatchedInsn() void {
-    decodeOperands();
+pub fn exec_latched_insn() void {
+    decode_operands();
     allow_interrupt();
     setControlSignal(.seq_op, .next_instruction);
     if (isSet(.special)) {
@@ -1043,9 +1033,9 @@ pub fn execLatchedInsn() void {
 pub fn load_and_exec_next_insn(ip_offset: misc.SignedOffsetForLiteral) void {
     branch(.ip, ip_offset);
     if (ib.insn) |i| {
-        i.DL_state = .next_insn;
-        i.OA_state = .next_insn;
-        i.OB_state = .next_insn;
+        i.dl_state = .next_insn;
+        i.oa_state = .next_insn;
+        i.ob_state = .next_insn;
         i.setNextInsnOffset(ip_offset);
         i.setNextInsnExecuted();
     }
@@ -1059,7 +1049,7 @@ pub fn load_and_exec_next_insn_no_atomic_end(ip_offset: misc.SignedOffsetForLite
 //////////////////////////////////////////////////////////////////////////////
 // Arith
 
-pub fn add_to_LL(freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn add_to_LL(freshness: Freshness, flags: FlagsMode) void {
     switch (freshness) {
         .fresh => setControlSignal(.compute_mode, .{ .arith = .jl_plus_k }),
         .cont => setControlSignal(.compute_mode, .{ .arith = .jl_plus_k_plus_c }),
@@ -1074,7 +1064,7 @@ pub fn add_to_LL(freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
     }
 }
 
-pub fn sub_to_LL(freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn sub_to_LL(freshness: Freshness, flags: FlagsMode) void {
     switch (freshness) {
         .fresh => setControlSignal(.compute_mode, .{ .arith = .jl_minus_k }),
         .cont => setControlSignal(.compute_mode, .{ .arith = .jl_minus_k_minus_c }),
@@ -1089,7 +1079,7 @@ pub fn sub_to_LL(freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
     }
 }
 
-pub fn add_to_L(ext: ZX_SX_or_1X, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn add_to_L(ext: ZeroSignOrOneExtension, freshness: Freshness, flags: FlagsMode) void {
     switch (freshness) {
         .fresh => switch (ext) {
             .zx => setControlSignal(.compute_mode, .{ .arith = .j_plus_k_zx }),
@@ -1113,7 +1103,7 @@ pub fn add_to_L(ext: ZX_SX_or_1X, freshness: ALU_Freshness, flags: ALU_Flag_Mode
     }
 }
 
-pub fn sub_to_L(ext: ZX_SX_or_1X, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn sub_to_L(ext: ZeroSignOrOneExtension, freshness: Freshness, flags: FlagsMode) void {
     switch (freshness) {
         .fresh => switch (ext) {
             .zx => setControlSignal(.compute_mode, .{ .arith = .j_minus_k_zx }),
@@ -1137,112 +1127,112 @@ pub fn sub_to_L(ext: ZX_SX_or_1X, freshness: ALU_Freshness, flags: ALU_Flag_Mode
     }
 }
 
-pub fn SR_plus_literal_to_L(left: ControlSignals.AnySRIndex, right: i17, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn SR_plus_literal_to_L(left: ControlSignals.AnySRIndex, right: i17, freshness: Freshness, flags: FlagsMode) void {
     SR_to_J(left);
     literal_to_K(right);
     add_to_L(if (right < 0) ._1x else .zx, freshness, flags);
 }
-pub fn SR_minus_literal_to_L(left: ControlSignals.AnySRIndex, right: i17, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn SR_minus_literal_to_L(left: ControlSignals.AnySRIndex, right: i17, freshness: Freshness, flags: FlagsMode) void {
     SR_to_J(left);
     literal_to_K(right);
     sub_to_L(if (right < 0) ._1x else .zx, freshness, flags);
 }
 
-pub fn SR_plus_op_reg_to_L(left: ControlSignals.AnySRIndex, right: OA_or_OB_xor, ext: ZX_SX_or_1X, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn SR_plus_op_reg_to_L(left: ControlSignals.AnySRIndex, right: OperandSelectionWithXor, ext: ZeroSignOrOneExtension, freshness: Freshness, flags: FlagsMode) void {
     SR_to_J(left);
     op_reg_to_K(right);
     add_to_L(ext, freshness, flags);
 }
-pub fn SR_minus_op_reg_to_L(left: ControlSignals.AnySRIndex, right: OA_or_OB_xor, ext: ZX_SX_or_1X, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn SR_minus_op_reg_to_L(left: ControlSignals.AnySRIndex, right: OperandSelectionWithXor, ext: ZeroSignOrOneExtension, freshness: Freshness, flags: FlagsMode) void {
     SR_to_J(left);
     op_reg_to_K(right);
     sub_to_L(ext, freshness, flags);
 }
 
-pub fn SR_plus_SRL_to_L(left: ControlSignals.AnySRIndex, right: ControlSignals.AnySRIndex, ext: ZX_SX_or_1X, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn SR_plus_SRL_to_L(left: ControlSignals.AnySRIndex, right: ControlSignals.AnySRIndex, ext: ZeroSignOrOneExtension, freshness: Freshness, flags: FlagsMode) void {
     SR_to_J(left);
     SRL_to_K(right);
     add_to_L(ext, freshness, flags);
 }
-pub fn SR_minus_SRL_to_L(left: ControlSignals.AnySRIndex, right: ControlSignals.AnySRIndex, ext: ZX_SX_or_1X, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn SR_minus_SRL_to_L(left: ControlSignals.AnySRIndex, right: ControlSignals.AnySRIndex, ext: ZeroSignOrOneExtension, freshness: Freshness, flags: FlagsMode) void {
     SR_to_J(left);
     SRL_to_K(right);
     sub_to_L(ext, freshness, flags);
 }
 
-pub fn op_reg32_plus_SRL_to_L(left: OA_or_OB_xor, right: ControlSignals.AnySRIndex, ext: ZX_SX_or_1X, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn op_reg32_plus_SRL_to_L(left: OperandSelectionWithXor, right: ControlSignals.AnySRIndex, ext: ZeroSignOrOneExtension, freshness: Freshness, flags: FlagsMode) void {
     op_reg32_to_J(left);
     SRL_to_K(right);
     add_to_L(ext, freshness, flags);
 }
-pub fn op_reg32_minus_SRL_to_L(left: OA_or_OB_xor, right: ControlSignals.AnySRIndex, ext: ZX_SX_or_1X, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn op_reg32_minus_SRL_to_L(left: OperandSelectionWithXor, right: ControlSignals.AnySRIndex, ext: ZeroSignOrOneExtension, freshness: Freshness, flags: FlagsMode) void {
     op_reg32_to_J(left);
     SRL_to_K(right);
     sub_to_L(ext, freshness, flags);
 }
 
-pub fn op_reg32_plus_op_reg_to_L(left: OA_or_OB_xor, right: OA_or_OB_xor, ext: ZX_SX_or_1X, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn op_reg32_plus_op_reg_to_L(left: OperandSelectionWithXor, right: OperandSelectionWithXor, ext: ZeroSignOrOneExtension, freshness: Freshness, flags: FlagsMode) void {
     op_reg32_to_J(left);
     op_reg_to_K(right);
     add_to_L(ext, freshness, flags);
 }
-pub fn op_reg32_minus_op_reg_to_L(left: OA_or_OB_xor, right: OA_or_OB_xor, ext: ZX_SX_or_1X, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn op_reg32_minus_op_reg_to_L(left: OperandSelectionWithXor, right: OperandSelectionWithXor, ext: ZeroSignOrOneExtension, freshness: Freshness, flags: FlagsMode) void {
     op_reg32_to_J(left);
     op_reg_to_K(right);
     sub_to_L(ext, freshness, flags);
 }
 
-pub fn op_reg32_plus_literal_to_L(left: OA_or_OB_xor, right: i17, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn op_reg32_plus_literal_to_L(left: OperandSelectionWithXor, right: i17, freshness: Freshness, flags: FlagsMode) void {
     op_reg32_to_J(left);
     literal_to_K(right);
     add_to_L(if (right < 0) ._1x else .zx, freshness, flags);
 }
-pub fn op_reg32_minus_literal_to_L(left: OA_or_OB_xor, right: i17, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn op_reg32_minus_literal_to_L(left: OperandSelectionWithXor, right: i17, freshness: Freshness, flags: FlagsMode) void {
     op_reg32_to_J(left);
     literal_to_K(right);
     sub_to_L(if (right < 0) ._1x else .zx, freshness, flags);
 }
 
-pub fn zero_minus_op_reg_to_LL(right: OA_or_OB_xor, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn zero_minus_op_reg_to_LL(right: OperandSelectionWithXor, freshness: Freshness, flags: FlagsMode) void {
     zero_to_J();
     op_reg_to_K(right);
     sub_to_LL(freshness, flags);
 }
 
-pub fn SRL_minus_op_reg_to_LL(left: ControlSignals.AnySRIndex, right: OA_or_OB_xor, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn SRL_minus_op_reg_to_LL(left: ControlSignals.AnySRIndex, right: OperandSelectionWithXor, freshness: Freshness, flags: FlagsMode) void {
     SR_to_J(left);
     op_reg_to_K(right);
     sub_to_LL(freshness, flags);
 }
 
-pub fn op_reg_plus_literal_to_LL(left: OA_or_OB_xor, right: i17, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn op_reg_plus_literal_to_LL(left: OperandSelectionWithXor, right: i17, freshness: Freshness, flags: FlagsMode) void {
     op_reg_to_J(left, .zx);
     literal_to_K(right);
     add_to_LL(freshness, flags);
 }
-pub fn op_reg_minus_literal_to_LL(left: OA_or_OB_xor, right: i17, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn op_reg_minus_literal_to_LL(left: OperandSelectionWithXor, right: i17, freshness: Freshness, flags: FlagsMode) void {
     op_reg_to_J(left, .zx);
     literal_to_K(right);
     sub_to_LL(freshness, flags);
 }
 
-pub fn op_reg_plus_SRL_to_LL(left: OA_or_OB_xor, right: ControlSignals.AnySRIndex, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn op_reg_plus_SRL_to_LL(left: OperandSelectionWithXor, right: ControlSignals.AnySRIndex, freshness: Freshness, flags: FlagsMode) void {
     op_reg_to_J(left, .zx);
     SRL_to_K(right);
     add_to_LL(freshness, flags);
 }
-pub fn op_reg_minus_SRL_to_LL(left: OA_or_OB_xor, right: ControlSignals.AnySRIndex, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn op_reg_minus_SRL_to_LL(left: OperandSelectionWithXor, right: ControlSignals.AnySRIndex, freshness: Freshness, flags: FlagsMode) void {
     op_reg_to_J(left, .zx);
     SRL_to_K(right);
     sub_to_LL(freshness, flags);
 }
 
-pub fn op_reg_plus_op_reg_to_LL(left: OA_or_OB_xor, right: OA_or_OB_xor, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn op_reg_plus_op_reg_to_LL(left: OperandSelectionWithXor, right: OperandSelectionWithXor, freshness: Freshness, flags: FlagsMode) void {
     op_reg_to_J(left, .zx);
     op_reg_to_K(right);
     add_to_LL(freshness, flags);
 }
-pub fn op_reg_minus_op_reg_to_LL(left: OA_or_OB_xor, right: OA_or_OB_xor, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn op_reg_minus_op_reg_to_LL(left: OperandSelectionWithXor, right: OperandSelectionWithXor, freshness: Freshness, flags: FlagsMode) void {
     op_reg_to_J(left, .zx);
     op_reg_to_K(right);
     sub_to_LL(freshness, flags);
@@ -1251,7 +1241,7 @@ pub fn op_reg_minus_op_reg_to_LL(left: OA_or_OB_xor, right: OA_or_OB_xor, freshn
 //////////////////////////////////////////////////////////////////////////////
 // Logic
 
-pub fn logic_to_LL(mode: ControlSignals.LogicMode, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn logic_to_LL(mode: ControlSignals.LogicMode, freshness: Freshness, flags: FlagsMode) void {
     setControlSignal(.compute_mode, .{ .logic = mode });
     setControlSignal(.ll_src, .logic_l);
     switch (flags) {
@@ -1263,25 +1253,25 @@ pub fn logic_to_LL(mode: ControlSignals.LogicMode, freshness: ALU_Freshness, fla
     }
 }
 
-pub fn SRL_logic_literal_to_LL(left: ControlSignals.AnySRIndex, mode: ControlSignals.LogicMode, right: i17, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn SRL_logic_literal_to_LL(left: ControlSignals.AnySRIndex, mode: ControlSignals.LogicMode, right: i17, freshness: Freshness, flags: FlagsMode) void {
     SR_to_J(left);
     literal_to_K(right);
     logic_to_LL(mode, freshness, flags);
 }
 
-pub fn op_reg_logic_literal_to_LL(left: OA_or_OB_xor, mode: ControlSignals.LogicMode, right: i17, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn op_reg_logic_literal_to_LL(left: OperandSelectionWithXor, mode: ControlSignals.LogicMode, right: i17, freshness: Freshness, flags: FlagsMode) void {
     op_reg_to_J(left, .zx);
     literal_to_K(right);
     logic_to_LL(mode, freshness, flags);
 }
 
-pub fn op_reg_logic_op_reg_to_LL(left: OA_or_OB_xor, mode: ControlSignals.LogicMode, right: OA_or_OB_xor, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn op_reg_logic_op_reg_to_LL(left: OperandSelectionWithXor, mode: ControlSignals.LogicMode, right: OperandSelectionWithXor, freshness: Freshness, flags: FlagsMode) void {
     op_reg_to_J(left, .zx);
     op_reg_to_K(right);
     logic_to_LL(mode, freshness, flags);
 }
 
-pub fn op_reg_logic_SRL_to_LL(left: OA_or_OB_xor, mode: ControlSignals.LogicMode, right: ControlSignals.AnySRIndex, freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
+pub fn op_reg_logic_SRL_to_LL(left: OperandSelectionWithXor, mode: ControlSignals.LogicMode, right: ControlSignals.AnySRIndex, freshness: Freshness, flags: FlagsMode) void {
     op_reg_to_J(left, .zx);
     SRL_to_K(right);
     logic_to_LL(mode, freshness, flags);
@@ -1290,7 +1280,7 @@ pub fn op_reg_logic_SRL_to_LL(left: OA_or_OB_xor, mode: ControlSignals.LogicMode
 //////////////////////////////////////////////////////////////////////////////
 // Multiplier
 
-pub fn mult_to_L(left_ext: ZX_or_SX, right_ext: ZX_or_SX, flags: ALU_Flag_Mode) void {
+pub fn mult_to_L(left_ext: ZeroOrSignExtension, right_ext: ZeroOrSignExtension, flags: FlagsMode) void {
     var mode_bits = ControlSignals.MultModeBits{
         .jl = switch (left_ext) {
             .zx => .unsigned,
@@ -1311,7 +1301,7 @@ pub fn mult_to_L(left_ext: ZX_or_SX, right_ext: ZX_or_SX, flags: ALU_Flag_Mode) 
     }
 }
 
-pub fn mult_to_LL(left_ext: ZX_or_SX, right_ext: ZX_or_SX, swap: Swap_Halves, flags: ALU_Flag_Mode) void {
+pub fn mult_to_LL(left_ext: ZeroOrSignExtension, right_ext: ZeroOrSignExtension, swap: SwapHalves, flags: FlagsMode) void {
     var mode_bits = ControlSignals.MultModeBits{
         .jl = switch (left_ext) {
             .zx => .unsigned,
@@ -1334,25 +1324,25 @@ pub fn mult_to_LL(left_ext: ZX_or_SX, right_ext: ZX_or_SX, swap: Swap_Halves, fl
     }
 }
 
-pub fn op_reg_mult_SRL_to_L(left: OA_or_OB_xor, left_ext: ZX_or_SX, right: ControlSignals.AnySRIndex, right_ext: ZX_or_SX, flags: ALU_Flag_Mode) void {
+pub fn op_reg_mult_SRL_to_L(left: OperandSelectionWithXor, left_ext: ZeroOrSignExtension, right: ControlSignals.AnySRIndex, right_ext: ZeroOrSignExtension, flags: FlagsMode) void {
     op_reg_to_J(left, .zx);
     SRL_to_K(right);
     mult_to_L(left_ext, right_ext, flags);
 }
 
-pub fn op_reg_mult_op_reg_to_L(left: OA_or_OB_xor, left_ext: ZX_or_SX, right: OA_or_OB_xor, right_ext: ZX_or_SX, flags: ALU_Flag_Mode) void {
+pub fn op_reg_mult_op_reg_to_L(left: OperandSelectionWithXor, left_ext: ZeroOrSignExtension, right: OperandSelectionWithXor, right_ext: ZeroOrSignExtension, flags: FlagsMode) void {
     op_reg_to_J(left, .zx);
     op_reg_to_K(right);
     mult_to_L(left_ext, right_ext, flags);
 }
 
-pub fn op_reg_mult_SRL_to_LL(left: OA_or_OB_xor, left_ext: ZX_or_SX, right: ControlSignals.AnySRIndex, right_ext: ZX_or_SX, swap: Swap_Halves, flags: ALU_Flag_Mode) void {
+pub fn op_reg_mult_SRL_to_LL(left: OperandSelectionWithXor, left_ext: ZeroOrSignExtension, right: ControlSignals.AnySRIndex, right_ext: ZeroOrSignExtension, swap: SwapHalves, flags: FlagsMode) void {
     op_reg_to_J(left, .zx);
     SRL_to_K(right);
     mult_to_LL(left_ext, right_ext, swap, flags);
 }
 
-pub fn op_reg_mult_op_reg_to_LL(left: OA_or_OB_xor, left_ext: ZX_or_SX, right: OA_or_OB_xor, right_ext: ZX_or_SX, swap: Swap_Halves, flags: ALU_Flag_Mode) void {
+pub fn op_reg_mult_op_reg_to_LL(left: OperandSelectionWithXor, left_ext: ZeroOrSignExtension, right: OperandSelectionWithXor, right_ext: ZeroOrSignExtension, swap: SwapHalves, flags: FlagsMode) void {
     op_reg_to_J(left, .zx);
     op_reg_to_K(right);
     mult_to_LL(left_ext, right_ext, swap, flags);
@@ -1360,7 +1350,7 @@ pub fn op_reg_mult_op_reg_to_LL(left: OA_or_OB_xor, left_ext: ZX_or_SX, right: O
 
 //////////////////////////////////////////////////////////////////////////////
 // Shifter
-pub fn shift_to_L(dir: Shift_Dir, flags: ALU_Flag_Mode) void {
+pub fn shift_to_L(dir: ShiftDirection, flags: FlagsMode) void {
     switch (dir) {
         .left => setControlSignal(.compute_mode, .{ .shift = .j_shl_k5 }),
         .right => setControlSignal(.compute_mode, .{ .shift = .j_shr_k5 }),
@@ -1373,7 +1363,7 @@ pub fn shift_to_L(dir: Shift_Dir, flags: ALU_Flag_Mode) void {
     }
 }
 
-pub fn shift_to_LL(dir: Shift_Dir, flags: ALU_Flag_Mode) void {
+pub fn shift_to_LL(dir: ShiftDirection, flags: FlagsMode) void {
     switch (dir) {
         .left => setControlSignal(.compute_mode, .{ .shift = .jl_shl_k4 }),
         .right => setControlSignal(.compute_mode, .{ .shift = .jl_shr_k4 }),
@@ -1385,37 +1375,37 @@ pub fn shift_to_LL(dir: Shift_Dir, flags: ALU_Flag_Mode) void {
     }
 }
 
-pub fn SR_shift_literal_to_L(left: ControlSignals.AnySRIndex, dir: Shift_Dir, right: i5, flags: ALU_Flag_Mode) void {
+pub fn SR_shift_literal_to_L(left: ControlSignals.AnySRIndex, dir: ShiftDirection, right: i5, flags: FlagsMode) void {
     SR_to_J(left);
     literal_to_K(right);
     shift_to_L(dir, flags);
 }
 
-pub fn op_reg32_shift_op_reg_to_L(left: OA_or_OB_xor, dir: Shift_Dir, right: OA_or_OB_xor, flags: ALU_Flag_Mode) void {
+pub fn op_reg32_shift_op_reg_to_L(left: OperandSelectionWithXor, dir: ShiftDirection, right: OperandSelectionWithXor, flags: FlagsMode) void {
     op_reg32_to_J(left);
     op_reg_to_K(right);
     shift_to_L(dir, flags);
 }
 
-pub fn op_reg32_shift_literal_to_L(left: OA_or_OB_xor, dir: Shift_Dir, right: u5, flags: ALU_Flag_Mode) void {
+pub fn op_reg32_shift_literal_to_L(left: OperandSelectionWithXor, dir: ShiftDirection, right: u5, flags: FlagsMode) void {
     op_reg32_to_J(left);
     literal_to_K(right);
     shift_to_L(dir, flags);
 }
 
-pub fn op_reg_shift_op_reg_to_LL(left: OA_or_OB_xor, ext: ZX_SX_or_1X, dir: Shift_Dir, right: OA_or_OB_xor, flags: ALU_Flag_Mode) void {
+pub fn op_reg_shift_op_reg_to_LL(left: OperandSelectionWithXor, ext: ZeroSignOrOneExtension, dir: ShiftDirection, right: OperandSelectionWithXor, flags: FlagsMode) void {
     op_reg_to_J(left, ext);
     op_reg_to_K(right);
     shift_to_LL(dir, flags);
 }
 
-pub fn op_reg_shift_literal_to_LL(left: OA_or_OB_xor, ext: ZX_SX_or_1X, dir: Shift_Dir, right: u4, flags: ALU_Flag_Mode) void {
+pub fn op_reg_shift_literal_to_LL(left: OperandSelectionWithXor, ext: ZeroSignOrOneExtension, dir: ShiftDirection, right: u4, flags: FlagsMode) void {
     op_reg_to_J(left, ext);
     literal_to_K(right);
     shift_to_LL(dir, flags);
 }
 
-pub fn bitcount_op_reg_to_LL(which: OA_or_OB_xor, mode: Bitcount_Mode, polarity: u1, flags: ALU_Flag_Mode) void {
+pub fn bitcount_op_reg_to_LL(which: OperandSelectionWithXor, mode: BitcountDirection, polarity: u1, flags: FlagsMode) void {
     op_reg_to_J(which, .zx);
     zero_to_K();
 
@@ -1465,11 +1455,11 @@ pub fn block_transfer_from_ram(base: ControlSignals.AnySRIndex, preincrement: i7
     PN_to_SR(base);
 }
 
-pub fn atomicThisCycle() void {
+pub fn atomic_this_cycle() void {
     setControlSignal(.special, .atomic_this);
 }
 
-pub fn atomicNextCycleUntilEnd() void {
+pub fn atomic_next_cycle_until_end() void {
     setControlSignal(.special, .atomic_next);
 }
 
@@ -1484,27 +1474,14 @@ pub fn allow_interrupt() void {
 
 pub fn clear_OB() void {
     setControlSignal(.ob_oa_op, .clear_ob);
-
-    if (ib.insn) |i| {
-        i.OB_state = .loaded;
-    }
 }
 
 pub fn increment_OB() void {
     setControlSignal(.ob_oa_op, .increment_ob);
-
-    if (ib.insn) |i| {
-        i.OB_state = .loaded;
-    }
 }
 
-pub fn decodeOperands() void {
+pub fn decode_operands() void {
     setControlSignal(.ob_oa_op, .from_dl);
-
-    if (ib.insn) |i| {
-        i.OA_state = i.DL_state;
-        i.OB_state = i.DL_state;
-    }
 }
 
 pub fn prev_UA_to_LH() void {

@@ -43,12 +43,12 @@ const reg32_to_L = cb.reg32_to_L;
 const op_reg32_to_L = cb.op_reg32_to_L;
 const branch = cb.branch;
 const SRL_logic_literal_to_LL = cb.SRL_logic_literal_to_LL;
-const disableAddressTranslation = cb.disableAddressTranslation;
-const enableAddressTranslation = cb.enableAddressTranslation;
+const disable_address_translation = cb.disable_address_translation;
+const enable_address_translation = cb.enable_address_translation;
 const load_and_exec_next_insn = cb.load_and_exec_next_insn;
 const load_and_exec_next_insn_no_atomic_end = cb.load_and_exec_next_insn_no_atomic_end;
 const illegal_instruction = cb.illegal_instruction;
-const execLatchedInsn = cb.execLatchedInsn;
+const exec_latched_insn = cb.exec_latched_insn;
 
 pub fn _0000() void {
     encoding(.NOP, .{});
@@ -65,7 +65,7 @@ pub fn _0001() void {
         return;
     }
 
-    execLatchedInsn();
+    exec_latched_insn();
 }
 
 pub fn _0100_013C() void {
@@ -537,7 +537,7 @@ pub fn _0188() void {
 
     reg32_to_L(0);
     L_to_SR(.next_ip);
-    enableAddressTranslation();
+    enable_address_translation();
     next_cycle();
 
     branch(.next_ip, 0);
@@ -555,7 +555,7 @@ pub fn _0189() void {
 
     reg32_to_L(0);
     L_to_SR(.next_ip);
-    disableAddressTranslation();
+    disable_address_translation();
     next_cycle();
 
     branch(.next_ip, 0);

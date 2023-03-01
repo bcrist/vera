@@ -48,15 +48,15 @@ const L_to_SR2 = cb.L_to_SR2;
 const branch = cb.branch;
 const clear_OB = cb.clear_OB;
 const increment_OB = cb.increment_OB;
-const enableSleep = cb.enableSleep;
-const disableSleep = cb.disableSleep;
+const enable_sleep = cb.enable_sleep;
+const disable_sleep = cb.disable_sleep;
 const ZN_from_LL = cb.ZN_from_LL;
-const disableAddressTranslation = cb.disableAddressTranslation;
+const disable_address_translation = cb.disable_address_translation;
 const neg_one_to_JH = cb.neg_one_to_JH;
 const zero_to_JL = cb.zero_to_JL;
-const decodeOperands = cb.decodeOperands;
+const decode_operands = cb.decode_operands;
 const allow_interrupt = cb.allow_interrupt;
-const execLatchedInsn = cb.execLatchedInsn;
+const exec_latched_insn = cb.exec_latched_insn;
 
 pub fn _handler_0() void {
     //desc("Initialization/reset entry point");
@@ -77,7 +77,7 @@ pub fn _handler_0() void {
     zero_to_L();
     L_to_SR1(.zero);
     L_to_SR2(.zero);
-    disableAddressTranslation();
+    disable_address_translation();
     conditional_next_cycle(0x200);
 }
 
@@ -166,7 +166,7 @@ pub fn _continuation_201() void {
         read_to_D(.zero, @offsetOf(misc.ZeropageVectorTable, "pipe_0_reset"), .word, .raw);
         D_to_L(.zx);
         L_to_SR(.next_ip);
-        disableSleep();
+        disable_sleep();
         next_cycle();
 
         branch(.next_ip, 0);
@@ -221,7 +221,7 @@ fn wait_for_interrupt() void {
     LL_to_STAT();
     next_cycle_force_normal_execution();
 
-    execLatchedInsn();
+    exec_latched_insn();
 }
 
 pub fn _018B() void {
@@ -233,7 +233,7 @@ pub fn _018B() void {
         return;
     }
 
-    enableSleep();
+    enable_sleep();
     load_and_exec_next_insn(2);
 }
 
@@ -246,6 +246,6 @@ pub fn _018A() void {
         return;
     }
 
-    disableSleep();
+    disable_sleep();
     load_and_exec_next_insn(2);
 }

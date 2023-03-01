@@ -36,15 +36,15 @@ const load_and_exec_next_insn = cb.load_and_exec_next_insn;
 const load_next_insn = cb.load_next_insn;
 const exec_next_insn = cb.exec_next_insn;
 const assume_next_insn_loaded = cb.assume_next_insn_loaded;
-const atomicThisCycle = cb.atomicThisCycle;
-const atomicNextCycleUntilEnd = cb.atomicNextCycleUntilEnd;
+const atomic_this_cycle = cb.atomic_this_cycle;
+const atomic_next_cycle_until_end = cb.atomic_next_cycle_until_end;
 const ZN_from_LL = cb.ZN_from_LL;
 
 pub fn _0002() void {
     encoding(.SYNC, .{});
     //syntax("SYNC");
     desc("Forces the next instruction to be atomic");
-    atomicNextCycleUntilEnd();
+    atomic_next_cycle_until_end();
     load_and_exec_next_insn(2);
 }
 
@@ -58,7 +58,7 @@ pub fn _3000_30FF() void {
     load_next_insn(2);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     read_to_D(.temp_1, 0, .word, .data);
     D_to_L(.zx);
     LL_to_op_reg(.OB);
@@ -75,13 +75,13 @@ pub fn _3100_31FF() void {
     load_next_insn(2);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     read_to_D(.temp_1, 0, .word, .data);
     D_to_L(.zx);
     LL_to_op_reg(.OB);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     read_to_D(.temp_1, 2, .word, .data);
     D_to_L(.zx);
     LL_to_op_reg(.OBxor1);
@@ -98,7 +98,7 @@ pub fn _3200_32FF() void {
     load_next_insn(2);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     op_reg_to_LL(.OB);
     write_from_LL(.temp_1, 0, .word, .data);
     exec_next_insn();
@@ -114,12 +114,12 @@ pub fn _3300_33FF() void {
     load_next_insn(2);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     op_reg_to_LL(.OB);
     write_from_LL(.temp_1, 0, .word, .data);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     op_reg_to_LL(.OBxor1);
     write_from_LL(.temp_1, 2, .word, .data);
     exec_next_insn();
@@ -135,7 +135,7 @@ pub fn _3400_34FF() void {
     load_next_insn(2);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     read_to_D(.temp_1, 0, .word, .data);
     D_to_L(.zx);
     ZN_from_LL(.fresh);
@@ -144,7 +144,7 @@ pub fn _3400_34FF() void {
 pub fn _continuation_220() void {
     assume_next_insn_loaded(2);
     if (zero()) {
-        atomicThisCycle();
+        atomic_this_cycle();
         op_reg_to_LL(.OB);
         write_from_LL(.temp_1, 0, .word, .data);
         exec_next_insn();
@@ -163,13 +163,13 @@ pub fn _3500_35FF() void {
     load_next_insn(2);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     read_to_D(.temp_1, 0, .word, .data);
     D_to_L(.zx);
     ZN_from_LL(.fresh);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     read_to_D(.temp_1, 2, .word, .data);
     D_to_L(.zx);
     ZN_from_LL(.cont);
@@ -178,12 +178,12 @@ pub fn _3500_35FF() void {
 pub fn _continuation_221() void {
     assume_next_insn_loaded(2);
     if (zero()) {
-        atomicThisCycle();
+        atomic_this_cycle();
         op_reg_to_LL(.OB);
         write_from_LL(.temp_1, 0, .word, .data);
         next_cycle();
 
-        atomicThisCycle();
+        atomic_this_cycle();
         op_reg_to_LL(.OBxor1);
         write_from_LL(.temp_1, 2, .word, .data);
         exec_next_insn();
@@ -202,13 +202,13 @@ pub fn _3600_36FF() void {
     load_next_insn(2);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     read_to_D(.temp_1, 0, .word, .data);
     D_to_L(.zx);
     LL_to_reg(0);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     op_reg_to_J(.OB, .zx);
     reg_to_K(0);
     add_to_LL(.fresh, .flags);
@@ -227,19 +227,19 @@ pub fn _3700_37FF() void {
     load_next_insn(2);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     read_to_D(.temp_1, 0, .word, .data);
     D_to_L(.zx);
     LL_to_reg(0);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     read_to_D(.temp_1, 2, .word, .data);
     D_to_L(.zx);
     LL_to_reg(1);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     op_reg_to_J(.OB, .zx);
     reg_to_K(0);
     add_to_LL(.fresh, .flags);
@@ -247,7 +247,7 @@ pub fn _3700_37FF() void {
     write_from_LL(.temp_1, 0, .word, .data);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     op_reg_to_J(.OBxor1, .zx);
     reg_to_K(0);
     add_to_LL(.cont, .flags);
@@ -269,13 +269,13 @@ pub fn _3800_38FF() void {
     load_next_insn(2);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     read_to_D(.temp_1, 0, .word, .data);
     D_to_L(.zx);
     LL_to_op_reg(.OB);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     op_reg_plus_literal_to_LL(.OB, 1, .fresh, .flags);
     LL_to_op_reg(.OB);
     write_from_LL(.temp_1, 0, .word, .data);
@@ -292,25 +292,25 @@ pub fn _3900_39FF() void {
     load_next_insn(2);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     read_to_D(.temp_1, 0, .word, .data);
     D_to_L(.zx);
     LL_to_op_reg(.OB);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     read_to_D(.temp_1, 2, .word, .data);
     D_to_L(.zx);
     LL_to_op_reg(.OBxor1);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     op_reg32_plus_literal_to_L(.OB, 1, .fresh, .flags);
     L_to_op_reg32(.OB);
     write_from_LL(.temp_1, 0, .word, .data);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     op_reg_to_LL(.OBxor1);
     write_from_LL(.temp_1, 2, .word, .data);
     exec_next_insn();
@@ -326,7 +326,7 @@ pub fn _3A00_3AFF() void {
     load_next_insn(2);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     read_to_D(.temp_1, 0, .word, .data);
     D_to_L(.zx);
     LL_to_op_reg(.OB);
@@ -338,7 +338,7 @@ pub fn _continuation_222() void {
     if (zero()) {
         exec_next_insn();
     } else {
-        atomicThisCycle();
+        atomic_this_cycle();
         op_reg_minus_literal_to_LL(.OB, 1, .fresh, .no_flags);
         LL_to_op_reg(.OB);
         write_from_LL(.temp_1, 0, .word, .data);
@@ -356,14 +356,14 @@ pub fn _3B00_3BFF() void {
     load_next_insn(2);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     read_to_D(.temp_1, 0, .word, .data);
     D_to_L(.zx);
     LL_to_op_reg(.OB);
     ZN_from_LL(.fresh);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     read_to_D(.temp_1, 2, .word, .data);
     D_to_L(.zx);
     LL_to_op_reg(.OBxor1);
@@ -375,13 +375,13 @@ pub fn _continuation_223() void {
     if (zero()) {
         exec_next_insn();
     } else {
-        atomicThisCycle();
+        atomic_this_cycle();
         op_reg32_minus_literal_to_L(.OB, 1, .fresh, .no_flags);
         L_to_op_reg32(.OB);
         write_from_LL(.temp_1, 0, .word, .data);
         next_cycle();
 
-        atomicThisCycle();
+        atomic_this_cycle();
         op_reg_to_LL(.OBxor1);
         write_from_LL(.temp_1, 2, .word, .data);
         exec_next_insn();
@@ -402,13 +402,13 @@ pub fn _3C00_3C0F() void {
     load_next_insn(3);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     read_to_D(.temp_1, 0, .word, .data);
     D_to_L(.zx);
     LL_to_op_reg(.OB);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     op_reg_to_LL(.OA);
     write_from_LL(.temp_1, 0, .word, .data);
     exec_next_insn();
@@ -428,24 +428,24 @@ pub fn _3C10_3C1F() void {
     load_next_insn(3);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     read_to_D(.temp_1, 0, .word, .data);
     D_to_L(.zx);
     LL_to_op_reg(.OB);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     read_to_D(.temp_1, 2, .word, .data);
     D_to_L(.zx);
     LL_to_op_reg(.OBxor1);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     op_reg_to_LL(.OA);
     write_from_LL(.temp_1, 0, .word, .data);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     op_reg_to_LL(.OAxor1);
     write_from_LL(.temp_1, 2, .word, .data);
     exec_next_insn();
@@ -465,13 +465,13 @@ pub fn _3C20_3C2F() void {
     load_next_insn(3);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     read_to_D(.temp_1, 0, .word, .data);
     D_to_L(.zx);
     LL_to_reg(0);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     reg_to_J(0, .zx);
     op_reg_to_K(.OB);
     sub_to_LL(.fresh, .flags);
@@ -480,7 +480,7 @@ pub fn _3C20_3C2F() void {
 pub fn _continuation_224() void {
     assume_next_insn_loaded(3);
     if (zero()) {
-        atomicThisCycle();
+        atomic_this_cycle();
         op_reg_to_LL(.OA);
         write_from_LL(.temp_1, 0, .word, .data);
         exec_next_insn();
@@ -503,13 +503,13 @@ pub fn _3C30_3C3F() void {
     load_next_insn(3);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     read_to_D(.temp_1, 0, .word, .data);
     D_to_L(.zx);
     LL_to_reg(0);
     next_cycle();
 
-    atomicThisCycle();
+    atomic_this_cycle();
     reg_to_J(0, .zx);
     op_reg_to_K(.OB);
     sub_to_LL(.fresh, .flags);
@@ -518,13 +518,13 @@ pub fn _3C30_3C3F() void {
 pub fn _continuation_225() void {
     assume_next_insn_loaded(3);
     if (zero()) {
-        atomicThisCycle();
+        atomic_this_cycle();
         read_to_D(.temp_1, 2, .word, .data);
         D_to_L(.zx);
         LL_to_reg(1);
         next_cycle();
 
-        atomicThisCycle();
+        atomic_this_cycle();
         reg_to_J(1, .zx);
         op_reg_to_K(.OBxor1);
         sub_to_LL(.cont, .flags);
@@ -536,12 +536,12 @@ pub fn _continuation_225() void {
 pub fn _continuation_226() void {
     assume_next_insn_loaded(3);
     if (zero()) {
-        atomicThisCycle();
+        atomic_this_cycle();
         op_reg_to_LL(.OA);
         write_from_LL(.temp_1, 0, .word, .data);
         next_cycle();
 
-        atomicThisCycle();
+        atomic_this_cycle();
         op_reg_to_LL(.OAxor1);
         write_from_LL(.temp_1, 2, .word, .data);
         exec_next_insn();

@@ -97,7 +97,7 @@ pub fn _7200_72FF() void {
 }
 
 pub fn _7300_74FF() void {
-    var ext: cb.ZX_SX_or_1X = undefined;
+    var ext: cb.ZeroSignOrOneExtension = undefined;
     switch (opcode_high()) {
         0x73 => {
             encoding(.ADD, .{ .Xa, .RbU, .to, .Xa });
@@ -120,7 +120,7 @@ pub fn _7300_74FF() void {
 }
 
 pub fn _7500_76FF() void {
-    var freshness: cb.ALU_Freshness = undefined;
+    var freshness: cb.Freshness = undefined;
     switch (opcode_high()) {
         0x75 => {
             encoding(.ADD, .{ .Ra, .imm8s, .to, .Rb });
@@ -148,7 +148,7 @@ pub fn _7500_76FF() void {
 }
 
 pub fn _7700_78FF() void {
-    var freshness: cb.ALU_Freshness = undefined;
+    var freshness: cb.Freshness = undefined;
     switch (opcode_high()) {
         0x77 => {
             encoding(.ADD, .{ .Ra, .imm16, .to, .Rb });
@@ -176,7 +176,7 @@ pub fn _7700_78FF() void {
 }
 
 pub fn _7900_7AFF() void {
-    var freshness: cb.ALU_Freshness = undefined;
+    var freshness: cb.Freshness = undefined;
     switch (opcode_high()) {
         0x79 => {
             encoding(.ADD, .{ .Ra, .Rb, .to, .Ra });
@@ -199,7 +199,7 @@ pub fn _7900_7AFF() void {
 }
 
 pub fn _8000_81FF() void {
-    var freshness: cb.ALU_Freshness = undefined;
+    var freshness: cb.Freshness = undefined;
     switch (opcode_high()) {
         0x80 => {
             encoding(.CMP, .{ .Ra, .Rb });
@@ -221,7 +221,7 @@ pub fn _8000_81FF() void {
 }
 
 pub fn _8B00_8CFF() void {
-    var ext: cb.ZX_SX_or_1X = undefined;
+    var ext: cb.ZeroSignOrOneExtension = undefined;
     switch (opcode_high()) {
         0x8B => {
             encoding(.CMP, .{ .Xa, .RbU });
@@ -243,7 +243,7 @@ pub fn _8B00_8CFF() void {
 }
 
 pub fn _FA40_FA5F() void {
-    var freshness: cb.ALU_Freshness = undefined;
+    var freshness: cb.Freshness = undefined;
     switch (OB()) {
         0x4 => {
             encoding(.CMP, .{ .Ra, .imm16 });
@@ -298,7 +298,7 @@ pub fn _FA70_FA7F() void {
 }
 
 pub fn _8300_84FF() void {
-    var ext: cb.ZX_SX_or_1X = undefined;
+    var ext: cb.ZeroSignOrOneExtension = undefined;
     switch (opcode_high()) {
         0x83 => {
             encoding(.SUB, .{ .Xa, .RbU, .to, .Xa });
@@ -321,7 +321,7 @@ pub fn _8300_84FF() void {
 }
 
 pub fn _8500_86FF() void {
-    var freshness: cb.ALU_Freshness = undefined;
+    var freshness: cb.Freshness = undefined;
     switch (opcode_high()) {
         0x85 => {
             encoding(.SUB, .{ .imm8s, .Ra, .to, .Rb });
@@ -349,7 +349,7 @@ pub fn _8500_86FF() void {
 }
 
 pub fn _8700_88FF() void {
-    var freshness: cb.ALU_Freshness = undefined;
+    var freshness: cb.Freshness = undefined;
     switch (opcode_high()) {
         0x87 => {
             encoding(.SUB, .{ .imm16, .Ra, .to, .Rb });
@@ -377,7 +377,7 @@ pub fn _8700_88FF() void {
 }
 
 pub fn _8900_8AFF() void {
-    var freshness: cb.ALU_Freshness = undefined;
+    var freshness: cb.Freshness = undefined;
     switch (opcode_high()) {
         0x89 => {
             encoding(.SUB, .{ .Ra, .Rb, .to, .Ra });
@@ -400,7 +400,7 @@ pub fn _8900_8AFF() void {
 }
 
 pub fn _9300_931F() void {
-    var freshness: cb.ALU_Freshness = undefined;
+    var freshness: cb.Freshness = undefined;
     switch (OB()) {
         0x0 => {
             encoding(.INC, .{ .Ra, .to, .Ra });
@@ -423,7 +423,7 @@ pub fn _9300_931F() void {
 }
 
 pub fn _9320_933F() void {
-    var freshness: cb.ALU_Freshness = undefined;
+    var freshness: cb.Freshness = undefined;
     switch (OB()) {
         0x2 => {
             encoding(.INC, .{ .Xa, .to, .Xa });
@@ -446,7 +446,7 @@ pub fn _9320_933F() void {
 }
 
 pub fn _9340_935F() void {
-    var freshness: cb.ALU_Freshness = undefined;
+    var freshness: cb.Freshness = undefined;
     switch (OB()) {
         0x4 => {
             encoding(.DEC, .{ .Ra, .to, .Ra });
@@ -469,7 +469,7 @@ pub fn _9340_935F() void {
 }
 
 pub fn _9360_937F() void {
-    var freshness: cb.ALU_Freshness = undefined;
+    var freshness: cb.Freshness = undefined;
     switch (OB()) {
         0x6 => {
             encoding(.DEC, .{ .Xa, .to, .Xa });
@@ -492,7 +492,7 @@ pub fn _9360_937F() void {
 }
 
 pub fn _9380_939F() void {
-    var freshness: cb.ALU_Freshness = undefined;
+    var freshness: cb.Freshness = undefined;
     switch (OB()) {
         0x8 => {
             encoding(.NEG, .{ .Ra, .to, .Ra });
@@ -574,7 +574,7 @@ pub fn _C100_C5FF() void {
 }
 
 pub fn _C600_C7FF() void {
-    var freshness: cb.ALU_Freshness = undefined;
+    var freshness: cb.Freshness = undefined;
     switch (opcode_high()) {
         0xC6 => {
             encoding(.TEST, .{ .Ra, .Rb });
@@ -644,7 +644,7 @@ pub fn _A200_A2FF() void {
 }
 
 pub fn _D000_D1FF() void {
-    var dir: cb.Shift_Dir = undefined;
+    var dir: cb.ShiftDirection = undefined;
     switch (opcode_high()) {
         0xD0 => {
             encoding(.SHR, .{ .XaU, .Rb, .to, .XaU });
@@ -667,8 +667,8 @@ pub fn _D000_D1FF() void {
 }
 
 pub fn _D200_D4FF() void {
-    var dir: cb.Shift_Dir = undefined;
-    var ext: cb.ZX_SX_or_1X = undefined;
+    var dir: cb.ShiftDirection = undefined;
+    var ext: cb.ZeroSignOrOneExtension = undefined;
     switch (opcode_high()) {
         0xD2 => {
             encoding(.SHR, .{ .RaU, .Rb, .to, .RaU });
@@ -700,8 +700,8 @@ pub fn _D200_D4FF() void {
 }
 
 pub fn _D500_D7FF() void {
-    var dir: cb.Shift_Dir = undefined;
-    var ext: cb.ZX_SX_or_1X = undefined;
+    var dir: cb.ShiftDirection = undefined;
+    var ext: cb.ZeroSignOrOneExtension = undefined;
     switch (opcode_high()) {
         0xD5 => {
             encoding(.SHR, .{ .RaU, .immb4u, .to, .RaU });
@@ -734,7 +734,7 @@ pub fn _D500_D7FF() void {
 }
 
 pub fn _E000_E3FF() void {
-    var dir: cb.Shift_Dir = undefined;
+    var dir: cb.ShiftDirection = undefined;
     switch (opcode_high()) {
         0xE0 => {
             encoding(.SHR, .{ .XaU, .immb4u, .to, .XaU });
@@ -853,8 +853,8 @@ pub fn _F500_F5FF() void {
 }
 
 pub fn _F600_F8FF() void {
-    var ext_l: cb.ZX_or_SX = undefined;
-    var ext_r: cb.ZX_or_SX = undefined;
+    var ext_l: cb.ZeroOrSignExtension = undefined;
+    var ext_r: cb.ZeroOrSignExtension = undefined;
     switch (opcode_high()) {
         0xF6 => {
             encoding(.MUL, .{ .RaU, .RbU, .to, .X0U });

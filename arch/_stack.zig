@@ -260,7 +260,7 @@ pub fn _0007() void {
 }
 
 pub fn _E480_E49F() void {
-    var ext: cb.ZX_SX_or_1X = undefined;
+    var ext: cb.ZeroSignOrOneExtension = undefined;
     switch (OB()) {
         0x8 => {
             encoding(.POP, .{ .BaU });

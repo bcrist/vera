@@ -22,11 +22,12 @@ const comptimeParameterEncoding = instruction_encoding.comptimeParameterEncoding
 
 const temp_alloc = allocators.temp_arena.allocator();
 
-pub const InstructionRegState = enum(u2) {
-    unknown = 0,
-    current_insn = 1,
-    next_insn = 2,
-    loaded = 3,
+pub const InstructionRegState = enum {
+    unknown,
+    current_insn,
+    next_insn,
+    loaded,
+    same_as_dl,
 };
 
 const InstructionData = struct {
@@ -41,9 +42,9 @@ const InstructionData = struct {
     queried_opcode: bool = false,
     queried_flags: uc.FlagSet = .{},
 
-    DL_state: InstructionRegState,
-    OA_state: InstructionRegState,
-    OB_state: InstructionRegState,
+    dl_state: InstructionRegState,
+    oa_state: InstructionRegState,
+    ob_state: InstructionRegState,
 
     next_unread_insn_offset: misc.SignedOffsetForLiteral = -1,
     next_insn_offset: misc.SignedOffsetForLiteral = 0,
@@ -58,13 +59,20 @@ const InstructionData = struct {
     }
 
     pub fn setNextInsnExecuted(self: *InstructionData) void {
-        if (self.DL_state != .next_insn) {
+        if (self.oa_state == .same_as_dl) {
+            self.oa_state = self.dl_state;
+        }
+        if (self.ob_state == .same_as_dl) {
+            self.ob_state = self.dl_state;
+        }
+
+        if (self.dl_state != .next_insn) {
             panic("DL value loaded by load_next_insn() has been clobbered!", .{});
         }
-        if (self.OA_state != .next_insn) {
+        if (self.oa_state != .next_insn) {
             panic("OA has not been loaded for the next instruction!", .{});
         }
-        if (self.OB_state != .next_insn) {
+        if (self.ob_state != .next_insn) {
             panic("OB has not been loaded for the next instruction!", .{});
         }
         self.next_insn_executed = true;
@@ -427,7 +435,7 @@ pub fn processHandler(handler: uc.Address, func: *const fn () void) void {
         .initial_uc_address = handler,
         .allowed_flags = .{},
         .flags = .{},
-        .initial_DL_OBOA_state = .unknown,
+        .initial_dl_ob_oa_state = .unknown,
     });
 }
 
@@ -442,7 +450,7 @@ pub fn processContinuation(continuation: uc.Continuation, func: *const fn () voi
         .initial_uc_address = initial_uc_address,
         .allowed_flags = uc.getCheckedFlagsForAddress(initial_uc_address),
         .flags = .{},
-        .initial_DL_OBOA_state = .unknown,
+        .initial_dl_ob_oa_state = .unknown,
     };
     var result = process(config);
     var unqueried_flags = result.queried_flags;
@@ -559,7 +567,7 @@ fn processOpcode(original_range: instruction_encoding.OpcodeRange, the_opcode: O
         .initial_uc_address = uc.getAddressForOpcode(the_opcode, .{}),
         .allowed_flags = uc.getCheckedFlagsForOpcode(the_opcode),
         .flags = .{},
-        .initial_DL_OBOA_state = .current_insn,
+        .initial_dl_ob_oa_state = .current_insn,
     };
     var result = process(config);
     var unqueried_flags = result.queried_flags;
@@ -634,7 +642,7 @@ const ProcessConfig = struct {
     initial_uc_address: uc.Address,
     allowed_flags: uc.FlagSet,
     flags: uc.FlagSet,
-    initial_DL_OBOA_state: InstructionRegState,
+    initial_dl_ob_oa_state: InstructionRegState,
 };
 
 const ProcessResult = struct {
@@ -658,9 +666,9 @@ fn process(config: ProcessConfig) ProcessResult {
         .initial_uc_address = config.initial_uc_address,
         .allowed_flags = config.allowed_flags,
         .flags = config.flags,
-        .DL_state = config.initial_DL_OBOA_state,
-        .OA_state = config.initial_DL_OBOA_state,
-        .OB_state = config.initial_DL_OBOA_state,
+        .dl_state = config.initial_dl_ob_oa_state,
+        .oa_state = config.initial_dl_ob_oa_state,
+        .ob_state = config.initial_dl_ob_oa_state,
     };
 
     completed_cycles.clearRetainingCapacity();

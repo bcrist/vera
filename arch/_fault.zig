@@ -50,7 +50,7 @@ const RSN_to_SR1H = cb.RSN_to_SR1H;
 const branch = cb.branch;
 const illegal_instruction = cb.illegal_instruction;
 const load_and_exec_next_insn = cb.load_and_exec_next_insn;
-const atomicNextCycleUntilEnd = cb.atomicNextCycleUntilEnd;
+const atomic_next_cycle_until_end = cb.atomic_next_cycle_until_end;
 const clear_OB = cb.clear_OB;
 const increment_OB = cb.increment_OB;
 const prev_UA_to_LH = cb.prev_UA_to_LH;
@@ -167,7 +167,7 @@ pub fn _018D() void {
     // we want to make sure it's still atomic when we retry.
     // It doesn't hurt to "upgrade" a non-atomic instruction, so we
     // just assume all faults happen during atomic instructions
-    atomicNextCycleUntilEnd();
+    atomic_next_cycle_until_end();
     fault_return();
 }
 
