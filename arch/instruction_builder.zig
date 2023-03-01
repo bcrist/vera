@@ -374,8 +374,12 @@ pub fn fault_return() void {
 // It's not normally necessary to call this; it only exists to prevent accidentally
 // creating additional cycles after a branch or load of a new instruction.
 pub fn end_instruction() void {
-    completed_cycles.append(cycle_builder.finish()) catch @panic("Out of memory");
-    insn.?.cycle_started = false;
+    if (insn) |i| {
+        if (i.cycle_started) {
+            completed_cycles.append(cycle_builder.finish()) catch @panic("Out of memory");
+            i.cycle_started = false;
+        }
+    }
 }
 
 pub fn processScope(comptime T: type) !void {

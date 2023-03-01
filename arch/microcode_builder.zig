@@ -40,6 +40,12 @@ pub fn getOrCreateUnconditionalContinuation(cycle: *ControlSignals) uc.Address {
             ua = uc.getAddressForContinuation(n, .{});
         }
 
+        //occasionally useful for debugging changes that cause unexpected increases in continuation use:
+        // if (@import("instruction_builder.zig").insn) |i| {
+        //     std.debug.print("Allocating continuation {}:\n", .{ n });
+        //     @import("instruction_builder.zig").printCyclePath(i.initial_uc_address, i.encoding);
+        // }
+
         if (n < min_n) {
             // TODO use conditional slots?
             std.debug.panic("No more continuations left!", .{});
