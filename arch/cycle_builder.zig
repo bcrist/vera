@@ -518,11 +518,11 @@ pub fn reg_to_J(register: misc.RegisterIndex, ext: ZX_SX_or_1X) void {
         setControlSignal(.jr_rsel, .zero);
         setControlSignal(.jr_rx, true);
     } else if (isSet(.literal) and (cycle.literal ^ 1) == register) {
-        setControlSignal(.jr_rsel, .LITERAL);
+        setControlSignal(.jr_rsel, .literal);
         setControlSignal(.jr_rx, true);
         setControlSignal(.literal, register ^ 1);
     } else {
-        setControlSignal(.jr_rsel, .LITERAL);
+        setControlSignal(.jr_rsel, .literal);
         setControlSignal(.jr_rx, false);
         setControlSignal(.literal, register);
     }
@@ -542,11 +542,11 @@ pub fn reg_to_K(register: misc.RegisterIndex) void {
         setControlSignal(.kr_rsel, .zero);
         setControlSignal(.kr_rx, true);
     } else if (isSet(.literal) and (cycle.literal ^ 1) == register) {
-        setControlSignal(.kr_rsel, .LITERAL);
+        setControlSignal(.kr_rsel, .literal);
         setControlSignal(.kr_rx, true);
         setControlSignal(.literal, register ^ 1);
     } else {
-        setControlSignal(.kr_rsel, .LITERAL);
+        setControlSignal(.kr_rsel, .literal);
         setControlSignal(.kr_rx, false);
         setControlSignal(.literal, register);
     }
@@ -571,11 +571,11 @@ pub fn reg32_to_J(register: misc.RegisterIndex) void {
         setControlSignal(.jr_rsel, .zero);
         setControlSignal(.jr_rx, true);
     } else if (isSet(.literal) and (cycle.literal ^ 1) == register) {
-        setControlSignal(.jr_rsel, .LITERAL);
+        setControlSignal(.jr_rsel, .literal);
         setControlSignal(.jr_rx, true);
         setControlSignal(.literal, register ^ 1);
     } else {
-        setControlSignal(.jr_rsel, .LITERAL);
+        setControlSignal(.jr_rsel, .literal);
         setControlSignal(.jr_rx, false);
         setControlSignal(.literal, register);
     }
@@ -589,10 +589,10 @@ pub fn reg32_to_L(register: misc.RegisterIndex) void {
 }
 
 pub fn op_reg_to_J(which: OA_or_OB_xor, ext: ZX_SX_or_1X) void {
-    setControlSignal(.jr_rsel, switch (which) {
-        .OA, .OAxor1 => ControlSignals.Reg_File_Indexing_Source.OA,
-        .OB, .OBxor1 => ControlSignals.Reg_File_Indexing_Source.OB,
-    });
+    switch (which) {
+        .OA, .OAxor1 => setControlSignal(.jr_rsel, .oa),
+        .OB, .OBxor1 => setControlSignal(.jr_rsel, .ob),
+    }
     setControlSignal(.jr_rx, switch (which) {
         .OA, .OB => false,
         .OAxor1, .OBxor1 => true,
@@ -606,10 +606,10 @@ pub fn op_reg_to_J(which: OA_or_OB_xor, ext: ZX_SX_or_1X) void {
 }
 
 pub fn op_reg_to_K(which: OA_or_OB_xor) void {
-    setControlSignal(.kr_rsel, switch (which) {
-        .OA, .OAxor1 => ControlSignals.Reg_File_Indexing_Source.OA,
-        .OB, .OBxor1 => ControlSignals.Reg_File_Indexing_Source.OB,
-    });
+    switch (which) {
+        .OA, .OAxor1 => setControlSignal(.kr_rsel, .oa),
+        .OB, .OBxor1 => setControlSignal(.kr_rsel, .ob),
+    }
     setControlSignal(.kr_rx, switch (which) {
         .OA, .OB => false,
         .OAxor1, .OBxor1 => true,
@@ -628,10 +628,10 @@ pub fn op_reg_to_LL(which: OA_or_OB_xor) void {
 }
 
 pub fn op_reg32_to_J(which: OA_or_OB_xor) void {
-    setControlSignal(.jr_rsel, switch (which) {
-        .OA, .OAxor1 => ControlSignals.Reg_File_Indexing_Source.OA,
-        .OB, .OBxor1 => ControlSignals.Reg_File_Indexing_Source.OB,
-    });
+    switch (which) {
+        .OA, .OAxor1 => setControlSignal(.jr_rsel, .oa),
+        .OB, .OBxor1 => setControlSignal(.jr_rsel, .ob),
+    }
     setControlSignal(.jr_rx, switch (which) {
         .OA, .OB => false,
         .OAxor1, .OBxor1 => true,
@@ -931,10 +931,10 @@ pub fn LL_to_op_reg(which: OA_or_OB_xor) void {
         .OA, .OB => ControlSignals.Reg_File_Write_Mode.write_16,
         .OAxor1, .OBxor1 => ControlSignals.Reg_File_Write_Mode.write_16_xor1,
     });
-    setControlSignal(.jkr_wsel, switch (which) {
-        .OA, .OAxor1 => ControlSignals.Reg_File_Indexing_Source.OA,
-        .OB, .OBxor1 => ControlSignals.Reg_File_Indexing_Source.OB,
-    });
+    switch (which) {
+        .OA, .OAxor1 => setControlSignal(.jkr_wsel, .oa),
+        .OB, .OBxor1 => setControlSignal(.jkr_wsel, .ob),
+    }
 }
 
 pub fn LL_to_reg(register: misc.RegisterIndex) void {
@@ -945,11 +945,11 @@ pub fn LL_to_reg(register: misc.RegisterIndex) void {
         setControlSignal(.jkr_wsel, .zero);
         setControlSignal(.jkr_wmode, .write_16_xor1);
     } else if (isSet(.literal) and (cycle.literal ^ 1) == register) {
-        setControlSignal(.jkr_wsel, .LITERAL);
+        setControlSignal(.jkr_wsel, .literal);
         setControlSignal(.jkr_wmode, .write_16_xor1);
         setControlSignal(.literal, register ^ 1);
     } else {
-        setControlSignal(.jkr_wsel, .LITERAL);
+        setControlSignal(.jkr_wsel, .literal);
         setControlSignal(.jkr_wmode, .write_16);
         setControlSignal(.literal, register);
     }
@@ -957,10 +957,10 @@ pub fn LL_to_reg(register: misc.RegisterIndex) void {
 
 pub fn L_to_op_reg32(which: OA_or_OB) void {
     setControlSignal(.jkr_wmode, .write_32);
-    setControlSignal(.jkr_wsel, switch (which) {
-        .OA => ControlSignals.Reg_File_Indexing_Source.OA,
-        .OB => ControlSignals.Reg_File_Indexing_Source.OB,
-    });
+    switch (which) {
+        .OA => setControlSignal(.jkr_wsel, .oa),
+        .OB => setControlSignal(.jkr_wsel, .ob),
+    }
 }
 
 pub fn L_to_reg32(register: misc.RegisterIndex) void {
@@ -968,7 +968,7 @@ pub fn L_to_reg32(register: misc.RegisterIndex) void {
     if (register == 0) {
         setControlSignal(.jkr_wsel, .zero);
     } else {
-        setControlSignal(.jkr_wsel, .LITERAL);
+        setControlSignal(.jkr_wsel, .literal);
         setControlSignal(.literal, register);
     }
 }

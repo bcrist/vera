@@ -5,8 +5,8 @@ const misc = @import("misc");
 const ControlSignals = @This();
 
 literal: Literal,
-jr_rsel: Reg_File_Indexing_Source,
-kr_rsel: Reg_File_Indexing_Source,
+jr_rsel: RegFileIndexingSource,
+kr_rsel: RegFileIndexingSource,
 jr_rx: bool,
 kr_rx: bool,
 jl_src: JL_Source,
@@ -24,7 +24,7 @@ at_op: AT_Op,
 special: Special_Op,
 ll_src: LL_Source,
 lh_src: LH_Source,
-jkr_wsel: Reg_File_Indexing_Source,
+jkr_wsel: RegFileIndexingSource,
 jkr_wmode: Reg_File_Write_Mode,
 sr1_wi: SR1Index,
 sr2_wi: SR2Index,
@@ -111,8 +111,8 @@ pub fn init() ControlSignals {
 
 pub fn randomize(self: *ControlSignals, rnd: std.rand.Random) void {
     self.literal = rnd.int(Literal);
-    self.jr_rsel = rnd.enumValue(Reg_File_Indexing_Source);
-    self.kr_rsel = rnd.enumValue(Reg_File_Indexing_Source);
+    self.jr_rsel = rnd.enumValue(RegFileIndexingSource);
+    self.kr_rsel = rnd.enumValue(RegFileIndexingSource);
     self.jr_rx = rnd.boolean();
     self.kr_rx = rnd.boolean();
     self.jl_src = rnd.enumValue(JL_Source);
@@ -137,7 +137,7 @@ pub fn randomize(self: *ControlSignals, rnd: std.rand.Random) void {
         else => {},
     }
     self.lh_src = rnd.enumValue(LH_Source);
-    self.jkr_wsel = rnd.enumValue(Reg_File_Indexing_Source);
+    self.jkr_wsel = rnd.enumValue(RegFileIndexingSource);
     self.jkr_wmode = rnd.enumValue(Reg_File_Write_Mode);
     self.sr1_wi = rnd.enumValue(SR1Index);
     self.sr2_wi = rnd.enumValue(SR2Index);
@@ -221,11 +221,11 @@ pub fn address_offset(self: *ControlSignals) misc.SignedOffsetForLiteral {
 pub const Literal = u6;
 
 // what determines which general purpose registers to read/write?
-pub const Reg_File_Indexing_Source = enum(u2) {
+pub const RegFileIndexingSource = enum(u2) {
     zero = 0,
-    LITERAL = 1,
-    OA = 2,
-    OB = 3,
+    literal = 1,
+    oa = 2,
+    ob = 3,
 };
 
 pub const Reg_File_Write_Mode = enum(u2) {

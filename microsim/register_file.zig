@@ -95,8 +95,8 @@ pub const SetupInputs = struct {
     JL_SRC: ControlSignals.JL_Source,
     JH_SRC: ControlSignals.JH_Source,
     K_SRC: ControlSignals.KSource,
-    JR_RSEL: ControlSignals.Reg_File_Indexing_Source,
-    KR_RSEL: ControlSignals.Reg_File_Indexing_Source,
+    JR_RSEL: ControlSignals.RegFileIndexingSource,
+    KR_RSEL: ControlSignals.RegFileIndexingSource,
     JR_RX: bool,
     KR_RX: bool,
     SR1_RI: ControlSignals.SR1Index,
@@ -123,7 +123,7 @@ pub const TransactInputs = struct {
     sr1: bus.JParts,
     sr2: bus.JParts,
     virtual_address: bus.VirtualAddressParts,
-    JKR_WSEL: ControlSignals.Reg_File_Indexing_Source,
+    JKR_WSEL: ControlSignals.RegFileIndexingSource,
     JKR_WMODE: ControlSignals.Reg_File_Write_Mode,
     SR1_WSRC: ControlSignals.SR1_Write_Data_Source,
     SR2_WSRC: ControlSignals.SR2_Write_Data_Source,
@@ -246,15 +246,15 @@ pub const RegisterView = struct {
 pub fn setup(state: *const State, in: SetupInputs) SetupOutputs {
     const jr_index: RegisterIndex = switch (in.JR_RSEL) {
         .zero => 0,
-        .LITERAL => @truncate(RegisterIndex, in.LITERAL),
-        .OA => in.oa,
-        .OB => in.ob,
+        .literal => @truncate(RegisterIndex, in.LITERAL),
+        .oa => in.oa,
+        .ob => in.ob,
     };
     const kr_index: RegisterIndex = switch (in.KR_RSEL) {
         .zero => 0,
-        .LITERAL => @truncate(RegisterIndex, in.LITERAL),
-        .OA => in.oa,
-        .OB => in.ob,
+        .literal => @truncate(RegisterIndex, in.LITERAL),
+        .oa => in.oa,
+        .ob => in.ob,
     };
 
     var jr_swap = @truncate(u1, jr_index) == 1;
@@ -338,9 +338,9 @@ pub fn transact(state: *State, in: TransactInputs) void {
 
     const jkr_index: RegisterIndex = switch (in.JKR_WSEL) {
         .zero => 0,
-        .LITERAL => @truncate(RegisterIndex, in.LITERAL),
-        .OA => in.oa,
-        .OB => in.ob,
+        .literal => @truncate(RegisterIndex, in.LITERAL),
+        .oa => in.oa,
+        .ob => in.ob,
     };
 
     const odd_register = (jkr_index & 1) == 1;

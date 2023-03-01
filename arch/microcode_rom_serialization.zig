@@ -12,8 +12,8 @@ const RomEntry = rom_compress.Entry(u16, u16);
 
 const Rom0Data = packed struct {
     literal: ControlSignals.Literal, // 6
-    jr_rsel: ControlSignals.Reg_File_Indexing_Source, // 2
-    kr_rsel: ControlSignals.Reg_File_Indexing_Source, // 2
+    jr_rsel: ControlSignals.RegFileIndexingSource, // 2
+    kr_rsel: ControlSignals.RegFileIndexingSource, // 2
     jr_rx: bool, // 1
     kr_rx: bool, // 1
     jl_src: ControlSignals.JL_Source, // 2
@@ -101,7 +101,7 @@ const Rom2Data = packed struct {
 const Rom3Data = packed struct {
     ob_oa_op: ControlSignals.Operand_Reg_Op, // 2
     lh_src: ControlSignals.LH_Source, // 4
-    jkr_wsel: ControlSignals.Reg_File_Indexing_Source, // 2
+    jkr_wsel: ControlSignals.RegFileIndexingSource, // 2
     jkr_wmode: ControlSignals.Reg_File_Write_Mode, // 2
     sr1_wi: ControlSignals.SR1Index, // 3
     sr2_wi: ControlSignals.SR2Index, // 3
