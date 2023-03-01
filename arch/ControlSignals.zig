@@ -31,7 +31,7 @@ sr2_wi: SR2Index,
 sr1_wsrc: SR1WriteDataSource,
 sr2_wsrc: SR2WriteDataSource,
 stat_op: STAT_Op,
-dl_op: Data_Latch_Op,
+dl_op: DataLatchOp,
 ob_oa_op: Operand_Reg_Op,
 allow_int: bool,
 seq_op: Sequencer_Op,
@@ -144,7 +144,7 @@ pub fn randomize(self: *ControlSignals, rnd: std.rand.Random) void {
     self.sr1_wsrc = rnd.enumValue(SR1WriteDataSource);
     self.sr2_wsrc = rnd.enumValue(SR2WriteDataSource);
     self.stat_op = rnd.enumValue(STAT_Op);
-    self.dl_op = rnd.enumValue(Data_Latch_Op);
+    self.dl_op = rnd.enumValue(DataLatchOp);
     self.ob_oa_op = rnd.enumValue(Operand_Reg_Op);
     self.allow_int = rnd.boolean();
     self.seq_op = rnd.enumValue(Sequencer_Op);
@@ -374,10 +374,10 @@ pub const LHSource = enum(u4) {
     last_mmu_op_h = 14,
 };
 
-pub const Data_Latch_Op = enum(u2) {
+pub const DataLatchOp = enum(u2) {
     hold = 0,
-    from_D = 1,
-    to_D = 2,
+    from_d = 1,
+    to_d = 2,
 };
 
 pub const Operand_Reg_Op = enum(u2) {

@@ -81,12 +81,12 @@ pub fn finish() ControlSignals {
         },
     }
 
-    if (cycle.dl_op == .from_D and cycle.bus_rw == .read and cycle.at_op != .translate) {
-        panic("Expected AT_OP to be .translate", .{});
+    if (cycle.dl_op == .from_d and cycle.bus_rw == .read and cycle.at_op != .translate) {
+        panic("Expected at_op to be .translate", .{});
     }
 
-    if (cycle.dl_op == .to_D and cycle.bus_rw != .write and cycle.ll_src != .d16 and cycle.ll_src != .d8_sx) {
-        panic("Expected DL value to be written to the bus or LL", .{});
+    if (cycle.dl_op == .to_d and cycle.bus_rw != .write and cycle.ll_src != .d16 and cycle.ll_src != .d8_sx) {
+        panic("Expected dl value to be written to the bus or ll", .{});
     }
 
     switch (cycle.ll_src) {
@@ -96,8 +96,8 @@ pub fn finish() ControlSignals {
         .arith_l  => validate_ALU_MODE(.arith),
         .mult_l   => validate_ALU_MODE(.mult),
         .bitcount => validate_ALU_MODE(.bitcount),
-        .d16      => if (cycle.dl_op != .to_D) validate_bus_read(null),
-        .d8_sx    => if (cycle.dl_op != .to_D) validate_bus_read(.byte),
+        .d16      => if (cycle.dl_op != .to_d) validate_bus_read(null),
+        .d8_sx    => if (cycle.dl_op != .to_d) validate_bus_read(.byte),
     }
 
     switch (cycle.lh_src) {
@@ -106,7 +106,7 @@ pub fn finish() ControlSignals {
         .shift_h => validate_ALU_MODE(.shift),
         .arith_h => validate_ALU_MODE(.arith),
         .mult_h => validate_ALU_MODE(.mult),
-        .d16 => if (cycle.dl_op != .to_D) validate_bus_read(null),
+        .d16 => if (cycle.dl_op != .to_d) validate_bus_read(null),
     }
 
     switch (cycle.stat_op) {
@@ -269,7 +269,7 @@ pub fn setControlSignal(comptime signal: ControlSignals.SignalName, raw_value: a
         .alu_mode => if (value == .unused) {
             panic("alu_mode can't be manually set to .unused", .{});
         },
-        .dl_op => if (value == .from_D) {
+        .dl_op => if (value == .from_d) {
             if (ib.insn) |i| {
                 i.DL_state = .loaded;
             }
@@ -770,7 +770,7 @@ pub fn write_from_DL(base: ControlSignals.AnySRIndex, offset: misc.SignedOffsetF
     setControlSignal(.bus_mode, mode);
     setControlSignal(.bus_byte, width);
     setControlSignal(.bus_rw, .write);
-    setControlSignal(.dl_op, .to_D);
+    setControlSignal(.dl_op, .to_d);
 }
 
 pub fn LL_to_D() void {
@@ -818,7 +818,7 @@ pub fn D_to_LL() void {
 }
 
 pub fn D_to_DL() void {
-    setControlSignal(.dl_op, .from_D);
+    setControlSignal(.dl_op, .from_d);
 
     if (ib.insn) |i| {
         i.DL_state = .loaded;
@@ -832,7 +832,7 @@ pub fn D_to_OB_OA() void {
 
 pub fn DL_to_LL() void {
     setControlSignal(.at_op, .none);
-    setControlSignal(.dl_op, .to_D);
+    setControlSignal(.dl_op, .to_d);
     setControlSignal(.ll_src, .d16);
 }
 

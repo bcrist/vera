@@ -17,7 +17,7 @@ const Rom0Data = packed struct {
     jr_rx: bool, // 1
     kr_rx: bool, // 1
     jl_src: ControlSignals.JLSource, // 2
-    dl_op: ControlSignals.Data_Latch_Op, // 2
+    dl_op: ControlSignals.DataLatchOp, // 2
 
     fn init(cs: ControlSignals) Rom0Data {
         return .{

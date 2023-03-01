@@ -657,7 +657,7 @@ fn simulate_transact(microcode: []const ControlSignals, memory: *Memory, reg_fil
         .prev_ua => in.reg.ua,
     };
 
-    if (in.bus_ctrl.write and in.cs.dl_op != .to_D) {
+    if (in.bus_ctrl.write and in.cs.dl_op != .to_d) {
         assert(in.cs.ll_src != .d16);
         assert(in.cs.ll_src != .d8_sx);
         d = l.low;

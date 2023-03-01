@@ -5,8 +5,8 @@ const bus = @import("bus");
 
 const SystemBusControl = @import("SystemBusControl.zig");
 
-pub fn readDL(dl: u16, DL_OP: ControlSignals.Data_Latch_Op, bus_ctrl: SystemBusControl) ?u16 {
-    if (DL_OP == .to_D and !bus_ctrl.read) {
+pub fn readDL(dl: u16, DL_OP: ControlSignals.DataLatchOp, bus_ctrl: SystemBusControl) ?u16 {
+    if (DL_OP == .to_d and !bus_ctrl.read) {
         return dl;
     } else {
         return null;
@@ -21,7 +21,7 @@ pub const TransactInputs = struct {
     inhibit_writes: bool,
     data: bus.D,
     ll: bus.LLow,
-    DL_OP: ControlSignals.Data_Latch_Op,
+    DL_OP: ControlSignals.DataLatchOp,
     OB_OA_OP: ControlSignals.Operand_Reg_Op,
     SPECIAL: ControlSignals.SpecialOp,
 };
@@ -43,8 +43,8 @@ pub fn transact(in: TransactInputs) TransactOutputs {
         };
     }
     const dl = switch (in.DL_OP) {
-        .from_D => in.data,
-        .hold, .to_D => in.dl,
+        .from_d => in.data,
+        .hold, .to_d => in.dl,
     };
     const oa = switch (in.OB_OA_OP) {
         .hold, .increment_OB, .clear_OB => in.oa,
