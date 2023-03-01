@@ -111,21 +111,21 @@ pub fn finish() ControlSignals {
 
     switch (cycle.stat_op) {
         .hold,
-        .ZN_from_L,
-        .ZN_from_L_no_set_Z,
-        .ZN_from_LL,
-        .ZN_from_LL_no_set_Z,
-        .load_ZNVC_from_LL,
-        .load_ZNVCKA_from_LL,
-        .clear_A,
-        .set_A,
-        .clear_S,
-        .set_S,
+        .zn_from_l,
+        .zn_from_l_no_set_z,
+        .zn_from_ll,
+        .zn_from_ll_no_set_z,
+        .load_znvc_from_ll,
+        .load_znvcka_from_ll,
+        .clear_a,
+        .set_a,
+        .clear_s,
+        .set_s,
         => {},
 
-        .ZN_from_L_C_from_shift, .ZN_from_LL_C_from_shift => validate_ALU_MODE(.shift),
+        .zn_from_l_c_from_shift, .zn_from_ll_c_from_shift => validate_ALU_MODE(.shift),
 
-        .ZNVC_from_arith, .ZNVC_from_arith_no_set_Z => validate_ALU_MODE(.arith),
+        .znvc_from_arith, .znvc_from_arith_no_set_z => validate_ALU_MODE(.arith),
     }
 
     if ((cycle.at_op == .none or cycle.bus_rw == .read)
@@ -870,31 +870,31 @@ pub fn SR2_to_SR2(src_index: ControlSignals.SR2Index, dest_index: ControlSignals
 
 pub fn ZN_from_LL(freshness: ALU_Freshness) void {
     switch (freshness) {
-        .fresh => setControlSignal(.stat_op, .ZN_from_LL),
-        .cont => setControlSignal(.stat_op, .ZN_from_LL_no_set_Z),
+        .fresh => setControlSignal(.stat_op, .zn_from_ll),
+        .cont => setControlSignal(.stat_op, .zn_from_ll_no_set_z),
     }
 }
 
 pub fn LL_to_ZNVC() void {
-    setControlSignal(.stat_op, .load_ZNVC_from_LL);
+    setControlSignal(.stat_op, .load_znvc_from_ll);
 }
 
 pub fn LL_to_STAT() void {
-    setControlSignal(.stat_op, .load_ZNVCKA_from_LL);
+    setControlSignal(.stat_op, .load_znvcka_from_ll);
 }
 
 pub fn enableSleep() void {
-    setControlSignal(.stat_op, .set_S);
+    setControlSignal(.stat_op, .set_s);
 }
 pub fn disableSleep() void {
-    setControlSignal(.stat_op, .clear_S);
+    setControlSignal(.stat_op, .clear_s);
 }
 
 pub fn enableAddressTranslation() void {
-    setControlSignal(.stat_op, .set_A);
+    setControlSignal(.stat_op, .set_a);
 }
 pub fn disableAddressTranslation() void {
-    setControlSignal(.stat_op, .clear_A);
+    setControlSignal(.stat_op, .clear_a);
 }
 
 pub fn LL_to_RSN() void {
@@ -1067,10 +1067,10 @@ pub fn add_to_LL(freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
     setControlSignal(.ll_src, .arith_l);
     switch (flags) {
         .no_flags => {},
-        .flags => setControlSignal(.stat_op, switch (freshness) {
-            .fresh => ControlSignals.STAT_Op.ZNVC_from_arith,
-            .cont => ControlSignals.STAT_Op.ZNVC_from_arith_no_set_Z,
-        }),
+        .flags => switch (freshness) {
+            .fresh => setControlSignal(.stat_op, .znvc_from_arith),
+            .cont => setControlSignal(.stat_op, .znvc_from_arith_no_set_z),
+        },
     }
 }
 
@@ -1082,10 +1082,10 @@ pub fn sub_to_LL(freshness: ALU_Freshness, flags: ALU_Flag_Mode) void {
     setControlSignal(.ll_src, .arith_l);
     switch (flags) {
         .no_flags => {},
-        .flags => setControlSignal(.stat_op, switch (freshness) {
-            .fresh => ControlSignals.STAT_Op.ZNVC_from_arith,
-            .cont => ControlSignals.STAT_Op.ZNVC_from_arith_no_set_Z,
-        }),
+        .flags => switch (freshness) {
+            .fresh => setControlSignal(.stat_op, .znvc_from_arith),
+            .cont => setControlSignal(.stat_op, .znvc_from_arith_no_set_z),
+        },
     }
 }
 
@@ -1106,10 +1106,10 @@ pub fn add_to_L(ext: ZX_SX_or_1X, freshness: ALU_Freshness, flags: ALU_Flag_Mode
     setControlSignal(.lh_src, .arith_h);
     switch (flags) {
         .no_flags => {},
-        .flags => setControlSignal(.stat_op, switch (freshness) {
-            .fresh => ControlSignals.STAT_Op.ZNVC_from_arith,
-            .cont => ControlSignals.STAT_Op.ZNVC_from_arith_no_set_Z,
-        }),
+        .flags => switch (freshness) {
+            .fresh => setControlSignal(.stat_op, .znvc_from_arith),
+            .cont => setControlSignal(.stat_op, .znvc_from_arith_no_set_z),
+        },
     }
 }
 
@@ -1130,10 +1130,10 @@ pub fn sub_to_L(ext: ZX_SX_or_1X, freshness: ALU_Freshness, flags: ALU_Flag_Mode
     setControlSignal(.lh_src, .arith_h);
     switch (flags) {
         .no_flags => {},
-        .flags => setControlSignal(.stat_op, switch (freshness) {
-            .fresh => ControlSignals.STAT_Op.ZNVC_from_arith,
-            .cont => ControlSignals.STAT_Op.ZNVC_from_arith_no_set_Z,
-        }),
+        .flags => switch (freshness) {
+            .fresh => setControlSignal(.stat_op, .znvc_from_arith),
+            .cont => setControlSignal(.stat_op, .znvc_from_arith_no_set_z),
+        },
     }
 }
 
@@ -1256,10 +1256,10 @@ pub fn logic_to_LL(mode: ControlSignals.Logic_Mode, freshness: ALU_Freshness, fl
     setControlSignal(.ll_src, .logic_l);
     switch (flags) {
         .no_flags => {},
-        .flags => setControlSignal(.stat_op, switch (freshness) {
-            .fresh => ControlSignals.STAT_Op.ZN_from_LL,
-            .cont => ControlSignals.STAT_Op.ZN_from_LL_no_set_Z,
-        }),
+        .flags => switch (freshness) {
+            .fresh => setControlSignal(.stat_op, .zn_from_ll),
+            .cont => setControlSignal(.stat_op, .zn_from_ll_no_set_z),
+        },
     }
 }
 
@@ -1307,7 +1307,7 @@ pub fn mult_to_L(left_ext: ZX_or_SX, right_ext: ZX_or_SX, flags: ALU_Flag_Mode) 
     setControlSignal(.lh_src, .mult_h);
     switch (flags) {
         .no_flags => {},
-        .flags => setControlSignal(.stat_op, .ZN_from_L),
+        .flags => setControlSignal(.stat_op, .zn_from_l),
     }
 }
 
@@ -1330,7 +1330,7 @@ pub fn mult_to_LL(left_ext: ZX_or_SX, right_ext: ZX_or_SX, swap: Swap_Halves, fl
     setControlSignal(.ll_src, .mult_l);
     switch (flags) {
         .no_flags => {},
-        .flags => setControlSignal(.stat_op, .ZN_from_LL),
+        .flags => setControlSignal(.stat_op, .zn_from_ll),
     }
 }
 
@@ -1369,7 +1369,7 @@ pub fn shift_to_L(dir: Shift_Dir, flags: ALU_Flag_Mode) void {
     setControlSignal(.lh_src, .shift_h);
     switch (flags) {
         .no_flags => {},
-        .flags => setControlSignal(.stat_op, .ZN_from_L_C_from_shift),
+        .flags => setControlSignal(.stat_op, .zn_from_l_c_from_shift),
     }
 }
 
@@ -1381,7 +1381,7 @@ pub fn shift_to_LL(dir: Shift_Dir, flags: ALU_Flag_Mode) void {
     setControlSignal(.ll_src, .shift_l);
     switch (flags) {
         .no_flags => {},
-        .flags => setControlSignal(.stat_op, .ZN_from_LL_C_from_shift),
+        .flags => setControlSignal(.stat_op, .zn_from_ll_c_from_shift),
     }
 }
 
@@ -1429,7 +1429,7 @@ pub fn bitcount_op_reg_to_LL(which: OA_or_OB_xor, mode: Bitcount_Mode, polarity:
     setControlSignal(.ll_src, .bitcount);
     switch (flags) {
         .no_flags => {},
-        .flags => setControlSignal(.stat_op, .ZN_from_LL),
+        .flags => setControlSignal(.stat_op, .zn_from_ll),
     }
 }
 

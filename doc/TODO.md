@@ -6,9 +6,6 @@
 ## Implement interrupt controller
 ## Implement serial device for console
 ## Normalize naming conventions
-Use zig standards.
-Remove individual functions to set each control signal individually (`STAT_OP(.ZN_from_L);` etc.)
-Instead use `assign(.stat_op, .zn_from_l);` and create helper functions for things where that's too unclear
 
 ## Rework logic unit
 

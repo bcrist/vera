@@ -47,8 +47,8 @@ pub const Inputs = struct {
     arith_v: bool,
     mmu_k: bool,
 
-    STAT_OP: ControlSignals.STAT_Op,
-    SEQ_OP: ControlSignals.Sequencer_Op,
+    STAT_OP: ControlSignals.StatusRegOp,
+    SEQ_OP: ControlSignals.SequencerOp,
     LITERAL: ControlSignals.Literal,
 };
 
@@ -75,59 +75,59 @@ pub fn transact(in: Inputs, power: *misc.PowerMode) LoopState {
 
     switch (in.STAT_OP) {
         .hold => {},
-        .ZN_from_L => {
+        .zn_from_l => {
             state.z = lz;
             state.n = ln;
         },
-        .ZN_from_L_C_from_shift => {
+        .zn_from_l_c_from_shift => {
             state.z = lz;
             state.n = ln;
             state.c = in.shift_c;
         },
-        .ZN_from_L_no_set_Z => {
+        .zn_from_l_no_set_z => {
             state.z = lz and in.state.z;
             state.n = ln;
         },
-        .ZN_from_LL => {
+        .zn_from_ll => {
             state.z = llz;
             state.n = lln;
         },
-        .ZN_from_LL_C_from_shift => {
+        .zn_from_ll_c_from_shift => {
             state.z = llz;
             state.n = lln;
             state.c = in.shift_c;
         },
-        .ZN_from_LL_no_set_Z => {
+        .zn_from_ll_no_set_z => {
             state.z = llz and in.state.z;
             state.n = lln;
         },
-        .ZNVC_from_arith => {
+        .znvc_from_arith => {
             state.z = in.arith_z;
             state.n = in.arith_n;
             state.v = in.arith_v;
             state.c = in.arith_c;
         },
-        .ZNVC_from_arith_no_set_Z => {
+        .znvc_from_arith_no_set_z => {
             state.z = in.arith_z and in.state.z;
             state.n = in.arith_n;
             state.v = in.arith_v;
             state.c = in.arith_c;
         },
-        .load_ZNVC_from_LL, .load_ZNVCKA_from_LL => {
+        .load_znvc_from_ll, .load_znvcka_from_ll => {
             const ll_bits = @bitCast(misc.StatusBits, in.l.low);
             state.z = ll_bits.z;
             state.n = ll_bits.n;
             state.v = ll_bits.v;
             state.c = ll_bits.c;
-            if (in.STAT_OP == .load_ZNVCKA_from_LL) {
+            if (in.STAT_OP == .load_znvcka_from_ll) {
                 state.k = ll_bits.k;
                 state.a = ll_bits.a;
             }
         },
-        .clear_A => state.a = false,
-        .set_A => state.a = true,
-        .clear_S => power.* = .run,
-        .set_S => power.* = .sleep,
+        .clear_a => state.a = false,
+        .set_a => state.a = true,
+        .clear_s => power.* = .run,
+        .set_s => power.* = .sleep,
     }
 
     return state;

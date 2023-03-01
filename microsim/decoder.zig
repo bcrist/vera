@@ -17,7 +17,7 @@ pub const TransactInputs = struct {
     dl: bus.D,
     lh: bus.LHigh,
     ALLOW_INT: bool,
-    SEQ_OP: ControlSignals.Sequencer_Op,
+    SEQ_OP: ControlSignals.SequencerOp,
     NEXT_UOP: uc.Continuation,
     SPECIAL: ControlSignals.SpecialOp,
 };

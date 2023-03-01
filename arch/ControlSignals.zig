@@ -30,11 +30,11 @@ sr1_wi: SR1Index,
 sr2_wi: SR2Index,
 sr1_wsrc: SR1WriteDataSource,
 sr2_wsrc: SR2WriteDataSource,
-stat_op: STAT_Op,
+stat_op: StatusRegOp,
 dl_op: DataLatchOp,
 ob_oa_op: OperandRegOp,
 allow_int: bool,
-seq_op: Sequencer_Op,
+seq_op: SequencerOp,
 next_uop: uc.Continuation,
 
 pub const SignalName = enum {
@@ -143,11 +143,11 @@ pub fn randomize(self: *ControlSignals, rnd: std.rand.Random) void {
     self.sr2_wi = rnd.enumValue(SR2Index);
     self.sr1_wsrc = rnd.enumValue(SR1WriteDataSource);
     self.sr2_wsrc = rnd.enumValue(SR2WriteDataSource);
-    self.stat_op = rnd.enumValue(STAT_Op);
+    self.stat_op = rnd.enumValue(StatusRegOp);
     self.dl_op = rnd.enumValue(DataLatchOp);
     self.ob_oa_op = rnd.enumValue(OperandRegOp);
     self.allow_int = rnd.boolean();
-    self.seq_op = rnd.enumValue(Sequencer_Op);
+    self.seq_op = rnd.enumValue(SequencerOp);
     self.next_uop = rnd.int(uc.Continuation);
 }
 
@@ -549,25 +549,25 @@ pub const Shift_Mode_Bits = packed struct {
     wide: bool,
 };
 
-pub const STAT_Op = enum(u4) {
+pub const StatusRegOp = enum(u4) {
     hold = 0,
-    ZN_from_L = 1,
-    ZN_from_L_C_from_shift = 2,
-    ZN_from_L_no_set_Z = 3,
-    ZN_from_LL = 5,
-    ZN_from_LL_C_from_shift = 6,
-    ZN_from_LL_no_set_Z = 7,
-    ZNVC_from_arith = 8,
-    ZNVC_from_arith_no_set_Z = 9,
-    load_ZNVC_from_LL = 10,
-    load_ZNVCKA_from_LL = 11,
-    clear_A = 12,
-    set_A = 13,
-    clear_S = 14,
-    set_S = 15,
+    zn_from_l = 1,
+    zn_from_l_c_from_shift = 2,
+    zn_from_l_no_set_z = 3,
+    zn_from_ll = 5,
+    zn_from_ll_c_from_shift = 6,
+    zn_from_ll_no_set_z = 7,
+    znvc_from_arith = 8,
+    znvc_from_arith_no_set_z = 9,
+    load_znvc_from_ll = 10,
+    load_znvcka_from_ll = 11,
+    clear_a = 12,
+    set_a = 13,
+    clear_s = 14,
+    set_s = 15,
 };
 
-pub const Sequencer_Op = enum(u2) {
+pub const SequencerOp = enum(u2) {
     next_uop = 0,
     next_instruction = 1,
     next_uop_force_normal = 2,

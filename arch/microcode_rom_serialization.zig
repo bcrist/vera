@@ -129,9 +129,9 @@ const Rom3Data = packed struct {
 const Rom4Data = packed struct {
     sr1_wsrc: ControlSignals.SR1WriteDataSource, // 2
     sr2_wsrc: ControlSignals.SR2WriteDataSource, // 2
-    stat_op: ControlSignals.STAT_Op, // 4
+    stat_op: ControlSignals.StatusRegOp, // 4
     allow_int: bool, // 1
-    seq_op: ControlSignals.Sequencer_Op, // 2
+    seq_op: ControlSignals.SequencerOp, // 2
     _: u5 = 0, // 5
 
     fn init(cs: ControlSignals) Rom4Data {
