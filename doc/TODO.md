@@ -1,6 +1,3 @@
-## misc.address_translator -> misc.mmu?
-## Rename HALT to WFI (wait for interrupt)
-
 ## Add instructions for doing block transfers to/from FLASH/PSRAM
 ## Fix BB, BBN instructions in _branch.zig
 

@@ -486,7 +486,7 @@ test "Instruction encoding" {
     }
 
     // TODO .BB, .BBN
-    for ([_]ie.Mnemonic{ .NOP, .HALT, .BP, .BPN }) |mnemonic| {
+    for ([_]ie.Mnemonic{ .NOP, .WFI, .BP, .BPN }) |mnemonic| {
         try ie.testIdempotence(&ddb, &edb, 1, .{
             .mnemonic = mnemonic,
             .suffix = .none,

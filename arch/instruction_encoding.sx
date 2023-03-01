@@ -2,7 +2,7 @@
    (0000 0000 NOP
       (desc "No operation; equivalent to B IP+2")
    )
-   (0001 0001 HALT
+   (0001 0001 WFI
       (desc "Does nothing on the current pipe until an interrupt is triggered, or the CPU is reset")
    )
    (0002 0002 SYNC

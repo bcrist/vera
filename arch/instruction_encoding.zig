@@ -41,9 +41,9 @@ pub const Mnemonic = enum {
     // Memcpy & streaming:
     MCR, MCRB, MCF, MCFB, SI, SIB, SO, SOB,
     // Faults, interrupts, and context switching:
-    FRET, IRET, IFEX, LDRS, STRS, SRS,
+    FRET, IRET, IFEX, LDRS, STRS, SRS, WFI,
     // Misc:
-    NOP, NOPE, HALT, SLEEP, UNSLEEP,
+    NOP, NOPE, SLEEP, UNSLEEP,
 };
 
 pub fn mnemonicName(mnemonic: Mnemonic) []const u8 {
@@ -89,7 +89,6 @@ pub fn mnemonicName(mnemonic: Mnemonic) []const u8 {
         .CTZ => "Count Trailing Zero Bits",
         .NOP => "No Operation",
         .NOPE => "No Operation",
-        .HALT => "Halt Execution",
         .B => "Branch",
         .BP => "Branch to Start of Page",
         .BPN => "Branch to Next Page",
@@ -98,14 +97,13 @@ pub fn mnemonicName(mnemonic: Mnemonic) []const u8 {
         .EAB => "Enable Address Translation and Branch",
         .DAB => "Disable Address Translation and Branch",
         .CALL => "Call Subroutine",
-        .KCALL => "Call Kernel Routine",
         .RET => "Return from Subroutine",
-        .KRET => "Return from Kernel Routine",
         .IRET => "Return from Interrupt",
         .FRET => "Return from Fault Handler",
-        .BEGIN => "Begin execution using a new registerset",
+        .WFI => "Wait for Interrupt",
         .LDRS => "Load Registerset",
         .STRS => "Store Registerset",
+        .SRS => "Switch to Registerset",
         .C => "Copy",
         .DUP => "Duplicate",
         .LD => "Load",
@@ -114,11 +112,7 @@ pub fn mnemonicName(mnemonic: Mnemonic) []const u8 {
         .ST => "Store",
         .STI => "Store and Increment",
         .IST => "Increment and Store",
-        .CAT => "Copy Address Translation Entries",
-        .CATM => "Copy Matching Address Translation Entry",
-        .CATO => "Copy Other Address Translation Entry",
         .SAT => "Set Address Translation Entry",
-        .CSAT => "Copy and Set Address Translation Entry",
         .RAT => "Remove Address Translation(s)",
         .FRAME => "Set Up Stack Frame",
         .UNFRAME => "Tear Down Stack Frame",
