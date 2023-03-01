@@ -67,11 +67,11 @@ const Rom1Data = packed struct {
 };
 
 const Rom2Data = packed struct {
-    offset: ControlSignals.Address_Offset, // 2
+    offset: ControlSignals.AddressOffset, // 2
     alu_mode: u4, // 4
-    bus_mode: ControlSignals.Bus_Mode, // 2
-    bus_byte: ControlSignals.Bus_Width, // 1
-    bus_rw: ControlSignals.Bus_Direction, // 1
+    bus_mode: ControlSignals.BusMode, // 2
+    bus_byte: ControlSignals.BusWidth, // 1
+    bus_rw: ControlSignals.BusDirection, // 1
     at_op: ControlSignals.AT_Op, // 2
     special: ControlSignals.Special_Op, // 3
     _: u1 = 0,

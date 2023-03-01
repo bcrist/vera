@@ -228,7 +228,7 @@ fn validateAddress() void {
     ensureSet(.at_op);
 }
 
-fn validate_bus_read(width: ?ControlSignals.Bus_Width) void {
+fn validate_bus_read(width: ?ControlSignals.BusWidth) void {
     validateAddress();
     if (cycle.bus_rw != .read) {
         panic("Expected bus_rw to be .read", .{});
@@ -312,10 +312,10 @@ pub fn address(base: ControlSignals.AnySRIndex, offset: misc.SignedOffsetForLite
         var raw_offset: ControlSignals.Literal = undefined;
         if (offset < 0) {
             raw_offset = @intCast(ControlSignals.Literal, @as(i8, offset) + 64);
-            setControlSignal(.offset, .LITERAL_minus_64);
+            setControlSignal(.offset, .literal_minus_64);
         } else {
             raw_offset = @intCast(ControlSignals.Literal, offset);
-            setControlSignal(.offset, .LITERAL);
+            setControlSignal(.offset, .literal);
         }
         setControlSignal(.literal, raw_offset);
     }
@@ -735,7 +735,7 @@ pub fn SR_to_PN(base: ControlSignals.AnySRIndex, offset: misc.SignedOffsetForLit
     address(base, offset);
 }
 
-pub fn read_to_D(base: ControlSignals.AnySRIndex, offset: misc.SignedOffsetForLiteral, width: ControlSignals.Bus_Width, mode: ControlSignals.Bus_Mode) void {
+pub fn read_to_D(base: ControlSignals.AnySRIndex, offset: misc.SignedOffsetForLiteral, width: ControlSignals.BusWidth, mode: ControlSignals.BusMode) void {
     address(base, offset);
     setControlSignal(.at_op, .translate);
     setControlSignal(.bus_mode, mode);
@@ -751,11 +751,11 @@ pub fn read_to_D(base: ControlSignals.AnySRIndex, offset: misc.SignedOffsetForLi
     }
 }
 
-pub fn IP_read_to_D(offset: misc.SignedOffsetForLiteral, width: ControlSignals.Bus_Width) void {
+pub fn IP_read_to_D(offset: misc.SignedOffsetForLiteral, width: ControlSignals.BusWidth) void {
     read_to_D(.ip, offset, width, .insn);
 }
 
-pub fn write_from_LL(base: ControlSignals.AnySRIndex, offset: misc.SignedOffsetForLiteral, width: ControlSignals.Bus_Width, mode: ControlSignals.Bus_Mode) void {
+pub fn write_from_LL(base: ControlSignals.AnySRIndex, offset: misc.SignedOffsetForLiteral, width: ControlSignals.BusWidth, mode: ControlSignals.BusMode) void {
     address(base, offset);
     setControlSignal(.at_op, .translate);
     setControlSignal(.bus_mode, mode);
@@ -764,7 +764,7 @@ pub fn write_from_LL(base: ControlSignals.AnySRIndex, offset: misc.SignedOffsetF
     setControlSignal(.dl_op, .hold);
 }
 
-pub fn write_from_DL(base: ControlSignals.AnySRIndex, offset: misc.SignedOffsetForLiteral, width: ControlSignals.Bus_Width, mode: ControlSignals.Bus_Mode) void {
+pub fn write_from_DL(base: ControlSignals.AnySRIndex, offset: misc.SignedOffsetForLiteral, width: ControlSignals.BusWidth, mode: ControlSignals.BusMode) void {
     address(base, offset);
     setControlSignal(.at_op, .translate);
     setControlSignal(.bus_mode, mode);
@@ -1445,7 +1445,7 @@ pub fn invalid_instruction() void {
     setControlSignal(.next_uop, @intCast(u10, @enumToInt(uc.Vectors.invalid_instruction)));
 }
 
-pub fn block_transfer_to_ram(base: ControlSignals.AnySRIndex, preincrement: i7, bus_mode: ControlSignals.Bus_Mode) void {
+pub fn block_transfer_to_ram(base: ControlSignals.AnySRIndex, preincrement: i7, bus_mode: ControlSignals.BusMode) void {
     address(base, preincrement);
     setControlSignal(.at_op, .translate);
     setControlSignal(.bus_mode, bus_mode);
@@ -1455,7 +1455,7 @@ pub fn block_transfer_to_ram(base: ControlSignals.AnySRIndex, preincrement: i7, 
     PN_to_SR(base);
 }
 
-pub fn block_transfer_from_ram(base: ControlSignals.AnySRIndex, preincrement: i7, bus_mode: ControlSignals.Bus_Mode) void {
+pub fn block_transfer_from_ram(base: ControlSignals.AnySRIndex, preincrement: i7, bus_mode: ControlSignals.BusMode) void {
     address(base, preincrement);
     setControlSignal(.at_op, .translate);
     setControlSignal(.bus_mode, bus_mode);
@@ -1511,7 +1511,7 @@ pub fn prev_UA_to_LH() void {
     setControlSignal(.lh_src, .prev_UA);
 }
 
-pub fn update_address_translation_from_L(base: ControlSignals.AnySRIndex, mode: ControlSignals.Bus_Mode, dir: ControlSignals.Bus_Direction) void {
+pub fn update_address_translation_from_L(base: ControlSignals.AnySRIndex, mode: ControlSignals.BusMode, dir: ControlSignals.BusDirection) void {
     address(base, 0);
     setControlSignal(.at_op, .update);
     setControlSignal(.bus_mode, mode);
@@ -1519,7 +1519,7 @@ pub fn update_address_translation_from_L(base: ControlSignals.AnySRIndex, mode: 
     setControlSignal(.bus_byte, .word);
 }
 
-pub fn invalidate_address_translation_from_L(base: ControlSignals.AnySRIndex, mode: ControlSignals.Bus_Mode, dir: ControlSignals.Bus_Direction) void {
+pub fn invalidate_address_translation_from_L(base: ControlSignals.AnySRIndex, mode: ControlSignals.BusMode, dir: ControlSignals.BusDirection) void {
     address(base, 0);
     setControlSignal(.at_op, .invalidate);
     setControlSignal(.bus_mode, mode);

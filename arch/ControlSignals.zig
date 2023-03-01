@@ -15,11 +15,11 @@ k_src: KSource,
 sr1_ri: SR1Index,
 sr2_ri: SR2Index,
 base: AnySRIndex,
-offset: Address_Offset,
+offset: AddressOffset,
 alu_mode: ALU_Mode,
-bus_mode: Bus_Mode,
-bus_byte: Bus_Width,
-bus_rw: Bus_Direction,
+bus_mode: BusMode,
+bus_byte: BusWidth,
+bus_rw: BusDirection,
 at_op: AT_Op,
 special: Special_Op,
 ll_src: LL_Source,
@@ -121,11 +121,11 @@ pub fn randomize(self: *ControlSignals, rnd: std.rand.Random) void {
     self.sr1_ri = rnd.enumValue(SR1Index);
     self.sr2_ri = rnd.enumValue(SR2Index);
     self.base = rnd.enumValue(AnySRIndex);
-    self.offset = rnd.enumValue(Address_Offset);
+    self.offset = rnd.enumValue(AddressOffset);
     self.alu_mode = .{ .unknown = rnd.int(u4) };
-    self.bus_mode = rnd.enumValue(Bus_Mode);
-    self.bus_byte = rnd.enumValue(Bus_Width);
-    self.bus_rw = rnd.enumValue(Bus_Direction);
+    self.bus_mode = rnd.enumValue(BusMode);
+    self.bus_byte = rnd.enumValue(BusWidth);
+    self.bus_rw = rnd.enumValue(BusDirection);
     self.at_op = rnd.enumValue(AT_Op);
     self.special = rnd.enumValue(Special_Op);
     self.ll_src = rnd.enumValue(LL_Source);
@@ -213,8 +213,8 @@ pub fn address_offset(self: *ControlSignals) misc.SignedOffsetForLiteral {
     return switch (self.offset) {
         .zero => 0,
         .two => 2,
-        .LITERAL => self.literal,
-        .LITERAL_minus_64 => @as(misc.SignedOffsetForLiteral, self.literal) - 64,
+        .literal => self.literal,
+        .literal_minus_64 => @as(misc.SignedOffsetForLiteral, self.literal) - 64,
     };
 }
 
@@ -326,11 +326,11 @@ pub fn addressBaseToSR2(base: AnySRIndex) ?SR2Index {
     }
 }
 
-pub const Address_Offset = enum(u2) {
+pub const AddressOffset = enum(u2) {
     zero = 0,
-    LITERAL = 1,
+    literal = 1,
     two = 2,
-    LITERAL_minus_64 = 3,
+    literal_minus_64 = 3,
 };
 
 pub const SR1_Write_Data_Source = enum(u2) {
@@ -387,17 +387,17 @@ pub const Operand_Reg_Op = enum(u2) {
     clear_OB = 3,
 };
 
-pub const Bus_Direction = enum(u1) {
+pub const BusDirection = enum(u1) {
     read = 0,
     write = 1,
 };
 
-pub const Bus_Width = enum(u1) {
+pub const BusWidth = enum(u1) {
     word = 0,
     byte = 1,
 };
 
-pub const Bus_Mode = enum(u2) {
+pub const BusMode = enum(u2) {
     raw = 0,
     data = 1,
     stack = 2,

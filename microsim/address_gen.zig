@@ -6,8 +6,8 @@ pub fn setup(in: SetupInputs) bus.VirtualAddressParts {
     const address_offset: i32 = switch (in.OFFSET) {
         .zero => 0,
         .two => 2,
-        .LITERAL => in.LITERAL,
-        .LITERAL_minus_64 => @intCast(i32, in.LITERAL) - 64,
+        .literal => in.LITERAL,
+        .literal_minus_64 => @intCast(i32, in.LITERAL) - 64,
     };
 
     const address = in.base +% @bitCast(u32, address_offset);
@@ -20,6 +20,6 @@ pub fn setup(in: SetupInputs) bus.VirtualAddressParts {
 
 pub const SetupInputs = struct {
     base: bus.VirtualAddress,
-    OFFSET: ControlSignals.Address_Offset,
+    OFFSET: ControlSignals.AddressOffset,
     LITERAL: ControlSignals.Literal,
 };

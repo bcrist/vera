@@ -14,9 +14,9 @@ const OffsetSlotAndTag = packed struct {
 };
 
 pub const OperationInfo = struct {
-    BUS_RW: ControlSignals.Bus_Direction,
-    BUS_BYTE: ControlSignals.Bus_Width,
-    BUS_MODE: ControlSignals.Bus_Mode,
+    BUS_RW: ControlSignals.BusDirection,
+    BUS_BYTE: ControlSignals.BusWidth,
+    BUS_MODE: ControlSignals.BusMode,
     AT_OP: ControlSignals.AT_Op,
     slot: u6,
     tag: misc.address_translator.Tag,
@@ -34,9 +34,9 @@ pub const OperationInfo = struct {
 
     pub fn random(rnd: std.rand.Random) OperationInfo {
         return .{
-            .BUS_RW = rnd.enumValue(ControlSignals.Bus_Direction),
-            .BUS_BYTE = rnd.enumValue(ControlSignals.Bus_Width),
-            .BUS_MODE = rnd.enumValue(ControlSignals.Bus_Mode),
+            .BUS_RW = rnd.enumValue(ControlSignals.BusDirection),
+            .BUS_BYTE = rnd.enumValue(ControlSignals.BusWidth),
+            .BUS_MODE = rnd.enumValue(ControlSignals.BusMode),
             .AT_OP = rnd.enumValue(ControlSignals.AT_Op),
             .slot = rnd.int(u6),
             .tag = rnd.int(misc.address_translator.Tag),
@@ -104,9 +104,9 @@ pub const ComputeInputs = struct {
     enable_flag: bool,
     kernel_flag: bool,
 
-    BUS_MODE: ControlSignals.Bus_Mode,
-    BUS_RW: ControlSignals.Bus_Direction,
-    BUS_BYTE: ControlSignals.Bus_Width,
+    BUS_MODE: ControlSignals.BusMode,
+    BUS_RW: ControlSignals.BusDirection,
+    BUS_BYTE: ControlSignals.BusWidth,
     LL_SRC: ControlSignals.LL_Source,
     AT_OP: ControlSignals.AT_Op,
     SR2_WI: ControlSignals.SR2Index,

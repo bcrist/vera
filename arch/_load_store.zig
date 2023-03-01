@@ -101,7 +101,7 @@ fn fromSPPlusImm16Offset() void {
     next_cycle();
 }
 
-fn opLoad8(reg: cb.OA_or_OB, bus_mode: ControlSignals.Bus_Mode, ext: cb.ZX_SX_or_1X, offset: SignedOffsetForLiteral) void {
+fn opLoad8(reg: cb.OA_or_OB, bus_mode: ControlSignals.BusMode, ext: cb.ZX_SX_or_1X, offset: SignedOffsetForLiteral) void {
     read_to_D(.temp_1, offset, .byte, bus_mode);
     D_to_L(ext);
     LL_to_op_reg(switch (reg) {
@@ -110,7 +110,7 @@ fn opLoad8(reg: cb.OA_or_OB, bus_mode: ControlSignals.Bus_Mode, ext: cb.ZX_SX_or
     });
     exec_next_insn_no_atomic_end();
 }
-fn opLoad16(reg: cb.OA_or_OB, bus_mode: ControlSignals.Bus_Mode, offset: SignedOffsetForLiteral) void {
+fn opLoad16(reg: cb.OA_or_OB, bus_mode: ControlSignals.BusMode, offset: SignedOffsetForLiteral) void {
     read_to_D(.temp_1, offset, .word, bus_mode);
     D_to_L(.zx);
     LL_to_op_reg(switch (reg) {
@@ -119,7 +119,7 @@ fn opLoad16(reg: cb.OA_or_OB, bus_mode: ControlSignals.Bus_Mode, offset: SignedO
     });
     exec_next_insn_no_atomic_end();
 }
-fn opLoad32(reg: cb.OA_or_OB, bus_mode: ControlSignals.Bus_Mode, offset: SignedOffsetForLiteral) void {
+fn opLoad32(reg: cb.OA_or_OB, bus_mode: ControlSignals.BusMode, offset: SignedOffsetForLiteral) void {
     read_to_D(.temp_1, offset, .word, bus_mode);
     D_to_L(.zx);
     LL_to_op_reg(switch (reg) {
@@ -137,19 +137,19 @@ fn opLoad32(reg: cb.OA_or_OB, bus_mode: ControlSignals.Bus_Mode, offset: SignedO
     exec_next_insn_no_atomic_end();
 }
 
-fn load8(reg: misc.RegisterIndex, bus_mode: ControlSignals.Bus_Mode, ext: cb.ZX_SX_or_1X, offset: SignedOffsetForLiteral) void {
+fn load8(reg: misc.RegisterIndex, bus_mode: ControlSignals.BusMode, ext: cb.ZX_SX_or_1X, offset: SignedOffsetForLiteral) void {
     read_to_D(.temp_1, offset, .byte, bus_mode);
     D_to_L(ext);
     LL_to_reg(reg);
     exec_next_insn_no_atomic_end();
 }
-fn load16(reg: misc.RegisterIndex, bus_mode: ControlSignals.Bus_Mode, offset: SignedOffsetForLiteral) void {
+fn load16(reg: misc.RegisterIndex, bus_mode: ControlSignals.BusMode, offset: SignedOffsetForLiteral) void {
     read_to_D(.temp_1, offset, .word, bus_mode);
     D_to_L(.zx);
     LL_to_reg(reg);
     exec_next_insn_no_atomic_end();
 }
-fn load32(reg: misc.RegisterIndex, bus_mode: ControlSignals.Bus_Mode, offset: SignedOffsetForLiteral) void {
+fn load32(reg: misc.RegisterIndex, bus_mode: ControlSignals.BusMode, offset: SignedOffsetForLiteral) void {
     read_to_D(.temp_1, offset, .word, bus_mode);
     D_to_L(.zx);
     LL_to_reg(reg);
@@ -161,7 +161,7 @@ fn load32(reg: misc.RegisterIndex, bus_mode: ControlSignals.Bus_Mode, offset: Si
     exec_next_insn_no_atomic_end();
 }
 
-fn opStore8(reg: cb.OA_or_OB, bus_mode: ControlSignals.Bus_Mode, offset: SignedOffsetForLiteral) void {
+fn opStore8(reg: cb.OA_or_OB, bus_mode: ControlSignals.BusMode, offset: SignedOffsetForLiteral) void {
     op_reg_to_LL(switch (reg) {
         .OA => .OA,
         .OB => .OB,
@@ -169,7 +169,7 @@ fn opStore8(reg: cb.OA_or_OB, bus_mode: ControlSignals.Bus_Mode, offset: SignedO
     write_from_LL(.temp_1, offset, .byte, bus_mode);
     exec_next_insn_no_atomic_end();
 }
-fn opStore16(reg: cb.OA_or_OB, bus_mode: ControlSignals.Bus_Mode, offset: SignedOffsetForLiteral) void {
+fn opStore16(reg: cb.OA_or_OB, bus_mode: ControlSignals.BusMode, offset: SignedOffsetForLiteral) void {
     op_reg_to_LL(switch (reg) {
         .OA => .OA,
         .OB => .OB,
@@ -177,7 +177,7 @@ fn opStore16(reg: cb.OA_or_OB, bus_mode: ControlSignals.Bus_Mode, offset: Signed
     write_from_LL(.temp_1, offset, .word, bus_mode);
     exec_next_insn_no_atomic_end();
 }
-fn opStore32(reg: cb.OA_or_OB, bus_mode: ControlSignals.Bus_Mode, offset: SignedOffsetForLiteral) void {
+fn opStore32(reg: cb.OA_or_OB, bus_mode: ControlSignals.BusMode, offset: SignedOffsetForLiteral) void {
     op_reg_to_LL(switch (reg) {
         .OA => .OA,
         .OB => .OB,
@@ -193,17 +193,17 @@ fn opStore32(reg: cb.OA_or_OB, bus_mode: ControlSignals.Bus_Mode, offset: Signed
     exec_next_insn_no_atomic_end();
 }
 
-fn store8(reg: misc.RegisterIndex, bus_mode: ControlSignals.Bus_Mode, offset: SignedOffsetForLiteral) void {
+fn store8(reg: misc.RegisterIndex, bus_mode: ControlSignals.BusMode, offset: SignedOffsetForLiteral) void {
     reg_to_LL(reg);
     write_from_LL(.temp_1, offset, .byte, bus_mode);
     exec_next_insn_no_atomic_end();
 }
-fn store16(reg: misc.RegisterIndex, bus_mode: ControlSignals.Bus_Mode, offset: SignedOffsetForLiteral) void {
+fn store16(reg: misc.RegisterIndex, bus_mode: ControlSignals.BusMode, offset: SignedOffsetForLiteral) void {
     reg_to_LL(reg);
     write_from_LL(.temp_1, offset, .word, bus_mode);
     exec_next_insn_no_atomic_end();
 }
-fn store32(reg: misc.RegisterIndex, bus_mode: ControlSignals.Bus_Mode, offset: SignedOffsetForLiteral) void {
+fn store32(reg: misc.RegisterIndex, bus_mode: ControlSignals.BusMode, offset: SignedOffsetForLiteral) void {
     reg_to_LL(reg);
     write_from_LL(.temp_1, offset, .word, bus_mode);
     next_cycle();

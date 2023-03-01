@@ -20,8 +20,8 @@ const update_address_translation_from_L = cb.update_address_translation_from_L;
 const invalidate_address_translation_from_L = cb.invalidate_address_translation_from_L;
 
 pub fn _0018_001B() void {
-    var mode: ControlSignals.Bus_Mode = undefined;
-    var dir: ControlSignals.Bus_Direction = undefined;
+    var mode: ControlSignals.BusMode = undefined;
+    var dir: ControlSignals.BusDirection = undefined;
     switch (opcode() & 0x3) {
         0 => {
             mode = .data;
@@ -67,8 +67,8 @@ pub fn _0018_001B() void {
 }
 
 pub fn _0008_000B() void {
-    var mode: ControlSignals.Bus_Mode = undefined;
-    var dir: ControlSignals.Bus_Direction = undefined;
+    var mode: ControlSignals.BusMode = undefined;
+    var dir: ControlSignals.BusDirection = undefined;
     switch (opcode() & 0x3) {
         0 => {
             mode = .data;
