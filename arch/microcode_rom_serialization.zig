@@ -16,7 +16,7 @@ const Rom0Data = packed struct {
     kr_rsel: ControlSignals.RegFileIndexingSource, // 2
     jr_rx: bool, // 1
     kr_rx: bool, // 1
-    jl_src: ControlSignals.JL_Source, // 2
+    jl_src: ControlSignals.JLSource, // 2
     dl_op: ControlSignals.Data_Latch_Op, // 2
 
     fn init(cs: ControlSignals) Rom0Data {
@@ -42,7 +42,7 @@ const Rom0Data = packed struct {
 };
 
 const Rom1Data = packed struct {
-    jh_src: ControlSignals.JH_Source, // 3
+    jh_src: ControlSignals.JHSource, // 3
     k_src: ControlSignals.KSource, // 3
     sr1_ri: ControlSignals.SR1Index, // 3
     sr2_ri: ControlSignals.SR2Index, // 3

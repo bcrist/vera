@@ -9,8 +9,8 @@ jr_rsel: RegFileIndexingSource,
 kr_rsel: RegFileIndexingSource,
 jr_rx: bool,
 kr_rx: bool,
-jl_src: JL_Source,
-jh_src: JH_Source,
+jl_src: JLSource,
+jh_src: JHSource,
 k_src: KSource,
 sr1_ri: SR1Index,
 sr2_ri: SR2Index,
@@ -115,8 +115,8 @@ pub fn randomize(self: *ControlSignals, rnd: std.rand.Random) void {
     self.kr_rsel = rnd.enumValue(RegFileIndexingSource);
     self.jr_rx = rnd.boolean();
     self.kr_rx = rnd.boolean();
-    self.jl_src = rnd.enumValue(JL_Source);
-    self.jh_src = rnd.enumValue(JH_Source);
+    self.jl_src = rnd.enumValue(JLSource);
+    self.jh_src = rnd.enumValue(JHSource);
     self.k_src = rnd.enumValue(KSource);
     self.sr1_ri = rnd.enumValue(SR1Index);
     self.sr2_ri = rnd.enumValue(SR2Index);
@@ -236,34 +236,34 @@ pub const Reg_File_Write_Mode = enum(u2) {
 };
 
 // what drives the JL bus?
-pub const JL_Source = enum(u2) {
+pub const JLSource = enum(u2) {
     zero = 0,
-    JRL = 1,
-    SR1L = 2,
-    SR2L = 3,
+    jrl = 1,
+    sr1l = 2,
+    sr2l = 3,
 };
 
 // what drives the JH bus?
-pub const JH_Source = enum(u3) {
+pub const JHSource = enum(u3) {
     zero = 0,
     neg_one = 1,
     sx = 2, // copy high bit of JL 16 times
     // 3 unused
-    JRL = 4,
-    JRH = 5,
-    SR1H = 6,
-    SR2H = 7,
+    jrl = 4,
+    jrh = 5,
+    sr1h = 6,
+    sr2h = 7,
 };
 
 pub const KSource = enum(u3) {
     zero = 0,
-    KR = 1,
-    SR1L = 2,
-    SR2L = 3,
-    LITERAL = 4,
-    LITERAL_minus_64 = 5,
-    LITERAL_special = 6, // 3:8 decoder on LITERAL[2:0] -> K[13:7], LITERAL[4:3] -> K[15:14]
-    OB_OA_zx = 7,
+    kr = 1,
+    sr1l = 2,
+    sr2l = 3,
+    literal = 4,
+    literal_minus_64 = 5,
+    literal_special = 6, // 3:8 decoder on LITERAL[2:0] -> K[13:7], LITERAL[4:3] -> K[15:14]
+    ob_oa_zx = 7,
 };
 
 pub const SR1Index = enum(u3) {

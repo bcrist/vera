@@ -174,14 +174,14 @@ fn validate_ALU_MODE(expected: ControlSignals.ALU_Mode_Type) void {
         panic("Expected jl_src to be set for ALU operation", .{});
     } else switch (cycle.jl_src) {
         .zero => {},
-        .JRL => {
+        .jrl => {
             ensureSet(.jr_rsel);
             ensureSet(.jr_rx);
         },
-        .SR1L => {
+        .sr1l => {
             ensureSet(.sr1_ri);
         },
-        .SR2L => {
+        .sr2l => {
             ensureSet(.sr2_ri);
         },
     }
@@ -190,14 +190,14 @@ fn validate_ALU_MODE(expected: ControlSignals.ALU_Mode_Type) void {
         panic("Expected jh_src to be set for ALU operation", .{});
     } else switch (cycle.jh_src) {
         .zero, .neg_one, .sx => {},
-        .JRL, .JRH => {
+        .jrl, .jrh => {
             ensureSet(.jr_rsel);
             ensureSet(.jr_rx);
         },
-        .SR1H => {
+        .sr1h => {
             ensureSet(.sr1_ri);
         },
-        .SR2H => {
+        .sr2h => {
             ensureSet(.sr2_ri);
         },
     }
@@ -205,16 +205,16 @@ fn validate_ALU_MODE(expected: ControlSignals.ALU_Mode_Type) void {
     if (!isSet(.k_src)) {
         panic("Expected k_src to be set for ALU operation", .{});
     } else switch (cycle.k_src) {
-        .zero, .OB_OA_zx => {},
-        .LITERAL, .LITERAL_minus_64, .LITERAL_special => ensureSet(.literal),
-        .KR => {
+        .zero, .ob_oa_zx => {},
+        .literal, .literal_minus_64, .literal_special => ensureSet(.literal),
+        .kr => {
             ensureSet(.kr_rsel);
             ensureSet(.kr_rx);
         },
-        .SR1L => {
+        .sr1l => {
             ensureSet(.sr1_ri);
         },
-        .SR2L => {
+        .sr2l => {
             ensureSet(.sr2_ri);
         },
     }
@@ -356,10 +356,10 @@ pub fn literal_to_K(literal: i17) void {
     if (literal == 0) {
         setControlSignal(.k_src, .zero);
     } else if (literal >= 0 and literal < 64) {
-        setControlSignal(.k_src, .LITERAL);
+        setControlSignal(.k_src, .literal);
         setControlSignal(.literal, @intCast(ControlSignals.Literal, literal));
     } else if (literal < 0 and literal >= -64) {
-        setControlSignal(.k_src, .LITERAL_minus_64);
+        setControlSignal(.k_src, .literal_minus_64);
         setControlSignal(.literal, @intCast(ControlSignals.Literal, literal + 64));
     } else {
         const raw = @bitCast(u17, literal);
@@ -377,7 +377,7 @@ pub fn literal_to_K(literal: i17) void {
             panic("Invalid literal for K: {} (expected {b}, found {b})", .{ literal, raw, special });
         }
 
-        setControlSignal(.k_src, .LITERAL_special);
+        setControlSignal(.k_src, .literal_special);
         setControlSignal(.literal, bits.concat2(encoded, high_bits));
     }
 }
@@ -415,36 +415,36 @@ pub fn literal_to_L(literal: i17) void {
 }
 
 pub fn OB_OA_to_K() void {
-    setControlSignal(.k_src, .OB_OA_zx);
+    setControlSignal(.k_src, .ob_oa_zx);
 }
 
 pub fn OB_OA_to_LL() void {
     setControlSignal(.jl_src, .zero);
-    setControlSignal(.k_src, .OB_OA_zx);
+    setControlSignal(.k_src, .ob_oa_zx);
     setControlSignal(.alu_mode, .{ .logic = .JL_xor_K });
     setControlSignal(.ll_src, .logic);
 }
 
 pub fn OB_OA_to_LH() void {
     setControlSignal(.jl_src, .zero);
-    setControlSignal(.k_src, .OB_OA_zx);
+    setControlSignal(.k_src, .ob_oa_zx);
     setControlSignal(.alu_mode, .{ .logic = .JL_xor_K });
     setControlSignal(.lh_src, .logic);
 }
 
 pub fn SR1H_to_JH(index: ControlSignals.SR1Index) void {
     setControlSignal(.sr1_ri, index);
-    setControlSignal(.jh_src, .SR1H);
+    setControlSignal(.jh_src, .sr1h);
 }
 
 pub fn SR1_to_J(index: ControlSignals.SR1Index) void {
     setControlSignal(.sr1_ri, index);
-    setControlSignal(.jl_src, .SR1L);
-    setControlSignal(.jh_src, .SR1H);
+    setControlSignal(.jl_src, .sr1l);
+    setControlSignal(.jh_src, .sr1h);
 }
 pub fn SR1L_to_K(index: ControlSignals.SR1Index) void {
     setControlSignal(.sr1_ri, index);
-    setControlSignal(.k_src, .SR1L);
+    setControlSignal(.k_src, .sr1l);
 }
 
 pub fn SR1_to_L(index: ControlSignals.SR1Index) void {
@@ -454,13 +454,13 @@ pub fn SR1_to_L(index: ControlSignals.SR1Index) void {
 
 pub fn SR2_to_J(index: ControlSignals.SR2Index) void {
     setControlSignal(.sr2_ri, index);
-    setControlSignal(.jl_src, .SR2L);
-    setControlSignal(.jh_src, .SR2H);
+    setControlSignal(.jl_src, .sr2l);
+    setControlSignal(.jh_src, .sr2h);
 }
 
 pub fn SR2L_to_K(index: ControlSignals.SR2Index) void {
     setControlSignal(.sr2_ri, index);
-    setControlSignal(.k_src, .SR2L);
+    setControlSignal(.k_src, .sr2l);
 }
 
 pub fn SR2_to_L(index: ControlSignals.SR2Index) void {
@@ -526,11 +526,11 @@ pub fn reg_to_J(register: misc.RegisterIndex, ext: ZX_SX_or_1X) void {
         setControlSignal(.jr_rx, false);
         setControlSignal(.literal, register);
     }
-    setControlSignal(.jl_src, .JRL);
+    setControlSignal(.jl_src, .jrl);
     setControlSignal(.jh_src, switch (ext) {
-        ._1x => ControlSignals.JH_Source.neg_one,
-        .zx => ControlSignals.JH_Source.zero,
-        .sx => ControlSignals.JH_Source.sx,
+        ._1x => ControlSignals.JHSource.neg_one,
+        .zx => ControlSignals.JHSource.zero,
+        .sx => ControlSignals.JHSource.sx,
     });
 }
 
@@ -550,7 +550,7 @@ pub fn reg_to_K(register: misc.RegisterIndex) void {
         setControlSignal(.kr_rx, false);
         setControlSignal(.literal, register);
     }
-    setControlSignal(.k_src, .KR);
+    setControlSignal(.k_src, .kr);
 }
 
 pub fn reg_to_L(register: misc.RegisterIndex, ext: ZX_SX_or_1X) void {
@@ -579,8 +579,8 @@ pub fn reg32_to_J(register: misc.RegisterIndex) void {
         setControlSignal(.jr_rx, false);
         setControlSignal(.literal, register);
     }
-    setControlSignal(.jl_src, .JRL);
-    setControlSignal(.jh_src, .JRH);
+    setControlSignal(.jl_src, .jrl);
+    setControlSignal(.jh_src, .jrh);
 }
 
 pub fn reg32_to_L(register: misc.RegisterIndex) void {
@@ -597,11 +597,11 @@ pub fn op_reg_to_J(which: OA_or_OB_xor, ext: ZX_SX_or_1X) void {
         .OA, .OB => false,
         .OAxor1, .OBxor1 => true,
     });
-    setControlSignal(.jl_src, .JRL);
+    setControlSignal(.jl_src, .jrl);
     setControlSignal(.jh_src, switch (ext) {
-        ._1x => ControlSignals.JH_Source.neg_one,
-        .zx => ControlSignals.JH_Source.zero,
-        .sx => ControlSignals.JH_Source.sx,
+        ._1x => ControlSignals.JHSource.neg_one,
+        .zx => ControlSignals.JHSource.zero,
+        .sx => ControlSignals.JHSource.sx,
     });
 }
 
@@ -614,7 +614,7 @@ pub fn op_reg_to_K(which: OA_or_OB_xor) void {
         .OA, .OB => false,
         .OAxor1, .OBxor1 => true,
     });
-    setControlSignal(.k_src, .KR);
+    setControlSignal(.k_src, .kr);
 }
 
 pub fn op_reg_to_L(which: OA_or_OB_xor, ext: ZX_SX_or_1X) void {
@@ -636,8 +636,8 @@ pub fn op_reg32_to_J(which: OA_or_OB_xor) void {
         .OA, .OB => false,
         .OAxor1, .OBxor1 => true,
     });
-    setControlSignal(.jl_src, .JRL);
-    setControlSignal(.jh_src, .JRH);
+    setControlSignal(.jl_src, .jrl);
+    setControlSignal(.jh_src, .jrh);
 }
 
 pub fn op_reg32_to_L(which: OA_or_OB_xor) void {
