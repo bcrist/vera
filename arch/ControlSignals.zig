@@ -20,7 +20,7 @@ alu_mode: ALU_Mode,
 bus_mode: BusMode,
 bus_byte: BusWidth,
 bus_rw: BusDirection,
-at_op: AT_Op,
+at_op: AddressTranslatorOp,
 special: Special_Op,
 ll_src: LL_Source,
 lh_src: LH_Source,
@@ -126,7 +126,7 @@ pub fn randomize(self: *ControlSignals, rnd: std.rand.Random) void {
     self.bus_mode = rnd.enumValue(BusMode);
     self.bus_byte = rnd.enumValue(BusWidth);
     self.bus_rw = rnd.enumValue(BusDirection);
-    self.at_op = rnd.enumValue(AT_Op);
+    self.at_op = rnd.enumValue(AddressTranslatorOp);
     self.special = rnd.enumValue(Special_Op);
     self.ll_src = rnd.enumValue(LL_Source);
     switch (self.ll_src) {
@@ -406,7 +406,7 @@ pub const BusMode = enum(u2) {
 
 // what should the address translator do this cycle?
 // bus operation is inhibited if not .translate
-pub const AT_Op = enum(u2) {
+pub const AddressTranslatorOp = enum(u2) {
     none = 0,
     translate = 1,
     update = 2,

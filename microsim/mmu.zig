@@ -17,7 +17,7 @@ pub const OperationInfo = struct {
     BUS_RW: ControlSignals.BusDirection,
     BUS_BYTE: ControlSignals.BusWidth,
     BUS_MODE: ControlSignals.BusMode,
-    AT_OP: ControlSignals.AT_Op,
+    AT_OP: ControlSignals.AddressTranslatorOp,
     slot: u6,
     tag: misc.address_translator.Tag,
 
@@ -37,7 +37,7 @@ pub const OperationInfo = struct {
             .BUS_RW = rnd.enumValue(ControlSignals.BusDirection),
             .BUS_BYTE = rnd.enumValue(ControlSignals.BusWidth),
             .BUS_MODE = rnd.enumValue(ControlSignals.BusMode),
-            .AT_OP = rnd.enumValue(ControlSignals.AT_Op),
+            .AT_OP = rnd.enumValue(ControlSignals.AddressTranslatorOp),
             .slot = rnd.int(u6),
             .tag = rnd.int(misc.address_translator.Tag),
         };
@@ -108,7 +108,7 @@ pub const ComputeInputs = struct {
     BUS_RW: ControlSignals.BusDirection,
     BUS_BYTE: ControlSignals.BusWidth,
     LL_SRC: ControlSignals.LL_Source,
-    AT_OP: ControlSignals.AT_Op,
+    AT_OP: ControlSignals.AddressTranslatorOp,
     SR2_WI: ControlSignals.SR2Index,
     SR2_WSRC: ControlSignals.SR2_Write_Data_Source,
 };
@@ -278,7 +278,7 @@ pub const TransactInputs = struct {
     slot: misc.address_translator.Slot,
     l: bus.LParts,
     tag: misc.address_translator.Tag,
-    AT_OP: ControlSignals.AT_Op,
+    AT_OP: ControlSignals.AddressTranslatorOp,
 };
 
 pub fn transact(state: *State, in: TransactInputs) void {

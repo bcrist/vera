@@ -72,7 +72,7 @@ const Rom2Data = packed struct {
     bus_mode: ControlSignals.BusMode, // 2
     bus_byte: ControlSignals.BusWidth, // 1
     bus_rw: ControlSignals.BusDirection, // 1
-    at_op: ControlSignals.AT_Op, // 2
+    at_op: ControlSignals.AddressTranslatorOp, // 2
     special: ControlSignals.Special_Op, // 3
     _: u1 = 0,
 
