@@ -21,7 +21,7 @@ bus_mode: BusMode,
 bus_byte: BusWidth,
 bus_rw: BusDirection,
 at_op: AddressTranslatorOp,
-special: Special_Op,
+special: SpecialOp,
 ll_src: LL_Source,
 lh_src: LH_Source,
 jkr_wsel: RegFileIndexingSource,
@@ -127,7 +127,7 @@ pub fn randomize(self: *ControlSignals, rnd: std.rand.Random) void {
     self.bus_byte = rnd.enumValue(BusWidth);
     self.bus_rw = rnd.enumValue(BusDirection);
     self.at_op = rnd.enumValue(AddressTranslatorOp);
-    self.special = rnd.enumValue(Special_Op);
+    self.special = rnd.enumValue(SpecialOp);
     self.ll_src = rnd.enumValue(LL_Source);
     switch (self.ll_src) {
         // The simulator normally crashes on access to an address that's not hooked up to anything,
@@ -574,13 +574,13 @@ pub const Sequencer_Op = enum(u2) {
     fault_return = 3,
 };
 
-pub const Special_Op = enum(u3) {
+pub const SpecialOp = enum(u3) {
     none = 0,
     atomic_this = 1, // This cycle is atomic, but the next one is not, unless it is also .atomic_this
     atomic_next = 2, // All upcoming cycles are atomic, until the next cycle that's .atomic_this or .atomic_end
     atomic_end = 3, // The next cycle is not atomic, unless it's .atomic_this.  If this cycle wasn't atomic to begin with, this has no effect.
     block_transfer = 4, // transfers 8 bytes from FLASH or PSRAM into RAM, or vice versa, depending on bus_ctrl.  D_Bus is not used by this.
-    load_RSN_from_LL = 5,
-    toggle_RSN = 6,
+    load_rsn_from_ll = 5,
+    toggle_rsn = 6,
     trigger_fault = 7,
 };

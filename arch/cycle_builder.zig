@@ -898,11 +898,11 @@ pub fn disableAddressTranslation() void {
 }
 
 pub fn LL_to_RSN() void {
-    setControlSignal(.special, .load_RSN_from_LL);
+    setControlSignal(.special, .load_rsn_from_ll);
 }
 
-pub fn toggle_RSN() void {
-    setControlSignal(.special, .toggle_RSN);
+pub fn toggle_rsn() void {
+    setControlSignal(.special, .toggle_rsn);
 }
 
 pub fn RSN_to_SR1H(index: ControlSignals.SR1Index) void {

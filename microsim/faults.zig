@@ -5,7 +5,7 @@ pub const ComputeInputs = struct {
     page_fault: bool,
     page_align_fault: bool,
     access_fault: bool,
-    SPECIAL: ControlSignals.Special_Op,
+    SPECIAL: ControlSignals.SpecialOp,
 };
 
 pub const ComputeOutputs = struct {

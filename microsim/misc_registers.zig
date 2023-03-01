@@ -23,7 +23,7 @@ pub const TransactInputs = struct {
     ll: bus.LLow,
     DL_OP: ControlSignals.Data_Latch_Op,
     OB_OA_OP: ControlSignals.Operand_Reg_Op,
-    SPECIAL: ControlSignals.Special_Op,
+    SPECIAL: ControlSignals.SpecialOp,
 };
 
 pub const TransactOutputs = struct {
@@ -57,8 +57,8 @@ pub fn transact(in: TransactInputs) TransactOutputs {
         .clear_OB => 0,
     };
     const rsn: misc.RegistersetNumber = switch (in.SPECIAL) {
-        .load_RSN_from_LL => @truncate(misc.RegistersetNumber, in.ll),
-        .toggle_RSN => in.rsn ^ 0x20,
+        .load_rsn_from_ll => @truncate(misc.RegistersetNumber, in.ll),
+        .toggle_rsn => in.rsn ^ 0x20,
         else => in.rsn,
     };
 

@@ -19,7 +19,7 @@ pub const TransactInputs = struct {
     ALLOW_INT: bool,
     SEQ_OP: ControlSignals.Sequencer_Op,
     NEXT_UOP: uc.Continuation,
-    SPECIAL: ControlSignals.Special_Op,
+    SPECIAL: ControlSignals.SpecialOp,
 };
 
 pub const TransactOutputs = struct {

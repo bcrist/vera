@@ -45,7 +45,7 @@ const D_to_LH = cb.D_to_LH;
 const D_to_DL = cb.D_to_DL;
 const D_to_OB_OA = cb.D_to_OB_OA;
 const reload_ASN = cb.reload_ASN;
-const toggle_RSN = cb.toggle_RSN;
+const toggle_rsn = cb.toggle_rsn;
 const RSN_to_SR1H = cb.RSN_to_SR1H;
 const branch = cb.branch;
 const illegal_instruction = cb.illegal_instruction;
@@ -77,7 +77,7 @@ fn vectored_fault_handler(zeropage_vector: u5) void {
     next_cycle();
 
     // Switch to fault registerset:
-    toggle_RSN();
+    toggle_rsn();
     // Copy data about last MMU op into X4
     // For page faults, this is critical for knowing what page to load
     last_mmu_op_to_L();
@@ -147,7 +147,7 @@ pub fn _018D() void {
         return;
     }
 
-    toggle_RSN();
+    toggle_rsn();
     next_cycle();
 
     reload_ASN();
