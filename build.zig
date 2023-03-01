@@ -169,7 +169,7 @@ pub fn build(b: *std.Build) void {
     _ = makeRunStep(b, microsim, "usim", "run microsim");
 
     const tests1 = b.addTest(.{
-        .root_source_file = .{ .path = "arch/test_idempotence.zig"},
+        .root_source_file = .{ .path = "arch/test_instruction_encoding.zig"},
         .target = target,
         .optimize = mode,
     });

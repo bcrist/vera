@@ -1819,7 +1819,7 @@ pub fn testIdempotence(ddb: *const DecoderDatabase, edb: *const EncoderDatabase,
 
         if (!insn.eql(decoded)) {
             const stderr = std.io.getStdErr().writer();
-            try stderr.writeAll("Testing idempotence of instruction: ");
+            try stderr.writeAll("Roundtrip testing of instruction: ");
             try insn.print(stderr);
             try stderr.writeAll("\nWith encoding: ");
             try encoding.print(stderr);

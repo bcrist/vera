@@ -93,7 +93,7 @@ pub fn decompress(input: []const u8, context: anytype) void {
 }
 
 
-test "rom_compress/decompress idempotence" {
+test "rom_compress/decompress roundtripping" {
     const compress = @import("rom_compress");
     const Entry = compress.Entry(u32, u16);
 
