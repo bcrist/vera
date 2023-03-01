@@ -1,11 +1,11 @@
 const bits = @import("bits");
 const sim = @import("Simulator");
-const ctrl = @import("control_signals");
+const ControlSignals = @import("ControlSignals");
 const misc = @import("misc");
 const bus = @import("bus");
 
 pub fn compute(in: Inputs) Outputs {
-    const mode_bits = @bitCast(ctrl.Multiplier_Mode_Bits, in.ALU_MODE.raw());
+    const mode_bits = @bitCast(ControlSignals.Multiplier_Mode_Bits, in.ALU_MODE.raw());
 
     const j = switch (mode_bits.JL) {
         .unsigned => bits.zx(i64, in.j),
@@ -32,7 +32,7 @@ pub fn compute(in: Inputs) Outputs {
 pub const Inputs = struct {
     j: bus.JLow,
     k: bus.K,
-    ALU_MODE: ctrl.ALU_Mode,
+    ALU_MODE: ControlSignals.ALU_Mode,
 };
 
 pub const Outputs = struct {

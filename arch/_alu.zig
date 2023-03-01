@@ -1,6 +1,6 @@
 const ib = @import("instruction_builder.zig");
 const cb = @import("cycle_builder.zig");
-const ctrl = @import("control_signals");
+const ControlSignals = @import("ControlSignals");
 const ie = @import("instruction_encoding");
 
 const Mnemonic = ie.Mnemonic;
@@ -525,7 +525,7 @@ pub fn _93A0_93AF() void {
 }
 
 pub fn _B000_B6FF() void {
-    var op: ctrl.Logic_Mode = undefined;
+    var op: ControlSignals.Logic_Mode = undefined;
     var mn: Mnemonic = undefined;
     var d: []const u8 = undefined;
     switch (opcode_high()) {
@@ -548,7 +548,7 @@ pub fn _B000_B6FF() void {
 }
 
 pub fn _C100_C5FF() void {
-    var op: ctrl.Logic_Mode = undefined;
+    var op: ControlSignals.Logic_Mode = undefined;
     var mn: Mnemonic = undefined;
     var d: []const u8 = undefined;
     switch (opcode_high()) {

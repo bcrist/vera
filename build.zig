@@ -7,10 +7,6 @@ pub fn build(b: *std.Build) void {
     //[[!! include 'build' !! 209 ]]
     //[[ ################# !! GENERATED CODE -- DO NOT MODIFY !! ################# ]]
 
-    const Simulator = b.createModule(.{
-        .source_file = .{ .path = "microsim/Simulator.zig" },
-    });
-
     const bits = b.createModule(.{
         .source_file = .{ .path = "pkg/bits.zig" },
     });
@@ -34,12 +30,16 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    const control_signals = b.createModule(.{
-        .source_file = .{ .path = "arch/control_signals.zig" },
+    const ControlSignals = b.createModule(.{
+        .source_file = .{ .path = "arch/ControlSignals.zig" },
         .dependencies = &.{
             .{ .name = "microcode", .module = microcode },
             .{ .name = "misc", .module = misc },
         },
+    });
+
+    const Simulator = b.createModule(.{
+        .source_file = .{ .path = "microsim/Simulator.zig" },
     });
 
     const physical_address = b.createModule(.{
@@ -52,18 +52,18 @@ pub fn build(b: *std.Build) void {
     const register_file = b.createModule(.{
         .source_file = .{ .path = "microsim/register_file.zig" },
         .dependencies = &.{
+            .{ .name = "ControlSignals", .module = ControlSignals },
             .{ .name = "Simulator", .module = Simulator },
             .{ .name = "bits", .module = bits },
             .{ .name = "bus", .module = bus },
-            .{ .name = "control_signals", .module = control_signals },
             .{ .name = "misc", .module = misc },
         },
     });
 
+    Simulator.dependencies.put("ControlSignals", ControlSignals) catch unreachable;
     Simulator.dependencies.put("Simulator", Simulator) catch unreachable;
     Simulator.dependencies.put("bits", bits) catch unreachable;
     Simulator.dependencies.put("bus", bus) catch unreachable;
-    Simulator.dependencies.put("control_signals", control_signals) catch unreachable;
     Simulator.dependencies.put("microcode", microcode) catch unreachable;
     Simulator.dependencies.put("misc", misc) catch unreachable;
     Simulator.dependencies.put("physical_address", physical_address) catch unreachable;
@@ -80,8 +80,8 @@ pub fn build(b: *std.Build) void {
     const instruction_encoding = b.createModule(.{
         .source_file = .{ .path = "arch/instruction_encoding.zig" },
         .dependencies = &.{
+            .{ .name = "ControlSignals", .module = ControlSignals },
             .{ .name = "bits", .module = bits },
-            .{ .name = "control_signals", .module = control_signals },
             .{ .name = "deep_hash_map", .module = deep_hash_map },
             .{ .name = "microcode", .module = microcode },
             .{ .name = "misc", .module = misc },
@@ -115,7 +115,7 @@ pub fn build(b: *std.Build) void {
     const microcode_rom_serialization = b.createModule(.{
         .source_file = .{ .path = "arch/microcode_rom_serialization.zig" },
         .dependencies = &.{
-            .{ .name = "control_signals", .module = control_signals },
+            .{ .name = "ControlSignals", .module = ControlSignals },
             .{ .name = "microcode", .module = microcode },
             .{ .name = "misc", .module = misc },
             .{ .name = "rom_compress", .module = rom_compress },
@@ -138,8 +138,8 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = mode,
     });
+    compile_arch.addModule("ControlSignals", ControlSignals);
     compile_arch.addModule("bits", bits);
-    compile_arch.addModule("control_signals", control_signals);
     compile_arch.addModule("instruction_encoding", instruction_encoding);
     compile_arch.addModule("microcode", microcode);
     compile_arch.addModule("misc", misc);
@@ -158,8 +158,8 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = mode,
     });
+    microsim.addModule("ControlSignals", ControlSignals);
     microsim.addModule("Simulator", Simulator);
-    microsim.addModule("control_signals", control_signals);
     microsim.addModule("instruction_encoding", instruction_encoding);
     microsim.addModule("instruction_encoding_data", instruction_encoding_data);
     microsim.addModule("microcode_rom_serialization", microcode_rom_serialization);
@@ -181,8 +181,8 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = mode,
     });
+    tests2.addModule("ControlSignals", ControlSignals);
     tests2.addModule("Simulator", Simulator);
-    tests2.addModule("control_signals", control_signals);
     tests2.addModule("instruction_encoding", instruction_encoding);
     tests2.addModule("instruction_encoding_data", instruction_encoding_data);
     tests2.addModule("microcode", microcode);

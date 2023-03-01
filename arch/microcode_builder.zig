@@ -1,34 +1,32 @@
 const std = @import("std");
 const allocators = @import("allocators.zig");
-const ctrl = @import("control_signals");
+const ControlSignals = @import("ControlSignals");
 const uc = @import("microcode");
 const instructions = @import("instructions.zig");
 const panic = @import("instruction_builder.zig").panic;
-
-const Control_Signals = ctrl.Control_Signals;
 
 const gpa = &allocators.global_gpa;
 const perm_arena = &allocators.global_arena;
 
 const CycleContext = struct {
-    pub fn hash(self: @This(), cs: *Control_Signals) u64 {
+    pub fn hash(self: @This(), cs: *ControlSignals) u64 {
         _ = self;
         var hasher = std.hash.Wyhash.init(0);
         std.hash.autoHash(&hasher, cs.*);
         return hasher.final();
     }
-    pub fn eql(self: @This(), a: *Control_Signals, b: *Control_Signals) bool {
+    pub fn eql(self: @This(), a: *ControlSignals, b: *ControlSignals) bool {
         _ = self;
         return std.meta.eql(a.*, b.*);
     }
 };
-var cycle_dedup = std.HashMap(*Control_Signals, *Control_Signals, CycleContext, 75).init(gpa.allocator());
-var unconditional_continuations = std.HashMap(*Control_Signals, uc.Address, CycleContext, 75).init(gpa.allocator());
-pub var microcode: [65536]?*Control_Signals = [_]?*Control_Signals { null } ** 65536;
+var cycle_dedup = std.HashMap(*ControlSignals, *ControlSignals, CycleContext, 75).init(gpa.allocator());
+var unconditional_continuations = std.HashMap(*ControlSignals, uc.Address, CycleContext, 75).init(gpa.allocator());
+pub var microcode: [65536]?*ControlSignals = [_]?*ControlSignals { null } ** 65536;
 
 var next_unconditional_continuation: uc.Continuation = 0x1FF;
 
-pub fn getOrCreateUnconditionalContinuation(cycle: *Control_Signals) uc.Address {
+pub fn getOrCreateUnconditionalContinuation(cycle: *ControlSignals) uc.Address {
     if (unconditional_continuations.get(cycle)) |ua| {
         return ua;
     } else {
@@ -59,16 +57,16 @@ pub fn getContinuationsLeft() usize {
     return next_unconditional_continuation - min_n + 1;
 }
 
-pub fn get(ua: uc.Address) ?*Control_Signals {
+pub fn get(ua: uc.Address) ?*ControlSignals {
     return microcode[ua];
 }
 
-pub fn put(ua: uc.Address, cycle: *Control_Signals) *Control_Signals {
+pub fn put(ua: uc.Address, cycle: *ControlSignals) *ControlSignals {
     var deduped = cycle;
     if (cycle_dedup.get(cycle)) |c| {
         deduped = c;
     } else {
-        deduped = perm_arena.allocator().create(Control_Signals) catch @panic("Out of memory!");
+        deduped = perm_arena.allocator().create(ControlSignals) catch @panic("Out of memory!");
         deduped.* = cycle.*;
         cycle_dedup.put(deduped, deduped) catch @panic("Out of memory!");
     }
@@ -78,7 +76,7 @@ pub fn put(ua: uc.Address, cycle: *Control_Signals) *Control_Signals {
 }
 
 // provided cycle should be from perm_arena
-pub fn putNoDedup(ua: uc.Address, cycle: *Control_Signals) void {
+pub fn putNoDedup(ua: uc.Address, cycle: *ControlSignals) void {
     if (microcode[ua] != null) {
         if (uc.getOpcodeForAddress(ua)) |opcode| {
             if (instructions.getInstructionByOpcode(opcode)) |insn| {

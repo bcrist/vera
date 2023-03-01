@@ -1,11 +1,11 @@
 const sim = @import("Simulator");
-const ctrl = @import("control_signals");
+const ControlSignals = @import("ControlSignals");
 
 pub const ComputeInputs = struct {
     page_fault: bool,
     page_align_fault: bool,
     access_fault: bool,
-    SPECIAL: ctrl.Special_Op,
+    SPECIAL: ControlSignals.Special_Op,
 };
 
 pub const ComputeOutputs = struct {

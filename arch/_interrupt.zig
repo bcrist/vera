@@ -1,7 +1,6 @@
 const assert = @import("std").debug.assert;
 const ib = @import("instruction_builder.zig");
 const cb = @import("cycle_builder.zig");
-const ctrl = @import("control_signals");
 const misc = @import("misc");
 const uc = @import("microcode");
 const physical_address = @import("physical_address");
@@ -9,6 +8,7 @@ const physical_address = @import("physical_address");
 const encoding = ib.encoding;
 const desc = ib.desc;
 const next_cycle = ib.next_cycle;
+const next_cycle_force_normal_execution = ib.next_cycle_force_normal_execution;
 const kernel = ib.kernel;
 const uc_address = ib.uc_address;
 
@@ -31,7 +31,6 @@ const read_to_D = cb.read_to_D;
 const D_to_L = cb.D_to_L;
 const branch = cb.branch;
 const illegal_instruction = cb.illegal_instruction;
-const SEQ_OP = cb.SEQ_OP;
 
 pub fn _handler_7() void {
     //syntax("(interrupt)");
@@ -87,8 +86,7 @@ pub fn _018C() void {
     reload_ASN();
     SRL_to_LL(.fault_rsn_stat);
     LL_to_STAT();
-    SEQ_OP(.next_uop_force_normal);
-    next_cycle();
+    next_cycle_force_normal_execution();
 
     branch(.ip, 0);
 }

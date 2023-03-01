@@ -1,5 +1,5 @@
 const std = @import("std");
-const ctrl = @import("control_signals");
+const ControlSignals = @import("ControlSignals");
 const uc = @import("microcode");
 const bits = @import("bits");
 const misc = @import("misc");
@@ -25,7 +25,7 @@ const SystemBusControl = @import("SystemBusControl.zig");
 const Simulator = @This();
 
 allocator: std.mem.Allocator,
-microcode: []const ctrl.Control_Signals,
+microcode: []const ControlSignals,
 exec_state: ExecutionState,
 reg_file: *register_file.State,
 mmu_state: *mmu.State,
@@ -36,7 +36,7 @@ c: ComputeInputs = ComputeInputs.init(),
 t: TransactInputs = TransactInputs.init(),
 microcycle_count: u64,
 
-pub fn init(allocator: std.mem.Allocator, microcode: []const ctrl.Control_Signals) !Simulator {
+pub fn init(allocator: std.mem.Allocator, microcode: []const ControlSignals) !Simulator {
     const memory = try allocator.create(Memory);
     errdefer allocator.destroy(memory);
     const reg_file_state = try allocator.create(register_file.State);
@@ -104,7 +104,7 @@ pub fn cycle(self: *Simulator, n: u64) void {
     self.microcycle(n * 3);
 }
 
-pub fn debugCycle(self: *Simulator, n: u64, pipe: ctrl.Pipe_ID) !void {
+pub fn debugCycle(self: *Simulator, n: u64, pipe: ControlSignals.Pipe_ID) !void {
     var writer = std.io.getStdErr().writer();
     try self.printState(writer, pipe);
 
@@ -130,7 +130,7 @@ pub fn resetAndStart(self: *Simulator) void {
     while (self.s.pipe != .zero) {
         self.microcycle(1);
     }
-    while (self.s.cs.SEQ_OP != .next_instruction) {
+    while (self.s.cs.seq_op != .next_instruction) {
         self.cycle(1);
     }
     self.cycle(1);
@@ -219,8 +219,6 @@ const LoopRegisters = struct {
     stat: stat.LoopState,
     asn: misc.address_translator.AddressSpaceNumber,
     last_mmu_op: mmu.OperationInfo,
-    mmu_matching_entry: mmu.Entry,
-    mmu_other_entry: mmu.Entry,
 
     pub fn init() LoopRegisters {
         return .{
@@ -241,8 +239,6 @@ const LoopRegisters = struct {
             },
             .asn = 0,
             .last_mmu_op = mmu.OperationInfo.init(),
-            .mmu_matching_entry = mmu.Entry{},
-            .mmu_other_entry = mmu.Entry{},
         };
     }
 
@@ -264,21 +260,19 @@ const LoopRegisters = struct {
         };
         self.asn = rnd.int(misc.address_translator.AddressSpaceNumber);
         self.last_mmu_op = mmu.OperationInfo.random(rnd);
-        self.mmu_matching_entry = mmu.Entry.random(rnd);
-        self.mmu_other_entry = mmu.Entry.random(rnd);
     }
 };
 
 const SetupInputs = struct {
     pipe: misc.PipeID,
-    cs: ctrl.Control_Signals,
+    cs: ControlSignals,
     reg: LoopRegisters,
     want_atomic: bool,
 
     pub fn init() SetupInputs {
         return .{
             .pipe = .zero,
-            .cs = ctrl.Control_Signals.init(),
+            .cs = ControlSignals.init(),
             .reg = LoopRegisters.init(),
             .want_atomic = false,
         };
@@ -294,7 +288,7 @@ const SetupInputs = struct {
 
 const ComputeInputs = struct {
     pipe: misc.PipeID,
-    cs: ctrl.Control_Signals,
+    cs: ControlSignals,
     reg: LoopRegisters,
     want_atomic: bool,
     stall_atomic: bool,
@@ -307,7 +301,7 @@ const ComputeInputs = struct {
     pub fn init() ComputeInputs {
         return .{
             .pipe = .zero,
-            .cs = ctrl.Control_Signals.init(),
+            .cs = ControlSignals.init(),
             .reg = LoopRegisters.init(),
             .want_atomic = false,
             .stall_atomic = false,
@@ -347,7 +341,7 @@ const ComputeInputs = struct {
 
 const TransactInputs = struct {
     pipe: misc.PipeID,
-    cs: ctrl.Control_Signals,
+    cs: ControlSignals,
     reg: LoopRegisters,
     want_atomic: bool,
     stall_atomic: bool,
@@ -371,7 +365,7 @@ const TransactInputs = struct {
     pub fn init() TransactInputs {
         return .{
             .pipe = .zero,
-            .cs = ctrl.Control_Signals.init(),
+            .cs = ControlSignals.init(),
             .reg = LoopRegisters.init(),
             .want_atomic = false,
             .stall_atomic = false,
@@ -483,20 +477,20 @@ fn simulate_setup(reg_file: *const register_file.State, in: SetupInputs, atomic_
         .rsn = in.reg.rsn,
         .oa = in.reg.oa,
         .ob = in.reg.ob,
-        .JR_RSEL = in.cs.JR_RSEL,
-        .KR_RSEL = in.cs.KR_RSEL,
-        .JR_RX = in.cs.JR_RX,
-        .KR_RX = in.cs.KR_RX,
-        .SR1_RI = in.cs.SR1_RI,
-        .SR2_RI = in.cs.SR2_RI,
-        .BASE = in.cs.BASE,
-        .LITERAL = in.cs.LITERAL,
-        .JL_SRC = in.cs.JL_SRC,
-        .JH_SRC = in.cs.JH_SRC,
-        .K_SRC = in.cs.K_SRC,
+        .JR_RSEL = in.cs.jr_rsel,
+        .KR_RSEL = in.cs.kr_rsel,
+        .JR_RX = in.cs.jr_rx,
+        .KR_RX = in.cs.kr_rx,
+        .SR1_RI = in.cs.sr1_ri,
+        .SR2_RI = in.cs.sr2_ri,
+        .BASE = in.cs.base,
+        .LITERAL = in.cs.literal,
+        .JL_SRC = in.cs.jl_src,
+        .JH_SRC = in.cs.jh_src,
+        .K_SRC = in.cs.k_src,
     });
 
-    const want_atomic = in.want_atomic or in.cs.SPECIAL == .atomic_this or in.cs.SPECIAL == .atomic_next;
+    const want_atomic = in.want_atomic or in.cs.special == .atomic_this or in.cs.special == .atomic_next;
 
     return .{
         .pipe = in.pipe,
@@ -510,8 +504,8 @@ fn simulate_setup(reg_file: *const register_file.State, in: SetupInputs, atomic_
         .sr2 = rf.sr2,
         .virtual_address = address_gen.setup(.{
             .base = rf.address_base,
-            .OFFSET = in.cs.OFFSET,
-            .LITERAL = in.cs.LITERAL,
+            .OFFSET = in.cs.offset,
+            .LITERAL = in.cs.literal,
         }),
     };
 }
@@ -521,26 +515,26 @@ fn simulate_compute(mmu_state: *const mmu.State, es: ExecutionState, in: Compute
         .j = in.j,
         .k = in.k,
         .c = in.reg.stat.c,
-        .ALU_MODE = in.cs.ALU_MODE,
+        .ALU_MODE = in.cs.alu_mode,
     });
     const shift_out = shift.compute(.{
         .j = in.j,
         .k = in.k,
-        .ALU_MODE = in.cs.ALU_MODE,
+        .ALU_MODE = in.cs.alu_mode,
     });
     const mult_out = mult.compute(.{
         .j = in.j.low,
         .k = in.k,
-        .ALU_MODE = in.cs.ALU_MODE,
+        .ALU_MODE = in.cs.alu_mode,
     });
     const logic_out = logic.compute(.{
         .j = in.j,
         .k = in.k,
-        .ALU_MODE = in.cs.ALU_MODE,
+        .ALU_MODE = in.cs.alu_mode,
     });
     const bitcount_out = bitcount.compute(.{
         .j = in.j.low,
-        .ALU_MODE = in.cs.ALU_MODE,
+        .ALU_MODE = in.cs.alu_mode,
     });
 
     var mmu_out = mmu.compute(mmu_state, .{
@@ -548,22 +542,20 @@ fn simulate_compute(mmu_state: *const mmu.State, es: ExecutionState, in: Compute
         .asn = in.reg.asn,
         .enable_flag = in.reg.stat.a,
         .kernel_flag = in.reg.stat.k,
-        .matching_entry = in.reg.mmu_matching_entry,
-        .other_entry = in.reg.mmu_other_entry,
-        .BUS_MODE = in.cs.BUS_MODE,
-        .BUS_RW = in.cs.BUS_RW,
-        .BUS_BYTE = in.cs.BUS_BYTE,
-        .LL_SRC = in.cs.LL_SRC,
-        .AT_OP = in.cs.AT_OP,
-        .SR2_WI = in.cs.SR2_WI,
-        .SR2_WSRC = in.cs.SR2_WSRC,
+        .BUS_MODE = in.cs.bus_mode,
+        .BUS_RW = in.cs.bus_rw,
+        .BUS_BYTE = in.cs.bus_byte,
+        .LL_SRC = in.cs.ll_src,
+        .AT_OP = in.cs.at_op,
+        .SR2_WI = in.cs.sr2_wi,
+        .SR2_WSRC = in.cs.sr2_wsrc,
     });
 
     const fault = faults.compute(.{
         .page_fault = mmu_out.page_fault,
         .page_align_fault = mmu_out.page_align_fault,
         .access_fault = mmu_out.access_fault,
-        .SPECIAL = in.cs.SPECIAL,
+        .SPECIAL = in.cs.special,
     });
 
     const inhibit_writes = in.stall_atomic or fault.any;
@@ -601,10 +593,10 @@ fn simulate_compute(mmu_state: *const mmu.State, es: ExecutionState, in: Compute
     };
 }
 
-fn simulate_transact(microcode: []const ctrl.Control_Signals, memory: *Memory, reg_file: *register_file.State, mmu_state: *mmu.State, sys_state: *device_sys.State, es: *ExecutionState, in: TransactInputs) SetupInputs {
+fn simulate_transact(microcode: []const ControlSignals, memory: *Memory, reg_file: *register_file.State, mmu_state: *mmu.State, sys_state: *device_sys.State, es: *ExecutionState, in: TransactInputs) SetupInputs {
     const mem_d = memory.read(in.bus_ctrl);
     const sys_d = device_sys.read(sys_state, in.bus_ctrl);
-    const dl_d = misc_registers.readDL(in.reg.dl, in.cs.DL_OP, in.bus_ctrl);
+    const dl_d = misc_registers.readDL(in.reg.dl, in.cs.dl_op, in.bus_ctrl);
     // :NewDevice: handle read here
 
     var d: bus.D = 0;
@@ -626,10 +618,10 @@ fn simulate_transact(microcode: []const ctrl.Control_Signals, memory: *Memory, r
     assert(num_d_drivers <= 1);
 
     // Note this happens even if in.inhibit_writes is true
-    const new_last_mmu_op = if (in.cs.AT_OP == .hold) in.reg.last_mmu_op else in.mmu_op;
+    const new_last_mmu_op = if (in.cs.at_op == .none) in.reg.last_mmu_op else in.mmu_op;
 
     var l: bus.LParts = undefined;
-    l.low = switch (in.cs.LL_SRC) {
+    l.low = switch (in.cs.ll_src) {
         .zero => 0,
         .logic => in.logic.data.low,
         .shift_L => in.shift.data.low,
@@ -638,8 +630,6 @@ fn simulate_transact(microcode: []const ctrl.Control_Signals, memory: *Memory, r
         .bitcount => in.bitcount.data,
         .D16 => d,
         .D8_sx => bits.sx(bus.LLow, @truncate(u8, d)),
-        .AT_ME_L => @truncate(u16, @bitCast(u32, in.mmu_matching_entry)),
-        .AT_OE_L => @truncate(u16, @bitCast(u32, in.mmu_other_entry)),
         .last_mmu_op_L => @truncate(u16, new_last_mmu_op.toU32()),
         .STAT => @bitCast(u16, misc.StatusBits{
             .z = in.reg.stat.z,
@@ -654,7 +644,7 @@ fn simulate_transact(microcode: []const ctrl.Control_Signals, memory: *Memory, r
         }),
         .pipe_ID => @enumToInt(in.pipe),
     };
-    l.high = switch (in.cs.LH_SRC) {
+    l.high = switch (in.cs.lh_src) {
         .zero => 0,
         .logic => in.logic.data.low,
         .shift_H => in.shift.data.high,
@@ -663,31 +653,29 @@ fn simulate_transact(microcode: []const ctrl.Control_Signals, memory: *Memory, r
         .D16 => d,
         .sx => bits.sx(bus.LHigh, @truncate(u1, l.low >> 15)),
         .JH => in.logic.data.high,
-        .AT_ME_H => @intCast(u16, @bitCast(u32, in.mmu_matching_entry) >> 16),
-        .AT_OE_H => @intCast(u16, @bitCast(u32, in.mmu_other_entry) >> 16),
         .last_mmu_op_H => @intCast(u16, new_last_mmu_op.toU32() >> 16),
         .prev_UA => in.reg.ua,
     };
 
-    if (in.bus_ctrl.write and in.cs.DL_OP != .to_D) {
-        assert(in.cs.LL_SRC != .D16);
-        assert(in.cs.LL_SRC != .D8_sx);
+    if (in.bus_ctrl.write and in.cs.dl_op != .to_D) {
+        assert(in.cs.ll_src != .D16);
+        assert(in.cs.ll_src != .D8_sx);
         d = l.low;
         num_d_drivers += 1;
     }
 
     assert(num_d_drivers <= 1);
 
-    memory.write(in.bus_ctrl, d, in.cs.SPECIAL == .block_transfer);
+    memory.write(in.bus_ctrl, d, in.cs.special == .block_transfer);
     device_sys.write(sys_state, in.bus_ctrl, d, in.mmu_matching_entry.update_frame_state);
     // :NewDevice: handle write here
 
     var next_asn = in.reg.asn;
-    if (!in.inhibit_writes and in.cs.SR2_WI == .asn) {
+    if (!in.inhibit_writes and in.cs.sr2_wi == .asn) {
         next_asn = @truncate(misc.address_translator.AddressSpaceNumber, l.low);
     }
 
-    const mmu_out = mmu.transact(mmu_state, .{
+    mmu.transact(mmu_state, .{
         .inhibit_writes = in.inhibit_writes,
         .matching_entry = in.mmu_matching_entry,
         .other_entry = in.mmu_other_entry,
@@ -706,12 +694,10 @@ fn simulate_transact(microcode: []const ctrl.Control_Signals, memory: *Memory, r
         .arith_n = in.arith.n,
         .arith_c = in.arith.c,
         .arith_v = in.arith.v,
-        .mmu_z = mmu_out.z,
-        .mmu_n = mmu_out.n,
         .mmu_k = in.mmu_k,
-        .STAT_OP = in.cs.STAT_OP,
-        .SEQ_OP = in.cs.SEQ_OP,
-        .LITERAL = in.cs.LITERAL,
+        .STAT_OP = in.cs.stat_op,
+        .SEQ_OP = in.cs.seq_op,
+        .LITERAL = in.cs.literal,
     }, &es.power);
 
     const misc_out = misc_registers.transact(.{
@@ -722,9 +708,9 @@ fn simulate_transact(microcode: []const ctrl.Control_Signals, memory: *Memory, r
         .ob = in.reg.ob,
         .inhibit_writes = in.inhibit_writes,
         .data = d,
-        .DL_OP = in.cs.DL_OP,
-        .OB_OA_OP = in.cs.OB_OA_OP,
-        .SPECIAL = in.cs.SPECIAL,
+        .DL_OP = in.cs.dl_op,
+        .OB_OA_OP = in.cs.ob_oa_op,
+        .SPECIAL = in.cs.special,
     });
 
     register_file.transact(reg_file, .{
@@ -737,13 +723,13 @@ fn simulate_transact(microcode: []const ctrl.Control_Signals, memory: *Memory, r
         .virtual_address = in.virtual_address,
         .sr1 = in.sr1,
         .sr2 = in.sr2,
-        .JKR_WSEL = in.cs.JKR_WSEL,
-        .JKR_WMODE = in.cs.JKR_WMODE,
-        .SR1_WSRC = in.cs.SR1_WSRC,
-        .SR2_WSRC = in.cs.SR2_WSRC,
-        .SR1_WI = in.cs.SR1_WI,
-        .SR2_WI = in.cs.SR2_WI,
-        .LITERAL = in.cs.LITERAL,
+        .JKR_WSEL = in.cs.jkr_wsel,
+        .JKR_WMODE = in.cs.jkr_wmode,
+        .SR1_WSRC = in.cs.sr1_wsrc,
+        .SR2_WSRC = in.cs.sr2_wsrc,
+        .SR1_WI = in.cs.sr1_wi,
+        .SR2_WI = in.cs.sr2_wi,
+        .LITERAL = in.cs.literal,
     });
 
     const decode_out = decoder.transact(.{
@@ -757,15 +743,15 @@ fn simulate_transact(microcode: []const ctrl.Control_Signals, memory: *Memory, r
         .stat = stat_out,
         .lh = l.high,
         .dl = misc_out.dl,
-        .SPECIAL = in.cs.SPECIAL,
-        .NEXT_UOP = in.cs.NEXT_UOP,
-        .SEQ_OP = in.cs.SEQ_OP,
-        .ALLOW_INT = in.cs.ALLOW_INT,
+        .SPECIAL = in.cs.special,
+        .NEXT_UOP = in.cs.next_uop,
+        .SEQ_OP = in.cs.seq_op,
+        .ALLOW_INT = in.cs.allow_int,
     });
 
     var next_atomic = in.want_atomic;
     if (!in.inhibit_writes) {
-        switch (in.cs.SPECIAL) {
+        switch (in.cs.special) {
             .atomic_next => {
                 next_atomic = true;
             },
@@ -789,8 +775,6 @@ fn simulate_transact(microcode: []const ctrl.Control_Signals, memory: *Memory, r
             .stat = stat_out,
             .asn = next_asn,
             .last_mmu_op = new_last_mmu_op,
-            .mmu_matching_entry = mmu_out.matching_entry,
-            .mmu_other_entry = mmu_out.other_entry,
         },
         .want_atomic = next_atomic,
     };

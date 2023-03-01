@@ -1,7 +1,7 @@
 const std = @import("std");
 const sim = @import("Simulator");
 const bits = @import("bits");
-const ctrl = @import("control_signals");
+const ControlSignals = @import("ControlSignals");
 const misc = @import("misc");
 const bus = @import("bus");
 
@@ -31,12 +31,12 @@ pub const State = struct {
     fn gprAddress(index: RegisterIndex, rsn: RegistersetNumber) u9 {
         return bits.concat2(@truncate(u3, index >> 1), rsn);
     }
-    fn sr1Address(index: ctrl.SR1Index, rsn: RegistersetNumber) u9 {
-        std.debug.assert(@bitSizeOf(ctrl.SR1Index) == 3);
+    fn sr1Address(index: ControlSignals.SR1Index, rsn: RegistersetNumber) u9 {
+        std.debug.assert(@bitSizeOf(ControlSignals.SR1Index) == 3);
         return bits.concat2(@enumToInt(index), rsn);
     }
-    fn sr2Address(index: ctrl.SR2Index, rsn: RegistersetNumber) u9 {
-        std.debug.assert(@bitSizeOf(ctrl.SR2Index) == 3);
+    fn sr2Address(index: ControlSignals.SR2Index, rsn: RegistersetNumber) u9 {
+        std.debug.assert(@bitSizeOf(ControlSignals.SR2Index) == 3);
         return bits.concat2(@enumToInt(index), rsn);
     }
 
@@ -54,33 +54,33 @@ pub const State = struct {
         self.gpr_odd[gprAddress(index, rsn)] = value;
     }
 
-    pub fn readSR1(self: *const State, index: ctrl.SR1Index, rsn: RegistersetNumber) u32 {
+    pub fn readSR1(self: *const State, index: ControlSignals.SR1Index, rsn: RegistersetNumber) u32 {
         return self.sr1[sr1Address(index, rsn)];
     }
-    pub fn writeSR1(self: *State, index: ctrl.SR1Index, rsn: RegistersetNumber, value: u32) void {
+    pub fn writeSR1(self: *State, index: ControlSignals.SR1Index, rsn: RegistersetNumber, value: u32) void {
         self.sr1[sr1Address(index, rsn)] = value;
     }
 
-    pub fn readSR2(self: *const State, index: ctrl.SR2Index, rsn: RegistersetNumber) u32 {
+    pub fn readSR2(self: *const State, index: ControlSignals.SR2Index, rsn: RegistersetNumber) u32 {
         return self.sr2[sr2Address(index, rsn)];
     }
-    pub fn writeSR2(self: *State, index: ctrl.SR2Index, rsn: RegistersetNumber, value: u32) void {
+    pub fn writeSR2(self: *State, index: ControlSignals.SR2Index, rsn: RegistersetNumber, value: u32) void {
         self.sr2[sr2Address(index, rsn)] = value;
     }
 
-    pub fn readSR(self: *const State, index: ctrl.AnySRIndex, rsn: RegistersetNumber) u32 {
-        if (ctrl.addressBaseToSR1(index)) |sr1| {
+    pub fn readSR(self: *const State, index: ControlSignals.AnySRIndex, rsn: RegistersetNumber) u32 {
+        if (ControlSignals.addressBaseToSR1(index)) |sr1| {
             return self.readSR1(sr1, rsn);
-        } else if (ctrl.addressBaseToSR2(index)) |sr2| {
+        } else if (ControlSignals.addressBaseToSR2(index)) |sr2| {
             return self.readSR2(sr2, rsn);
         } else {
             unreachable;
         }
     }
-    pub fn writeSR(self: *const State, index: ctrl.AnySRIndex, rsn: RegistersetNumber, value: u32) void {
-        if (ctrl.addressBaseToSR1(index)) |sr1| {
+    pub fn writeSR(self: *const State, index: ControlSignals.AnySRIndex, rsn: RegistersetNumber, value: u32) void {
+        if (ControlSignals.addressBaseToSR1(index)) |sr1| {
             self.writeSR1(sr1, rsn, value);
-        } else if (ctrl.addressBaseToSR2(index)) |sr2| {
+        } else if (ControlSignals.addressBaseToSR2(index)) |sr2| {
             self.writeSR2(sr2, rsn, value);
         } else {
             unreachable;
@@ -92,17 +92,17 @@ pub const SetupInputs = struct {
     rsn: RegistersetNumber,
     oa: misc.OperandA,
     ob: misc.OperandB,
-    JL_SRC: ctrl.JL_Source,
-    JH_SRC: ctrl.JH_Source,
-    K_SRC: ctrl.K_Source,
-    JR_RSEL: ctrl.Reg_File_Indexing_Source,
-    KR_RSEL: ctrl.Reg_File_Indexing_Source,
+    JL_SRC: ControlSignals.JL_Source,
+    JH_SRC: ControlSignals.JH_Source,
+    K_SRC: ControlSignals.KSource,
+    JR_RSEL: ControlSignals.Reg_File_Indexing_Source,
+    KR_RSEL: ControlSignals.Reg_File_Indexing_Source,
     JR_RX: bool,
     KR_RX: bool,
-    SR1_RI: ctrl.SR1Index,
-    SR2_RI: ctrl.SR2Index,
-    BASE: ctrl.AnySRIndex,
-    LITERAL: ctrl.Literal,
+    SR1_RI: ControlSignals.SR1Index,
+    SR2_RI: ControlSignals.SR2Index,
+    BASE: ControlSignals.AnySRIndex,
+    LITERAL: ControlSignals.Literal,
 };
 
 pub const SetupOutputs = struct {
@@ -123,13 +123,13 @@ pub const TransactInputs = struct {
     sr1: bus.JParts,
     sr2: bus.JParts,
     virtual_address: bus.VirtualAddressParts,
-    JKR_WSEL: ctrl.Reg_File_Indexing_Source,
-    JKR_WMODE: ctrl.Reg_File_Write_Mode,
-    SR1_WSRC: ctrl.SR1_Write_Data_Source,
-    SR2_WSRC: ctrl.SR2_Write_Data_Source,
-    SR1_WI: ctrl.SR1Index,
-    SR2_WI: ctrl.SR2Index,
-    LITERAL: ctrl.Literal,
+    JKR_WSEL: ControlSignals.Reg_File_Indexing_Source,
+    JKR_WMODE: ControlSignals.Reg_File_Write_Mode,
+    SR1_WSRC: ControlSignals.SR1_Write_Data_Source,
+    SR2_WSRC: ControlSignals.SR2_Write_Data_Source,
+    SR1_WI: ControlSignals.SR1Index,
+    SR2_WI: ControlSignals.SR2Index,
+    LITERAL: ControlSignals.Literal,
 };
 
 pub const RegisterView = struct {
@@ -194,24 +194,24 @@ pub const RegisterView = struct {
         self.writeGPR(index ^ 1, @intCast(u16, unsigned >> 16));
     }
 
-    pub fn readSR(self: *const RegisterView, index: ctrl.AnySRIndex) u32 {
+    pub fn readSR(self: *const RegisterView, index: ControlSignals.AnySRIndex) u32 {
         return self.state.readSR(index, self.rsn);
     }
-    pub fn writeSR(self: *RegisterView, index: ctrl.AnySRIndex, value: u32) void {
+    pub fn writeSR(self: *RegisterView, index: ControlSignals.AnySRIndex, value: u32) void {
         return self.state.writeSR(index, self.rsn, value);
     }
 
-    pub fn readSR1(self: *const RegisterView, index: ctrl.SR1Index) u32 {
+    pub fn readSR1(self: *const RegisterView, index: ControlSignals.SR1Index) u32 {
         return self.state.readSR1(index, self.rsn);
     }
-    pub fn writeSR1(self: *RegisterView, index: ctrl.SR1Index, value: u32) void {
+    pub fn writeSR1(self: *RegisterView, index: ControlSignals.SR1Index, value: u32) void {
         return self.state.writeSR1(index, self.rsn, value);
     }
 
-    pub fn readSR2(self: *const RegisterView, index: ctrl.SR2Index) u32 {
+    pub fn readSR2(self: *const RegisterView, index: ControlSignals.SR2Index) u32 {
         return self.state.readSR2(index, self.rsn);
     }
-    pub fn writeSR2(self: *RegisterView, index: ctrl.SR2Index, value: u32) void {
+    pub fn writeSR2(self: *RegisterView, index: ControlSignals.SR2Index, value: u32) void {
         return self.state.writeSR2(index, self.rsn, value);
     }
 

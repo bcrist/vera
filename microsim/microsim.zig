@@ -1,11 +1,9 @@
 const std = @import("std");
 const Simulator = @import("Simulator");
 const uc_roms = @import("microcode_rom_serialization");
-const ctrl = @import("control_signals");
+const ControlSignals = @import("ControlSignals");
 const ie = @import("instruction_encoding");
 const misc = @import("misc");
-
-const Control_Signals = ctrl.Control_Signals;
 
 const roms = @import("microcode_roms").compressed_data;
 const instruction_encoding_data = @import("instruction_encoding_data").data;
@@ -17,7 +15,7 @@ pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
 
-    const microcode = try arena.allocator().alloc(Control_Signals, misc.microcode_length);
+    const microcode = try arena.allocator().alloc(ControlSignals, misc.microcode_length);
     uc_roms.readCompressedRoms(roms, microcode);
 
     var temp = std.heap.ArenaAllocator.init(std.heap.page_allocator);

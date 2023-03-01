@@ -1,5 +1,4 @@
 const std = @import("std");
-const ctrl = @import("control_signals");
 const misc = @import("misc");
 const uc = @import("microcode");
 const ib = @import("instruction_builder.zig");
@@ -11,6 +10,8 @@ const assert = std.debug.assert;
 const encoding = ib.encoding;
 const desc = ib.desc;
 const next_cycle = ib.next_cycle;
+const conditional_next_cycle = ib.conditional_next_cycle;
+const next_cycle_force_normal_execution = ib.next_cycle_force_normal_execution;
 const uc_address = ib.uc_address;
 const kernel = ib.kernel;
 const zero = ib.zero;
@@ -39,19 +40,23 @@ const shift_to_LL = cb.shift_to_LL;
 const sub_to_LL = cb.sub_to_LL;
 const LL_to_reg = cb.LL_to_reg;
 const LL_to_RSN = cb.LL_to_RSN;
+const LL_to_STAT = cb.LL_to_STAT;
 const LL_to_D = cb.LL_to_D;
 const L_to_SR = cb.L_to_SR;
 const L_to_SR1 = cb.L_to_SR1;
 const L_to_SR2 = cb.L_to_SR2;
 const branch = cb.branch;
-const STAT_OP = cb.STAT_OP;
-const NEXT_UOP = cb.NEXT_UOP;
-const OB_OA_OP = cb.OB_OA_OP;
-const ALLOW_INT = cb.ALLOW_INT;
-const SEQ_OP = cb.SEQ_OP;
-const SPECIAL = cb.SPECIAL;
-const JH_SRC = cb.JH_SRC;
-const JL_SRC = cb.JL_SRC;
+const clear_OB = cb.clear_OB;
+const increment_OB = cb.increment_OB;
+const enableSleep = cb.enableSleep;
+const disableSleep = cb.disableSleep;
+const ZN_from_LL = cb.ZN_from_LL;
+const disableAddressTranslation = cb.disableAddressTranslation;
+const neg_one_to_JH = cb.neg_one_to_JH;
+const zero_to_JL = cb.zero_to_JL;
+const decodeOperands = cb.decodeOperands;
+const allow_interrupt = cb.allow_interrupt;
+const execLatchedInsn = cb.execLatchedInsn;
 
 pub fn _handler_0() void {
     //desc("Initialization/reset entry point");
@@ -65,16 +70,15 @@ pub fn _handler_0() void {
     LL_to_RSN();
     // We also store the RSN in .temp_1 so we can use it easily later:
     L_to_SR(.temp_1);
-    STAT_OP(.ZN_from_LL);
+    ZN_from_LL(.fresh);
     next_cycle();
 
     // Set up the .zero registers in RSN 0, 1, and 2:
     zero_to_L();
     L_to_SR1(.zero);
     L_to_SR2(.zero);
-    // Ensure that AT is disabled:
-    STAT_OP(.clear_A);
-    NEXT_UOP(0x200);
+    disableAddressTranslation();
+    conditional_next_cycle(0x200);
 }
 
 pub fn _continuation_200() void {
@@ -87,12 +91,12 @@ pub fn _continuation_200() void {
 
         literal_to_LL(@intCast(i17, base_block_transfer_address >> 16));
         LL_to_reg(1);
-        OB_OA_OP(.clear_OB);
+        clear_OB();
         next_cycle();
 
         literal_to_LL(@truncate(u16, base_block_transfer_address));
         LL_to_reg(0);
-        OB_OA_OP(.increment_OB);
+        increment_OB();
         next_cycle();
 
         // 0x800 indicates that we want the address to auto-increment after every block transfer:
@@ -101,20 +105,20 @@ pub fn _continuation_200() void {
         JH_to_LH();
         logic_to_LL(.JL_or_K, .fresh, .no_flags);
         L_to_SR(.temp_1);
-        OB_OA_OP(.increment_OB);
+        increment_OB();
         next_cycle();
 
         // 0x200 indicates that we want to copy from FLASH, not PSRAM
         SRL_logic_literal_to_LL(.temp_1, .JL_or_K, 0x200, .fresh, .no_flags);
         JH_to_LH();
         L_to_SR(.temp_1);
-        OB_OA_OP(.increment_OB);
+        increment_OB();
         next_cycle();
 
         // The FLASH address is 0x7E000, and the low 16 bits are the value we write to the register.
         // 0xE000 is generated with the equivalent of @truncate(u16, 0xFFFF0000 >> 3):
-        JH_SRC(.neg_one);
-        JL_SRC(.zero);
+        neg_one_to_JH();
+        zero_to_JL();
         OB_OA_to_K(); // 3; we can't use literal_to_K(3) because we need to use the literal for the temp_1 offset of 7
         shift_to_LL(.right, .no_flags);
         // The high 3 bits of the FLASH address get added as an offset to the address where we write it:
@@ -135,14 +139,14 @@ pub fn _continuation_200() void {
         // We set up R0 to be a counter of how many block transfers are remaining:
         literal_to_L(0x2000);
         LL_to_reg(0);
-        STAT_OP(.ZN_from_LL);
-        NEXT_UOP(0x201);
+        ZN_from_LL(.fresh);
+        conditional_next_cycle(0x201);
     } else {
         // We are pipe 1 or 2.
         // Subtract 1 from .temp_1 so that next cycle we will know which next cycle.
         SR_minus_literal_to_L(.temp_1, 1, .fresh, .flags);
         L_to_SR1(.temp_1);
-        NEXT_UOP(0x202);
+        conditional_next_cycle(0x202);
     }
 }
 
@@ -155,15 +159,14 @@ pub fn _continuation_201() void {
         reg_to_K(1);
         sub_to_LL(.fresh, .flags);
         LL_to_reg(0);
-        NEXT_UOP(0x201);
+        conditional_next_cycle(0x201);
     } else {
         // Done with the block transfer!
         // Time to read the reset vector:
         read_to_D(.zero, @offsetOf(misc.ZeropageVectorTable, "pipe_0_reset"), .word, .raw);
         D_to_L(.zx);
         L_to_SR(.next_ip);
-        // Ensure that sleep mode is disabled:
-        STAT_OP(.clear_S);
+        disableSleep();
         next_cycle();
 
         branch(.next_ip, 0);
@@ -183,8 +186,8 @@ pub fn _continuation_202() void {
         literal_to_L(std.math.maxInt(misc.RegistersetNumber));
         LL_to_RSN();
         L_to_SR(.temp_1);
-        STAT_OP(.ZN_from_LL);
-        NEXT_UOP(0x203);
+        ZN_from_LL(.fresh);
+        conditional_next_cycle(0x203);
     } else {
         // We are pipe 2.
         wait_for_interrupt();
@@ -201,7 +204,7 @@ pub fn _continuation_203() void {
         SR_minus_literal_to_L(.temp_1, 1, .fresh, .flags);
         LL_to_RSN();
         L_to_SR1(.temp_1);
-        NEXT_UOP(0x203);
+        conditional_next_cycle(0x203);
     } else {
         pipe_id_to_L();
         LL_to_RSN();
@@ -215,14 +218,10 @@ fn wait_for_interrupt() void {
     literal_to_LL(0x0001);
     LL_to_D();
     D_to_DL();
-    STAT_OP(.load_ZNVCKA_from_LL);
-    SEQ_OP(.next_uop_force_normal);
-    next_cycle();
+    LL_to_STAT();
+    next_cycle_force_normal_execution();
 
-    OB_OA_OP(.from_DL);
-    ALLOW_INT(true);
-    SEQ_OP(.next_instruction);
-    SPECIAL(.atomic_end);
+    execLatchedInsn();
 }
 
 pub fn _018B() void {
@@ -234,7 +233,7 @@ pub fn _018B() void {
         return;
     }
 
-    STAT_OP(.set_S);
+    enableSleep();
     load_and_exec_next_insn(2);
 }
 
@@ -247,6 +246,6 @@ pub fn _018A() void {
         return;
     }
 
-    STAT_OP(.clear_S);
+    disableSleep();
     load_and_exec_next_insn(2);
 }

@@ -32,6 +32,7 @@ const signed_greater_than = ib.signed_greater_than;
 const IP_read_to_D = cb.IP_read_to_D;
 const D_to_L = cb.D_to_L;
 const D_to_LH = cb.D_to_LH;
+const JH_to_LH = cb.JH_to_LH;
 const L_to_SR = cb.L_to_SR;
 const JL_to_LL = cb.JL_to_LL;
 const SR_minus_SRL_to_L = cb.SR_minus_SRL_to_L;
@@ -42,16 +43,12 @@ const reg32_to_L = cb.reg32_to_L;
 const op_reg32_to_L = cb.op_reg32_to_L;
 const branch = cb.branch;
 const SRL_logic_literal_to_LL = cb.SRL_logic_literal_to_LL;
-
+const disableAddressTranslation = cb.disableAddressTranslation;
+const enableAddressTranslation = cb.enableAddressTranslation;
 const load_and_exec_next_insn = cb.load_and_exec_next_insn;
+const load_and_exec_next_insn_no_atomic_end = cb.load_and_exec_next_insn_no_atomic_end;
 const illegal_instruction = cb.illegal_instruction;
-
-const STAT_OP = cb.STAT_OP;
-const OB_OA_OP = cb.OB_OA_OP;
-const ALLOW_INT = cb.ALLOW_INT;
-const SEQ_OP = cb.SEQ_OP;
-const SPECIAL = cb.SPECIAL;
-const LH_SRC = cb.LH_SRC;
+const execLatchedInsn = cb.execLatchedInsn;
 
 pub fn _0000() void {
     encoding(.NOP, .{});
@@ -68,10 +65,7 @@ pub fn _0001() void {
         return;
     }
 
-    OB_OA_OP(.from_DL);
-    ALLOW_INT(true);
-    SEQ_OP(.next_instruction);
-    SPECIAL(.atomic_end);
+    execLatchedInsn();
 }
 
 pub fn _0100_013C() void {
@@ -225,8 +219,7 @@ pub fn _0200_023C() void {
     if (zero()) {
         branch(.ip, getParameterOffset(0));
     } else {
-        SPECIAL(.none); // don't clear atomic state
-        load_and_exec_next_insn(2);
+        load_and_exec_next_insn_no_atomic_end(2);
     }
 }
 pub fn _023D_027B() void {
@@ -237,8 +230,7 @@ pub fn _023D_027B() void {
     if (zero()) {
         branch(.ip, getParameterOffset(0));
     } else {
-        SPECIAL(.none); // don't clear atomic state
-        load_and_exec_next_insn(2);
+        load_and_exec_next_insn_no_atomic_end(2);
     }
 }
 
@@ -250,8 +242,7 @@ pub fn _0300_033C() void {
     if (!zero()) {
         branch(.ip, getParameterOffset(0));
     } else {
-        SPECIAL(.none); // don't clear atomic state
-        load_and_exec_next_insn(2);
+        load_and_exec_next_insn_no_atomic_end(2);
     }
 }
 pub fn _033D_037B() void {
@@ -262,8 +253,7 @@ pub fn _033D_037B() void {
     if (!zero()) {
         branch(.ip, getParameterOffset(0));
     } else {
-        SPECIAL(.none); // don't clear atomic state
-        load_and_exec_next_insn(2);
+        load_and_exec_next_insn_no_atomic_end(2);
     }
 }
 
@@ -345,8 +335,7 @@ fn conditional_n6_14(comptime condition: MnemonicSuffix) void {
     if (should_branch) {
         branch(.ip, getParameterOffset(0));
     } else {
-        SPECIAL(.none); // don't clear atomic state
-        load_and_exec_next_insn(2);
+        load_and_exec_next_insn_no_atomic_end(2);
     }
 }
 
@@ -384,8 +373,7 @@ fn conditional_15_270(comptime condition: MnemonicSuffix) void {
 
         branch(.next_ip, 15);
     } else {
-        SPECIAL(.none); // don't clear atomic state
-        load_and_exec_next_insn(3);
+        load_and_exec_next_insn_no_atomic_end(3);
     }
 }
 
@@ -408,8 +396,7 @@ fn conditional_n262_n7(comptime condition: MnemonicSuffix) void {
 
         branch(.next_ip, -7);
     } else {
-        SPECIAL(.none); // don't clear atomic state
-        load_and_exec_next_insn(3);
+        load_and_exec_next_insn_no_atomic_end(3);
     }
 }
 
@@ -465,8 +452,7 @@ fn conditional_s16(comptime condition: MnemonicSuffix) void {
 
         branch(.next_ip, 0);
     } else {
-        SPECIAL(.none); // don't clear atomic state
-        load_and_exec_next_insn(4);
+        load_and_exec_next_insn_no_atomic_end(4);
     }
 }
 
@@ -493,7 +479,7 @@ pub fn _0184() void {
     desc("Branch to start of current page");
 
     SRL_logic_literal_to_LL(.ip, .JL_and_K, 0xF000, .fresh, .no_flags);
-    LH_SRC(.JH);
+    JH_to_LH();
     L_to_SR(.next_ip);
     next_cycle();
 
@@ -506,7 +492,7 @@ pub fn _0185() void {
     desc("Branch to start of next page");
 
     SRL_logic_literal_to_LL(.ip, .JL_or_not_K, 0xF000, .fresh, .no_flags);
-    LH_SRC(.JH);
+    JH_to_LH();
     L_to_SR(.next_ip);
     next_cycle();
 
@@ -551,7 +537,7 @@ pub fn _0188() void {
 
     reg32_to_L(0);
     L_to_SR(.next_ip);
-    STAT_OP(.set_A);
+    enableAddressTranslation();
     next_cycle();
 
     branch(.next_ip, 0);
@@ -569,7 +555,7 @@ pub fn _0189() void {
 
     reg32_to_L(0);
     L_to_SR(.next_ip);
-    STAT_OP(.clear_A);
+    disableAddressTranslation();
     next_cycle();
 
     branch(.next_ip, 0);
@@ -616,8 +602,7 @@ fn conditional_double_branch_s16(comptime condition: MnemonicSuffix) void {
     } else if (conditionFn(second)()) {
         IP_read_to_D(4, .word);
     } else {
-        SPECIAL(.none); // don't clear atomic state
-        load_and_exec_next_insn(6);
+        load_and_exec_next_insn_no_atomic_end(6);
         return;
     }
     D_to_L(.zx);

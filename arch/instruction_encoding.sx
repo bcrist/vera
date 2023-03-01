@@ -25,52 +25,16 @@
       (param constant (base-src IP_plus_2_16) (range 0 65535))
    )
    (0008 0008 RAT W
-      (desc "Remove address translation entry corresponding to X4 and tag mask R0")
+      (desc "Remove address translation entry or entries corresponding to X4 and tag mask R0")
    )
    (0009 0009 RAT R
-      (desc "Remove address translation entry corresponding to X4 and tag mask R0")
+      (desc "Remove address translation entry or entries corresponding to X4 and tag mask R0")
    )
    (000A 000A RAT S
-      (desc "Remove address translation entry corresponding to X4 and tag mask R0")
+      (desc "Remove address translation entry or entries corresponding to X4 and tag mask R0")
    )
    (000B 000B RAT I
-      (desc "Remove address translation entry corresponding to X4 and tag mask R0")
-   )
-   (000C 000C CAT W
-      (desc "Query address translation entries corresponding to X4; store in X0 and X2")
-   )
-   (000D 000D CAT R
-      (desc "Query address translation entries corresponding to X4; store in X0 and X2")
-   )
-   (000E 000E CAT S
-      (desc "Query address translation entries corresponding to X4; store in X0 and X2")
-   )
-   (000F 000F CAT I
-      (desc "Query address translation entries corresponding to X4; store in X0 and X2")
-   )
-   (0010 0010 CATM W
-      (desc "Query matching/primary address translation entry corresponding to X4; store in X0")
-   )
-   (0011 0011 CATM R
-      (desc "Query matching/primary address translation entry corresponding to X4; store in X0")
-   )
-   (0012 0012 CATM S
-      (desc "Query matching/primary address translation entry corresponding to X4; store in X0")
-   )
-   (0013 0013 CATM I
-      (desc "Query matching/primary address translation entry corresponding to X4; store in X0")
-   )
-   (0014 0014 CATO W
-      (desc "Query other/secondary address translation entry corresponding to X4; store in X2")
-   )
-   (0015 0015 CATO R
-      (desc "Query other/secondary address translation entry corresponding to X4; store in X2")
-   )
-   (0016 0016 CATO S
-      (desc "Query other/secondary address translation entry corresponding to X4; store in X2")
-   )
-   (0017 0017 CATO I
-      (desc "Query other/secondary address translation entry corresponding to X4; store in X2")
+      (desc "Remove address translation entry or entries corresponding to X4 and tag mask R0")
    )
    (0018 0018 SAT W
       (desc "Set address translation entry corresponding to X4 with data in X0; discard secondary entry if necessary")
@@ -83,18 +47,6 @@
    )
    (001B 001B SAT I
       (desc "Set address translation entry corresponding to X4 with data in X0; discard secondary entry if necessary")
-   )
-   (001C 001C CSAT W
-      (desc "Set address translation entry corresponding to X4 with data in X0; load overwritten entry into X2")
-   )
-   (001D 001D CSAT R
-      (desc "Set address translation entry corresponding to X4 with data in X0; load overwritten entry into X2")
-   )
-   (001E 001E CSAT S
-      (desc "Set address translation entry corresponding to X4 with data in X0; load overwritten entry into X2")
-   )
-   (001F 001F CSAT I
-      (desc "Set address translation entry corresponding to X4 with data in X0; load overwritten entry into X2")
    )
    (0100 013C B
       (desc "IP-relative unconditional branch")

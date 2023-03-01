@@ -2,222 +2,221 @@ const std = @import("std");
 const uc = @import("microcode");
 const misc = @import("misc");
 
-pub const Control_Signal = enum {
-    LITERAL,
-    JR_RSEL,
-    KR_RSEL,
-    JR_RX,
-    KR_RX,
-    JL_SRC,
-    JH_SRC,
-    K_SRC,
-    SR1_RI,
-    SR2_RI,
-    BASE,
-    OFFSET,
-    ALU_MODE,
-    BUS_MODE,
-    BUS_BYTE,
-    BUS_RW,
-    AT_OP,
-    SPECIAL,
-    LL_SRC,
-    LH_SRC,
-    JKR_WSEL,
-    JKR_WMODE,
-    SR1_WI,
-    SR2_WI,
-    SR1_WSRC,
-    SR2_WSRC,
-    STAT_OP,
-    DL_OP,
-    OB_OA_OP,
-    ALLOW_INT,
-    SEQ_OP,
-    NEXT_UOP,
+const ControlSignals = @This();
+
+literal: Literal,
+jr_rsel: Reg_File_Indexing_Source,
+kr_rsel: Reg_File_Indexing_Source,
+jr_rx: bool,
+kr_rx: bool,
+jl_src: JL_Source,
+jh_src: JH_Source,
+k_src: KSource,
+sr1_ri: SR1Index,
+sr2_ri: SR2Index,
+base: AnySRIndex,
+offset: Address_Offset,
+alu_mode: ALU_Mode,
+bus_mode: Bus_Mode,
+bus_byte: Bus_Width,
+bus_rw: Bus_Direction,
+at_op: AT_Op,
+special: Special_Op,
+ll_src: LL_Source,
+lh_src: LH_Source,
+jkr_wsel: Reg_File_Indexing_Source,
+jkr_wmode: Reg_File_Write_Mode,
+sr1_wi: SR1Index,
+sr2_wi: SR2Index,
+sr1_wsrc: SR1_Write_Data_Source,
+sr2_wsrc: SR2_Write_Data_Source,
+stat_op: STAT_Op,
+dl_op: Data_Latch_Op,
+ob_oa_op: Operand_Reg_Op,
+allow_int: bool,
+seq_op: Sequencer_Op,
+next_uop: uc.Continuation,
+
+pub const SignalName = enum {
+    literal,
+    jr_rsel,
+    kr_rsel,
+    jr_rx,
+    kr_rx,
+    jl_src,
+    jh_src,
+    k_src,
+    sr1_ri,
+    sr2_ri,
+    base,
+    offset,
+    alu_mode,
+    bus_mode,
+    bus_byte,
+    bus_rw,
+    at_op,
+    special,
+    ll_src,
+    lh_src,
+    jkr_wsel,
+    jkr_wmode,
+    sr1_wi,
+    sr2_wi,
+    sr1_wsrc,
+    sr2_wsrc,
+    stat_op,
+    dl_op,
+    ob_oa_op,
+    allow_int,
+    seq_op,
+    next_uop,
 };
 
-pub const Control_Signals = struct {
-    LITERAL: Literal,
-    JR_RSEL: Reg_File_Indexing_Source,
-    KR_RSEL: Reg_File_Indexing_Source,
-    JR_RX: bool,
-    KR_RX: bool,
-    JL_SRC: JL_Source,
-    JH_SRC: JH_Source,
-    K_SRC: K_Source,
-    SR1_RI: SR1Index,
-    SR2_RI: SR2Index,
-    BASE: AnySRIndex,
-    OFFSET: Address_Offset,
-    ALU_MODE: ALU_Mode,
-    BUS_MODE: Bus_Mode,
-    BUS_BYTE: Bus_Width,
-    BUS_RW: Bus_Direction,
-    AT_OP: AT_Op,
-    SPECIAL: Special_Op,
-    LL_SRC: LL_Source,
-    LH_SRC: LH_Source,
-    JKR_WSEL: Reg_File_Indexing_Source,
-    JKR_WMODE: Reg_File_Write_Mode,
-    SR1_WI: SR1Index,
-    SR2_WI: SR2Index,
-    SR1_WSRC: SR1_Write_Data_Source,
-    SR2_WSRC: SR2_Write_Data_Source,
-    STAT_OP: STAT_Op,
-    DL_OP: Data_Latch_Op,
-    OB_OA_OP: Operand_Reg_Op,
-    ALLOW_INT: bool,
-    SEQ_OP: Sequencer_Op,
-    NEXT_UOP: uc.Continuation,
+pub fn init() ControlSignals {
+    return .{
+        .literal = 0,
+        .jr_rsel = .zero,
+        .kr_rsel = .zero,
+        .jr_rx = false,
+        .kr_rx = false,
+        .jl_src = .zero,
+        .jh_src = .zero,
+        .k_src = .zero,
+        .sr1_ri = .zero,
+        .sr2_ri = .zero,
+        .base = .zero,
+        .offset = .zero,
+        .alu_mode = ALU_Mode.unused,
+        .bus_mode = .raw,
+        .bus_byte = .word,
+        .bus_rw = .read,
+        .at_op = .none,
+        .special = .none,
+        .ll_src = .zero,
+        .lh_src = .zero,
+        .jkr_wsel = .zero,
+        .jkr_wmode = .no_write,
+        .sr1_wi = .zero,
+        .sr2_wi = .zero,
+        .sr1_wsrc = .no_write,
+        .sr2_wsrc = .no_write,
+        .stat_op = .hold,
+        .dl_op = .hold,
+        .ob_oa_op = .hold,
+        .allow_int = false,
+        .seq_op = .next_uop,
+        .next_uop = 0,
+    };
+}
 
-    pub fn init() Control_Signals {
-        return .{
-            .LITERAL = 0,
-            .JR_RSEL = .zero,
-            .KR_RSEL = .zero,
-            .JR_RX = false,
-            .KR_RX = false,
-            .JL_SRC = .zero,
-            .JH_SRC = .zero,
-            .K_SRC = .zero,
-            .SR1_RI = .zero,
-            .SR2_RI = .zero,
-            .BASE = .zero,
-            .OFFSET = .zero,
-            .ALU_MODE = ALU_Mode.unused,
-            .BUS_MODE = .raw,
-            .BUS_BYTE = .word,
-            .BUS_RW = .read,
-            .AT_OP = .hold,
-            .SPECIAL = .none,
-            .LL_SRC = .zero,
-            .LH_SRC = .zero,
-            .JKR_WSEL = .zero,
-            .JKR_WMODE = .no_write,
-            .SR1_WI = .zero,
-            .SR2_WI = .zero,
-            .SR1_WSRC = .no_write,
-            .SR2_WSRC = .no_write,
-            .STAT_OP = .hold,
-            .DL_OP = .hold,
-            .OB_OA_OP = .hold,
-            .ALLOW_INT = false,
-            .SEQ_OP = .next_uop,
-            .NEXT_UOP = 0,
-        };
+pub fn randomize(self: *ControlSignals, rnd: std.rand.Random) void {
+    self.literal = rnd.int(Literal);
+    self.jr_rsel = rnd.enumValue(Reg_File_Indexing_Source);
+    self.kr_rsel = rnd.enumValue(Reg_File_Indexing_Source);
+    self.jr_rx = rnd.boolean();
+    self.kr_rx = rnd.boolean();
+    self.jl_src = rnd.enumValue(JL_Source);
+    self.jh_src = rnd.enumValue(JH_Source);
+    self.k_src = rnd.enumValue(KSource);
+    self.sr1_ri = rnd.enumValue(SR1Index);
+    self.sr2_ri = rnd.enumValue(SR2Index);
+    self.base = rnd.enumValue(AnySRIndex);
+    self.offset = rnd.enumValue(Address_Offset);
+    self.alu_mode = .{ .unknown = rnd.int(u4) };
+    self.bus_mode = rnd.enumValue(Bus_Mode);
+    self.bus_byte = rnd.enumValue(Bus_Width);
+    self.bus_rw = rnd.enumValue(Bus_Direction);
+    self.at_op = rnd.enumValue(AT_Op);
+    self.special = rnd.enumValue(Special_Op);
+    self.ll_src = rnd.enumValue(LL_Source);
+    switch (self.ll_src) {
+        // The simulator normally crashes on access to an address that's not hooked up to anything,
+        // and this would be likely to trigger that so we'll just prevent it.  It shouldn't be a problem
+        // for the real computer to have this happen during the first few cycles after power-on.
+        .D16, .D8_sx => self.ll_src = .zero,
+        else => {},
     }
+    self.lh_src = rnd.enumValue(LH_Source);
+    self.jkr_wsel = rnd.enumValue(Reg_File_Indexing_Source);
+    self.jkr_wmode = rnd.enumValue(Reg_File_Write_Mode);
+    self.sr1_wi = rnd.enumValue(SR1Index);
+    self.sr2_wi = rnd.enumValue(SR2Index);
+    self.sr1_wsrc = rnd.enumValue(SR1_Write_Data_Source);
+    self.sr2_wsrc = rnd.enumValue(SR2_Write_Data_Source);
+    self.stat_op = rnd.enumValue(STAT_Op);
+    self.dl_op = rnd.enumValue(Data_Latch_Op);
+    self.ob_oa_op = rnd.enumValue(Operand_Reg_Op);
+    self.allow_int = rnd.boolean();
+    self.seq_op = rnd.enumValue(Sequencer_Op);
+    self.next_uop = rnd.int(uc.Continuation);
+}
 
-    pub fn randomize(self: *Control_Signals, rnd: std.rand.Random) void {
-        self.LITERAL = rnd.int(Literal);
-        self.JR_RSEL = rnd.enumValue(Reg_File_Indexing_Source);
-        self.KR_RSEL = rnd.enumValue(Reg_File_Indexing_Source);
-        self.JR_RX = rnd.boolean();
-        self.KR_RX = rnd.boolean();
-        self.JL_SRC = rnd.enumValue(JL_Source);
-        self.JH_SRC = rnd.enumValue(JH_Source);
-        self.K_SRC = rnd.enumValue(K_Source);
-        self.SR1_RI = rnd.enumValue(SR1Index);
-        self.SR2_RI = rnd.enumValue(SR2Index);
-        self.BASE = rnd.enumValue(AnySRIndex);
-        self.OFFSET = rnd.enumValue(Address_Offset);
-        self.ALU_MODE = .{ .unknown = rnd.int(u4) };
-        self.BUS_MODE = rnd.enumValue(Bus_Mode);
-        self.BUS_BYTE = rnd.enumValue(Bus_Width);
-        self.BUS_RW = rnd.enumValue(Bus_Direction);
-        self.AT_OP = rnd.enumValue(AT_Op);
-        self.SPECIAL = rnd.enumValue(Special_Op);
-        self.LL_SRC = rnd.enumValue(LL_Source);
-        switch (self.LL_SRC) {
-            // The simulator normally crashes on access to an address that's not hooked up to anything,
-            // and this would be likely to trigger that so we'll just prevent it.  It shouldn't be a problem
-            // for the real computer to have this happen during the first few cycles after power-on.
-            .D16, .D8_sx => self.LL_SRC = .zero,
-            else => {},
+pub fn print(self: *const ControlSignals, writer: anytype) !void {
+    const def = ControlSignals.init();
+    if (self.literal != def.literal) try writer.print(" literal={x}", .{ self.literal });
+    if (self.jr_rsel != def.jr_rsel) try writer.print(" jr_rsel={s}", .{ @tagName(self.jr_rsel) });
+    if (self.jr_rx != def.jr_rx) try writer.print(" jr_rx={}", .{ @boolToInt(self.jr_rx) });
+    if (self.kr_rsel != def.kr_rsel) try writer.print(" kr_rsel={s}", .{ @tagName(self.kr_rsel) });
+    if (self.kr_rx != def.kr_rx) try writer.print(" kr_rx={}", .{ @boolToInt(self.kr_rx) });
+    if (self.sr1_ri != def.sr1_ri) try writer.print(" sr1_ri={s}", .{ @tagName(self.sr1_ri) });
+    if (self.sr2_ri != def.sr2_ri) try writer.print(" sr2_ri={s}", .{ @tagName(self.sr2_ri) });
+    if (self.jl_src != def.jl_src) try writer.print(" jl_src={s}", .{ @tagName(self.jl_src) });
+    if (self.jh_src != def.jh_src) try writer.print(" jh_src={s}", .{ @tagName(self.jh_src) });
+    if (self.k_src != def.k_src) try writer.print(" k_src={s}", .{ @tagName(self.k_src) });
+    if (self.base != def.base) try writer.print(" base={s}", .{ @tagName(self.base) });
+    if (self.offset != def.offset) try writer.print(" offset={s}", .{ @tagName(self.offset) });
+
+    if (!std.meta.eql(self.alu_mode, def.alu_mode)) {
+        switch (self.alu_mode) {
+            .unknown => |value| {
+                try writer.print(" alu_mode=unknown({X})", .{ value });
+            },
+            else => {
+                const what: []const u8 = switch (self.alu_mode) {
+                    .arith    => |value| @tagName(value),
+                    .logic    => |value| @tagName(value),
+                    .mult     => |value| @tagName(value),
+                    .shift    => |value| @tagName(value),
+                    .bitcount => |value| @tagName(value),
+                    else => "none",
+                };
+
+                const ALU_Mode_Tag = comptime @typeInfo(ALU_Mode).Union.tag_type.?;
+                try writer.print(" alu_mode={s}.{s}", .{ @tagName(@as(ALU_Mode_Tag, self.alu_mode)), what });
+            },
         }
-        self.LH_SRC = rnd.enumValue(LH_Source);
-        self.JKR_WSEL = rnd.enumValue(Reg_File_Indexing_Source);
-        self.JKR_WMODE = rnd.enumValue(Reg_File_Write_Mode);
-        self.SR1_WI = rnd.enumValue(SR1Index);
-        self.SR2_WI = rnd.enumValue(SR2Index);
-        self.SR1_WSRC = rnd.enumValue(SR1_Write_Data_Source);
-        self.SR2_WSRC = rnd.enumValue(SR2_Write_Data_Source);
-        self.STAT_OP = rnd.enumValue(STAT_Op);
-        self.DL_OP = rnd.enumValue(Data_Latch_Op);
-        self.OB_OA_OP = rnd.enumValue(Operand_Reg_Op);
-        self.ALLOW_INT = rnd.boolean();
-        self.SEQ_OP = rnd.enumValue(Sequencer_Op);
-        self.NEXT_UOP = rnd.int(uc.Continuation);
     }
+    if (self.bus_mode != def.bus_mode) try writer.print(" bus_mode={s}", .{ @tagName(self.bus_mode) });
+    if (self.bus_byte != def.bus_byte) try writer.print(" bus_byte={s}", .{ @tagName(self.bus_byte) });
+    if (self.bus_rw != def.bus_rw) try writer.print(" bus_rw={s}", .{ @tagName(self.bus_rw) });
+    if (self.at_op != def.at_op) try writer.print(" at_op={s}", .{ @tagName(self.at_op) });
+    if (self.ll_src != def.ll_src) try writer.print(" ll_src={s}", .{ @tagName(self.ll_src) });
+    if (self.lh_src != def.lh_src) try writer.print(" lh_src={s}", .{ @tagName(self.lh_src) });
+    if (self.jkr_wsel != def.jkr_wsel) try writer.print(" jkr_wsel={s}", .{ @tagName(self.jkr_wsel) });
+    if (self.jkr_wmode != def.jkr_wmode) try writer.print(" jkr_wmode={s}", .{ @tagName(self.jkr_wmode) });
+    if (self.sr1_wsrc != def.sr1_wsrc) try writer.print(" sr1_wsrc={s}", .{ @tagName(self.sr1_wsrc) });
+    if (self.sr1_wi != def.sr1_wi) try writer.print(" sr1_wi={s}", .{ @tagName(self.sr1_wi) });
+    if (self.sr2_wsrc != def.sr2_wsrc) try writer.print(" sr2_wsrc={s}", .{ @tagName(self.sr2_wsrc) });
+    if (self.sr2_wi != def.sr2_wi) try writer.print(" sr2_wi={s}", .{ @tagName(self.sr2_wi) });
+    if (self.stat_op != def.stat_op) try writer.print(" stat_op={s}", .{ @tagName(self.stat_op) });
+    if (self.dl_op != def.dl_op) try writer.print(" dl_op={s}", .{ @tagName(self.dl_op) });
+    if (self.ob_oa_op != def.ob_oa_op) try writer.print(" ob_oa_op={s}", .{ @tagName(self.ob_oa_op) });
+    if (self.special != def.special) try writer.print(" special={s}", .{ @tagName(self.special) });
+    if (self.allow_int != def.allow_int) try writer.print(" allow_int={}", .{ @boolToInt(self.allow_int) });
+    if (self.seq_op != def.seq_op) try writer.print(" seq_op={s}", .{ @tagName(self.seq_op) });
+    if (self.next_uop != def.next_uop) try writer.print(" next_uop={x}", .{ self.next_uop });
 
-    pub fn print(self: *const Control_Signals, writer: anytype) !void {
-        const def = Control_Signals.init();
-        if (self.LITERAL != def.LITERAL) try writer.print(" LITERAL={x}", .{ self.LITERAL });
-        if (self.JR_RSEL != def.JR_RSEL) try writer.print(" JR_RSEL={s}", .{ @tagName(self.JR_RSEL) });
-        if (self.JR_RX != def.JR_RX) try writer.print(" JR_RX={}", .{ @boolToInt(self.JR_RX) });
-        if (self.KR_RSEL != def.KR_RSEL) try writer.print(" KR_RSEL={s}", .{ @tagName(self.KR_RSEL) });
-        if (self.KR_RX != def.KR_RX) try writer.print(" KR_RX={}", .{ @boolToInt(self.KR_RX) });
-        if (self.SR1_RI != def.SR1_RI) try writer.print(" SR1_RI={s}", .{ @tagName(self.SR1_RI) });
-        if (self.SR2_RI != def.SR2_RI) try writer.print(" SR2_RI={s}", .{ @tagName(self.SR2_RI) });
-        if (self.JL_SRC != def.JL_SRC) try writer.print(" JL_SRC={s}", .{ @tagName(self.JL_SRC) });
-        if (self.JH_SRC != def.JH_SRC) try writer.print(" JH_SRC={s}", .{ @tagName(self.JH_SRC) });
-        if (self.K_SRC != def.K_SRC) try writer.print(" K_SRC={s}", .{ @tagName(self.K_SRC) });
-        if (self.BASE != def.BASE) try writer.print(" BASE={s}", .{ @tagName(self.BASE) });
-        if (self.OFFSET != def.OFFSET) try writer.print(" OFFSET={s}", .{ @tagName(self.OFFSET) });
+    try writer.print("\n", .{});
+}
 
-        if (!std.meta.eql(self.ALU_MODE, def.ALU_MODE)) {
-            switch (self.ALU_MODE) {
-                .unknown => |value| {
-                    try writer.print(" ALU_MODE=unknown({X})", .{ value });
-                },
-                else => {
-                    const what: []const u8 = switch (self.ALU_MODE) {
-                        .arith    => |value| @tagName(value),
-                        .logic    => |value| @tagName(value),
-                        .mult     => |value| @tagName(value),
-                        .shift    => |value| @tagName(value),
-                        .bitcount => |value| @tagName(value),
-                        else => "none",
-                    };
-
-                    const ALU_Mode_Tag = comptime @typeInfo(ALU_Mode).Union.tag_type.?;
-                    try writer.print(" ALU_MODE={s}.{s}", .{ @tagName(@as(ALU_Mode_Tag, self.ALU_MODE)), what });
-                },
-            }
-        }
-        if (self.BUS_MODE != def.BUS_MODE) try writer.print(" BUS_MODE={s}", .{ @tagName(self.BUS_MODE) });
-        if (self.BUS_BYTE != def.BUS_BYTE) try writer.print(" BUS_BYTE={s}", .{ @tagName(self.BUS_BYTE) });
-        if (self.BUS_RW != def.BUS_RW) try writer.print(" BUS_RW={s}", .{ @tagName(self.BUS_RW) });
-        if (self.AT_OP != def.AT_OP) try writer.print(" AT_OP={s}", .{ @tagName(self.AT_OP) });
-        if (self.LL_SRC != def.LL_SRC) try writer.print(" LL_SRC={s}", .{ @tagName(self.LL_SRC) });
-        if (self.LH_SRC != def.LH_SRC) try writer.print(" LH_SRC={s}", .{ @tagName(self.LH_SRC) });
-        if (self.JKR_WSEL != def.JKR_WSEL) try writer.print(" JKR_WSEL={s}", .{ @tagName(self.JKR_WSEL) });
-        if (self.JKR_WMODE != def.JKR_WMODE) try writer.print(" JKR_WMODE={s}", .{ @tagName(self.JKR_WMODE) });
-        if (self.SR1_WSRC != def.SR1_WSRC) try writer.print(" SR1_WSRC={s}", .{ @tagName(self.SR1_WSRC) });
-        if (self.SR1_WI != def.SR1_WI) try writer.print(" SR1_WI={s}", .{ @tagName(self.SR1_WI) });
-        if (self.SR2_WSRC != def.SR2_WSRC) try writer.print(" SR2_WSRC={s}", .{ @tagName(self.SR2_WSRC) });
-        if (self.SR2_WI != def.SR2_WI) try writer.print(" SR2_WI={s}", .{ @tagName(self.SR2_WI) });
-        if (self.STAT_OP != def.STAT_OP) try writer.print(" STAT_OP={s}", .{ @tagName(self.STAT_OP) });
-        if (self.DL_OP != def.DL_OP) try writer.print(" DL_OP={s}", .{ @tagName(self.DL_OP) });
-        if (self.OB_OA_OP != def.OB_OA_OP) try writer.print(" OB_OA_OP={s}", .{ @tagName(self.OB_OA_OP) });
-        if (self.STAT_OP != def.STAT_OP) try writer.print(" STAT_OP={s}", .{ @tagName(self.STAT_OP) });
-        if (self.SPECIAL != def.SPECIAL) try writer.print(" SPECIAL={s}", .{ @tagName(self.SPECIAL) });
-        if (self.ALLOW_INT != def.ALLOW_INT) try writer.print(" ALLOW_INT={}", .{ @boolToInt(self.ALLOW_INT) });
-        if (self.SEQ_OP != def.SEQ_OP) try writer.print(" SEQ_OP={s}", .{ @tagName(self.SEQ_OP) });
-        if (self.NEXT_UOP != def.NEXT_UOP) try writer.print(" NEXT_UOP={x}", .{ self.NEXT_UOP });
-
-        try writer.print("\n", .{});
-    }
-
-    pub fn address_offset(self: *Control_Signals) misc.SignedOffsetForLiteral {
-        return switch (self.OFFSET) {
-            .zero => 0,
-            .two => 2,
-            .LITERAL => self.LITERAL,
-            .LITERAL_minus_64 => @as(misc.SignedOffsetForLiteral, self.LITERAL) - 64,
-        };
-    }
-};
+pub fn address_offset(self: *ControlSignals) misc.SignedOffsetForLiteral {
+    return switch (self.offset) {
+        .zero => 0,
+        .two => 2,
+        .LITERAL => self.literal,
+        .LITERAL_minus_64 => @as(misc.SignedOffsetForLiteral, self.literal) - 64,
+    };
+}
 
 pub const Literal = u6;
 
@@ -256,7 +255,7 @@ pub const JH_Source = enum(u3) {
     SR2H = 7,
 };
 
-pub const K_Source = enum(u3) {
+pub const KSource = enum(u3) {
     zero = 0,
     KR = 1,
     SR1L = 2,
@@ -357,8 +356,6 @@ pub const LL_Source = enum(u4) {
     bitcount = 5,
     D16 = 6,
     D8_sx = 7,
-    AT_ME_L = 10,
-    AT_OE_L = 11,
     STAT = 12,
     pipe_ID = 13,
     last_mmu_op_L = 14,
@@ -374,8 +371,6 @@ pub const LH_Source = enum(u4) {
     sx = 7, // repeat LL[15]
     JH = 8,
     prev_UA = 9,
-    AT_ME_H = 10,
-    AT_OE_H = 11,
     last_mmu_op_H = 14,
 };
 
@@ -412,7 +407,7 @@ pub const Bus_Mode = enum(u2) {
 // what should the address translator do this cycle?
 // bus operation is inhibited if not .translate
 pub const AT_Op = enum(u2) {
-    hold = 0, // uses ME/OE from previous cycle
+    none = 0,
     translate = 1,
     update = 2,
     invalidate = 3,
@@ -559,7 +554,6 @@ pub const STAT_Op = enum(u4) {
     ZN_from_L = 1,
     ZN_from_L_C_from_shift = 2,
     ZN_from_L_no_set_Z = 3,
-    ZN_from_address_translator = 4,
     ZN_from_LL = 5,
     ZN_from_LL_C_from_shift = 6,
     ZN_from_LL_no_set_Z = 7,

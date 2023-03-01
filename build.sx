@@ -14,7 +14,7 @@
     (pkg deep_hash_map)
 )
 (dir arch
-    (pkg control_signals)
+    (pkg ControlSignals)
     (pkg instruction_encoding)
     (pkg instruction_encoding_data)
     (pkg microcode)

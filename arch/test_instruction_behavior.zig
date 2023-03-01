@@ -1,6 +1,6 @@
 const std = @import("std");
 const ie = @import("instruction_encoding");
-const ctrl = @import("control_signals");
+const ControlSignals = @import("ControlSignals");
 const uc_roms = @import("microcode_rom_serialization.zig");
 const register_file = @import("register_file");
 const misc = @import("misc");
@@ -14,7 +14,7 @@ const expectEqual = std.testing.expectEqual;
 var arena: std.heap.ArenaAllocator = undefined;
 var ddb: ie.DecoderDatabase = undefined;
 var edb: ie.EncoderDatabase = undefined;
-var microcode: []ctrl.Control_Signals = undefined;
+var microcode: []ControlSignals = undefined;
 var globals_loaded = false;
 
 fn initSimulator(program: []const ie.Instruction) !Simulator {
@@ -22,7 +22,7 @@ fn initSimulator(program: []const ie.Instruction) !Simulator {
         arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
         ddb = try ie.DecoderDatabase.init(arena.allocator(), ie_data, std.testing.allocator);
         edb = try ie.EncoderDatabase.init(arena.allocator(), ie_data, std.testing.allocator);
-        microcode = try arena.allocator().alloc(ctrl.Control_Signals, misc.microcode_length);
+        microcode = try arena.allocator().alloc(ControlSignals, misc.microcode_length);
         uc_roms.readCompressedRoms(rom_data.compressed_data, microcode);
         globals_loaded = true;
     }

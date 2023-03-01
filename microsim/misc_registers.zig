@@ -1,11 +1,11 @@
 const sim = @import("Simulator");
-const ctrl = @import("control_signals");
+const ControlSignals = @import("ControlSignals");
 const misc = @import("misc");
 const bus = @import("bus");
 
 const SystemBusControl = @import("SystemBusControl.zig");
 
-pub fn readDL(dl: u16, DL_OP: ctrl.Data_Latch_Op, bus_ctrl: SystemBusControl) ?u16 {
+pub fn readDL(dl: u16, DL_OP: ControlSignals.Data_Latch_Op, bus_ctrl: SystemBusControl) ?u16 {
     if (DL_OP == .to_D and !bus_ctrl.read) {
         return dl;
     } else {
@@ -21,9 +21,9 @@ pub const TransactInputs = struct {
     inhibit_writes: bool,
     data: bus.D,
     ll: bus.LLow,
-    DL_OP: ctrl.Data_Latch_Op,
-    OB_OA_OP: ctrl.Operand_Reg_Op,
-    SPECIAL: ctrl.Special_Op,
+    DL_OP: ControlSignals.Data_Latch_Op,
+    OB_OA_OP: ControlSignals.Operand_Reg_Op,
+    SPECIAL: ControlSignals.Special_Op,
 };
 
 pub const TransactOutputs = struct {

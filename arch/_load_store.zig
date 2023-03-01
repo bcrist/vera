@@ -1,6 +1,6 @@
 const ib = @import("instruction_builder.zig");
 const cb = @import("cycle_builder.zig");
-const ctrl = @import("control_signals");
+const ControlSignals = @import("ControlSignals");
 const misc = @import("misc");
 
 const SignedOffsetForLiteral = misc.SignedOffsetForLiteral;
@@ -13,6 +13,7 @@ const KXP_relative = ib.KXP_relative;
 const Xa_relative = ib.Xa_relative;
 const desc = ib.desc;
 const next_cycle = ib.next_cycle;
+const conditional_next_cycle = ib.conditional_next_cycle;
 const opcode_high = ib.opcode_high;
 const OB = ib.OB;
 const kernel = ib.kernel;
@@ -29,8 +30,9 @@ const write_from_LL = cb.write_from_LL;
 const write_from_DL = cb.write_from_DL;
 const read_to_D = cb.read_to_D;
 const D_to_L = cb.D_to_L;
+const D_to_DL = cb.D_to_DL;
 const load_next_insn = cb.load_next_insn;
-const exec_next_insn = cb.exec_next_insn;
+const exec_next_insn_no_atomic_end = cb.exec_next_insn_no_atomic_end;
 const load_and_exec_next_insn = cb.load_and_exec_next_insn;
 const op_reg32_plus_op_reg_to_L = cb.op_reg32_plus_op_reg_to_L;
 const op_reg32_plus_literal_to_L = cb.op_reg32_plus_literal_to_L;
@@ -42,11 +44,7 @@ const SR_plus_SRL_to_L = cb.SR_plus_SRL_to_L;
 const L_to_op_reg32 = cb.L_to_op_reg32;
 const illegal_instruction = cb.illegal_instruction;
 const PN_to_SR = cb.PN_to_SR;
-
-const SPECIAL = cb.SPECIAL;
-const NEXT_UOP = cb.NEXT_UOP;
-const DL_OP = cb.DL_OP;
-const ALLOW_INT = cb.ALLOW_INT;
+const allow_interrupt = cb.allow_interrupt;
 
 fn fromRegPointer(inc: SignedOffsetForLiteral) void {
     op_reg32_plus_literal_to_L(.OA, inc, .fresh, .no_flags);
@@ -103,27 +101,25 @@ fn fromSPPlusImm16Offset() void {
     next_cycle();
 }
 
-fn opLoad8(reg: cb.OA_or_OB, bus_mode: ctrl.Bus_Mode, ext: cb.ZX_SX_or_1X, offset: SignedOffsetForLiteral) void {
+fn opLoad8(reg: cb.OA_or_OB, bus_mode: ControlSignals.Bus_Mode, ext: cb.ZX_SX_or_1X, offset: SignedOffsetForLiteral) void {
     read_to_D(.temp_1, offset, .byte, bus_mode);
     D_to_L(ext);
     LL_to_op_reg(switch (reg) {
         .OA => .OA,
         .OB => .OB,
     });
-    SPECIAL(.none); // don't clear atomic state
-    exec_next_insn();
+    exec_next_insn_no_atomic_end();
 }
-fn opLoad16(reg: cb.OA_or_OB, bus_mode: ctrl.Bus_Mode, offset: SignedOffsetForLiteral) void {
+fn opLoad16(reg: cb.OA_or_OB, bus_mode: ControlSignals.Bus_Mode, offset: SignedOffsetForLiteral) void {
     read_to_D(.temp_1, offset, .word, bus_mode);
     D_to_L(.zx);
     LL_to_op_reg(switch (reg) {
         .OA => .OA,
         .OB => .OB,
     });
-    SPECIAL(.none); // don't clear atomic state
-    exec_next_insn();
+    exec_next_insn_no_atomic_end();
 }
-fn opLoad32(reg: cb.OA_or_OB, bus_mode: ctrl.Bus_Mode, offset: SignedOffsetForLiteral) void {
+fn opLoad32(reg: cb.OA_or_OB, bus_mode: ControlSignals.Bus_Mode, offset: SignedOffsetForLiteral) void {
     read_to_D(.temp_1, offset, .word, bus_mode);
     D_to_L(.zx);
     LL_to_op_reg(switch (reg) {
@@ -138,25 +134,22 @@ fn opLoad32(reg: cb.OA_or_OB, bus_mode: ctrl.Bus_Mode, offset: SignedOffsetForLi
         .OA => .OAxor1,
         .OB => .OBxor1,
     });
-    SPECIAL(.none); // don't clear atomic state
-    exec_next_insn();
+    exec_next_insn_no_atomic_end();
 }
 
-fn load8(reg: misc.RegisterIndex, bus_mode: ctrl.Bus_Mode, ext: cb.ZX_SX_or_1X, offset: SignedOffsetForLiteral) void {
+fn load8(reg: misc.RegisterIndex, bus_mode: ControlSignals.Bus_Mode, ext: cb.ZX_SX_or_1X, offset: SignedOffsetForLiteral) void {
     read_to_D(.temp_1, offset, .byte, bus_mode);
     D_to_L(ext);
     LL_to_reg(reg);
-    SPECIAL(.none); // don't clear atomic state
-    exec_next_insn();
+    exec_next_insn_no_atomic_end();
 }
-fn load16(reg: misc.RegisterIndex, bus_mode: ctrl.Bus_Mode, offset: SignedOffsetForLiteral) void {
+fn load16(reg: misc.RegisterIndex, bus_mode: ControlSignals.Bus_Mode, offset: SignedOffsetForLiteral) void {
     read_to_D(.temp_1, offset, .word, bus_mode);
     D_to_L(.zx);
     LL_to_reg(reg);
-    SPECIAL(.none); // don't clear atomic state
-    exec_next_insn();
+    exec_next_insn_no_atomic_end();
 }
-fn load32(reg: misc.RegisterIndex, bus_mode: ctrl.Bus_Mode, offset: SignedOffsetForLiteral) void {
+fn load32(reg: misc.RegisterIndex, bus_mode: ControlSignals.Bus_Mode, offset: SignedOffsetForLiteral) void {
     read_to_D(.temp_1, offset, .word, bus_mode);
     D_to_L(.zx);
     LL_to_reg(reg);
@@ -165,29 +158,26 @@ fn load32(reg: misc.RegisterIndex, bus_mode: ctrl.Bus_Mode, offset: SignedOffset
     read_to_D(.temp_1, offset + 2, .word, bus_mode);
     D_to_L(.zx);
     LL_to_reg(reg ^ 1);
-    SPECIAL(.none); // don't clear atomic state
-    exec_next_insn();
+    exec_next_insn_no_atomic_end();
 }
 
-fn opStore8(reg: cb.OA_or_OB, bus_mode: ctrl.Bus_Mode, offset: SignedOffsetForLiteral) void {
+fn opStore8(reg: cb.OA_or_OB, bus_mode: ControlSignals.Bus_Mode, offset: SignedOffsetForLiteral) void {
     op_reg_to_LL(switch (reg) {
         .OA => .OA,
         .OB => .OB,
     });
     write_from_LL(.temp_1, offset, .byte, bus_mode);
-    SPECIAL(.none); // don't clear atomic state
-    exec_next_insn();
+    exec_next_insn_no_atomic_end();
 }
-fn opStore16(reg: cb.OA_or_OB, bus_mode: ctrl.Bus_Mode, offset: SignedOffsetForLiteral) void {
+fn opStore16(reg: cb.OA_or_OB, bus_mode: ControlSignals.Bus_Mode, offset: SignedOffsetForLiteral) void {
     op_reg_to_LL(switch (reg) {
         .OA => .OA,
         .OB => .OB,
     });
     write_from_LL(.temp_1, offset, .word, bus_mode);
-    SPECIAL(.none); // don't clear atomic state
-    exec_next_insn();
+    exec_next_insn_no_atomic_end();
 }
-fn opStore32(reg: cb.OA_or_OB, bus_mode: ctrl.Bus_Mode, offset: SignedOffsetForLiteral) void {
+fn opStore32(reg: cb.OA_or_OB, bus_mode: ControlSignals.Bus_Mode, offset: SignedOffsetForLiteral) void {
     op_reg_to_LL(switch (reg) {
         .OA => .OA,
         .OB => .OB,
@@ -200,31 +190,27 @@ fn opStore32(reg: cb.OA_or_OB, bus_mode: ctrl.Bus_Mode, offset: SignedOffsetForL
         .OB => .OBxor1,
     });
     write_from_LL(.temp_1, offset + 2, .word, bus_mode);
-    SPECIAL(.none); // don't clear atomic state
-    exec_next_insn();
+    exec_next_insn_no_atomic_end();
 }
 
-fn store8(reg: misc.RegisterIndex, bus_mode: ctrl.Bus_Mode, offset: SignedOffsetForLiteral) void {
+fn store8(reg: misc.RegisterIndex, bus_mode: ControlSignals.Bus_Mode, offset: SignedOffsetForLiteral) void {
     reg_to_LL(reg);
     write_from_LL(.temp_1, offset, .byte, bus_mode);
-    SPECIAL(.none); // don't clear atomic state
-    exec_next_insn();
+    exec_next_insn_no_atomic_end();
 }
-fn store16(reg: misc.RegisterIndex, bus_mode: ctrl.Bus_Mode, offset: SignedOffsetForLiteral) void {
+fn store16(reg: misc.RegisterIndex, bus_mode: ControlSignals.Bus_Mode, offset: SignedOffsetForLiteral) void {
     reg_to_LL(reg);
     write_from_LL(.temp_1, offset, .word, bus_mode);
-    SPECIAL(.none); // don't clear atomic state
-    exec_next_insn();
+    exec_next_insn_no_atomic_end();
 }
-fn store32(reg: misc.RegisterIndex, bus_mode: ctrl.Bus_Mode, offset: SignedOffsetForLiteral) void {
+fn store32(reg: misc.RegisterIndex, bus_mode: ControlSignals.Bus_Mode, offset: SignedOffsetForLiteral) void {
     reg_to_LL(reg);
     write_from_LL(.temp_1, offset, .word, bus_mode);
     next_cycle();
 
     reg_to_LL(reg ^ 1);
     write_from_LL(.temp_1, offset + 2, .word, bus_mode);
-    SPECIAL(.none); // don't clear atomic state
-    exec_next_insn();
+    exec_next_insn_no_atomic_end();
 }
 
 // Instruction memory loads
@@ -792,17 +778,17 @@ pub fn _0C60_0C6F() void {
     desc("Copy a block of memory.  BP points to the first byte of the source block and RP points to the first byte of the destination block.  If blocks overlap, BP must be larger than RP.  If a block crosses a page boundary, it must be word aligned.  Takes approximately block_bytes + 2 cycles to complete.");
 
     op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
-    NEXT_UOP(0x207);
+    conditional_next_cycle(0x207);
 }
 pub fn _continuation_207() void {
     if (negative()) {
         // length == 0 or 1 bytes
         op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
-        NEXT_UOP(0x208);
+        conditional_next_cycle(0x208);
     } else if (zero()) {
         // length == 2 bytes
         read_to_D(.bp, 0, .word, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
         L_to_op_reg32(.OA);
         next_cycle();
@@ -814,14 +800,14 @@ pub fn _continuation_207() void {
     } else {
         // length > 2 bytes
         read_to_D(.bp, 0, .word, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
         L_to_op_reg32(.OA);
         next_cycle();
 
         write_from_DL(.rp, 0, .word, .data);
         op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
-        NEXT_UOP(0x209);
+        conditional_next_cycle(0x209);
     }
 }
 pub fn _continuation_208() void {
@@ -832,7 +818,7 @@ pub fn _continuation_208() void {
     } else {
         // length == 1 byte
         read_to_D(.bp, 0, .byte, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
         L_to_op_reg32(.OA);
         next_cycle();
@@ -847,7 +833,7 @@ pub fn _continuation_209() void {
     if (negative()) {
         // exactly 1 byte left
         read_to_D(.bp, 2, .byte, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         PN_to_SR(.bp);
         op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
         L_to_op_reg32(.OA);
@@ -861,7 +847,7 @@ pub fn _continuation_209() void {
     } else if (zero()) {
         // exactly 2 bytes left
         read_to_D(.bp, 2, .word, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         PN_to_SR(.bp);
         op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
         L_to_op_reg32(.OA);
@@ -875,7 +861,7 @@ pub fn _continuation_209() void {
     } else {
         // > 2 bytes left
         read_to_D(.bp, 2, .word, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         PN_to_SR(.bp);
         op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
         L_to_op_reg32(.OA);
@@ -883,8 +869,8 @@ pub fn _continuation_209() void {
 
         write_from_DL(.rp, 2, .word, .data);
         op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
-        ALLOW_INT(true);
-        NEXT_UOP(0x209);
+        allow_interrupt();
+        conditional_next_cycle(0x209);
     }
 }
 
@@ -893,7 +879,7 @@ pub fn _0C70_0C7F() void {
     desc("Copy a block of memory with byte transfers only.  BP points to the first byte of the source block and RP points to the first byte of the destination block.  If blocks overlap, BP must be larger than RP.  Takes approximately block_bytes * 2 + 2 cycles to complete, but is not susceptible to any of the alignment constraints of MCR.");
 
     op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
-    NEXT_UOP(0x20A);
+    conditional_next_cycle(0x20A);
 }
 pub fn _continuation_20A() void {
     if (negative()) {
@@ -903,7 +889,7 @@ pub fn _continuation_20A() void {
     } else if (zero()) {
         // length == 1 byte
         read_to_D(.bp, 0, .byte, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
         L_to_op_reg32(.OA);
         next_cycle();
@@ -915,14 +901,14 @@ pub fn _continuation_20A() void {
     } else {
         // length > 1 byte
         read_to_D(.bp, 0, .byte, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
         L_to_op_reg32(.OA);
         next_cycle();
 
         write_from_DL(.rp, 0, .byte, .data);
         op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
-        NEXT_UOP(0x20B);
+        conditional_next_cycle(0x20B);
     }
 }
 pub fn _continuation_20B() void {
@@ -930,7 +916,7 @@ pub fn _continuation_20B() void {
     if (zero()) {
         // exactly 1 byte left
         read_to_D(.bp, 1, .byte, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         PN_to_SR(.bp);
         op_reg32_minus_literal_to_L(.OA, 1, .fresh, .flags);
         L_to_op_reg32(.OA);
@@ -944,7 +930,7 @@ pub fn _continuation_20B() void {
     } else {
         // > 1 byte left
         read_to_D(.bp, 1, .byte, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         PN_to_SR(.bp);
         op_reg32_minus_literal_to_L(.OA, 1, .fresh, .flags);
         L_to_op_reg32(.OA);
@@ -953,8 +939,8 @@ pub fn _continuation_20B() void {
         write_from_DL(.rp, 1, .byte, .data);
         PN_to_SR(.rp);
         op_reg32_minus_literal_to_L(.OA, 1, .fresh, .flags);
-        ALLOW_INT(true);
-        NEXT_UOP(0x20B);
+        allow_interrupt();
+        conditional_next_cycle(0x20B);
     }
 }
 
@@ -963,17 +949,17 @@ pub fn _0CA0_0CAF() void {
     desc("Copy a block of memory.  BP points to the byte following the source block and RP points to the byte following the destination block.  If blocks overlap, BP must be smaller than RP.  If a block crosses a page boundary, it must be word aligned.  Takes approximately block_bytes + 2 cycles to complete.");
 
     op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
-    NEXT_UOP(0x20C);
+    conditional_next_cycle(0x20C);
 }
 pub fn _continuation_20C() void {
     if (negative()) {
         // length == 0 or 1 bytes
         op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
-        NEXT_UOP(0x20D);
+        conditional_next_cycle(0x20D);
     } else if (zero()) {
         // length == 2 bytes
         read_to_D(.bp, -2, .word, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         PN_to_SR(.bp);
         op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
         L_to_op_reg32(.OA);
@@ -987,7 +973,7 @@ pub fn _continuation_20C() void {
     } else {
         // length > 2 bytes
         read_to_D(.bp, -2, .word, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         PN_to_SR(.bp);
         op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
         L_to_op_reg32(.OA);
@@ -996,7 +982,7 @@ pub fn _continuation_20C() void {
         write_from_DL(.rp, -2, .word, .data);
         PN_to_SR(.rp);
         op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
-        NEXT_UOP(0x20E);
+        conditional_next_cycle(0x20E);
     }
 }
 pub fn _continuation_20D() void {
@@ -1007,7 +993,7 @@ pub fn _continuation_20D() void {
     } else {
         // length == 1 byte
         read_to_D(.bp, -1, .byte, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         PN_to_SR(.bp);
         op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
         L_to_op_reg32(.OA);
@@ -1024,7 +1010,7 @@ pub fn _continuation_20E() void {
     if (negative()) {
         // exactly 1 byte left
         read_to_D(.bp, -1, .byte, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         PN_to_SR(.bp);
         op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
         L_to_op_reg32(.OA);
@@ -1038,7 +1024,7 @@ pub fn _continuation_20E() void {
     } else if (zero()) {
         // exactly 2 bytes left
         read_to_D(.bp, -2, .word, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         PN_to_SR(.bp);
         op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
         L_to_op_reg32(.OA);
@@ -1052,7 +1038,7 @@ pub fn _continuation_20E() void {
     } else {
         // > 2 bytes left
         read_to_D(.bp, -2, .word, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         PN_to_SR(.bp);
         op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
         L_to_op_reg32(.OA);
@@ -1061,8 +1047,8 @@ pub fn _continuation_20E() void {
         write_from_DL(.rp, -2, .word, .data);
         PN_to_SR(.rp);
         op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
-        ALLOW_INT(true);
-        NEXT_UOP(0x20E);
+        allow_interrupt();
+        conditional_next_cycle(0x20E);
     }
 }
 
@@ -1071,7 +1057,7 @@ pub fn _0CB0_0CBF() void {
     desc("Copy a block of memory with byte transfers only.  BP points to the byte following the source block and RP points to the byte following the destination block.  If blocks overlap, BP must be smaller than RP.  Takes approximately block_bytes * 2 + 2 cycles to complete, but is not susceptible to any of the alignment constraints of MCF.");
 
     op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
-    NEXT_UOP(0x20F);
+    conditional_next_cycle(0x20F);
 }
 pub fn _continuation_20F() void {
     if (negative()) {
@@ -1081,7 +1067,7 @@ pub fn _continuation_20F() void {
     } else if (zero()) {
         // length == 1 byte
         read_to_D(.bp, -1, .byte, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         PN_to_SR(.bp);
         op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
         L_to_op_reg32(.OA);
@@ -1095,7 +1081,7 @@ pub fn _continuation_20F() void {
     } else {
         // length > 1 byte
         read_to_D(.bp, -1, .byte, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         PN_to_SR(.bp);
         op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
         L_to_op_reg32(.OA);
@@ -1104,8 +1090,8 @@ pub fn _continuation_20F() void {
         write_from_DL(.rp, -1, .byte, .data);
         PN_to_SR(.rp);
         op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
-        ALLOW_INT(true);
-        NEXT_UOP(0x20F);
+        allow_interrupt();
+        conditional_next_cycle(0x20F);
     }
 }
 
@@ -1114,17 +1100,17 @@ pub fn _0CC0_0CCF() void {
     desc("Stream from a fixed address to a block of memory.  BP points to the fixed address and RP points to the first byte of the destination block.  If the block crosses a page boundary, it must be word aligned.  Takes approximately block_bytes + 2 cycles to complete.");
 
     op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
-    NEXT_UOP(0x207);
+    conditional_next_cycle(0x207);
 }
 pub fn _continuation_210() void {
     if (negative()) {
         // length == 0 or 1 bytes
         op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
-        NEXT_UOP(0x211);
+        conditional_next_cycle(0x211);
     } else if (zero()) {
         // length == 2 bytes
         read_to_D(.bp, 0, .word, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
         L_to_op_reg32(.OA);
         next_cycle();
@@ -1136,14 +1122,14 @@ pub fn _continuation_210() void {
     } else {
         // length > 2 bytes
         read_to_D(.bp, 0, .word, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
         L_to_op_reg32(.OA);
         next_cycle();
 
         write_from_DL(.rp, 0, .word, .data);
         op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
-        NEXT_UOP(0x212);
+        conditional_next_cycle(0x212);
     }
 }
 pub fn _continuation_211() void {
@@ -1154,7 +1140,7 @@ pub fn _continuation_211() void {
     } else {
         // length == 1 byte
         read_to_D(.bp, 0, .byte, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
         L_to_op_reg32(.OA);
         next_cycle();
@@ -1169,7 +1155,7 @@ pub fn _continuation_212() void {
     if (negative()) {
         // exactly 1 byte left
         read_to_D(.bp, 0, .byte, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
         L_to_op_reg32(.OA);
         next_cycle();
@@ -1182,7 +1168,7 @@ pub fn _continuation_212() void {
     } else if (zero()) {
         // exactly 2 bytes left
         read_to_D(.bp, 0, .word, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
         L_to_op_reg32(.OA);
         next_cycle();
@@ -1195,15 +1181,15 @@ pub fn _continuation_212() void {
     } else {
         // > 2 bytes left
         read_to_D(.bp, 0, .word, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
         L_to_op_reg32(.OA);
         next_cycle();
 
         write_from_DL(.rp, 2, .word, .data);
         op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
-        ALLOW_INT(true);
-        NEXT_UOP(0x212);
+        allow_interrupt();
+        conditional_next_cycle(0x212);
     }
 }
 
@@ -1212,7 +1198,7 @@ pub fn _0CD0_0CDF() void {
     desc("Stream from a fixed address to a block of memory, with byte transfers only.  BP points to the fixed address and RP points to the first byte of the destination block.  Takes approximately block_bytes * 2 + 2 cycles to complete, but is not susceptible to any of the alignment constraints of SI.");
 
     op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
-    NEXT_UOP(0x213);
+    conditional_next_cycle(0x213);
 }
 pub fn _continuation_213() void {
     if (negative()) {
@@ -1222,7 +1208,7 @@ pub fn _continuation_213() void {
     } else if (zero()) {
         // length == 1 byte
         read_to_D(.bp, 0, .byte, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
         L_to_op_reg32(.OA);
         next_cycle();
@@ -1234,14 +1220,14 @@ pub fn _continuation_213() void {
     } else {
         // length > 1 byte
         read_to_D(.bp, 0, .byte, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
         L_to_op_reg32(.OA);
         next_cycle();
 
         write_from_DL(.rp, 0, .byte, .data);
         op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
-        NEXT_UOP(0x214);
+        conditional_next_cycle(0x214);
     }
 }
 pub fn _continuation_214() void {
@@ -1249,7 +1235,7 @@ pub fn _continuation_214() void {
     if (zero()) {
         // exactly 1 byte left
         read_to_D(.bp, 0, .byte, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         op_reg32_minus_literal_to_L(.OA, 1, .fresh, .flags);
         L_to_op_reg32(.OA);
         next_cycle();
@@ -1262,7 +1248,7 @@ pub fn _continuation_214() void {
     } else {
         // > 1 byte left
         read_to_D(.bp, 0, .byte, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         op_reg32_minus_literal_to_L(.OA, 1, .fresh, .flags);
         L_to_op_reg32(.OA);
         next_cycle();
@@ -1270,8 +1256,8 @@ pub fn _continuation_214() void {
         write_from_DL(.rp, 1, .byte, .data);
         PN_to_SR(.rp);
         op_reg32_minus_literal_to_L(.OA, 1, .fresh, .flags);
-        ALLOW_INT(true);
-        NEXT_UOP(0x214);
+        allow_interrupt();
+        conditional_next_cycle(0x214);
     }
 }
 
@@ -1280,17 +1266,17 @@ pub fn _0CE0_0CEF() void {
     desc("Stream a block of memory to a fixed address.  BP points to the first byte of the source block and RP points to the fixed destination address.  If the block crosses a page boundary, it must be word aligned.  Takes approximately block_bytes + 2 cycles to complete.");
 
     op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
-    NEXT_UOP(0x215);
+    conditional_next_cycle(0x215);
 }
 pub fn _continuation_215() void {
     if (negative()) {
         // length == 0 or 1 bytes
         op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
-        NEXT_UOP(0x216);
+        conditional_next_cycle(0x216);
     } else if (zero()) {
         // length == 2 bytes
         read_to_D(.bp, 0, .word, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
         L_to_op_reg32(.OA);
         next_cycle();
@@ -1302,14 +1288,14 @@ pub fn _continuation_215() void {
     } else {
         // length > 2 bytes
         read_to_D(.bp, 0, .word, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
         L_to_op_reg32(.OA);
         next_cycle();
 
         write_from_DL(.rp, 0, .word, .data);
         op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
-        NEXT_UOP(0x217);
+        conditional_next_cycle(0x217);
     }
 }
 pub fn _continuation_216() void {
@@ -1320,7 +1306,7 @@ pub fn _continuation_216() void {
     } else {
         // length == 1 byte
         read_to_D(.bp, 0, .byte, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
         L_to_op_reg32(.OA);
         next_cycle();
@@ -1335,7 +1321,7 @@ pub fn _continuation_217() void {
     if (negative()) {
         // exactly 1 byte left
         read_to_D(.bp, 2, .byte, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         PN_to_SR(.bp);
         op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
         L_to_op_reg32(.OA);
@@ -1348,7 +1334,7 @@ pub fn _continuation_217() void {
     } else if (zero()) {
         // exactly 2 bytes left
         read_to_D(.bp, 2, .word, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         PN_to_SR(.bp);
         op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
         L_to_op_reg32(.OA);
@@ -1361,7 +1347,7 @@ pub fn _continuation_217() void {
     } else {
         // > 2 bytes left
         read_to_D(.bp, 2, .word, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         PN_to_SR(.bp);
         op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
         L_to_op_reg32(.OA);
@@ -1369,8 +1355,8 @@ pub fn _continuation_217() void {
 
         write_from_DL(.rp, 0, .word, .data);
         op_reg32_plus_literal_to_L(.OA, -2, .fresh, .flags);
-        ALLOW_INT(true);
-        NEXT_UOP(0x217);
+        allow_interrupt();
+        conditional_next_cycle(0x217);
     }
 }
 
@@ -1379,7 +1365,7 @@ pub fn _0CF0_0CFF() void {
     desc("Stream a block of memory to a fixed address, with byte transfers only.  BP points to the first byte of the source block and RP points to the fixed destination address.  Takes approximately block_bytes * 2 + 2 cycles to complete, but is not susceptible to any of the alignment constraints of SO.");
 
     op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
-    NEXT_UOP(0x218);
+    conditional_next_cycle(0x218);
 }
 pub fn _continuation_218() void {
     if (negative()) {
@@ -1389,7 +1375,7 @@ pub fn _continuation_218() void {
     } else if (zero()) {
         // length == 1 byte
         read_to_D(.bp, 0, .byte, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
         L_to_op_reg32(.OA);
         next_cycle();
@@ -1401,14 +1387,14 @@ pub fn _continuation_218() void {
     } else {
         // length > 1 byte
         read_to_D(.bp, 0, .byte, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
         L_to_op_reg32(.OA);
         next_cycle();
 
         write_from_DL(.rp, 0, .byte, .data);
         op_reg32_plus_literal_to_L(.OA, -1, .fresh, .flags);
-        NEXT_UOP(0x219);
+        conditional_next_cycle(0x219);
     }
 }
 pub fn _continuation_219() void {
@@ -1416,7 +1402,7 @@ pub fn _continuation_219() void {
     if (zero()) {
         // exactly 1 byte left
         read_to_D(.bp, 1, .byte, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         PN_to_SR(.bp);
         op_reg32_minus_literal_to_L(.OA, 1, .fresh, .flags);
         L_to_op_reg32(.OA);
@@ -1429,7 +1415,7 @@ pub fn _continuation_219() void {
     } else {
         // > 1 byte left
         read_to_D(.bp, 1, .byte, .data);
-        DL_OP(.from_D);
+        D_to_DL();
         PN_to_SR(.bp);
         op_reg32_minus_literal_to_L(.OA, 1, .fresh, .flags);
         L_to_op_reg32(.OA);
@@ -1437,7 +1423,7 @@ pub fn _continuation_219() void {
 
         write_from_DL(.rp, 0, .byte, .data);
         op_reg32_minus_literal_to_L(.OA, 1, .fresh, .flags);
-        ALLOW_INT(true);
-        NEXT_UOP(0x219);
+        allow_interrupt();
+        conditional_next_cycle(0x219);
     }
 }

@@ -1,7 +1,7 @@
 const std = @import("std");
 const allocators = @import("allocators.zig");
 const uc = @import("microcode");
-const ctrl = @import("control_signals");
+const ControlSignals = @import("ControlSignals");
 const misc = @import("misc");
 const instruction_encoding = @import("instruction_encoding");
 const microcode_builder = @import("microcode_builder.zig");
@@ -11,7 +11,6 @@ const cycle_builder = @import("cycle_builder.zig");
 const assert = std.debug.assert;
 
 const Opcode = misc.Opcode;
-const Control_Signals = ctrl.Control_Signals;
 
 const Mnemonic = instruction_encoding.Mnemonic;
 const MnemonicSuffix = instruction_encoding.MnemonicSuffix;
@@ -72,7 +71,7 @@ const InstructionData = struct {
     }
 };
 pub var insn: ?*InstructionData = null;
-var completed_cycles = std.ArrayList(Control_Signals).init(allocators.global_arena.allocator());
+var completed_cycles = std.ArrayList(ControlSignals).init(allocators.global_arena.allocator());
 
 pub fn encoding(mnemonic: Mnemonic, comptime args: anytype) void {
     if (insn) |i| {
@@ -356,6 +355,29 @@ pub fn next_cycle() void {
     cycle_builder.start();
 }
 
+pub fn next_cycle_force_normal_execution() void {
+    cycle_builder.setControlSignal(.seq_op, .next_uop_force_normal);
+    next_cycle();
+}
+
+pub fn conditional_next_cycle(continuation: uc.Continuation) void {
+    cycle_builder.setControlSignal(.next_uop, continuation);
+    end_instruction();
+}
+
+pub fn fault_return() void {
+    cycle_builder.SR1_to_L(.fault_ua_dl); // .fault_return implies LH -> UA
+    cycle_builder.setControlSignal(.seq_op, .fault_return);
+    end_instruction();
+}
+
+// It's not normally necessary to call this; it only exists to prevent accidentally
+// creating additional cycles after a branch or load of a new instruction.
+pub fn end_instruction() void {
+    completed_cycles.append(cycle_builder.finish()) catch @panic("Out of memory");
+    insn.?.cycle_started = false;
+}
+
 pub fn processScope(comptime T: type) !void {
     @setEvalBranchQuota(10000);
     inline for (@typeInfo(T).Struct.decls) |decl| {
@@ -445,7 +467,7 @@ pub fn processContinuation(continuation: uc.Continuation, func: *const fn () voi
     }
 }
 
-fn storeInitialContinuationCycleFlagPermutations(continuation: uc.Continuation, initial_cycle: *Control_Signals, queried_flag_permutation: uc.FlagSet, unqueried_flags: uc.FlagSet) void {
+fn storeInitialContinuationCycleFlagPermutations(continuation: uc.Continuation, initial_cycle: *ControlSignals, queried_flag_permutation: uc.FlagSet, unqueried_flags: uc.FlagSet) void {
     var unqueried_permutations = uc.flagPermutationIterator(unqueried_flags);
     _ = unqueried_permutations.next(); // we already processed the no-flags case
     while (unqueried_permutations.next()) |unqueried_flag_permutation| {
@@ -592,7 +614,7 @@ fn processOpcode(original_range: instruction_encoding.OpcodeRange, the_opcode: O
     };
 }
 
-fn storeInitialCycleFlagPermutations(the_opcode: Opcode, initial_cycle: *Control_Signals, queried_flag_permutation: uc.FlagSet, unqueried_flags: uc.FlagSet) void {
+fn storeInitialCycleFlagPermutations(the_opcode: Opcode, initial_cycle: *ControlSignals, queried_flag_permutation: uc.FlagSet, unqueried_flags: uc.FlagSet) void {
     var unqueried_permutations = uc.flagPermutationIterator(unqueried_flags);
     _ = unqueried_permutations.next(); // we already processed the no-flags case
     while (unqueried_permutations.next()) |unqueried_flag_permutation| {
@@ -614,7 +636,7 @@ const ProcessConfig = struct {
 const ProcessResult = struct {
     encoding: ?InstructionEncoding,
     description: ?[]const u8,
-    initial_cycle: *Control_Signals,
+    initial_cycle: *ControlSignals,
     queried_opcode: bool,
     queried_flags: uc.FlagSet,
     next_unread_insn_offset: misc.SignedOffsetForLiteral,
@@ -654,7 +676,7 @@ fn process(config: ProcessConfig) ProcessResult {
     while (c > 0) : (c -= 1) {
         const cycle = &cycles[c];
         const ua = microcode_builder.getOrCreateUnconditionalContinuation(cycle);
-        cycles[c - 1].NEXT_UOP = uc.getContinuationNumberForAddress(ua).?;
+        cycles[c - 1].next_uop = uc.getContinuationNumberForAddress(ua).?;
     }
 
     if (!uc.isContinuationOrHandler(config.initial_uc_address)) {

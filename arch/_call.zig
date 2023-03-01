@@ -1,4 +1,3 @@
-const ctrl = @import("control_signals");
 const ib = @import("instruction_builder.zig");
 const cb = @import("cycle_builder.zig");
 

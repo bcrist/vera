@@ -2,175 +2,174 @@ const std = @import("std");
 const rom_compress = @import("rom_compress");
 const rom_decompress = @import("rom_decompress");
 const srec = @import("srec");
-const ctrl = @import("control_signals");
+const ControlSignals = @import("ControlSignals");
 const uc = @import("microcode");
 const misc = @import("misc");
 
-const Control_Signals = ctrl.Control_Signals;
 pub const Roms = [6][]const u8;
 
 const RomEntry = rom_compress.Entry(u16, u16);
 
 const Rom0Data = packed struct {
-    LITERAL: ctrl.Literal, // 6
-    JR_RSEL: ctrl.Reg_File_Indexing_Source, // 2
-    KR_RSEL: ctrl.Reg_File_Indexing_Source, // 2
-    JR_RX: bool, // 1
-    KR_RX: bool, // 1
-    JL_SRC: ctrl.JL_Source, // 2
-    DL_OP: ctrl.Data_Latch_Op, // 2
+    literal: ControlSignals.Literal, // 6
+    jr_rsel: ControlSignals.Reg_File_Indexing_Source, // 2
+    kr_rsel: ControlSignals.Reg_File_Indexing_Source, // 2
+    jr_rx: bool, // 1
+    kr_rx: bool, // 1
+    jl_src: ControlSignals.JL_Source, // 2
+    dl_op: ControlSignals.Data_Latch_Op, // 2
 
-    fn init(cs: Control_Signals) Rom0Data {
+    fn init(cs: ControlSignals) Rom0Data {
         return .{
-            .LITERAL = cs.LITERAL,
-            .JR_RSEL = cs.JR_RSEL,
-            .KR_RSEL = cs.KR_RSEL,
-            .JR_RX = cs.JR_RX,
-            .KR_RX = cs.KR_RX,
-            .JL_SRC = cs.JL_SRC,
-            .DL_OP = cs.DL_OP,
+            .literal = cs.literal,
+            .jr_rsel = cs.jr_rsel,
+            .kr_rsel = cs.kr_rsel,
+            .jr_rx = cs.jr_rx,
+            .kr_rx = cs.kr_rx,
+            .jl_src = cs.jl_src,
+            .dl_op = cs.dl_op,
         };
     }
-    fn apply(self: Rom0Data, cs: *Control_Signals) void {
-        cs.LITERAL = self.LITERAL;
-        cs.JR_RSEL = self.JR_RSEL;
-        cs.KR_RSEL = self.KR_RSEL;
-        cs.JR_RX = self.JR_RX;
-        cs.KR_RX = self.KR_RX;
-        cs.JL_SRC = self.JL_SRC;
-        cs.DL_OP = self.DL_OP;
+    fn apply(self: Rom0Data, cs: *ControlSignals) void {
+        cs.literal = self.literal;
+        cs.jr_rsel = self.jr_rsel;
+        cs.kr_rsel = self.kr_rsel;
+        cs.jr_rx = self.jr_rx;
+        cs.kr_rx = self.kr_rx;
+        cs.jl_src = self.jl_src;
+        cs.dl_op = self.dl_op;
     }
 };
 
 const Rom1Data = packed struct {
-    JH_SRC: ctrl.JH_Source, // 3
-    K_SRC: ctrl.K_Source, // 3
-    SR1_RI: ctrl.SR1Index, // 3
-    SR2_RI: ctrl.SR2Index, // 3
-    LL_SRC: ctrl.LL_Source, // 4
+    jh_src: ControlSignals.JH_Source, // 3
+    k_src: ControlSignals.KSource, // 3
+    sr1_ri: ControlSignals.SR1Index, // 3
+    sr2_ri: ControlSignals.SR2Index, // 3
+    ll_src: ControlSignals.LL_Source, // 4
 
-    fn init(cs: Control_Signals) Rom1Data {
+    fn init(cs: ControlSignals) Rom1Data {
         return .{
-            .JH_SRC = cs.JH_SRC,
-            .K_SRC = cs.K_SRC,
-            .SR1_RI = cs.SR1_RI,
-            .SR2_RI = cs.SR2_RI,
-            .LL_SRC = cs.LL_SRC,
+            .jh_src = cs.jh_src,
+            .k_src = cs.k_src,
+            .sr1_ri = cs.sr1_ri,
+            .sr2_ri = cs.sr2_ri,
+            .ll_src = cs.ll_src,
         };
     }
-    fn apply(self: Rom1Data, cs: *Control_Signals) void {
-        cs.JH_SRC = self.JH_SRC;
-        cs.K_SRC = self.K_SRC;
-        cs.SR1_RI = self.SR1_RI;
-        cs.SR2_RI = self.SR2_RI;
-        cs.LL_SRC = self.LL_SRC;
+    fn apply(self: Rom1Data, cs: *ControlSignals) void {
+        cs.jh_src = self.jh_src;
+        cs.k_src = self.k_src;
+        cs.sr1_ri = self.sr1_ri;
+        cs.sr2_ri = self.sr2_ri;
+        cs.ll_src = self.ll_src;
     }
 };
 
 const Rom2Data = packed struct {
-    OFFSET: ctrl.Address_Offset, // 2
-    ALU_MODE: u4, // 4
-    BUS_MODE: ctrl.Bus_Mode, // 2
-    BUS_BYTE: ctrl.Bus_Width, // 1
-    BUS_RW: ctrl.Bus_Direction, // 1
-    AT_OP: ctrl.AT_Op, // 2
-    SPECIAL: ctrl.Special_Op, // 3
+    offset: ControlSignals.Address_Offset, // 2
+    alu_mode: u4, // 4
+    bus_mode: ControlSignals.Bus_Mode, // 2
+    bus_byte: ControlSignals.Bus_Width, // 1
+    bus_rw: ControlSignals.Bus_Direction, // 1
+    at_op: ControlSignals.AT_Op, // 2
+    special: ControlSignals.Special_Op, // 3
     _: u1 = 0,
 
-    fn init(cs: Control_Signals) Rom2Data {
+    fn init(cs: ControlSignals) Rom2Data {
         return .{
-            .OFFSET = cs.OFFSET,
-            .ALU_MODE = cs.ALU_MODE.raw(),
-            .BUS_MODE = cs.BUS_MODE,
-            .BUS_BYTE = cs.BUS_BYTE,
-            .BUS_RW = cs.BUS_RW,
-            .AT_OP = cs.AT_OP,
-            .SPECIAL = cs.SPECIAL,
+            .offset = cs.offset,
+            .alu_mode = cs.alu_mode.raw(),
+            .bus_mode = cs.bus_mode,
+            .bus_byte = cs.bus_byte,
+            .bus_rw = cs.bus_rw,
+            .at_op = cs.at_op,
+            .special = cs.special,
         };
     }
-    fn apply(self: Rom2Data, cs: *Control_Signals) void {
-        cs.OFFSET = self.OFFSET;
-        cs.ALU_MODE = .{ .unknown = self.ALU_MODE };
-        cs.BUS_MODE = self.BUS_MODE;
-        cs.BUS_BYTE = self.BUS_BYTE;
-        cs.BUS_RW = self.BUS_RW;
-        cs.AT_OP = self.AT_OP;
-        cs.SPECIAL = self.SPECIAL;
+    fn apply(self: Rom2Data, cs: *ControlSignals) void {
+        cs.offset = self.offset;
+        cs.alu_mode = .{ .unknown = self.alu_mode };
+        cs.bus_mode = self.bus_mode;
+        cs.bus_byte = self.bus_byte;
+        cs.bus_rw = self.bus_rw;
+        cs.at_op = self.at_op;
+        cs.special = self.special;
     }
 };
 
 const Rom3Data = packed struct {
-    OB_OA_OP: ctrl.Operand_Reg_Op, // 2
-    LH_SRC: ctrl.LH_Source, // 4
-    JKR_WSEL: ctrl.Reg_File_Indexing_Source, // 2
-    JKR_WMODE: ctrl.Reg_File_Write_Mode, // 2
-    SR1_WI: ctrl.SR1Index, // 3
-    SR2_WI: ctrl.SR2Index, // 3
+    ob_oa_op: ControlSignals.Operand_Reg_Op, // 2
+    lh_src: ControlSignals.LH_Source, // 4
+    jkr_wsel: ControlSignals.Reg_File_Indexing_Source, // 2
+    jkr_wmode: ControlSignals.Reg_File_Write_Mode, // 2
+    sr1_wi: ControlSignals.SR1Index, // 3
+    sr2_wi: ControlSignals.SR2Index, // 3
 
-    fn init(cs: Control_Signals) Rom3Data {
+    fn init(cs: ControlSignals) Rom3Data {
         return .{
-            .OB_OA_OP = cs.OB_OA_OP,
-            .LH_SRC = cs.LH_SRC,
-            .JKR_WSEL = cs.JKR_WSEL,
-            .JKR_WMODE = cs.JKR_WMODE,
-            .SR1_WI = cs.SR1_WI,
-            .SR2_WI = cs.SR2_WI,
+            .ob_oa_op = cs.ob_oa_op,
+            .lh_src = cs.lh_src,
+            .jkr_wsel = cs.jkr_wsel,
+            .jkr_wmode = cs.jkr_wmode,
+            .sr1_wi = cs.sr1_wi,
+            .sr2_wi = cs.sr2_wi,
         };
     }
-    fn apply(self: Rom3Data, cs: *Control_Signals) void {
-        cs.OB_OA_OP = self.OB_OA_OP;
-        cs.LH_SRC = self.LH_SRC;
-        cs.JKR_WSEL = self.JKR_WSEL;
-        cs.JKR_WMODE = self.JKR_WMODE;
-        cs.SR1_WI = self.SR1_WI;
-        cs.SR2_WI = self.SR2_WI;
+    fn apply(self: Rom3Data, cs: *ControlSignals) void {
+        cs.ob_oa_op = self.ob_oa_op;
+        cs.lh_src = self.lh_src;
+        cs.jkr_wsel = self.jkr_wsel;
+        cs.jkr_wmode = self.jkr_wmode;
+        cs.sr1_wi = self.sr1_wi;
+        cs.sr2_wi = self.sr2_wi;
     }
 };
 
 const Rom4Data = packed struct {
-    SR1_WSRC: ctrl.SR1_Write_Data_Source, // 2
-    SR2_WSRC: ctrl.SR2_Write_Data_Source, // 2
-    STAT_OP: ctrl.STAT_Op, // 4
-    ALLOW_INT: bool, // 1
-    SEQ_OP: ctrl.Sequencer_Op, // 2
+    sr1_wsrc: ControlSignals.SR1_Write_Data_Source, // 2
+    sr2_wsrc: ControlSignals.SR2_Write_Data_Source, // 2
+    stat_op: ControlSignals.STAT_Op, // 4
+    allow_int: bool, // 1
+    seq_op: ControlSignals.Sequencer_Op, // 2
     _: u5 = 0, // 5
 
-    fn init(cs: Control_Signals) Rom4Data {
+    fn init(cs: ControlSignals) Rom4Data {
         return .{
-            .SR1_WSRC = cs.SR1_WSRC,
-            .SR2_WSRC = cs.SR2_WSRC,
-            .STAT_OP = cs.STAT_OP,
-            .ALLOW_INT = cs.ALLOW_INT,
-            .SEQ_OP = cs.SEQ_OP,
+            .sr1_wsrc = cs.sr1_wsrc,
+            .sr2_wsrc = cs.sr2_wsrc,
+            .stat_op = cs.stat_op,
+            .allow_int = cs.allow_int,
+            .seq_op = cs.seq_op,
         };
     }
-    fn apply(self: Rom4Data, cs: *Control_Signals) void {
-        cs.SR1_WSRC = self.SR1_WSRC;
-        cs.SR2_WSRC = self.SR2_WSRC;
-        cs.STAT_OP = self.STAT_OP;
-        cs.ALLOW_INT = self.ALLOW_INT;
-        cs.SEQ_OP = self.SEQ_OP;
+    fn apply(self: Rom4Data, cs: *ControlSignals) void {
+        cs.sr1_wsrc = self.sr1_wsrc;
+        cs.sr2_wsrc = self.sr2_wsrc;
+        cs.stat_op = self.stat_op;
+        cs.allow_int = self.allow_int;
+        cs.seq_op = self.seq_op;
     }
 };
 
 const Rom5Data = packed struct {
-    NEXT_UOP: uc.Continuation, // 10
-    BASE: ctrl.AnySRIndex, // 4
+    next_uop: uc.Continuation, // 10
+    base: ControlSignals.AnySRIndex, // 4
     _: u2 = 0, // 2
 
-    fn init(cs: Control_Signals) Rom5Data {
+    fn init(cs: ControlSignals) Rom5Data {
         return .{
-            .NEXT_UOP = cs.NEXT_UOP,
-            .BASE = cs.BASE,
+            .next_uop = cs.next_uop,
+            .base = cs.base,
         };
     }
-    fn apply(self: Rom5Data, cs: *Control_Signals) void {
-        cs.NEXT_UOP = self.NEXT_UOP;
-        cs.BASE = self.BASE;
+    fn apply(self: Rom5Data, cs: *ControlSignals) void {
+        cs.next_uop = self.next_uop;
+        cs.base = self.base;
     }
 };
 
-fn convertMicrocodeToRomEntries(comptime RomData: type, microcode: *const [misc.microcode_length]?*Control_Signals, entries: *std.ArrayList(RomEntry)) !void {
+fn convertMicrocodeToRomEntries(comptime RomData: type, microcode: *const [misc.microcode_length]?*ControlSignals, entries: *std.ArrayList(RomEntry)) !void {
     entries.clearRetainingCapacity();
     for (microcode, 0..) |optional_cs, ua| {
         if (optional_cs) |cs| {
@@ -181,7 +180,7 @@ fn convertMicrocodeToRomEntries(comptime RomData: type, microcode: *const [misc.
     }
 }
 
-pub fn writeCompressedRoms(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, microcode: *const [misc.microcode_length]?*Control_Signals) !Roms {
+pub fn writeCompressedRoms(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, microcode: *const [misc.microcode_length]?*ControlSignals) !Roms {
     var result: Roms = undefined;
     var entries = try std.ArrayList(RomEntry).initCapacity(temp_allocator, misc.microcode_length);
     defer entries.deinit();
@@ -192,9 +191,9 @@ pub fn writeCompressedRoms(result_allocator: std.mem.Allocator, temp_allocator: 
     return result;
 }
 
-fn readCompressedRom(comptime RomData: type, compressed_data: []const u8, cs: []Control_Signals) void {
+fn readCompressedRom(comptime RomData: type, compressed_data: []const u8, cs: []ControlSignals) void {
     const Ctx = struct {
-        cs: []Control_Signals,
+        cs: []ControlSignals,
         d: RomData = undefined,
 
         const Self = @This();
@@ -211,14 +210,14 @@ fn readCompressedRom(comptime RomData: type, compressed_data: []const u8, cs: []
     rom_decompress.decompress(compressed_data, &ctx);
 }
 
-pub fn readCompressedRoms(roms: Roms, microcode: []Control_Signals) void {
+pub fn readCompressedRoms(roms: Roms, microcode: []ControlSignals) void {
     std.debug.assert(microcode.len >= misc.microcode_length);
     inline for ([_]type{ Rom0Data, Rom1Data, Rom2Data, Rom3Data, Rom4Data, Rom5Data }, 0..) |RomData, n| {
         readCompressedRom(RomData, roms[n], microcode);
     }
 }
 
-fn convertMicrocodeToSRec(comptime RomData: type, microcode: *const [misc.microcode_length]?*Control_Signals, result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator) ![]u8 {
+fn convertMicrocodeToSRec(comptime RomData: type, microcode: *const [misc.microcode_length]?*ControlSignals, result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator) ![]u8 {
     var rom_name: []const u8 = @typeName(RomData);
     if (std.mem.lastIndexOf(u8, rom_name, ".")) |index| {
         rom_name = rom_name[index + 1 ..];
@@ -258,7 +257,7 @@ fn convertMicrocodeToSRec(comptime RomData: type, microcode: *const [misc.microc
     return result_allocator.dupe(u8, encoder.data.items);
 }
 
-pub fn writeSRecRoms(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, microcode: *const [misc.microcode_length]?*Control_Signals) !Roms {
+pub fn writeSRecRoms(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, microcode: *const [misc.microcode_length]?*ControlSignals) !Roms {
     var result: Roms = undefined;
     inline for ([_]type{ Rom0Data, Rom1Data, Rom2Data, Rom3Data, Rom4Data, Rom5Data }, 0..) |RomData, n| {
         result[n] = try convertMicrocodeToSRec(RomData, microcode, result_allocator, temp_allocator);

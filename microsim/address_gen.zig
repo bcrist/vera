@@ -1,5 +1,5 @@
 const sim = @import("Simulator");
-const ctrl = @import("control_signals");
+const ControlSignals = @import("ControlSignals");
 const bus = @import("bus");
 
 pub fn setup(in: SetupInputs) bus.VirtualAddressParts {
@@ -20,6 +20,6 @@ pub fn setup(in: SetupInputs) bus.VirtualAddressParts {
 
 pub const SetupInputs = struct {
     base: bus.VirtualAddress,
-    OFFSET: ctrl.Address_Offset,
-    LITERAL: ctrl.Literal,
+    OFFSET: ControlSignals.Address_Offset,
+    LITERAL: ControlSignals.Literal,
 };

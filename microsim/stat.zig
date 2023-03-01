@@ -1,5 +1,5 @@
 const sim = @import("Simulator");
-const ctrl = @import("control_signals");
+const ControlSignals = @import("ControlSignals");
 const misc = @import("misc");
 const bus = @import("bus");
 const uc = @import("microcode");
@@ -45,13 +45,11 @@ pub const Inputs = struct {
     arith_n: bool,
     arith_c: bool,
     arith_v: bool,
-    mmu_z: bool,
-    mmu_n: bool,
     mmu_k: bool,
 
-    STAT_OP: ctrl.STAT_Op,
-    SEQ_OP: ctrl.Sequencer_Op,
-    LITERAL: ctrl.Literal,
+    STAT_OP: ControlSignals.STAT_Op,
+    SEQ_OP: ControlSignals.Sequencer_Op,
+    LITERAL: ControlSignals.Literal,
 };
 
 pub fn transact(in: Inputs, power: *misc.PowerMode) LoopState {
@@ -89,10 +87,6 @@ pub fn transact(in: Inputs, power: *misc.PowerMode) LoopState {
         .ZN_from_L_no_set_Z => {
             state.z = lz and in.state.z;
             state.n = ln;
-        },
-        .ZN_from_address_translator => {
-            state.z = in.mmu_z;
-            state.n = in.mmu_n;
         },
         .ZN_from_LL => {
             state.z = llz;

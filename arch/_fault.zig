@@ -1,7 +1,7 @@
 const assert = @import("std").debug.assert;
 const ib = @import("instruction_builder.zig");
 const cb = @import("cycle_builder.zig");
-const ctrl = @import("control_signals");
+const ControlSignals = @import("ControlSignals");
 const misc = @import("misc");
 const uc = @import("microcode");
 
@@ -9,6 +9,8 @@ const Xa_relative = ib.Xa_relative;
 const encoding = ib.encoding;
 const desc = ib.desc;
 const next_cycle = ib.next_cycle;
+const next_cycle_force_normal_execution = ib.next_cycle_force_normal_execution;
+const fault_return = ib.fault_return;
 const uc_address = ib.uc_address;
 const kernel = ib.kernel;
 
@@ -46,19 +48,16 @@ const reload_ASN = cb.reload_ASN;
 const toggle_RSN = cb.toggle_RSN;
 const RSN_to_SR1H = cb.RSN_to_SR1H;
 const branch = cb.branch;
-
-const LH_SRC = cb.LH_SRC;
-const SPECIAL = cb.SPECIAL;
-const SEQ_OP = cb.SEQ_OP;
-const OB_OA_OP = cb.OB_OA_OP;
-const SR1_WI = cb.SR1_WI;
-
 const illegal_instruction = cb.illegal_instruction;
 const load_and_exec_next_insn = cb.load_and_exec_next_insn;
+const atomicNextCycleUntilEnd = cb.atomicNextCycleUntilEnd;
+const clear_OB = cb.clear_OB;
+const increment_OB = cb.increment_OB;
+const prev_UA_to_LH = cb.prev_UA_to_LH;
 
 fn vectored_fault_handler(zeropage_vector: u5) void {
     // Store the UC address of the faulted cycle and the contents of DL into SR1:
-    LH_SRC(.prev_UA);
+    prev_UA_to_LH();
     DL_to_LL();
     L_to_SR1(.fault_ua_dl);
     next_cycle();
@@ -168,9 +167,8 @@ pub fn _018D() void {
     // we want to make sure it's still atomic when we retry.
     // It doesn't hurt to "upgrade" a non-atomic instruction, so we
     // just assume all faults happen during atomic instructions
-    SPECIAL(.atomic_next);
-    // Note .fault_return requires the faulted microcode address be asserted on LH, which we did above.
-    SEQ_OP(.fault_return);
+    atomicNextCycleUntilEnd();
+    fault_return();
 }
 
 pub fn _018E() void {
@@ -182,8 +180,7 @@ pub fn _018E() void {
         return;
     }
 
-    SEQ_OP(.next_uop_force_normal);
-    next_cycle();
+    next_cycle_force_normal_execution();
 
     load_and_exec_next_insn(2);
 }
@@ -207,7 +204,7 @@ pub fn _FD00_FDFF() void {
     op_reg_to_LL(.OB);
     LL_to_RSN();
     SR2_to_SR2(.temp_2, .rs_reserved);
-    OB_OA_OP(.clear_OB);
+    clear_OB();
     next_cycle();
 
     // Load the GPR data
@@ -216,7 +213,7 @@ pub fn _FD00_FDFF() void {
         read_to_D(.rs_reserved, r * 2, .word, .data);
         D_to_L(.zx);
         LL_to_op_reg(.OB);
-        OB_OA_OP(.increment_OB);
+        increment_OB();
         next_cycle();
     }
 
@@ -241,10 +238,10 @@ pub fn _FD00_FDFF() void {
         SR1_to_J(.temp_1);
         JL_to_LL();
         D_to_LH();
-        if (@hasField(ctrl.SR1Index, reg)) {
-            L_to_SR1(@field(ctrl.SR1Index, reg));
+        if (@hasField(ControlSignals.SR1Index, reg)) {
+            L_to_SR1(@field(ControlSignals.SR1Index, reg));
         } else {
-            L_to_SR2(@field(ctrl.SR2Index, reg));
+            L_to_SR2(@field(ControlSignals.SR2Index, reg));
         }
         next_cycle();
     }
@@ -276,7 +273,7 @@ pub fn _FE00_FEFF() void {
     op_reg_to_LL(.OB);
     LL_to_RSN();
     SR2_to_SR2(.temp_2, .rs_reserved);
-    OB_OA_OP(.clear_OB);
+    clear_OB();
     next_cycle();
 
     // Store the GPR data
@@ -284,7 +281,7 @@ pub fn _FE00_FEFF() void {
     while (r < 16) : (r += 1) {
         op_reg_to_LL(.OB);
         write_from_LL(.rs_reserved, r * 2, .word, .data);
-        OB_OA_OP(.increment_OB);
+        increment_OB();
         next_cycle();
     }
 
@@ -300,19 +297,19 @@ pub fn _FE00_FEFF() void {
     }) |reg| {
         const offset = @offsetOf(misc.RegistersetState, reg) - 32;
 
-        if (@hasField(ctrl.SR1Index, reg)) {
-            SR1_to_J(@field(ctrl.SR1Index, reg));
+        if (@hasField(ControlSignals.SR1Index, reg)) {
+            SR1_to_J(@field(ControlSignals.SR1Index, reg));
         } else {
-            SR2_to_J(@field(ctrl.SR2Index, reg));
+            SR2_to_J(@field(ControlSignals.SR2Index, reg));
         }
         JL_to_LL();
         write_from_LL(.rs_reserved, offset, .word, .data);
         next_cycle();
 
-        if (@hasField(ctrl.SR1Index, reg)) {
-            SR1_to_J(@field(ctrl.SR1Index, reg));
+        if (@hasField(ControlSignals.SR1Index, reg)) {
+            SR1_to_J(@field(ControlSignals.SR1Index, reg));
         } else {
-            SR2_to_J(@field(ctrl.SR2Index, reg));
+            SR2_to_J(@field(ControlSignals.SR2Index, reg));
         }
         JH_to_LL();
         write_from_LL(.rs_reserved, offset + 2, .word, .data);

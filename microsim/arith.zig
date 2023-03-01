@@ -1,10 +1,10 @@
 const bits = @import("bits");
 const sim = @import("Simulator");
-const ctrl = @import("control_signals");
+const ControlSignals = @import("ControlSignals");
 const bus = @import("bus");
 
 pub fn compute(in: Inputs) Outputs {
-    const mode_bits = @bitCast(ctrl.Arith_Mode_Bits, in.ALU_MODE.raw());
+    const mode_bits = @bitCast(ControlSignals.Arith_Mode_Bits, in.ALU_MODE.raw());
     const narrow = mode_bits.width == .JL_K;
 
     const j: u32 = if (narrow) in.j.low else @bitCast(u32, in.j);
@@ -58,7 +58,7 @@ pub const Inputs = struct {
     j: bus.JParts,
     k: bus.K,
     c: bool,
-    ALU_MODE: ctrl.ALU_Mode,
+    ALU_MODE: ControlSignals.ALU_Mode,
 };
 
 pub const Outputs = struct {

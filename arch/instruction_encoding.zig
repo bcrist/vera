@@ -4,7 +4,7 @@ const deep_hash_map = @import("deep_hash_map");
 const sx = @import("sx");
 const uc = @import("microcode");
 const misc = @import("misc");
-const ctrl = @import("control_signals");
+const ControlSignals = @import("ControlSignals");
 
 const assert = std.debug.assert;
 
@@ -574,7 +574,7 @@ fn tryComptimeImmediateParameterEncoding(comptime name: []const u8) ?ParameterEn
             part = part[0 .. part.len - 1];
         }
 
-        var n_bits: ctrl.Literal = undefined;
+        var n_bits: ControlSignals.Literal = undefined;
         switch (part[0]) {
             'a', 'b', 'A', 'B' => |c| {
                 if (part.len != 2 or part[1] != '4') return null;
@@ -588,7 +588,7 @@ fn tryComptimeImmediateParameterEncoding(comptime name: []const u8) ?ParameterEn
                 };
             },
             else => {
-                n_bits = std.fmt.parseUnsigned(ctrl.Literal, part, 10) catch return null;
+                n_bits = std.fmt.parseUnsigned(ControlSignals.Literal, part, 10) catch return null;
                 if (n_bits <= 8) {
                     encoding.base_src = switch (ip_offset) {
                         2 => .IP_plus_2_8,

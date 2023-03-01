@@ -1,7 +1,7 @@
 const std = @import("std");
 const sim = @import("Simulator");
 const bits = @import("bits");
-const ctrl = @import("control_signals");
+const ControlSignals = @import("ControlSignals");
 const misc = @import("misc");
 const bus = @import("bus");
 
@@ -14,10 +14,10 @@ const OffsetSlotAndTag = packed struct {
 };
 
 pub const OperationInfo = struct {
-    BUS_RW: ctrl.Bus_Direction,
-    BUS_BYTE: ctrl.Bus_Width,
-    BUS_MODE: ctrl.Bus_Mode,
-    AT_OP: ctrl.AT_Op,
+    BUS_RW: ControlSignals.Bus_Direction,
+    BUS_BYTE: ControlSignals.Bus_Width,
+    BUS_MODE: ControlSignals.Bus_Mode,
+    AT_OP: ControlSignals.AT_Op,
     slot: u6,
     tag: misc.address_translator.Tag,
 
@@ -26,7 +26,7 @@ pub const OperationInfo = struct {
             .BUS_RW = .read,
             .BUS_BYTE = .word,
             .BUS_MODE = .raw,
-            .AT_OP = .hold,
+            .AT_OP = .none,
             .slot = 0,
             .tag = 0,
         };
@@ -34,10 +34,10 @@ pub const OperationInfo = struct {
 
     pub fn random(rnd: std.rand.Random) OperationInfo {
         return .{
-            .BUS_RW = rnd.enumValue(ctrl.Bus_Direction),
-            .BUS_BYTE = rnd.enumValue(ctrl.Bus_Width),
-            .BUS_MODE = rnd.enumValue(ctrl.Bus_Mode),
-            .AT_OP = rnd.enumValue(ctrl.AT_Op),
+            .BUS_RW = rnd.enumValue(ControlSignals.Bus_Direction),
+            .BUS_BYTE = rnd.enumValue(ControlSignals.Bus_Width),
+            .BUS_MODE = rnd.enumValue(ControlSignals.Bus_Mode),
+            .AT_OP = rnd.enumValue(ControlSignals.AT_Op),
             .slot = rnd.int(u6),
             .tag = rnd.int(misc.address_translator.Tag),
         };
@@ -101,18 +101,16 @@ pub const State = struct {
 pub const ComputeInputs = struct {
     virtual_address: bus.VirtualAddressParts,
     asn: misc.address_translator.AddressSpaceNumber,
-    matching_entry: Entry,
-    other_entry: Entry,
     enable_flag: bool,
     kernel_flag: bool,
 
-    BUS_MODE: ctrl.Bus_Mode,
-    BUS_RW: ctrl.Bus_Direction,
-    BUS_BYTE: ctrl.Bus_Width,
-    LL_SRC: ctrl.LL_Source,
-    AT_OP: ctrl.AT_Op,
-    SR2_WI: ctrl.SR2Index,
-    SR2_WSRC: ctrl.SR2_Write_Data_Source,
+    BUS_MODE: ControlSignals.Bus_Mode,
+    BUS_RW: ControlSignals.Bus_Direction,
+    BUS_BYTE: ControlSignals.Bus_Width,
+    LL_SRC: ControlSignals.LL_Source,
+    AT_OP: ControlSignals.AT_Op,
+    SR2_WI: ControlSignals.SR2Index,
+    SR2_WSRC: ControlSignals.SR2_Write_Data_Source,
 };
 
 pub const ComputeOutputs = struct {
@@ -152,26 +150,20 @@ pub fn compute(state: *const State, in: ComputeInputs) ComputeOutputs {
     const secondary_match = secondary.present and secondary.tag == virtual.tag;
     const any_match = primary_match or secondary_match;
 
-    var matching = in.matching_entry;
-    var other = in.other_entry;
-
-    if (in.AT_OP != .hold) {
-        if (!primary_match and (secondary_match or in.AT_OP == .update)) {
-            matching = secondary;
-            other = primary;
-        } else {
-            matching = primary;
-            other = secondary;
-        }
+    var matching = primary;
+    var other = secondary;
+    if (in.AT_OP != .none and !primary_match and (secondary_match or in.AT_OP == .update)) {
+        matching = secondary;
+        other = primary;
     }
 
-    const real_bus_op = in.AT_OP == .translate and in.LL_SRC != .AT_ME_L and in.LL_SRC != .AT_OE_L;
-    const insn_load = real_bus_op and in.SR2_WSRC == .PN and (in.SR2_WI == .ip or in.SR2_WI == .next_ip);
+    const translate = in.AT_OP == .translate;
+    const insn_load = translate and in.SR2_WSRC == .PN and (in.SR2_WI == .ip or in.SR2_WI == .next_ip);
 
     const enabled = in.enable_flag and in.BUS_MODE != .raw;
 
-    const enabled_translate = enabled and in.AT_OP == .translate;
-    const disabled_translate = !enabled and in.AT_OP == .translate;
+    const enabled_translate = enabled and translate;
+    const disabled_translate = !enabled and translate;
 
     const page_fault = enabled_translate and !any_match;
     var page_align_fault = false;
@@ -194,9 +186,7 @@ pub fn compute(state: *const State, in: ComputeInputs) ComputeOutputs {
 
     if (enabled_translate and any_match) {
         bus_ctrl.address.frame = matching.frame;
-        if (real_bus_op) {
-            bus_ctrl.wait_states = matching.wait_states;
-        }
+        bus_ctrl.wait_states = matching.wait_states;
 
         switch (matching.access) {
             .unprivileged => {
@@ -228,7 +218,7 @@ pub fn compute(state: *const State, in: ComputeInputs) ComputeOutputs {
                 }
             },
         }
-    } else if (disabled_translate and real_bus_op) {
+    } else if (disabled_translate) {
         bus_ctrl.wait_states = 0;
         if (in.BUS_MODE == .insn) {
             new_kernel_flag = true;
@@ -245,7 +235,7 @@ pub fn compute(state: *const State, in: ComputeInputs) ComputeOutputs {
         }
     }
 
-    if (in.AT_OP == .translate and real_bus_op) {
+    if (translate) {
         if (in.BUS_RW == .read) {
             bus_ctrl.read = true;
         } else if (in.BUS_RW == .write) {
@@ -288,63 +278,33 @@ pub const TransactInputs = struct {
     slot: misc.address_translator.Slot,
     l: bus.LParts,
     tag: misc.address_translator.Tag,
-    AT_OP: ctrl.AT_Op,
+    AT_OP: ControlSignals.AT_Op,
 };
 
-pub const TransactOutputs = struct {
-    matching_entry: Entry,
-    other_entry: Entry,
-    z: bool,
-    n: bool,
-};
-
-pub fn transact(state: *State, in: TransactInputs) TransactOutputs {
-    var matching = in.matching_entry;
-    var other = in.other_entry;
-
-    if (in.inhibit_writes) {
-        return .{
-            .matching_entry = matching,
-            .other_entry = other,
-            .z = matching.present,
-            .n = other.present,
-        };
-    }
-
-    var z = false;
-    var n = false;
+pub fn transact(state: *State, in: TransactInputs) void {
+    if (in.inhibit_writes) return;
 
     switch (in.AT_OP) {
-        .hold => {
-            z = matching.present;
-            n = other.present;
-        },
+        .none => {},
         .translate => {
-            z = matching.present;
-            n = other.present;
-
-            state.primary[in.slot] = matching;
-            state.secondary[in.slot] = other;
+            state.primary[in.slot] = in.matching_entry;
+            state.secondary[in.slot] = in.other_entry;
         },
         .update => {
-            z = matching.present;
-            n = in.tag != matching.tag;
-
-            matching = @bitCast(Entry, in.l);
-
-            state.primary[in.slot] = matching;
-            state.secondary[in.slot] = other;
+            state.primary[in.slot] = @bitCast(Entry, in.l);
+            state.secondary[in.slot] = in.other_entry;
         },
         .invalidate => {
             const tag_mask = @truncate(u14, in.l.low);
 
+            var matching = in.matching_entry;
+            var other = in.other_entry;
+
             if ((in.tag & tag_mask) == (matching.tag & tag_mask) and matching.present) {
-                z = matching.present;
                 matching.present = false;
             }
 
             if ((in.tag & tag_mask) == (other.tag & tag_mask) and other.present) {
-                n = other.present;
                 other.present = false;
             }
 
@@ -352,11 +312,4 @@ pub fn transact(state: *State, in: TransactInputs) TransactOutputs {
             state.secondary[in.slot] = other;
         },
     }
-
-    return .{
-        .matching_entry = matching,
-        .other_entry = other,
-        .z = z,
-        .n = n,
-    };
 }

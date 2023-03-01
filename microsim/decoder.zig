@@ -1,4 +1,4 @@
-const ctrl = @import("control_signals");
+const ControlSignals = @import("ControlSignals");
 const stat = @import("stat.zig");
 const faults = @import("faults.zig");
 const uc = @import("microcode");
@@ -17,9 +17,9 @@ pub const TransactInputs = struct {
     dl: bus.D,
     lh: bus.LHigh,
     ALLOW_INT: bool,
-    SEQ_OP: ctrl.Sequencer_Op,
+    SEQ_OP: ControlSignals.Sequencer_Op,
     NEXT_UOP: uc.Continuation,
-    SPECIAL: ctrl.Special_Op,
+    SPECIAL: ControlSignals.Special_Op,
 };
 
 pub const TransactOutputs = struct {

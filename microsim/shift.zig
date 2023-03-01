@@ -1,10 +1,10 @@
 const bits = @import("bits");
 const sim = @import("Simulator");
-const ctrl = @import("control_signals");
+const ControlSignals = @import("ControlSignals");
 const bus = @import("bus");
 
 pub fn compute(in: Inputs) Outputs {
-    const mode_bits = @bitCast(ctrl.Shift_Mode_Bits, in.ALU_MODE.raw());
+    const mode_bits = @bitCast(ControlSignals.Shift_Mode_Bits, in.ALU_MODE.raw());
 
     const k0 = (in.k & 1) == 1;
     const k1 = (in.k & 2) == 2;
@@ -72,7 +72,7 @@ pub fn compute(in: Inputs) Outputs {
 pub const Inputs = struct {
     j: bus.JParts,
     k: u16,
-    ALU_MODE: ctrl.ALU_Mode,
+    ALU_MODE: ControlSignals.ALU_Mode,
 };
 
 pub const Outputs = struct {
