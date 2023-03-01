@@ -4,14 +4,14 @@ const ControlSignals = @import("ControlSignals");
 const bus = @import("bus");
 
 pub fn compute(in: Inputs) Outputs {
-    const mode_bits = @bitCast(ControlSignals.Arith_Mode_Bits, in.ALU_MODE.raw());
-    const narrow = mode_bits.width == .JL_K;
+    const mode_bits = @bitCast(ControlSignals.ArithModeBits, in.ALU_MODE.raw());
+    const narrow = mode_bits.width == .jl_k;
 
     const j: u32 = if (narrow) in.j.low else @bitCast(u32, in.j);
     var k: u32 = switch (mode_bits.width) {
-        .J_K_zx, .JL_K => in.k,
-        .J_K_sx => bits.sx(u32, in.k),
-        .J_K_1x => bits._1x(u32, in.k),
+        .j_k_zx, .jl_k => in.k,
+        .j_k_sx => bits.sx(u32, in.k),
+        .j_k_1x => bits._1x(u32, in.k),
     };
     var c_in: u1 = if (mode_bits.carry_borrow) @boolToInt(in.c) else 0;
 
@@ -58,7 +58,7 @@ pub const Inputs = struct {
     j: bus.JParts,
     k: bus.K,
     c: bool,
-    ALU_MODE: ControlSignals.ALU_Mode,
+    ALU_MODE: ControlSignals.ComputeMode,
 };
 
 pub const Outputs = struct {

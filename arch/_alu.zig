@@ -519,23 +519,23 @@ pub fn _93A0_93AF() void {
     //syntax("NOT Ra -> Ra");
     desc("Bitwise complement of 16b register");
 
-    op_reg_logic_literal_to_LL(.OA, .JL_xor_K, -1, .fresh, .flags);
+    op_reg_logic_literal_to_LL(.OA, .jl_xor_k, -1, .fresh, .flags);
     LL_to_op_reg(.OA);
     load_and_exec_next_insn(2);
 }
 
 pub fn _B000_B6FF() void {
-    var op: ControlSignals.Logic_Mode = undefined;
+    var op: ControlSignals.LogicMode = undefined;
     var mn: Mnemonic = undefined;
     var d: []const u8 = undefined;
     switch (opcode_high()) {
-        0xB0 => { mn = .XOR;    op = .JL_xor_K;     d = "Bitwise XOR of two 16b registers";},
-        0xB1 => { mn = .XNOR;   op = .JL_xnor_K;    d = "Bitwise XNOR of two 16b registers";},
-        0xB2 => { mn = .OR;     op = .JL_or_K;      d = "Bitwise OR of two 16b registers";},
-        0xB3 => { mn = .NOR;    op = .JL_nor_K;     d = "Bitwise NOR of two 16b registers";},
-        0xB4 => { mn = .AND;    op = .JL_and_K;     d = "Bitwise AND of two 16b registers";},
-        0xB5 => { mn = .NAND;   op = .JL_nand_K;    d = "Bitwise NAND of two 16b registers";},
-        0xB6 => { mn = .ANDNOT; op = .JL_and_not_K; d = "Bitwise AND of two 16b registers (second register is complemented)";},
+        0xB0 => { mn = .XOR;    op = .jl_xor_k;     d = "Bitwise XOR of two 16b registers";},
+        0xB1 => { mn = .XNOR;   op = .jl_xnor_k;    d = "Bitwise XNOR of two 16b registers";},
+        0xB2 => { mn = .OR;     op = .jl_or_k;      d = "Bitwise OR of two 16b registers";},
+        0xB3 => { mn = .NOR;    op = .jl_nor_k;     d = "Bitwise NOR of two 16b registers";},
+        0xB4 => { mn = .AND;    op = .jl_and_k;     d = "Bitwise AND of two 16b registers";},
+        0xB5 => { mn = .NAND;   op = .jl_nand_k;    d = "Bitwise NAND of two 16b registers";},
+        0xB6 => { mn = .ANDNOT; op = .jl_and_not_k; d = "Bitwise AND of two 16b registers (second register is complemented)";},
         else => unreachable,
     }
 
@@ -548,15 +548,15 @@ pub fn _B000_B6FF() void {
 }
 
 pub fn _C100_C5FF() void {
-    var op: ControlSignals.Logic_Mode = undefined;
+    var op: ControlSignals.LogicMode = undefined;
     var mn: Mnemonic = undefined;
     var d: []const u8 = undefined;
     switch (opcode_high()) {
-        0xC1 => { mn = .XOR;  op = .JL_xor_K;  d = "Bitwise XOR of 16b register and immediate"; },
-        0xC2 => { mn = .OR;   op = .JL_or_K;   d = "Bitwise OR of 16b register and immediate"; },
-        0xC3 => { mn = .NOR;  op = .JL_nor_K;  d = "Bitwise NOR of 16b register and immediate"; },
-        0xC4 => { mn = .AND;  op = .JL_and_K;  d = "Bitwise AND of 16b register and immediate"; },
-        0xC5 => { mn = .NAND; op = .JL_nand_K; d = "Bitwise NAND of 16b register and immediate"; },
+        0xC1 => { mn = .XOR;  op = .jl_xor_k;  d = "Bitwise XOR of 16b register and immediate"; },
+        0xC2 => { mn = .OR;   op = .jl_or_k;   d = "Bitwise OR of 16b register and immediate"; },
+        0xC3 => { mn = .NOR;  op = .jl_nor_k;  d = "Bitwise NOR of 16b register and immediate"; },
+        0xC4 => { mn = .AND;  op = .jl_and_k;  d = "Bitwise AND of 16b register and immediate"; },
+        0xC5 => { mn = .NAND; op = .jl_nand_k; d = "Bitwise NAND of 16b register and immediate"; },
         else => unreachable,
     }
 
@@ -591,7 +591,7 @@ pub fn _C600_C7FF() void {
         else => unreachable,
     }
 
-    op_reg_logic_op_reg_to_LL(.OA, .JL_and_K, .OB, freshness, .flags);
+    op_reg_logic_op_reg_to_LL(.OA, .jl_and_k, .OB, freshness, .flags);
     load_and_exec_next_insn(2);
 }
 
@@ -600,7 +600,7 @@ pub fn _9100_91FF() void {
     //syntax("TESTB Ra, immb[0,15]");
     desc("Set Z and N flags according to single bit from 16b register");
 
-    op_reg_logic_literal_to_LL(.OA, .JL_and_K, @as(u16, 1) << OB(), .fresh, .flags);
+    op_reg_logic_literal_to_LL(.OA, .jl_and_k, @as(u16, 1) << OB(), .fresh, .flags);
     load_and_exec_next_insn(2);
 }
 
@@ -609,7 +609,7 @@ pub fn _9200_92FF() void {
     //syntax("TESTBZ Ra, immb[0,15]");
     desc("Set Z and N flags according to single bit from 16b register, without setting the Z flag if it is already clear");
 
-    op_reg_logic_literal_to_LL(.OA, .JL_and_K, @as(u16, 1) << OB(), .cont, .flags);
+    op_reg_logic_literal_to_LL(.OA, .jl_and_k, @as(u16, 1) << OB(), .cont, .flags);
     load_and_exec_next_insn(2);
 }
 
@@ -618,7 +618,7 @@ pub fn _A000_A0FF() void {
     //syntax("CLRB Ra, immb[0,15] -> Ra");
     desc("Clear single bit in 16b register");
 
-    op_reg_logic_literal_to_LL(.OA, .JL_and_not_K, @as(u16, 1) << OB(), .fresh, .flags);
+    op_reg_logic_literal_to_LL(.OA, .jl_and_not_k, @as(u16, 1) << OB(), .fresh, .flags);
     LL_to_op_reg(.OA);
     load_and_exec_next_insn(2);
 }
@@ -628,7 +628,7 @@ pub fn _A100_A1FF() void {
     //syntax("SETB Ra, immb[0,15] -> Ra");
     desc("Set single bit in 16b register");
 
-    op_reg_logic_literal_to_LL(.OA, .JL_or_K, @as(u16, 1) << OB(), .fresh, .flags);
+    op_reg_logic_literal_to_LL(.OA, .jl_or_k, @as(u16, 1) << OB(), .fresh, .flags);
     LL_to_op_reg(.OA);
     load_and_exec_next_insn(2);
 }
@@ -638,7 +638,7 @@ pub fn _A200_A2FF() void {
     //syntax("TGLB Ra, immb[0,15] -> Ra");
     desc("Toggle single bit in 16b register");
 
-    op_reg_logic_literal_to_LL(.OA, .JL_xor_K, @as(u16, 1) << OB(), .fresh, .flags);
+    op_reg_logic_literal_to_LL(.OA, .jl_xor_k, @as(u16, 1) << OB(), .fresh, .flags);
     LL_to_op_reg(.OA);
     load_and_exec_next_insn(2);
 }

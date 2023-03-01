@@ -103,13 +103,13 @@ pub fn _continuation_200() void {
         reg32_to_J(0);
         literal_to_K(0x800);
         JH_to_LH();
-        logic_to_LL(.JL_or_K, .fresh, .no_flags);
+        logic_to_LL(.jl_or_k, .fresh, .no_flags);
         L_to_SR(.temp_1);
         increment_OB();
         next_cycle();
 
         // 0x200 indicates that we want to copy from FLASH, not PSRAM
-        SRL_logic_literal_to_LL(.temp_1, .JL_or_K, 0x200, .fresh, .no_flags);
+        SRL_logic_literal_to_LL(.temp_1, .jl_or_k, 0x200, .fresh, .no_flags);
         JH_to_LH();
         L_to_SR(.temp_1);
         increment_OB();

@@ -515,26 +515,26 @@ fn simulate_compute(mmu_state: *const mmu.State, es: ExecutionState, in: Compute
         .j = in.j,
         .k = in.k,
         .c = in.reg.stat.c,
-        .ALU_MODE = in.cs.alu_mode,
+        .ALU_MODE = in.cs.compute_mode,
     });
     const shift_out = shift.compute(.{
         .j = in.j,
         .k = in.k,
-        .ALU_MODE = in.cs.alu_mode,
+        .ALU_MODE = in.cs.compute_mode,
     });
     const mult_out = mult.compute(.{
         .j = in.j.low,
         .k = in.k,
-        .ALU_MODE = in.cs.alu_mode,
+        .ALU_MODE = in.cs.compute_mode,
     });
     const logic_out = logic.compute(.{
         .j = in.j,
         .k = in.k,
-        .ALU_MODE = in.cs.alu_mode,
+        .ALU_MODE = in.cs.compute_mode,
     });
     const bitcount_out = bitcount.compute(.{
         .j = in.j.low,
-        .ALU_MODE = in.cs.alu_mode,
+        .ALU_MODE = in.cs.compute_mode,
     });
 
     var mmu_out = mmu.compute(mmu_state, .{

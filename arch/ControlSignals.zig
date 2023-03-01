@@ -16,7 +16,7 @@ sr1_ri: SR1Index,
 sr2_ri: SR2Index,
 base: AnySRIndex,
 offset: AddressOffset,
-alu_mode: ALU_Mode,
+compute_mode: ComputeMode,
 bus_mode: BusMode,
 bus_byte: BusWidth,
 bus_rw: BusDirection,
@@ -50,7 +50,7 @@ pub const SignalName = enum {
     sr2_ri,
     base,
     offset,
-    alu_mode,
+    compute_mode,
     bus_mode,
     bus_byte,
     bus_rw,
@@ -86,7 +86,7 @@ pub fn init() ControlSignals {
         .sr2_ri = .zero,
         .base = .zero,
         .offset = .zero,
-        .alu_mode = ALU_Mode.unused,
+        .compute_mode = ComputeMode.unused,
         .bus_mode = .raw,
         .bus_byte = .word,
         .bus_rw = .read,
@@ -122,7 +122,7 @@ pub fn randomize(self: *ControlSignals, rnd: std.rand.Random) void {
     self.sr2_ri = rnd.enumValue(SR2Index);
     self.base = rnd.enumValue(AnySRIndex);
     self.offset = rnd.enumValue(AddressOffset);
-    self.alu_mode = .{ .unknown = rnd.int(u4) };
+    self.compute_mode = .{ .unknown = rnd.int(u4) };
     self.bus_mode = rnd.enumValue(BusMode);
     self.bus_byte = rnd.enumValue(BusWidth);
     self.bus_rw = rnd.enumValue(BusDirection);
@@ -166,13 +166,13 @@ pub fn print(self: *const ControlSignals, writer: anytype) !void {
     if (self.base != def.base) try writer.print(" base={s}", .{ @tagName(self.base) });
     if (self.offset != def.offset) try writer.print(" offset={s}", .{ @tagName(self.offset) });
 
-    if (!std.meta.eql(self.alu_mode, def.alu_mode)) {
-        switch (self.alu_mode) {
+    if (!std.meta.eql(self.compute_mode, def.compute_mode)) {
+        switch (self.compute_mode) {
             .unknown => |value| {
-                try writer.print(" alu_mode=unknown({X})", .{ value });
+                try writer.print(" compute_mode=unknown({X})", .{ value });
             },
             else => {
-                const what: []const u8 = switch (self.alu_mode) {
+                const what: []const u8 = switch (self.compute_mode) {
                     .arith    => |value| @tagName(value),
                     .logic    => |value| @tagName(value),
                     .mult     => |value| @tagName(value),
@@ -181,8 +181,7 @@ pub fn print(self: *const ControlSignals, writer: anytype) !void {
                     else => "none",
                 };
 
-                const ALU_Mode_Tag = comptime @typeInfo(ALU_Mode).Union.tag_type.?;
-                try writer.print(" alu_mode={s}.{s}", .{ @tagName(@as(ALU_Mode_Tag, self.alu_mode)), what });
+                try writer.print(" compute_mode={s}.{s}", .{ @tagName(@as(ComputeModeTag, self.compute_mode)), what });
             },
         }
     }
@@ -413,7 +412,7 @@ pub const AddressTranslatorOp = enum(u2) {
     invalidate = 3,
 };
 
-pub const ALU_Mode_Type = enum {
+pub const ComputeModeTag = enum {
     unused,
     unknown,
     arith,
@@ -423,16 +422,16 @@ pub const ALU_Mode_Type = enum {
     bitcount,
 };
 
-pub const ALU_Mode = union(ALU_Mode_Type) {
+pub const ComputeMode = union(ComputeModeTag) {
     unused,
     unknown: u4,
-    arith: Arith_Mode,
-    logic: Logic_Mode,
-    mult: Multiplier_Mode,
-    shift: Shift_Mode,
-    bitcount: Bitcount_Mode,
+    arith: ArithMode,
+    logic: LogicMode,
+    mult: MultMode,
+    shift: ShiftMode,
+    bitcount: BitcountMode,
 
-    pub fn raw(mode: ALU_Mode) u4 {
+    pub fn raw(mode: ComputeMode) u4 {
         return switch (mode) {
             .unused => @as(u4, 0),
             .unknown  => |value| value,
@@ -445,104 +444,104 @@ pub const ALU_Mode = union(ALU_Mode_Type) {
     }
 };
 
-pub const Arith_Mode = enum(u4) {
-    JL_plus_K            = @bitCast(u4, Arith_Mode_Bits { .subtract = false, .carry_borrow = false, .width = .JL_K }),
-    JL_minus_K           = @bitCast(u4, Arith_Mode_Bits { .subtract = true,  .carry_borrow = false, .width = .JL_K }),
-    JL_plus_K_plus_C     = @bitCast(u4, Arith_Mode_Bits { .subtract = false, .carry_borrow = true,  .width = .JL_K }),
-    JL_minus_K_minus_C   = @bitCast(u4, Arith_Mode_Bits { .subtract = true,  .carry_borrow = true,  .width = .JL_K }),
+pub const ArithMode = enum(u4) {
+    jl_plus_k            = @bitCast(u4, ArithModeBits { .subtract = false, .carry_borrow = false, .width = .jl_k }),
+    jl_minus_k           = @bitCast(u4, ArithModeBits { .subtract = true,  .carry_borrow = false, .width = .jl_k }),
+    jl_plus_k_plus_c     = @bitCast(u4, ArithModeBits { .subtract = false, .carry_borrow = true,  .width = .jl_k }),
+    jl_minus_k_minus_c   = @bitCast(u4, ArithModeBits { .subtract = true,  .carry_borrow = true,  .width = .jl_k }),
 
-    J_plus_K_zx          = @bitCast(u4, Arith_Mode_Bits { .subtract = false, .carry_borrow = false, .width = .J_K_zx }),
-    J_minus_K_zx         = @bitCast(u4, Arith_Mode_Bits { .subtract = true,  .carry_borrow = false, .width = .J_K_zx }),
-    J_plus_K_zx_plus_C   = @bitCast(u4, Arith_Mode_Bits { .subtract = false, .carry_borrow = true,  .width = .J_K_zx }),
-    J_minus_K_zx_minus_C = @bitCast(u4, Arith_Mode_Bits { .subtract = true,  .carry_borrow = true,  .width = .J_K_zx }),
+    j_plus_k_zx          = @bitCast(u4, ArithModeBits { .subtract = false, .carry_borrow = false, .width = .j_k_zx }),
+    j_minus_k_zx         = @bitCast(u4, ArithModeBits { .subtract = true,  .carry_borrow = false, .width = .j_k_zx }),
+    j_plus_k_zx_plus_c   = @bitCast(u4, ArithModeBits { .subtract = false, .carry_borrow = true,  .width = .j_k_zx }),
+    j_minus_k_zx_minus_c = @bitCast(u4, ArithModeBits { .subtract = true,  .carry_borrow = true,  .width = .j_k_zx }),
 
-    J_plus_K_sx          = @bitCast(u4, Arith_Mode_Bits { .subtract = false, .carry_borrow = false, .width = .J_K_sx }),
-    J_minus_K_sx         = @bitCast(u4, Arith_Mode_Bits { .subtract = true,  .carry_borrow = false, .width = .J_K_sx }),
-    J_plus_K_sx_plus_C   = @bitCast(u4, Arith_Mode_Bits { .subtract = false, .carry_borrow = true,  .width = .J_K_sx }),
-    J_minus_K_sx_minus_C = @bitCast(u4, Arith_Mode_Bits { .subtract = true,  .carry_borrow = true,  .width = .J_K_sx }),
+    j_plus_k_sx          = @bitCast(u4, ArithModeBits { .subtract = false, .carry_borrow = false, .width = .j_k_sx }),
+    j_minus_k_sx         = @bitCast(u4, ArithModeBits { .subtract = true,  .carry_borrow = false, .width = .j_k_sx }),
+    j_plus_k_sx_plus_c   = @bitCast(u4, ArithModeBits { .subtract = false, .carry_borrow = true,  .width = .j_k_sx }),
+    j_minus_k_sx_minus_c = @bitCast(u4, ArithModeBits { .subtract = true,  .carry_borrow = true,  .width = .j_k_sx }),
 
-    J_plus_K_1x          = @bitCast(u4, Arith_Mode_Bits { .subtract = false, .carry_borrow = false, .width = .J_K_1x }),
-    J_minus_K_1x         = @bitCast(u4, Arith_Mode_Bits { .subtract = true,  .carry_borrow = false, .width = .J_K_1x }),
-    J_plus_K_1x_plus_C   = @bitCast(u4, Arith_Mode_Bits { .subtract = false, .carry_borrow = true,  .width = .J_K_1x }),
-    J_minus_K_1x_minus_C = @bitCast(u4, Arith_Mode_Bits { .subtract = true,  .carry_borrow = true,  .width = .J_K_1x }),
+    j_plus_k_1x          = @bitCast(u4, ArithModeBits { .subtract = false, .carry_borrow = false, .width = .j_k_1x }),
+    j_minus_k_1x         = @bitCast(u4, ArithModeBits { .subtract = true,  .carry_borrow = false, .width = .j_k_1x }),
+    j_plus_k_1x_plus_c   = @bitCast(u4, ArithModeBits { .subtract = false, .carry_borrow = true,  .width = .j_k_1x }),
+    j_minus_k_1x_minus_c = @bitCast(u4, ArithModeBits { .subtract = true,  .carry_borrow = true,  .width = .j_k_1x }),
 };
-pub const Arith_Width_Mode = enum(u2) {
-    JL_K = 0, // 16 bit
-    J_K_zx = 1,
-    J_K_sx = 2,
-    J_K_1x = 3,
+pub const ArithWidthMode = enum(u2) {
+    jl_k = 0, // 16 bit
+    j_k_zx = 1,
+    j_k_sx = 2,
+    j_k_1x = 3,
 };
-pub const Arith_Mode_Bits = packed struct {
+pub const ArithModeBits = packed struct {
     subtract: bool,
     carry_borrow: bool,
-    width: Arith_Width_Mode,
+    width: ArithWidthMode,
 };
 
-pub const Logic_Mode = enum(u4) {
-    JL_and_K     = @bitCast(u4, Logic_Mode_Bits { .xor = false, .invert_JL = false, .invert_K = false, .invert_Y = false }),
-    JL_nand_K    = @bitCast(u4, Logic_Mode_Bits { .xor = false, .invert_JL = false, .invert_K = false, .invert_Y = true  }),
-    JL_and_not_K = @bitCast(u4, Logic_Mode_Bits { .xor = false, .invert_JL = false, .invert_K = true,  .invert_Y = false }),
-    not_JL_or_K  = @bitCast(u4, Logic_Mode_Bits { .xor = false, .invert_JL = false, .invert_K = true,  .invert_Y = true  }),
-    not_JL_and_K = @bitCast(u4, Logic_Mode_Bits { .xor = false, .invert_JL = true,  .invert_K = false, .invert_Y = false }),
-    JL_or_not_K  = @bitCast(u4, Logic_Mode_Bits { .xor = false, .invert_JL = true,  .invert_K = false, .invert_Y = true  }),
-    JL_nor_K     = @bitCast(u4, Logic_Mode_Bits { .xor = false, .invert_JL = true,  .invert_K = true,  .invert_Y = false }),
-    JL_or_K      = @bitCast(u4, Logic_Mode_Bits { .xor = false, .invert_JL = true,  .invert_K = true,  .invert_Y = true  }),
-    JL_xor_K     = @bitCast(u4, Logic_Mode_Bits { .xor = true,  .invert_JL = false, .invert_K = false, .invert_Y = false }),
-    JL_xnor_K    = @bitCast(u4, Logic_Mode_Bits { .xor = true,  .invert_JL = false, .invert_K = false, .invert_Y = true  }),
+pub const LogicMode = enum(u4) {
+    jl_and_k     = @bitCast(u4, LogicModeBits { .xor = false, .invert_jl = false, .invert_k = false, .invert_y = false }),
+    jl_nand_k    = @bitCast(u4, LogicModeBits { .xor = false, .invert_jl = false, .invert_k = false, .invert_y = true  }),
+    jl_and_not_k = @bitCast(u4, LogicModeBits { .xor = false, .invert_jl = false, .invert_k = true,  .invert_y = false }),
+    not_jl_or_k  = @bitCast(u4, LogicModeBits { .xor = false, .invert_jl = false, .invert_k = true,  .invert_y = true  }),
+    not_jl_and_k = @bitCast(u4, LogicModeBits { .xor = false, .invert_jl = true,  .invert_k = false, .invert_y = false }),
+    jl_or_not_k  = @bitCast(u4, LogicModeBits { .xor = false, .invert_jl = true,  .invert_k = false, .invert_y = true  }),
+    jl_nor_k     = @bitCast(u4, LogicModeBits { .xor = false, .invert_jl = true,  .invert_k = true,  .invert_y = false }),
+    jl_or_k      = @bitCast(u4, LogicModeBits { .xor = false, .invert_jl = true,  .invert_k = true,  .invert_y = true  }),
+    jl_xor_k     = @bitCast(u4, LogicModeBits { .xor = true,  .invert_jl = false, .invert_k = false, .invert_y = false }),
+    jl_xnor_k    = @bitCast(u4, LogicModeBits { .xor = true,  .invert_jl = false, .invert_k = false, .invert_y = true  }),
 };
-pub const Logic_Mode_Bits = packed struct {
+pub const LogicModeBits = packed struct {
     xor: bool, // alternative is AND
-    invert_JL: bool,
-    invert_K: bool,
-    invert_Y: bool,
+    invert_jl: bool,
+    invert_k: bool,
+    invert_y: bool,
 };
 
-pub const Bitcount_Mode = enum(u4) {
-    cb_JL  = @bitCast(u4, Bitcount_Mode_Bits { .priority = false, .invert_JL = false, .reverse = false }), // count set bits
-    cz_JL  = @bitCast(u4, Bitcount_Mode_Bits { .priority = false, .invert_JL = true,  .reverse = false }), // count zero bits
-    clb_JL = @bitCast(u4, Bitcount_Mode_Bits { .priority = true,  .invert_JL = false, .reverse = true  }), // count leading (msb) set bits
-    ctb_JL = @bitCast(u4, Bitcount_Mode_Bits { .priority = true,  .invert_JL = false, .reverse = false }), // count trailing (lsb) set bits
-    clz_JL = @bitCast(u4, Bitcount_Mode_Bits { .priority = true,  .invert_JL = true,  .reverse = true  }), // count leading (msb) zeroes
-    ctz_JL = @bitCast(u4, Bitcount_Mode_Bits { .priority = true,  .invert_JL = true,  .reverse = false }), // count trailing (lsb) zeroes
+pub const BitcountMode = enum(u4) {
+    cb_jl  = @bitCast(u4, BitcountModeBits { .priority = false, .invert_jl = false, .reverse = false }), // count set bits
+    cz_jl  = @bitCast(u4, BitcountModeBits { .priority = false, .invert_jl = true,  .reverse = false }), // count zero bits
+    clb_jl = @bitCast(u4, BitcountModeBits { .priority = true,  .invert_jl = false, .reverse = true  }), // count leading (msb) set bits
+    ctb_jl = @bitCast(u4, BitcountModeBits { .priority = true,  .invert_jl = false, .reverse = false }), // count trailing (lsb) set bits
+    clz_jl = @bitCast(u4, BitcountModeBits { .priority = true,  .invert_jl = true,  .reverse = true  }), // count leading (msb) zeroes
+    ctz_jl = @bitCast(u4, BitcountModeBits { .priority = true,  .invert_jl = true,  .reverse = false }), // count trailing (lsb) zeroes
 };
-pub const Bitcount_Mode_Bits = packed struct {
+pub const BitcountModeBits = packed struct {
     priority: bool,
-    invert_JL: bool,
+    invert_jl: bool,
     reverse: bool,
     _unused: u1 = 0,
 };
 
-pub const Multiplier_Mode = enum(u4) {
-    JL_zx_K_zx = @bitCast(u4, Multiplier_Mode_Bits { .JL = .unsigned, .K = .unsigned, .swap_output = false }),
-    JL_sx_K_zx = @bitCast(u4, Multiplier_Mode_Bits { .JL = .signed,   .K = .unsigned, .swap_output = false }),
-    JL_zx_K_sx = @bitCast(u4, Multiplier_Mode_Bits { .JL = .unsigned, .K = .signed,   .swap_output = false }),
-    JL_sx_K_sx = @bitCast(u4, Multiplier_Mode_Bits { .JL = .signed,   .K = .signed,   .swap_output = false }),
+pub const MultMode = enum(u4) {
+    jl_zx_k_zx = @bitCast(u4, MultModeBits { .jl = .unsigned, .k = .unsigned, .swap_output = false }),
+    jl_sx_k_zx = @bitCast(u4, MultModeBits { .jl = .signed,   .k = .unsigned, .swap_output = false }),
+    jl_zx_k_sx = @bitCast(u4, MultModeBits { .jl = .unsigned, .k = .signed,   .swap_output = false }),
+    jl_sx_k_sx = @bitCast(u4, MultModeBits { .jl = .signed,   .k = .signed,   .swap_output = false }),
 
-    JL_zx_K_zx_swap = @bitCast(u4, Multiplier_Mode_Bits { .JL = .unsigned, .K = .unsigned, .swap_output = true }),
-    JL_sx_K_zx_swap = @bitCast(u4, Multiplier_Mode_Bits { .JL = .signed,   .K = .unsigned, .swap_output = true }),
-    JL_zx_K_sx_swap = @bitCast(u4, Multiplier_Mode_Bits { .JL = .unsigned, .K = .signed,   .swap_output = true }),
-    JL_sx_K_sx_swap = @bitCast(u4, Multiplier_Mode_Bits { .JL = .signed,   .K = .signed,   .swap_output = true }),
+    jl_zx_k_zx_swap = @bitCast(u4, MultModeBits { .jl = .unsigned, .k = .unsigned, .swap_output = true }),
+    jl_sx_k_zx_swap = @bitCast(u4, MultModeBits { .jl = .signed,   .k = .unsigned, .swap_output = true }),
+    jl_zx_k_sx_swap = @bitCast(u4, MultModeBits { .jl = .unsigned, .k = .signed,   .swap_output = true }),
+    jl_sx_k_sx_swap = @bitCast(u4, MultModeBits { .jl = .signed,   .k = .signed,   .swap_output = true }),
 };
-pub const Multiplier_Data_Type = enum(u1) {
+pub const MultDataType = enum(u1) {
     unsigned = 0,
     signed = 1,
 };
-pub const Multiplier_Mode_Bits = packed struct {
-    JL: Multiplier_Data_Type,
-    K: Multiplier_Data_Type,
+pub const MultModeBits = packed struct {
+    jl: MultDataType,
+    k: MultDataType,
     swap_output: bool,
     _unused: u1 = 0,
 };
 
-pub const Shift_Mode = enum(u4) {
-    JL_shr_K4 = @bitCast(u4, Shift_Mode_Bits { .left = false, .early_swap16 = false, .late_swap16 = false, .wide = false }),
-    JL_shl_K4 = @bitCast(u4, Shift_Mode_Bits { .left = true,  .early_swap16 = false, .late_swap16 = false, .wide = false }),
-    JH_shr_K4 = @bitCast(u4, Shift_Mode_Bits { .left = false, .early_swap16 = true,  .late_swap16 = false, .wide = false }),
-    JH_shl_K4 = @bitCast(u4, Shift_Mode_Bits { .left = true,  .early_swap16 = true,  .late_swap16 = false, .wide = false }),
-    J_shr_K5  = @bitCast(u4, Shift_Mode_Bits { .left = false, .early_swap16 = false, .late_swap16 = false, .wide = true }),
-    J_shl_K5  = @bitCast(u4, Shift_Mode_Bits { .left = true,  .early_swap16 = true,  .late_swap16 = true,  .wide = true }),
+pub const ShiftMode = enum(u4) {
+    jl_shr_k4 = @bitCast(u4, ShiftModeBits { .left = false, .early_swap16 = false, .late_swap16 = false, .wide = false }),
+    jl_shl_k4 = @bitCast(u4, ShiftModeBits { .left = true,  .early_swap16 = false, .late_swap16 = false, .wide = false }),
+    jh_shr_k4 = @bitCast(u4, ShiftModeBits { .left = false, .early_swap16 = true,  .late_swap16 = false, .wide = false }),
+    jh_shl_k4 = @bitCast(u4, ShiftModeBits { .left = true,  .early_swap16 = true,  .late_swap16 = false, .wide = false }),
+    j_shr_k5  = @bitCast(u4, ShiftModeBits { .left = false, .early_swap16 = false, .late_swap16 = false, .wide = true }),
+    j_shl_k5  = @bitCast(u4, ShiftModeBits { .left = true,  .early_swap16 = true,  .late_swap16 = true,  .wide = true }),
 };
-pub const Shift_Mode_Bits = packed struct {
+pub const ShiftModeBits = packed struct {
     left: bool,
     early_swap16: bool,
     late_swap16: bool,

@@ -478,7 +478,7 @@ pub fn _0184() void {
     //syntax("BP");
     desc("Branch to start of current page");
 
-    SRL_logic_literal_to_LL(.ip, .JL_and_K, 0xF000, .fresh, .no_flags);
+    SRL_logic_literal_to_LL(.ip, .jl_and_k, 0xF000, .fresh, .no_flags);
     JH_to_LH();
     L_to_SR(.next_ip);
     next_cycle();
@@ -491,7 +491,7 @@ pub fn _0185() void {
     //syntax("BPN");
     desc("Branch to start of next page");
 
-    SRL_logic_literal_to_LL(.ip, .JL_or_not_K, 0xF000, .fresh, .no_flags);
+    SRL_logic_literal_to_LL(.ip, .jl_or_not_k, 0xF000, .fresh, .no_flags);
     JH_to_LH();
     L_to_SR(.next_ip);
     next_cycle();
@@ -504,7 +504,7 @@ pub fn _0185() void {
 //     //syntax("BB");
 //     desc("Branch to start of current 256-byte-aligned block");
 
-//     SRL_logic_literal_to_LL(.ip, .JL_and_K, 0xFF00, .fresh, .no_flags);
+//     SRL_logic_literal_to_LL(.ip, .jl_and_k, 0xFF00, .fresh, .no_flags);
 //     LH_SRC(.JH);
 //     L_to_SR(.next_ip);
 //     next_cycle();
@@ -517,7 +517,7 @@ pub fn _0185() void {
 //     //syntax("BBN");
 //     desc("Branch to start of next 256-byte-aligned block");
 
-//     SRL_logic_literal_to_LL(.ip, .JL_or_K, 0xFF, .fresh, .no_flags);
+//     SRL_logic_literal_to_LL(.ip, .jl_or_k, 0xFF, .fresh, .no_flags);
 //     LH_SRC(.JH);
 //     L_to_SR(.next_ip);
 //     next_cycle();

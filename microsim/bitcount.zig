@@ -5,9 +5,9 @@ const bus = @import("bus");
 const SplitBus = sim.SplitBus;
 
 pub fn compute(in: Inputs) Outputs {
-    const mode_bits = @bitCast(ControlSignals.Bitcount_Mode_Bits, in.ALU_MODE.raw());
+    const mode_bits = @bitCast(ControlSignals.BitcountModeBits, in.ALU_MODE.raw());
     var j = in.j;
-    if (mode_bits.invert_JL) j = ~j;
+    if (mode_bits.invert_jl) j = ~j;
     if (mode_bits.reverse) j = @bitReverse(j);
 
     return .{
@@ -17,7 +17,7 @@ pub fn compute(in: Inputs) Outputs {
 
 pub const Inputs = struct {
     j: bus.JLow,
-    ALU_MODE: ControlSignals.ALU_Mode,
+    ALU_MODE: ControlSignals.ComputeMode,
 };
 
 pub const Outputs = struct {

@@ -68,7 +68,7 @@ const Rom1Data = packed struct {
 
 const Rom2Data = packed struct {
     offset: ControlSignals.AddressOffset, // 2
-    alu_mode: u4, // 4
+    compute_mode: u4, // 4
     bus_mode: ControlSignals.BusMode, // 2
     bus_byte: ControlSignals.BusWidth, // 1
     bus_rw: ControlSignals.BusDirection, // 1
@@ -79,7 +79,7 @@ const Rom2Data = packed struct {
     fn init(cs: ControlSignals) Rom2Data {
         return .{
             .offset = cs.offset,
-            .alu_mode = cs.alu_mode.raw(),
+            .compute_mode = cs.compute_mode.raw(),
             .bus_mode = cs.bus_mode,
             .bus_byte = cs.bus_byte,
             .bus_rw = cs.bus_rw,
@@ -89,7 +89,7 @@ const Rom2Data = packed struct {
     }
     fn apply(self: Rom2Data, cs: *ControlSignals) void {
         cs.offset = self.offset;
-        cs.alu_mode = .{ .unknown = self.alu_mode };
+        cs.compute_mode = .{ .unknown = self.compute_mode };
         cs.bus_mode = self.bus_mode;
         cs.bus_byte = self.bus_byte;
         cs.bus_rw = self.bus_rw;
