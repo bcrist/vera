@@ -186,27 +186,27 @@ pub const MnemonicSuffix = enum {
 
 pub const BaseExpressionType = enum {
     none,
-    constant,
-    reg8,
-    reg8u,
-    reg8s,
-    reg16,
-    reg16u,
-    reg16s,
-    reg32,
-    reg32u,
-    reg32s,
-    ptr32i,
-    ptr32s,
-    ptr32d,
-    IP,
-    SP,
-    STAT,
-    RP,
-    BP,
-    ASN,
-    KXP,
-    UXP,
+    constant, // a literal or implicit number
+    reg8, // a reference to the low 8 bits of a GPR, unknown signedness
+    reg8u, // a reference to the low 8 bits of a GPR, unsigned
+    reg8s, // a reference to the low 8 bits of a GPR, signed
+    reg16, // a reference to a GPR, unknown signedness
+    reg16u, // a reference to a GPR, unsigned
+    reg16s, // a reference to a GPR, signed
+    reg32, // a reference to a pair of GPRs, unknown signedness
+    reg32u, // a reference to a pair of GPRs, unsigned
+    reg32s, // a reference to a pair of GPRs, signed
+    ptr32i, // a reference to a pair of GPRs, pointer to code memory
+    ptr32s, // a reference to a pair of GPRs, pointer to stack memory
+    ptr32d, // a reference to a pair of GPRs, pointer to data memory
+    IP, // the instruction pointer register
+    SP, // the stack pointer register
+    STAT, // the status register
+    RP, // the return pointer register
+    BP, // the stack base pointer register
+    ASN, // the address space number register
+    KXP, // the kernel context pointer register
+    UXP, // the user context pointer register
 
     pub fn isGPR(self: BaseExpressionType) bool {
         return switch (self) {
@@ -249,17 +249,17 @@ pub const ExpressionType = struct {
 };
 
 pub const ParameterSource = enum {
-    implicit,
-    OA,
-    OB,
-    OB_OA,
-    IP_plus_2_OA,
-    IP_plus_2_OB,
-    IP_plus_2_8,
-    IP_plus_2_16,
-    IP_plus_2_32,
-    IP_plus_4_16,
-    opcode,
+    implicit, // Parameter is not directly represented in the instruction
+    OA, // The initial operand A
+    OB, // The initial operand B
+    OB_OA, // The combination of initial operands A and B (OB is MSB, OA is LSB)
+    IP_plus_2_OA, // operand A, after it has been loaded from IP+2
+    IP_plus_2_OB, // operand B, after it has been loaded from IP+2
+    IP_plus_2_8, // the byte at IP+2
+    IP_plus_2_16, // the word at IP+2
+    IP_plus_2_32, // the 2 words at IP+2 and IP+4
+    IP_plus_4_16, // the word at IP+4
+    opcode, // Like implicit, but used when there are multiple opcodes in the encoding, and the parameter value is linearly related to the opcode
 };
 
 fn getMinLengthForParamSource(src: ParameterSource) usize {
