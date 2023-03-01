@@ -1,5 +1,4 @@
 ## Add instructions for doing block transfers to/from FLASH/PSRAM
-## Fix BB, BBN instructions in _branch.zig
 
 ## Tool to count how many instructions/opcodes use each control signal
 maybe also permutations of multiple control signals
@@ -7,6 +6,7 @@ maybe also permutations of multiple control signals
 ## Add gui to simulator
 
 ## Rework logic unit
+Fix BB, BBN instructions in _branch.zig
 
 ## Handle alias_XXXX functions in microcode generator (see alias_0100 -> NOPE)
 

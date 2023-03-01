@@ -505,7 +505,7 @@ pub fn _0185() void {
 //     desc("Branch to start of current 256-byte-aligned block");
 
 //     SRL_logic_literal_to_LL(.ip, .jl_and_k, 0xFF00, .fresh, .no_flags);
-//     LH_SRC(.JH);
+//     JH_to_LH();
 //     L_to_SR(.next_ip);
 //     next_cycle();
 
@@ -518,7 +518,7 @@ pub fn _0185() void {
 //     desc("Branch to start of next 256-byte-aligned block");
 
 //     SRL_logic_literal_to_LL(.ip, .jl_or_k, 0xFF, .fresh, .no_flags);
-//     LH_SRC(.JH);
+//     JH_to_LH();
 //     L_to_SR(.next_ip);
 //     next_cycle();
 

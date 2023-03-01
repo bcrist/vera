@@ -29,7 +29,7 @@ pub const Mnemonic = enum {
     CB, CZ, CLB, CLZ, CTB, CTZ,
     // Branches & Calls:
     B, BP, BPN, EAB, DAB, CALL, RET,
-    // TODO BB, BBN,
+    BB, BBN,
     // Basic data movement:
     C, DUP, LD, LDI, ILD, ST, STI, IST,
     // MMU:
