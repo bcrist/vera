@@ -477,17 +477,17 @@ fn simulate_setup(reg_file: *const register_file.State, in: SetupInputs, atomic_
         .rsn = in.reg.rsn,
         .oa = in.reg.oa,
         .ob = in.reg.ob,
-        .JR_RSEL = in.cs.jr_rsel,
-        .KR_RSEL = in.cs.kr_rsel,
-        .JR_RX = in.cs.jr_rx,
-        .KR_RX = in.cs.kr_rx,
-        .SR1_RI = in.cs.sr1_ri,
-        .SR2_RI = in.cs.sr2_ri,
-        .BASE = in.cs.base,
-        .LITERAL = in.cs.literal,
-        .JL_SRC = in.cs.jl_src,
-        .JH_SRC = in.cs.jh_src,
-        .K_SRC = in.cs.k_src,
+        .cs_jr_rsel = in.cs.jr_rsel,
+        .cs_kr_rsel = in.cs.kr_rsel,
+        .cs_jr_rx = in.cs.jr_rx,
+        .cs_kr_rx = in.cs.kr_rx,
+        .cs_sr1_ri = in.cs.sr1_ri,
+        .cs_sr2_ri = in.cs.sr2_ri,
+        .cs_base = in.cs.base,
+        .cs_literal = in.cs.literal,
+        .cs_jl_src = in.cs.jl_src,
+        .cs_jh_src = in.cs.jh_src,
+        .cs_k_src = in.cs.k_src,
     });
 
     const want_atomic = in.want_atomic or in.cs.special == .atomic_this or in.cs.special == .atomic_next;
@@ -504,8 +504,8 @@ fn simulate_setup(reg_file: *const register_file.State, in: SetupInputs, atomic_
         .sr2 = rf.sr2,
         .virtual_address = address_gen.setup(.{
             .base = rf.address_base,
-            .OFFSET = in.cs.offset,
-            .LITERAL = in.cs.literal,
+            .cs_offset = in.cs.offset,
+            .cs_literal = in.cs.literal,
         }),
     };
 }
@@ -515,26 +515,26 @@ fn simulate_compute(mmu_state: *const mmu.State, es: ExecutionState, in: Compute
         .j = in.j,
         .k = in.k,
         .c = in.reg.stat.c,
-        .ALU_MODE = in.cs.compute_mode,
+        .cs_compute_mode = in.cs.compute_mode,
     });
     const shift_out = shift.compute(.{
         .j = in.j,
         .k = in.k,
-        .ALU_MODE = in.cs.compute_mode,
+        .cs_compute_mode = in.cs.compute_mode,
     });
     const mult_out = mult.compute(.{
         .j = in.j.low,
         .k = in.k,
-        .ALU_MODE = in.cs.compute_mode,
+        .cs_compute_mode = in.cs.compute_mode,
     });
     const logic_out = logic.compute(.{
         .j = in.j,
         .k = in.k,
-        .ALU_MODE = in.cs.compute_mode,
+        .cs_compute_mode = in.cs.compute_mode,
     });
     const bitcount_out = bitcount.compute(.{
         .j = in.j.low,
-        .ALU_MODE = in.cs.compute_mode,
+        .cs_compute_mode = in.cs.compute_mode,
     });
 
     var mmu_out = mmu.compute(mmu_state, .{
@@ -542,20 +542,19 @@ fn simulate_compute(mmu_state: *const mmu.State, es: ExecutionState, in: Compute
         .asn = in.reg.asn,
         .enable_flag = in.reg.stat.a,
         .kernel_flag = in.reg.stat.k,
-        .BUS_MODE = in.cs.bus_mode,
-        .BUS_RW = in.cs.bus_rw,
-        .BUS_BYTE = in.cs.bus_byte,
-        .LL_SRC = in.cs.ll_src,
-        .AT_OP = in.cs.at_op,
-        .SR2_WI = in.cs.sr2_wi,
-        .SR2_WSRC = in.cs.sr2_wsrc,
+        .cs_bus_mode = in.cs.bus_mode,
+        .cs_bus_rw = in.cs.bus_rw,
+        .cs_bus_byte = in.cs.bus_byte,
+        .cs_at_op = in.cs.at_op,
+        .cs_sr2_wi = in.cs.sr2_wi,
+        .cs_sr2_wsrc = in.cs.sr2_wsrc,
     });
 
     const fault = faults.compute(.{
         .page_fault = mmu_out.page_fault,
         .page_align_fault = mmu_out.page_align_fault,
         .access_fault = mmu_out.access_fault,
-        .SPECIAL = in.cs.special,
+        .cs_special = in.cs.special,
     });
 
     const inhibit_writes = in.stall_atomic or fault.any;
@@ -682,7 +681,7 @@ fn simulate_transact(microcode: []const ControlSignals, memory: *Memory, reg_fil
         .slot = in.mmu_slot_address,
         .l = l,
         .tag = in.mmu_op.tag,
-        .AT_OP = in.mmu_op.AT_OP,
+        .cs_at_op = in.mmu_op.cs_at_op,
     });
 
     const stat_out = stat.transact(.{
@@ -695,9 +694,9 @@ fn simulate_transact(microcode: []const ControlSignals, memory: *Memory, reg_fil
         .arith_c = in.arith.c,
         .arith_v = in.arith.v,
         .mmu_k = in.mmu_k,
-        .STAT_OP = in.cs.stat_op,
-        .SEQ_OP = in.cs.seq_op,
-        .LITERAL = in.cs.literal,
+        .cs_stat_op = in.cs.stat_op,
+        .cs_seq_op = in.cs.seq_op,
+        .cs_literal = in.cs.literal,
     }, &es.power);
 
     const misc_out = misc_registers.transact(.{
@@ -708,9 +707,9 @@ fn simulate_transact(microcode: []const ControlSignals, memory: *Memory, reg_fil
         .ob = in.reg.ob,
         .inhibit_writes = in.inhibit_writes,
         .data = d,
-        .DL_OP = in.cs.dl_op,
-        .OB_OA_OP = in.cs.ob_oa_op,
-        .SPECIAL = in.cs.special,
+        .cs_dl_op = in.cs.dl_op,
+        .cs_ob_oa_op = in.cs.ob_oa_op,
+        .cs_special = in.cs.special,
     });
 
     register_file.transact(reg_file, .{
@@ -723,13 +722,13 @@ fn simulate_transact(microcode: []const ControlSignals, memory: *Memory, reg_fil
         .virtual_address = in.virtual_address,
         .sr1 = in.sr1,
         .sr2 = in.sr2,
-        .JKR_WSEL = in.cs.jkr_wsel,
-        .JKR_WMODE = in.cs.jkr_wmode,
-        .SR1_WSRC = in.cs.sr1_wsrc,
-        .SR2_WSRC = in.cs.sr2_wsrc,
-        .SR1_WI = in.cs.sr1_wi,
-        .SR2_WI = in.cs.sr2_wi,
-        .LITERAL = in.cs.literal,
+        .cs_jkr_wsel = in.cs.jkr_wsel,
+        .cs_jkr_wmode = in.cs.jkr_wmode,
+        .cs_sr1_wsrc = in.cs.sr1_wsrc,
+        .cs_sr2_wsrc = in.cs.sr2_wsrc,
+        .cs_sr1_wi = in.cs.sr1_wi,
+        .cs_sr2_wi = in.cs.sr2_wi,
+        .cs_literal = in.cs.literal,
     });
 
     const decode_out = decoder.transact(.{
@@ -743,10 +742,10 @@ fn simulate_transact(microcode: []const ControlSignals, memory: *Memory, reg_fil
         .stat = stat_out,
         .lh = l.high,
         .dl = misc_out.dl,
-        .SPECIAL = in.cs.special,
-        .NEXT_UOP = in.cs.next_uop,
-        .SEQ_OP = in.cs.seq_op,
-        .ALLOW_INT = in.cs.allow_int,
+        .cs_special = in.cs.special,
+        .cs_next_uop = in.cs.next_uop,
+        .cs_seq_op = in.cs.seq_op,
+        .cs_allow_int = in.cs.allow_int,
     });
 
     var next_atomic = in.want_atomic;

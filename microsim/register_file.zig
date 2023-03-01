@@ -92,17 +92,18 @@ pub const SetupInputs = struct {
     rsn: RegistersetNumber,
     oa: misc.OperandA,
     ob: misc.OperandB,
-    JL_SRC: ControlSignals.JLSource,
-    JH_SRC: ControlSignals.JHSource,
-    K_SRC: ControlSignals.KSource,
-    JR_RSEL: ControlSignals.RegFileIndexingSource,
-    KR_RSEL: ControlSignals.RegFileIndexingSource,
-    JR_RX: bool,
-    KR_RX: bool,
-    SR1_RI: ControlSignals.SR1Index,
-    SR2_RI: ControlSignals.SR2Index,
-    BASE: ControlSignals.AnySRIndex,
-    LITERAL: ControlSignals.Literal,
+
+    cs_jl_src: ControlSignals.JLSource,
+    cs_jh_src: ControlSignals.JHSource,
+    cs_k_src: ControlSignals.KSource,
+    cs_jr_rsel: ControlSignals.RegFileIndexingSource,
+    cs_kr_rsel: ControlSignals.RegFileIndexingSource,
+    cs_jr_rx: bool,
+    cs_kr_rx: bool,
+    cs_sr1_ri: ControlSignals.SR1Index,
+    cs_sr2_ri: ControlSignals.SR2Index,
+    cs_base: ControlSignals.AnySRIndex,
+    cs_literal: ControlSignals.Literal,
 };
 
 pub const SetupOutputs = struct {
@@ -123,13 +124,14 @@ pub const TransactInputs = struct {
     sr1: bus.JParts,
     sr2: bus.JParts,
     virtual_address: bus.VirtualAddressParts,
-    JKR_WSEL: ControlSignals.RegFileIndexingSource,
-    JKR_WMODE: ControlSignals.RegFileWriteMode,
-    SR1_WSRC: ControlSignals.SR1WriteDataSource,
-    SR2_WSRC: ControlSignals.SR2WriteDataSource,
-    SR1_WI: ControlSignals.SR1Index,
-    SR2_WI: ControlSignals.SR2Index,
-    LITERAL: ControlSignals.Literal,
+
+    cs_jkr_wsel: ControlSignals.RegFileIndexingSource,
+    cs_jkr_wmode: ControlSignals.RegFileWriteMode,
+    cs_sr1_wsrc: ControlSignals.SR1WriteDataSource,
+    cs_sr2_wsrc: ControlSignals.SR2WriteDataSource,
+    cs_sr1_wi: ControlSignals.SR1Index,
+    cs_sr2_wi: ControlSignals.SR2Index,
+    cs_literal: ControlSignals.Literal,
 };
 
 pub const RegisterView = struct {
@@ -244,26 +246,26 @@ pub const RegisterView = struct {
 };
 
 pub fn setup(state: *const State, in: SetupInputs) SetupOutputs {
-    const jr_index: RegisterIndex = switch (in.JR_RSEL) {
+    const jr_index: RegisterIndex = switch (in.cs_jr_rsel) {
         .zero => 0,
-        .literal => @truncate(RegisterIndex, in.LITERAL),
+        .literal => @truncate(RegisterIndex, in.cs_literal),
         .oa => in.oa,
         .ob => in.ob,
     };
-    const kr_index: RegisterIndex = switch (in.KR_RSEL) {
+    const kr_index: RegisterIndex = switch (in.cs_kr_rsel) {
         .zero => 0,
-        .literal => @truncate(RegisterIndex, in.LITERAL),
+        .literal => @truncate(RegisterIndex, in.cs_literal),
         .oa => in.oa,
         .ob => in.ob,
     };
 
     var jr_swap = @truncate(u1, jr_index) == 1;
-    if (in.JR_RX) {
+    if (in.cs_jr_rx) {
         jr_swap = !jr_swap;
     }
 
     var kr_swap = @truncate(u1, kr_index) == 1;
-    if (in.KR_RX) {
+    if (in.cs_kr_rx) {
         kr_swap = !kr_swap;
     }
 
@@ -285,21 +287,21 @@ pub fn setup(state: *const State, in: SetupInputs) SetupOutputs {
         break :blk state.readEven(kr_index, in.rsn);
     };
 
-    const sr1 = @bitCast(bus.JParts, state.readSR1(in.SR1_RI, in.rsn));
-    const sr2 = @bitCast(bus.JParts, state.readSR2(in.SR2_RI, in.rsn));
+    const sr1 = @bitCast(bus.JParts, state.readSR1(in.cs_sr1_ri, in.rsn));
+    const sr2 = @bitCast(bus.JParts, state.readSR2(in.cs_sr2_ri, in.rsn));
 
     return .{
         .j = .{
-            .low = switch (in.JL_SRC) {
+            .low = switch (in.cs_jl_src) {
                 .zero => 0,
                 .jrl => jr.low,
                 .sr1l => sr1.low,
                 .sr2l => sr2.low,
             },
-            .high = switch (in.JH_SRC) {
+            .high = switch (in.cs_jh_src) {
                 .zero => 0,
                 .neg_one => 0xFFFF,
-                .sx_jl => bits.sx(u16, switch (in.JL_SRC) {
+                .sx_jl => bits.sx(u16, switch (in.cs_jl_src) {
                     .zero => @as(u1, 0),
                     .jrl => @intCast(u1, jr.low >> 15),
                     .sr1l => @intCast(u1, sr1.low >> 15),
@@ -311,23 +313,23 @@ pub fn setup(state: *const State, in: SetupInputs) SetupOutputs {
                 .sr2h => sr2.high,
             },
         },
-        .k = switch (in.K_SRC) {
+        .k = switch (in.cs_k_src) {
             .zero             => 0,
             .kr               => kr,
             .sr1l             => sr1.low,
             .sr2l             => sr2.low,
             .ob_oa_zx         => bits.zx(u16, bits.concat2(in.oa, in.ob)),
-            .literal          => bits.zx(u16, in.LITERAL),
-            .literal_minus_64 => bits._1x(u16, in.LITERAL),
+            .literal          => bits.zx(u16, in.cs_literal),
+            .literal_minus_64 => bits._1x(u16, in.cs_literal),
             .literal_special  => bits.concat(.{
                 @as(u6, 0),
-                @truncate(u7, @shlExact(@as(u8, 1), @truncate(u3, in.LITERAL))),
-                @truncate(u3, in.LITERAL >> 3),
+                @truncate(u7, @shlExact(@as(u8, 1), @truncate(u3, in.cs_literal))),
+                @truncate(u3, in.cs_literal >> 3),
             }),
         },
         .sr1 = @bitCast(bus.JParts, sr1),
         .sr2 = @bitCast(bus.JParts, sr2),
-        .address_base = state.readSR(in.BASE, in.rsn),
+        .address_base = state.readSR(in.cs_base, in.rsn),
     };
 }
 
@@ -336,15 +338,15 @@ pub fn transact(state: *State, in: TransactInputs) void {
         return;
     }
 
-    const jkr_index: RegisterIndex = switch (in.JKR_WSEL) {
+    const jkr_index: RegisterIndex = switch (in.cs_jkr_wsel) {
         .zero => 0,
-        .literal => @truncate(RegisterIndex, in.LITERAL),
+        .literal => @truncate(RegisterIndex, in.cs_literal),
         .oa => in.oa,
         .ob => in.ob,
     };
 
     const odd_register = (jkr_index & 1) == 1;
-    switch (in.JKR_WMODE) {
+    switch (in.cs_jkr_wmode) {
         .no_write => {},
         .write_16 => {
             if (odd_register) {
@@ -371,20 +373,20 @@ pub fn transact(state: *State, in: TransactInputs) void {
         },
     }
 
-    switch (in.SR1_WSRC) {
+    switch (in.cs_sr1_wsrc) {
         .no_write => {},
         .rsn_sr1 => {
             const val = bits.concat2(@truncate(u16, @bitCast(u32, in.sr1)), @as(u16, in.read_rsn));
-            state.writeSR1(in.SR1_WI, in.rsn, val);
+            state.writeSR1(in.cs_sr1_wi, in.rsn, val);
         },
-        .l_bus => state.writeSR1(in.SR1_WI, in.rsn, @bitCast(u32, in.l)),
-        .virtual_address => state.writeSR1(in.SR1_WI, in.rsn, @bitCast(u32, in.virtual_address)),
+        .l_bus => state.writeSR1(in.cs_sr1_wi, in.rsn, @bitCast(u32, in.l)),
+        .virtual_address => state.writeSR1(in.cs_sr1_wi, in.rsn, @bitCast(u32, in.virtual_address)),
     }
 
-    switch (in.SR2_WSRC) {
+    switch (in.cs_sr2_wsrc) {
         .no_write => {},
-        .sr2 => state.writeSR2(in.SR2_WI, in.rsn, @bitCast(u32, in.sr2)),
-        .l_bus => state.writeSR2(in.SR2_WI, in.rsn, @bitCast(u32, in.l)),
-        .virtual_address => state.writeSR2(in.SR2_WI, in.rsn, @bitCast(u32, in.virtual_address)),
+        .sr2 => state.writeSR2(in.cs_sr2_wi, in.rsn, @bitCast(u32, in.sr2)),
+        .l_bus => state.writeSR2(in.cs_sr2_wi, in.rsn, @bitCast(u32, in.l)),
+        .virtual_address => state.writeSR2(in.cs_sr2_wi, in.rsn, @bitCast(u32, in.virtual_address)),
     }
 }

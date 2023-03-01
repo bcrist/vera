@@ -14,19 +14,19 @@ const OffsetSlotAndTag = packed struct {
 };
 
 pub const OperationInfo = struct {
-    BUS_RW: ControlSignals.BusDirection,
-    BUS_BYTE: ControlSignals.BusWidth,
-    BUS_MODE: ControlSignals.BusMode,
-    AT_OP: ControlSignals.AddressTranslatorOp,
+    cs_bus_rw: ControlSignals.BusDirection,
+    cs_bus_byte: ControlSignals.BusWidth,
+    cs_bus_mode: ControlSignals.BusMode,
+    cs_at_op: ControlSignals.AddressTranslatorOp,
     slot: u6,
     tag: misc.address_translator.Tag,
 
     pub fn init() OperationInfo {
         return .{
-            .BUS_RW = .read,
-            .BUS_BYTE = .word,
-            .BUS_MODE = .raw,
-            .AT_OP = .none,
+            .cs_bus_rw = .read,
+            .cs_bus_byte = .word,
+            .cs_bus_mode = .raw,
+            .cs_at_op = .none,
             .slot = 0,
             .tag = 0,
         };
@@ -34,10 +34,10 @@ pub const OperationInfo = struct {
 
     pub fn random(rnd: std.rand.Random) OperationInfo {
         return .{
-            .BUS_RW = rnd.enumValue(ControlSignals.BusDirection),
-            .BUS_BYTE = rnd.enumValue(ControlSignals.BusWidth),
-            .BUS_MODE = rnd.enumValue(ControlSignals.BusMode),
-            .AT_OP = rnd.enumValue(ControlSignals.AddressTranslatorOp),
+            .cs_bus_rw = rnd.enumValue(ControlSignals.BusDirection),
+            .cs_bus_byte = rnd.enumValue(ControlSignals.BusWidth),
+            .cs_bus_mode = rnd.enumValue(ControlSignals.BusMode),
+            .cs_at_op = rnd.enumValue(ControlSignals.AddressTranslatorOp),
             .slot = rnd.int(u6),
             .tag = rnd.int(misc.address_translator.Tag),
         };
@@ -45,10 +45,10 @@ pub const OperationInfo = struct {
 
     pub fn toU32(self: OperationInfo) u32 {
         return bits.concat(.{
-            @enumToInt(self.BUS_RW),
-            @enumToInt(self.BUS_BYTE),
-            @enumToInt(self.BUS_MODE),
-            @enumToInt(self.AT_OP),
+            @enumToInt(self.cs_bus_rw),
+            @enumToInt(self.cs_bus_byte),
+            @enumToInt(self.cs_bus_mode),
+            @enumToInt(self.cs_at_op),
             @as(u6, 0),
             self.slot,
             self.tag,
@@ -104,13 +104,12 @@ pub const ComputeInputs = struct {
     enable_flag: bool,
     kernel_flag: bool,
 
-    BUS_MODE: ControlSignals.BusMode,
-    BUS_RW: ControlSignals.BusDirection,
-    BUS_BYTE: ControlSignals.BusWidth,
-    LL_SRC: ControlSignals.LLSource,
-    AT_OP: ControlSignals.AddressTranslatorOp,
-    SR2_WI: ControlSignals.SR2Index,
-    SR2_WSRC: ControlSignals.SR2WriteDataSource,
+    cs_bus_mode: ControlSignals.BusMode,
+    cs_bus_rw: ControlSignals.BusDirection,
+    cs_bus_byte: ControlSignals.BusWidth,
+    cs_at_op: ControlSignals.AddressTranslatorOp,
+    cs_sr2_wi: ControlSignals.SR2Index,
+    cs_sr2_wsrc: ControlSignals.SR2WriteDataSource,
 };
 
 pub const ComputeOutputs = struct {
@@ -126,8 +125,8 @@ pub const ComputeOutputs = struct {
 };
 
 pub fn compute(state: *const State, in: ComputeInputs) ComputeOutputs {
-    const group: u2 = switch (in.BUS_MODE) {
-        .raw, .data => switch (in.BUS_RW) {
+    const group: u2 = switch (in.cs_bus_mode) {
+        .raw, .data => switch (in.cs_bus_rw) {
             .write => @as(u2, 0),
             .read => @as(u2, 1),
         },
@@ -152,17 +151,17 @@ pub fn compute(state: *const State, in: ComputeInputs) ComputeOutputs {
 
     var matching = primary;
     var other = secondary;
-    if (in.AT_OP != .none and !primary_match and (secondary_match or in.AT_OP == .update)) {
+    if (in.cs_at_op != .none and !primary_match and (secondary_match or in.cs_at_op == .update)) {
         matching = secondary;
         other = primary;
     }
 
-    const translate = in.AT_OP == .translate;
+    const translate = in.cs_at_op == .translate;
 
     // TODO audit this to make sure it catches all instruction loads
-    const insn_load = translate and in.SR2_WSRC == .virtual_address and (in.SR2_WI == .ip or in.SR2_WI == .next_ip);
+    const insn_load = translate and in.cs_sr2_wsrc == .virtual_address and (in.cs_sr2_wi == .ip or in.cs_sr2_wi == .next_ip);
 
-    const enabled = in.enable_flag and in.BUS_MODE != .raw;
+    const enabled = in.enable_flag and in.cs_bus_mode != .raw;
 
     const enabled_translate = enabled and translate;
     const disabled_translate = !enabled and translate;
@@ -222,14 +221,14 @@ pub fn compute(state: *const State, in: ComputeInputs) ComputeOutputs {
         }
     } else if (disabled_translate) {
         bus_ctrl.wait_states = 0;
-        if (in.BUS_MODE == .insn) {
+        if (in.cs_bus_mode == .insn) {
             new_kernel_flag = true;
         }
     }
 
     if ((virtual.offset & 1) == 1) {
         bus_ctrl.swap_bytes = true;
-        if (in.BUS_BYTE == .word) {
+        if (in.cs_bus_byte == .word) {
             bus_ctrl.even_offset +%= 1;
             if (virtual.offset == 0xFFFF) {
                 page_align_fault = true;
@@ -238,11 +237,11 @@ pub fn compute(state: *const State, in: ComputeInputs) ComputeOutputs {
     }
 
     if (translate) {
-        if (in.BUS_RW == .read) {
+        if (in.cs_bus_rw == .read) {
             bus_ctrl.read = true;
-        } else if (in.BUS_RW == .write) {
+        } else if (in.cs_bus_rw == .write) {
             bus_ctrl.write = true;
-            if (in.BUS_BYTE == .word) {
+            if (in.cs_bus_byte == .word) {
                 bus_ctrl.write_even = true;
                 bus_ctrl.write_odd = true;
             } else if ((virtual.offset & 1) == 1) {
@@ -255,10 +254,10 @@ pub fn compute(state: *const State, in: ComputeInputs) ComputeOutputs {
 
     return .{
         .op = .{
-            .BUS_RW = in.BUS_RW,
-            .BUS_BYTE = in.BUS_BYTE,
-            .BUS_MODE = in.BUS_MODE,
-            .AT_OP = in.AT_OP,
+            .cs_bus_rw = in.cs_bus_rw,
+            .cs_bus_byte = in.cs_bus_byte,
+            .cs_bus_mode = in.cs_bus_mode,
+            .cs_at_op = in.cs_at_op,
             .slot = virtual.slot,
             .tag = virtual.tag,
         },
@@ -280,13 +279,13 @@ pub const TransactInputs = struct {
     slot: misc.address_translator.Slot,
     l: bus.LParts,
     tag: misc.address_translator.Tag,
-    AT_OP: ControlSignals.AddressTranslatorOp,
+    cs_at_op: ControlSignals.AddressTranslatorOp,
 };
 
 pub fn transact(state: *State, in: TransactInputs) void {
     if (in.inhibit_writes) return;
 
-    switch (in.AT_OP) {
+    switch (in.cs_at_op) {
         .none => {},
         .translate => {
             state.primary[in.slot] = in.matching_entry;

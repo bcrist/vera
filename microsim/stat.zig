@@ -47,9 +47,9 @@ pub const Inputs = struct {
     arith_v: bool,
     mmu_k: bool,
 
-    STAT_OP: ControlSignals.StatusRegOp,
-    SEQ_OP: ControlSignals.SequencerOp,
-    LITERAL: ControlSignals.Literal,
+    cs_stat_op: ControlSignals.StatusRegOp,
+    cs_seq_op: ControlSignals.SequencerOp,
+    cs_literal: ControlSignals.Literal,
 };
 
 pub fn transact(in: Inputs, power: *misc.PowerMode) LoopState {
@@ -67,13 +67,13 @@ pub fn transact(in: Inputs, power: *misc.PowerMode) LoopState {
 
     state.next_k = in.mmu_k;
 
-    switch (in.SEQ_OP) {
+    switch (in.cs_seq_op) {
         // next_k is a latch, so it has already been updated from in.mmu_k if necessary
         .next_instruction => state.k = state.next_k,
         .next_uop, .next_uop_force_normal, .fault_return => {},
     }
 
-    switch (in.STAT_OP) {
+    switch (in.cs_stat_op) {
         .hold => {},
         .zn_from_l => {
             state.z = lz;
@@ -119,7 +119,7 @@ pub fn transact(in: Inputs, power: *misc.PowerMode) LoopState {
             state.n = ll_bits.n;
             state.v = ll_bits.v;
             state.c = ll_bits.c;
-            if (in.STAT_OP == .load_znvcka_from_ll) {
+            if (in.cs_stat_op == .load_znvcka_from_ll) {
                 state.k = ll_bits.k;
                 state.a = ll_bits.a;
             }

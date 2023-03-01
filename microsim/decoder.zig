@@ -16,10 +16,10 @@ pub const TransactInputs = struct {
     stat: stat.LoopState,
     dl: bus.D,
     lh: bus.LHigh,
-    ALLOW_INT: bool,
-    SEQ_OP: ControlSignals.SequencerOp,
-    NEXT_UOP: uc.Continuation,
-    SPECIAL: ControlSignals.SpecialOp,
+    cs_allow_int: bool,
+    cs_seq_op: ControlSignals.SequencerOp,
+    cs_next_uop: uc.Continuation,
+    cs_special: ControlSignals.SpecialOp,
 };
 
 pub const TransactOutputs = struct {
@@ -44,19 +44,19 @@ pub fn transact(in: TransactInputs) TransactOutputs {
             .ua = if (in.fault.page) @enumToInt(uc.Vectors.page_fault)
                 else if (in.fault.access) @enumToInt(uc.Vectors.access_fault)
                 else if (in.fault.page_align) @enumToInt(uc.Vectors.page_align_fault)
-                else if (in.fault.special) uc.getAddressForContinuation(in.NEXT_UOP, in.stat.toUCFlags())
+                else if (in.fault.special) uc.getAddressForContinuation(in.cs_next_uop, in.stat.toUCFlags())
                 else undefined,
-        } else if (in.exec_mode == .normal and in.interrupt_pending and in.ALLOW_INT and !in.want_atomic) .{
+        } else if (in.exec_mode == .normal and in.interrupt_pending and in.cs_allow_int and !in.want_atomic) .{
             .exec_mode = .interrupt,
             .ua = @enumToInt(uc.Vectors.interrupt),
-        } else switch (in.SEQ_OP) {
+        } else switch (in.cs_seq_op) {
             .next_uop => .{
                 .exec_mode = in.exec_mode,
-                .ua = uc.getAddressForContinuation(in.NEXT_UOP, in.stat.toUCFlags()),
+                .ua = uc.getAddressForContinuation(in.cs_next_uop, in.stat.toUCFlags()),
             },
             .next_uop_force_normal => .{
                 .exec_mode = .normal,
-                .ua = uc.getAddressForContinuation(in.NEXT_UOP, in.stat.toUCFlags()),
+                .ua = uc.getAddressForContinuation(in.cs_next_uop, in.stat.toUCFlags()),
             },
             .next_instruction => .{
                 .exec_mode = in.exec_mode,
@@ -70,10 +70,10 @@ pub fn transact(in: TransactInputs) TransactOutputs {
         .fault, .interrupt_fault => if (in.fault.any) .{
             .exec_mode = in.exec_mode,
             .ua = @enumToInt(uc.Vectors.double_fault),
-        } else switch (in.SEQ_OP) {
+        } else switch (in.cs_seq_op) {
             .next_uop => .{
                 .exec_mode = in.exec_mode,
-                .ua = uc.getAddressForContinuation(in.NEXT_UOP, in.stat.toUCFlags()),
+                .ua = uc.getAddressForContinuation(in.cs_next_uop, in.stat.toUCFlags()),
             },
             .next_instruction => .{
                 .exec_mode = in.exec_mode,
@@ -81,7 +81,7 @@ pub fn transact(in: TransactInputs) TransactOutputs {
             },
             .next_uop_force_normal => .{
                 .exec_mode = .normal,
-                .ua = uc.getAddressForContinuation(in.NEXT_UOP, in.stat.toUCFlags()),
+                .ua = uc.getAddressForContinuation(in.cs_next_uop, in.stat.toUCFlags()),
             },
             .fault_return => .{
                 .exec_mode = switch (in.exec_mode) {

@@ -4,7 +4,7 @@ const ControlSignals = @import("ControlSignals");
 const bus = @import("bus");
 
 pub fn compute(in: Inputs) Outputs {
-    const mode_bits = @bitCast(ControlSignals.ArithModeBits, in.ALU_MODE.raw());
+    const mode_bits = @bitCast(ControlSignals.ArithModeBits, in.cs_compute_mode.raw());
     const narrow = mode_bits.width == .jl_k;
 
     const j: u32 = if (narrow) in.j.low else @bitCast(u32, in.j);
@@ -58,7 +58,7 @@ pub const Inputs = struct {
     j: bus.JParts,
     k: bus.K,
     c: bool,
-    ALU_MODE: ControlSignals.ComputeMode,
+    cs_compute_mode: ControlSignals.ComputeMode,
 };
 
 pub const Outputs = struct {

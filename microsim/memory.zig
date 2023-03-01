@@ -10,15 +10,15 @@ const cy7c1061g_address_bits = 20;   //  8MB (4x CY7C1061G; directly accessible)
 const is66wve4m16_address_bits = 22; // 32MB (4x IS66WVE4M16E; accessible via aligned 8 byte block transfers to/from SRAM)
 const sst39vf802c_address_bits = 19; //  4MB (4x SST39VF802C; accessible via aligned 8 byte block transfers to/from SRAM)
 
-const CY7C1061G_Address = std.meta.Int(.unsigned, cy7c1061g_address_bits);
-const IS66WVE4M16_Address = std.meta.Int(.unsigned, is66wve4m16_address_bits);
-const SST39VF802C_Address = std.meta.Int(.unsigned, sst39vf802c_address_bits);
+const SramAddress = std.meta.Int(.unsigned, cy7c1061g_address_bits);
+const PsramAddress = std.meta.Int(.unsigned, is66wve4m16_address_bits);
+const FlashAddress = std.meta.Int(.unsigned, sst39vf802c_address_bits);
 
-const Block_Address = std.meta.Int(.unsigned, @max(is66wve4m16_address_bits, sst39vf802c_address_bits));
+const BlockAddress = std.meta.Int(.unsigned, @max(is66wve4m16_address_bits, sst39vf802c_address_bits));
 
-const cy7c1061g_size = std.math.maxInt(CY7C1061G_Address) + 1;
-const is66wve4m16_size = std.math.maxInt(IS66WVE4M16_Address) + 1;
-const sst39vf802c_size = std.math.maxInt(SST39VF802C_Address) + 1;
+const cy7c1061g_size = std.math.maxInt(SramAddress) + 1;
+const is66wve4m16_size = std.math.maxInt(PsramAddress) + 1;
+const sst39vf802c_size = std.math.maxInt(FlashAddress) + 1;
 
 const last_frame = physical_address.toFrame(physical_address.ram_end);
 
@@ -38,11 +38,11 @@ pub const Memory = struct {
     sram: [4][cy7c1061g_size]u16,
     psram: [4][is66wve4m16_size]u16,
     flash: [4][sst39vf802c_size]u16,
-    flash_fsm: [4]SST39VF802C_State_Machine,
+    flash_fsm: [4]FlashStateMachine,
     block_advance: bool,
     block_flash: bool,
     block_psram: bool,
-    block_ptr: Block_Address,
+    block_ptr: BlockAddress,
 
     pub fn reset(self: *Memory) void {
         self.flash_fsm = .{.{}} ** 4;
@@ -62,7 +62,7 @@ pub const Memory = struct {
             self.block_flash = false;
             self.block_psram = false;
         }
-        self.block_ptr = rnd.int(Block_Address);
+        self.block_ptr = rnd.int(BlockAddress);
     }
 
     pub fn read(self: *Memory, bus_ctrl: SystemBusControl) ?u16 {
@@ -74,8 +74,8 @@ pub const Memory = struct {
         const even_high_byte = 0 != (bus_ctrl.even_offset & 2);
         const odd_high_byte = 0 != (bus_ctrl.odd_offset & 2);
 
-        const even_addr = @intCast(CY7C1061G_Address, bits.concat2(@intCast(u9, bus_ctrl.even_offset >> 2), bus_ctrl.address.frame));
-        const odd_addr = @intCast(CY7C1061G_Address, bits.concat2(@intCast(u9, bus_ctrl.odd_offset >> 2), bus_ctrl.address.frame));
+        const even_addr = @intCast(SramAddress, bits.concat2(@intCast(u9, bus_ctrl.even_offset >> 2), bus_ctrl.address.frame));
+        const odd_addr = @intCast(SramAddress, bits.concat2(@intCast(u9, bus_ctrl.odd_offset >> 2), bus_ctrl.address.frame));
 
         const sram = &self.sram;
         const even16 = sram[even_group][even_addr];
@@ -94,7 +94,7 @@ pub const Memory = struct {
     pub fn write(self: *Memory, bus_ctrl: SystemBusControl, data: bus.D, block_transfer: bool) void {
         switch (@intToEnum(physical_address.DeviceFrame, bus_ctrl.address.frame)) {
             .sys_block_transfer_config => if (bus_ctrl.write) {
-                self.block_ptr = @truncate(Block_Address, bits.concat2(data, bus_ctrl.address.offset));
+                self.block_ptr = @truncate(BlockAddress, bits.concat2(data, bus_ctrl.address.offset));
                 self.block_advance = 0 != (bus_ctrl.address.offset & 0x800);
                 switch (@truncate(u2, bus_ctrl.address.offset >> 9)) {
                     1 => {
@@ -116,17 +116,17 @@ pub const Memory = struct {
         if (bus_ctrl.write) {
             if (block_transfer) {
                 const sram = &self.sram;
-                const sram_addr = @intCast(CY7C1061G_Address, bits.concat2(@intCast(u9, bus_ctrl.address.offset >> 3), bus_ctrl.address.frame));
+                const sram_addr = @intCast(SramAddress, bits.concat2(@intCast(u9, bus_ctrl.address.offset >> 3), bus_ctrl.address.frame));
                 if (self.block_flash) {
                     const flash = &self.flash;
-                    const flash_addr = @truncate(SST39VF802C_Address, self.block_ptr);
+                    const flash_addr = @truncate(FlashAddress, self.block_ptr);
                     sram[0][sram_addr] = flash[0][flash_addr];
                     sram[1][sram_addr] = flash[1][flash_addr];
                     sram[2][sram_addr] = flash[2][flash_addr];
                     sram[3][sram_addr] = flash[3][flash_addr];
                 } else if (self.block_psram) {
                     const psram = &self.psram;
-                    const psram_addr = @truncate(IS66WVE4M16_Address, self.block_ptr);
+                    const psram_addr = @truncate(PsramAddress, self.block_ptr);
                     sram[0][sram_addr] = psram[0][psram_addr];
                     sram[1][sram_addr] = psram[1][psram_addr];
                     sram[2][sram_addr] = psram[2][psram_addr];
@@ -148,7 +148,7 @@ pub const Memory = struct {
                 if (bus_ctrl.write_even) {
                     const group = @truncate(u1, bus_ctrl.even_offset) * @as(u2, 2);
                     const high_byte = 0 != (bus_ctrl.even_offset & 2);
-                    const addr = @intCast(CY7C1061G_Address, bits.concat2(@intCast(u9, bus_ctrl.even_offset >> 2), bus_ctrl.address.frame));
+                    const addr = @intCast(SramAddress, bits.concat2(@intCast(u9, bus_ctrl.even_offset >> 2), bus_ctrl.address.frame));
                     sram[group][addr] = if (high_byte)
                         bits.concat2(low8(sram[group][addr]), even_data)
                     else
@@ -157,7 +157,7 @@ pub const Memory = struct {
                 if (bus_ctrl.write_odd) {
                     const group = @truncate(u1, bus_ctrl.odd_offset) * @as(u2, 2) + 1;
                     const high_byte = 0 != (bus_ctrl.odd_offset & 2);
-                    const addr = @intCast(CY7C1061G_Address, bits.concat2(@intCast(u9, bus_ctrl.odd_offset >> 2), bus_ctrl.address.frame));
+                    const addr = @intCast(SramAddress, bits.concat2(@intCast(u9, bus_ctrl.odd_offset >> 2), bus_ctrl.address.frame));
                     sram[group][addr] = if (high_byte)
                         bits.concat2(low8(sram[group][addr]), odd_data)
                     else
@@ -166,17 +166,17 @@ pub const Memory = struct {
             }
         } else if (bus_ctrl.read and block_transfer) {
             const sram = &self.sram;
-            const sram_addr = @intCast(CY7C1061G_Address, bits.concat2(@intCast(u9, bus_ctrl.address.offset >> 3), bus_ctrl.address.frame));
+            const sram_addr = @intCast(SramAddress, bits.concat2(@intCast(u9, bus_ctrl.address.offset >> 3), bus_ctrl.address.frame));
             if (self.block_flash) {
                 const flash = &self.flash;
-                const flash_addr = @truncate(SST39VF802C_Address, self.block_ptr);
+                const flash_addr = @truncate(FlashAddress, self.block_ptr);
                 self.flash_fsm[0].write(&flash[0], flash_addr, sram[0][sram_addr]);
                 self.flash_fsm[1].write(&flash[1], flash_addr, sram[1][sram_addr]);
                 self.flash_fsm[2].write(&flash[2], flash_addr, sram[2][sram_addr]);
                 self.flash_fsm[3].write(&flash[3], flash_addr, sram[3][sram_addr]);
             } else if (self.block_psram) {
                 const psram = &self.psram;
-                const psram_addr = @truncate(IS66WVE4M16_Address, self.block_ptr);
+                const psram_addr = @truncate(PsramAddress, self.block_ptr);
                 psram[0][psram_addr] = sram[0][sram_addr];
                 psram[1][psram_addr] = sram[1][sram_addr];
                 psram[2][psram_addr] = sram[2][sram_addr];
@@ -290,7 +290,7 @@ pub const Memory = struct {
     };
 };
 
-const SST39VF802C_State_Machine = struct {
+const FlashStateMachine = struct {
     state: enum {
         normal,
         preamble1,
@@ -301,7 +301,7 @@ const SST39VF802C_State_Machine = struct {
         erase2,
     } = .normal,
 
-    fn write(self: *SST39VF802C_State_Machine, flash: []u16, address: SST39VF802C_Address, data: u16) void {
+    fn write(self: *FlashStateMachine, flash: []u16, address: FlashAddress, data: u16) void {
         const command = bits.concat2(@truncate(u8, data), @truncate(u11, address));
         switch (self.state) {
             .normal => {
@@ -343,7 +343,7 @@ const SST39VF802C_State_Machine = struct {
                 switch (@truncate(u8, data)) {
                     0x50 => {
                         // Sector erase
-                        const sector_size: SST39VF802C_Address = 0x800;
+                        const sector_size: FlashAddress = 0x800;
                         const sector_mask = ~(sector_size - 1);
                         const sector = flash[(address & sector_mask)..][0..sector_size];
                         std.mem.set(u16, sector, 0xFFFF);
@@ -359,7 +359,7 @@ const SST39VF802C_State_Machine = struct {
                         const block_number = @intCast(u5, address >> 14);
                         switch (block_number) {
                             0...14 => {
-                                const block_size: SST39VF802C_Address = 0x8000;
+                                const block_size: FlashAddress = 0x8000;
                                 const block = flash[(block_number * block_size)..][0..block_size];
                                 std.mem.set(u16, block, 0xFFFF);
                             },

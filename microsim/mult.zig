@@ -5,7 +5,7 @@ const misc = @import("misc");
 const bus = @import("bus");
 
 pub fn compute(in: Inputs) Outputs {
-    const mode_bits = @bitCast(ControlSignals.MultModeBits, in.ALU_MODE.raw());
+    const mode_bits = @bitCast(ControlSignals.MultModeBits, in.cs_compute_mode.raw());
 
     const j = switch (mode_bits.jl) {
         .unsigned => bits.zx(i64, in.j),
@@ -32,7 +32,7 @@ pub fn compute(in: Inputs) Outputs {
 pub const Inputs = struct {
     j: bus.JLow,
     k: bus.K,
-    ALU_MODE: ControlSignals.ComputeMode,
+    cs_compute_mode: ControlSignals.ComputeMode,
 };
 
 pub const Outputs = struct {
