@@ -715,12 +715,12 @@ pub fn last_mmu_op_to_L() void {
 
 pub fn PN_to_SR1(index: ControlSignals.SR1Index) void {
     setControlSignal(.sr1_wi, index);
-    setControlSignal(.sr1_wsrc, .PN);
+    setControlSignal(.sr1_wsrc, .virtual_address);
 }
 
 pub fn PN_to_SR2(index: ControlSignals.SR2Index) void {
     setSR2WriteIndex(index);
-    setControlSignal(.sr2_wsrc, .PN);
+    setControlSignal(.sr2_wsrc, .virtual_address);
 }
 
 pub fn PN_to_SR(which: ControlSignals.AnySRIndex) void {
@@ -838,12 +838,12 @@ pub fn DL_to_LL() void {
 
 pub fn L_to_SR1(index: ControlSignals.SR1Index) void {
     setControlSignal(.sr1_wi, index);
-    setControlSignal(.sr1_wsrc, .L);
+    setControlSignal(.sr1_wsrc, .l_bus);
 }
 
 pub fn L_to_SR2(index: ControlSignals.SR2Index) void {
     setSR2WriteIndex(index);
-    setControlSignal(.sr2_wsrc, .L);
+    setControlSignal(.sr2_wsrc, .l_bus);
 }
 
 pub fn L_to_SR(which: ControlSignals.AnySRIndex) void {
@@ -865,7 +865,7 @@ pub fn L_to_SR(which: ControlSignals.AnySRIndex) void {
 pub fn SR2_to_SR2(src_index: ControlSignals.SR2Index, dest_index: ControlSignals.SR2Index) void {
     setControlSignal(.sr2_ri, src_index);
     setSR2WriteIndex(dest_index);
-    setControlSignal(.sr2_wsrc, .SR2);
+    setControlSignal(.sr2_wsrc, .sr2);
 }
 
 pub fn ZN_from_LL(freshness: ALU_Freshness) void {
@@ -908,13 +908,13 @@ pub fn toggle_rsn() void {
 pub fn RSN_to_SR1H(index: ControlSignals.SR1Index) void {
     setControlSignal(.sr1_ri, index);
     setControlSignal(.sr1_wi, index);
-    setControlSignal(.sr1_wsrc, .RSN_SR1);
+    setControlSignal(.sr1_wsrc, .rsn_sr1);
 }
 
 pub fn reload_ASN() void {
     setControlSignal(.sr2_ri, .asn);
     setSR2WriteIndex(.asn);
-    setControlSignal(.sr2_wsrc, .SR2);
+    setControlSignal(.sr2_wsrc, .sr2);
 }
 
 pub fn pipe_id_to_LL() void {
@@ -928,8 +928,8 @@ pub fn pipe_id_to_L() void {
 
 pub fn LL_to_op_reg(which: OA_or_OB_xor) void {
     setControlSignal(.jkr_wmode, switch (which) {
-        .OA, .OB => ControlSignals.Reg_File_Write_Mode.write_16,
-        .OAxor1, .OBxor1 => ControlSignals.Reg_File_Write_Mode.write_16_xor1,
+        .OA, .OB => ControlSignals.RegFileWriteMode.write_16,
+        .OAxor1, .OBxor1 => ControlSignals.RegFileWriteMode.write_16_xor1,
     });
     switch (which) {
         .OA, .OAxor1 => setControlSignal(.jkr_wsel, .oa),
@@ -981,7 +981,7 @@ pub fn load_next_insn(ip_offset: misc.SignedOffsetForLiteral) void {
     setControlSignal(.bus_rw, .read);
     D_to_DL();
     setSR2WriteIndex(.next_ip);
-    setControlSignal(.sr2_wsrc, .PN);
+    setControlSignal(.sr2_wsrc, .virtual_address);
     assume_next_insn_loaded(ip_offset);
 }
 
@@ -995,10 +995,10 @@ pub fn assume_next_insn_loaded(ip_offset: misc.SignedOffsetForLiteral) void {
 pub fn exec_next_insn() void {
     if (isSet(.sr2_ri) and cycle.sr2_ri != .next_ip) {
         address(.next_ip, 0);
-        setControlSignal(.sr2_wsrc, .PN);
+        setControlSignal(.sr2_wsrc, .virtual_address);
     } else {
         setControlSignal(.sr2_ri, .next_ip);
-        setControlSignal(.sr2_wsrc, .SR2);
+        setControlSignal(.sr2_wsrc, .sr2);
     }
     setControlSignal(.sr2_wi, .ip);
     execLatchedInsn();
@@ -1018,7 +1018,7 @@ pub fn branch(base: ControlSignals.AnySRIndex, offset: misc.SignedOffsetForLiter
     D_to_DL();
     if (base != .ip or offset != 0) {
         setSR2WriteIndex(.ip);
-        setControlSignal(.sr2_wsrc, .PN);
+        setControlSignal(.sr2_wsrc, .virtual_address);
     }
     execLatchedInsn();
 }

@@ -124,9 +124,9 @@ pub const TransactInputs = struct {
     sr2: bus.JParts,
     virtual_address: bus.VirtualAddressParts,
     JKR_WSEL: ControlSignals.RegFileIndexingSource,
-    JKR_WMODE: ControlSignals.Reg_File_Write_Mode,
-    SR1_WSRC: ControlSignals.SR1_Write_Data_Source,
-    SR2_WSRC: ControlSignals.SR2_Write_Data_Source,
+    JKR_WMODE: ControlSignals.RegFileWriteMode,
+    SR1_WSRC: ControlSignals.SR1WriteDataSource,
+    SR2_WSRC: ControlSignals.SR2WriteDataSource,
     SR1_WI: ControlSignals.SR1Index,
     SR2_WI: ControlSignals.SR2Index,
     LITERAL: ControlSignals.Literal,
@@ -373,18 +373,18 @@ pub fn transact(state: *State, in: TransactInputs) void {
 
     switch (in.SR1_WSRC) {
         .no_write => {},
-        .RSN_SR1 => {
+        .rsn_sr1 => {
             const val = bits.concat2(@truncate(u16, @bitCast(u32, in.sr1)), @as(u16, in.read_rsn));
             state.writeSR1(in.SR1_WI, in.rsn, val);
         },
-        .L   => state.writeSR1(in.SR1_WI, in.rsn, @bitCast(u32, in.l)),
-        .PN  => state.writeSR1(in.SR1_WI, in.rsn, @bitCast(u32, in.virtual_address)),
+        .l_bus => state.writeSR1(in.SR1_WI, in.rsn, @bitCast(u32, in.l)),
+        .virtual_address => state.writeSR1(in.SR1_WI, in.rsn, @bitCast(u32, in.virtual_address)),
     }
 
     switch (in.SR2_WSRC) {
         .no_write => {},
-        .SR2 => state.writeSR2(in.SR2_WI, in.rsn, @bitCast(u32, in.sr2)),
-        .L   => state.writeSR2(in.SR2_WI, in.rsn, @bitCast(u32, in.l)),
-        .PN  => state.writeSR2(in.SR2_WI, in.rsn, @bitCast(u32, in.virtual_address)),
+        .sr2 => state.writeSR2(in.SR2_WI, in.rsn, @bitCast(u32, in.sr2)),
+        .l_bus => state.writeSR2(in.SR2_WI, in.rsn, @bitCast(u32, in.l)),
+        .virtual_address => state.writeSR2(in.SR2_WI, in.rsn, @bitCast(u32, in.virtual_address)),
     }
 }

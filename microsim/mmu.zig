@@ -110,7 +110,7 @@ pub const ComputeInputs = struct {
     LL_SRC: ControlSignals.LLSource,
     AT_OP: ControlSignals.AddressTranslatorOp,
     SR2_WI: ControlSignals.SR2Index,
-    SR2_WSRC: ControlSignals.SR2_Write_Data_Source,
+    SR2_WSRC: ControlSignals.SR2WriteDataSource,
 };
 
 pub const ComputeOutputs = struct {
@@ -158,7 +158,9 @@ pub fn compute(state: *const State, in: ComputeInputs) ComputeOutputs {
     }
 
     const translate = in.AT_OP == .translate;
-    const insn_load = translate and in.SR2_WSRC == .PN and (in.SR2_WI == .ip or in.SR2_WI == .next_ip);
+
+    // TODO audit this to make sure it catches all instruction loads
+    const insn_load = translate and in.SR2_WSRC == .virtual_address and (in.SR2_WI == .ip or in.SR2_WI == .next_ip);
 
     const enabled = in.enable_flag and in.BUS_MODE != .raw;
 

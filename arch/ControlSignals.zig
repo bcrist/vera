@@ -25,11 +25,11 @@ special: SpecialOp,
 ll_src: LLSource,
 lh_src: LHSource,
 jkr_wsel: RegFileIndexingSource,
-jkr_wmode: Reg_File_Write_Mode,
+jkr_wmode: RegFileWriteMode,
 sr1_wi: SR1Index,
 sr2_wi: SR2Index,
-sr1_wsrc: SR1_Write_Data_Source,
-sr2_wsrc: SR2_Write_Data_Source,
+sr1_wsrc: SR1WriteDataSource,
+sr2_wsrc: SR2WriteDataSource,
 stat_op: STAT_Op,
 dl_op: Data_Latch_Op,
 ob_oa_op: Operand_Reg_Op,
@@ -138,11 +138,11 @@ pub fn randomize(self: *ControlSignals, rnd: std.rand.Random) void {
     }
     self.lh_src = rnd.enumValue(LHSource);
     self.jkr_wsel = rnd.enumValue(RegFileIndexingSource);
-    self.jkr_wmode = rnd.enumValue(Reg_File_Write_Mode);
+    self.jkr_wmode = rnd.enumValue(RegFileWriteMode);
     self.sr1_wi = rnd.enumValue(SR1Index);
     self.sr2_wi = rnd.enumValue(SR2Index);
-    self.sr1_wsrc = rnd.enumValue(SR1_Write_Data_Source);
-    self.sr2_wsrc = rnd.enumValue(SR2_Write_Data_Source);
+    self.sr1_wsrc = rnd.enumValue(SR1WriteDataSource);
+    self.sr2_wsrc = rnd.enumValue(SR2WriteDataSource);
     self.stat_op = rnd.enumValue(STAT_Op);
     self.dl_op = rnd.enumValue(Data_Latch_Op);
     self.ob_oa_op = rnd.enumValue(Operand_Reg_Op);
@@ -228,7 +228,7 @@ pub const RegFileIndexingSource = enum(u2) {
     ob = 3,
 };
 
-pub const Reg_File_Write_Mode = enum(u2) {
+pub const RegFileWriteMode = enum(u2) {
     no_write = 0,
     write_16 = 1,
     write_16_xor1 = 2,
@@ -333,18 +333,18 @@ pub const AddressOffset = enum(u2) {
     literal_minus_64 = 3,
 };
 
-pub const SR1_Write_Data_Source = enum(u2) {
+pub const SR1WriteDataSource = enum(u2) {
     no_write = 0,
-    RSN_SR1 = 1, // bits 31:16 from RSN that was used during setup cycle, bits 15:0 from SR1 data that was read during setup cycle.
-    L = 2,
-    PN = 3,
+    rsn_sr1 = 1, // bits 31:16 from RSN that was used during setup cycle, bits 15:0 from SR1 data that was read during setup cycle.
+    l_bus = 2,
+    virtual_address = 3,
 };
 
-pub const SR2_Write_Data_Source = enum(u2) {
+pub const SR2WriteDataSource = enum(u2) {
     no_write = 0,
-    SR2 = 1,
-    L = 2,
-    PN = 3,
+    sr2 = 1,
+    l_bus = 2,
+    virtual_address = 3,
 };
 
 pub const LLSource = enum(u4) {

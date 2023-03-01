@@ -102,7 +102,7 @@ const Rom3Data = packed struct {
     ob_oa_op: ControlSignals.Operand_Reg_Op, // 2
     lh_src: ControlSignals.LHSource, // 4
     jkr_wsel: ControlSignals.RegFileIndexingSource, // 2
-    jkr_wmode: ControlSignals.Reg_File_Write_Mode, // 2
+    jkr_wmode: ControlSignals.RegFileWriteMode, // 2
     sr1_wi: ControlSignals.SR1Index, // 3
     sr2_wi: ControlSignals.SR2Index, // 3
 
@@ -127,8 +127,8 @@ const Rom3Data = packed struct {
 };
 
 const Rom4Data = packed struct {
-    sr1_wsrc: ControlSignals.SR1_Write_Data_Source, // 2
-    sr2_wsrc: ControlSignals.SR2_Write_Data_Source, // 2
+    sr1_wsrc: ControlSignals.SR1WriteDataSource, // 2
+    sr2_wsrc: ControlSignals.SR2WriteDataSource, // 2
     stat_op: ControlSignals.STAT_Op, // 4
     allow_int: bool, // 1
     seq_op: ControlSignals.Sequencer_Op, // 2
