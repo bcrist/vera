@@ -299,7 +299,7 @@ pub fn setup(state: *const State, in: SetupInputs) SetupOutputs {
             .high = switch (in.JH_SRC) {
                 .zero => 0,
                 .neg_one => 0xFFFF,
-                .sx => bits.sx(u16, switch (in.JL_SRC) {
+                .sx_jl => bits.sx(u16, switch (in.JL_SRC) {
                     .zero => @as(u1, 0),
                     .jrl => @intCast(u1, jr.low >> 15),
                     .sr1l => @intCast(u1, sr1.low >> 15),

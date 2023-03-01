@@ -623,15 +623,15 @@ fn simulate_transact(microcode: []const ControlSignals, memory: *Memory, reg_fil
     var l: bus.LParts = undefined;
     l.low = switch (in.cs.ll_src) {
         .zero => 0,
-        .logic => in.logic.data.low,
-        .shift_L => in.shift.data.low,
-        .arith_L => in.arith.data.low,
-        .mult_L => in.mult.data.low,
+        .logic_l => in.logic.data.low,
+        .shift_l => in.shift.data.low,
+        .arith_l => in.arith.data.low,
+        .mult_l => in.mult.data.low,
         .bitcount => in.bitcount.data,
-        .D16 => d,
-        .D8_sx => bits.sx(bus.LLow, @truncate(u8, d)),
-        .last_mmu_op_L => @truncate(u16, new_last_mmu_op.toU32()),
-        .STAT => @bitCast(u16, misc.StatusBits{
+        .d16 => d,
+        .d8_sx => bits.sx(bus.LLow, @truncate(u8, d)),
+        .last_mmu_op_l => @truncate(u16, new_last_mmu_op.toU32()),
+        .stat => @bitCast(u16, misc.StatusBits{
             .z = in.reg.stat.z,
             .n = in.reg.stat.n,
             .c = in.reg.stat.c,
@@ -642,24 +642,24 @@ fn simulate_transact(microcode: []const ControlSignals, memory: *Memory, reg_fil
             .mode = in.reg.exec_mode,
             .pwr = es.power,
         }),
-        .pipe_ID => @enumToInt(in.pipe),
+        .pipe => @enumToInt(in.pipe),
     };
     l.high = switch (in.cs.lh_src) {
         .zero => 0,
-        .logic => in.logic.data.low,
-        .shift_H => in.shift.data.high,
-        .arith_H => in.arith.data.high,
-        .mult_H => in.mult.data.high,
-        .D16 => d,
-        .sx => bits.sx(bus.LHigh, @truncate(u1, l.low >> 15)),
-        .JH => in.logic.data.high,
-        .last_mmu_op_H => @intCast(u16, new_last_mmu_op.toU32() >> 16),
-        .prev_UA => in.reg.ua,
+        .logic_l => in.logic.data.low,
+        .logic_h => in.logic.data.high,
+        .shift_h => in.shift.data.high,
+        .arith_h => in.arith.data.high,
+        .mult_h => in.mult.data.high,
+        .d16 => d,
+        .sx_ll => bits.sx(bus.LHigh, @truncate(u1, l.low >> 15)),
+        .last_mmu_op_h => @intCast(u16, new_last_mmu_op.toU32() >> 16),
+        .prev_ua => in.reg.ua,
     };
 
     if (in.bus_ctrl.write and in.cs.dl_op != .to_D) {
-        assert(in.cs.ll_src != .D16);
-        assert(in.cs.ll_src != .D8_sx);
+        assert(in.cs.ll_src != .d16);
+        assert(in.cs.ll_src != .d8_sx);
         d = l.low;
         num_d_drivers += 1;
     }

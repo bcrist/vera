@@ -22,8 +22,8 @@ bus_byte: BusWidth,
 bus_rw: BusDirection,
 at_op: AddressTranslatorOp,
 special: SpecialOp,
-ll_src: LL_Source,
-lh_src: LH_Source,
+ll_src: LLSource,
+lh_src: LHSource,
 jkr_wsel: RegFileIndexingSource,
 jkr_wmode: Reg_File_Write_Mode,
 sr1_wi: SR1Index,
@@ -128,15 +128,15 @@ pub fn randomize(self: *ControlSignals, rnd: std.rand.Random) void {
     self.bus_rw = rnd.enumValue(BusDirection);
     self.at_op = rnd.enumValue(AddressTranslatorOp);
     self.special = rnd.enumValue(SpecialOp);
-    self.ll_src = rnd.enumValue(LL_Source);
+    self.ll_src = rnd.enumValue(LLSource);
     switch (self.ll_src) {
         // The simulator normally crashes on access to an address that's not hooked up to anything,
         // and this would be likely to trigger that so we'll just prevent it.  It shouldn't be a problem
         // for the real computer to have this happen during the first few cycles after power-on.
-        .D16, .D8_sx => self.ll_src = .zero,
+        .d16, .d8_sx => self.ll_src = .zero,
         else => {},
     }
-    self.lh_src = rnd.enumValue(LH_Source);
+    self.lh_src = rnd.enumValue(LHSource);
     self.jkr_wsel = rnd.enumValue(RegFileIndexingSource);
     self.jkr_wmode = rnd.enumValue(Reg_File_Write_Mode);
     self.sr1_wi = rnd.enumValue(SR1Index);
@@ -247,7 +247,7 @@ pub const JLSource = enum(u2) {
 pub const JHSource = enum(u3) {
     zero = 0,
     neg_one = 1,
-    sx = 2, // copy high bit of JL 16 times
+    sx_jl = 2,
     // 3 unused
     jrl = 4,
     jrh = 5,
@@ -347,31 +347,31 @@ pub const SR2_Write_Data_Source = enum(u2) {
     PN = 3,
 };
 
-pub const LL_Source = enum(u4) {
+pub const LLSource = enum(u4) {
     zero = 0,
-    logic = 1,
-    shift_L = 2,
-    arith_L = 3,
-    mult_L = 4,
+    logic_l = 1,
+    shift_l = 2,
+    arith_l = 3,
+    mult_l = 4,
     bitcount = 5,
-    D16 = 6,
-    D8_sx = 7,
-    STAT = 12,
-    pipe_ID = 13,
-    last_mmu_op_L = 14,
+    d16 = 6,
+    d8_sx = 7,
+    stat = 12,
+    pipe = 13,
+    last_mmu_op_l = 14,
 };
 
-pub const LH_Source = enum(u4) {
+pub const LHSource = enum(u4) {
     zero = 0,
-    logic = 1,
-    shift_H = 2,
-    arith_H = 3,
-    mult_H = 4,
-    D16 = 6,
-    sx = 7, // repeat LL[15]
-    JH = 8,
-    prev_UA = 9,
-    last_mmu_op_H = 14,
+    logic_h = 1,
+    shift_h = 2,
+    arith_h = 3,
+    mult_h = 4,
+    d16 = 6,
+    sx_ll = 7,
+    logic_l = 8,
+    prev_ua = 9,
+    last_mmu_op_h = 14,
 };
 
 pub const Data_Latch_Op = enum(u2) {

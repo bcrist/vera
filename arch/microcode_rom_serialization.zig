@@ -46,7 +46,7 @@ const Rom1Data = packed struct {
     k_src: ControlSignals.KSource, // 3
     sr1_ri: ControlSignals.SR1Index, // 3
     sr2_ri: ControlSignals.SR2Index, // 3
-    ll_src: ControlSignals.LL_Source, // 4
+    ll_src: ControlSignals.LLSource, // 4
 
     fn init(cs: ControlSignals) Rom1Data {
         return .{
@@ -100,7 +100,7 @@ const Rom2Data = packed struct {
 
 const Rom3Data = packed struct {
     ob_oa_op: ControlSignals.Operand_Reg_Op, // 2
-    lh_src: ControlSignals.LH_Source, // 4
+    lh_src: ControlSignals.LHSource, // 4
     jkr_wsel: ControlSignals.RegFileIndexingSource, // 2
     jkr_wmode: ControlSignals.Reg_File_Write_Mode, // 2
     sr1_wi: ControlSignals.SR1Index, // 3

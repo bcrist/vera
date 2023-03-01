@@ -107,7 +107,7 @@ pub const ComputeInputs = struct {
     BUS_MODE: ControlSignals.BusMode,
     BUS_RW: ControlSignals.BusDirection,
     BUS_BYTE: ControlSignals.BusWidth,
-    LL_SRC: ControlSignals.LL_Source,
+    LL_SRC: ControlSignals.LLSource,
     AT_OP: ControlSignals.AddressTranslatorOp,
     SR2_WI: ControlSignals.SR2Index,
     SR2_WSRC: ControlSignals.SR2_Write_Data_Source,

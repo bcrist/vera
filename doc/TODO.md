@@ -11,7 +11,6 @@ Remove individual functions to set each control signal individually (`STAT_OP(.Z
 Instead use `assign(.stat_op, .zn_from_l);` and create helper functions for things where that's too unclear
 
 ## Rework logic unit
-## Fix LH_SRC.logic, .JH naming
 
 ## Rename HALT to WFI (wait for interrupt)
 
