@@ -320,7 +320,7 @@ pub fn getCheckedFlagsForAddress(ua: Address) FlagSet {
         result.insert(.N);
         result.insert(.K);
         result.insert(.Z);
-        if ((ua & 0x0040) == 0x0400) {
+        if ((ua & 0x0040) == 0x0040) {
             result.insert(.V);
         } else {
             result.insert(.C);
@@ -352,7 +352,7 @@ pub fn getFlagsForAddress(ua: Address) FlagSet {
 
     if ((ua & 0x8000) == 0x8000) {
         // CNKZ or VNKZ opcode
-        if ((ua & 0x4000) == 0x4000) result.insert(if ((ua & 0x0040) == 0x0400) .V else .C);
+        if ((ua & 0x4000) == 0x4000) result.insert(if ((ua & 0x0040) == 0x0040) .V else .C);
         if ((ua & 0x2000) == 0x2000) result.insert(.N);
         if ((ua & 0x1000) == 0x1000) result.insert(.K);
         if ((ua & 0x0800) == 0x0800) result.insert(.Z);

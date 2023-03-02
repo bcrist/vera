@@ -846,12 +846,6 @@ pub fn L_to_SR(which: ControlSignals.AnySRIndex) void {
     }
 }
 
-// pub fn SR1_to_SR1(src_index: ControlSignals.SR1Index, dest_index: ControlSignals.SR1Index) void {
-//     setControlSignal(.sr1_ri, src_index);
-//     setControlSignal(.sr1_wi, dest_index);
-//     setControlSignal(.sr1_wsrc, .SR1);
-// }
-
 pub fn SR2_to_SR2(src_index: ControlSignals.SR2Index, dest_index: ControlSignals.SR2Index) void {
     setControlSignal(.sr2_ri, src_index);
     setSR2WriteIndex(dest_index);
@@ -862,6 +856,12 @@ pub fn ZN_from_LL(freshness: Freshness) void {
     switch (freshness) {
         .fresh => setControlSignal(.stat_op, .zn_from_ll),
         .cont => setControlSignal(.stat_op, .zn_from_ll_no_set_z),
+    }
+}
+pub fn ZN_from_L(freshness: Freshness) void {
+    switch (freshness) {
+        .fresh => setControlSignal(.stat_op, .zn_from_l),
+        .cont => setControlSignal(.stat_op, .zn_from_l_no_set_z),
     }
 }
 
@@ -1020,6 +1020,7 @@ pub fn exec_latched_insn() void {
     if (isSet(.special)) {
         switch (cycle.special) {
             .none, .atomic_next, .atomic_this => {},
+            .block_transfer => {}, // Note in this case we don't actually know if *_no_atomic_end was used, but generally we would want it anyway.
             else => setControlSignal(.special, .atomic_end),
         }
     } else {
@@ -1464,7 +1465,9 @@ pub fn atomic_next_cycle_until_end() void {
 }
 
 pub fn exec_next_insn_no_atomic_end() void {
-    setControlSignal(.special, .none); // don't clear atomic state
+    if (cycle.special != .block_transfer) {
+        setControlSignal(.special, .none); // don't clear atomic state
+    }
     exec_next_insn();
 }
 

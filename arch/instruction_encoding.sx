@@ -487,6 +487,24 @@
       (param BP)
       (param -> RP)
    )
+   (0D00 0D0F BLD D
+      (desc "Load 8 bytes from FLASH or PSRAM to RAM.  Xa points to the first chunk of RAM to write to (will be incremented by 8).  Block source must be configured beforehand by writing to the configuration port.  Only one pipe may perform a block operation at a time.")
+      (param -> ptr32d (base-src OA))
+   )
+   (0D10 0D1F BLD D
+      (desc "Load from FLASH or PSRAM to RAM.  Xa indicates the number of bytes remaining to be copied (will be decremented by 8 each cycle; operation ends when zero or negative).  BP points to just before the first byte of RAM to write to (will be incremented by 8 before each cycle).  Block source must be configured beforehand by writing to the configuration port.  Only one pipe may perform a block operation at a time.")
+      (param reg32s (base-src OA))
+      (param -> BP)
+   )
+   (0D20 0D2F BST D
+      (desc "Store 8 bytes from RAM into FLASH or PSRAM.  Xa points to the first chunk of RAM to read (will be incremented by 8).  Block destination must be configured beforehand by writing to the configuration port.  Only one pipe may perform a block operation at a time.")
+      (param ptr32d (base-src OA))
+   )
+   (0D30 0D3F BST D
+      (desc "Store from RAM into FLASH or PSRAM.  Xa indicates the number of bytes remaining to be copied (will be decremented by 8 each cycle; operation ends when zero or negative).  BP points to just before the first byte of RAM to read (will be incremented by 8 before each cycle).  Block destination must be configured beforehand by writing to the configuration port.  Only one pipe may perform a block operation at a time.")
+      (param reg32s (base-src OA))
+      (param BP)
+   )
    (1000 10FF ST S
       (desc "Store byte using pointer to stack memory")
       (param reg8 (base-src OB))

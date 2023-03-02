@@ -299,7 +299,11 @@ fn checkFlags(flags_to_check: []const uc.Flags) uc.FlagSet {
     if (insn) |i| {
         for (flags_to_check) |f| {
             if (!i.allowed_flags.contains(f)) {
-                panic("This opcode cannot have different implementations based on {}", .{ f });
+                if (uc.getCheckedFlagsForAddress(i.initial_uc_address).contains(f)) {
+                    panic("{} was not queried the first time this instruction was processed.  Try saving it to a variable before doing other checks.", .{ f });
+                } else {
+                    panic("This opcode cannot have different implementations based on {}", .{ f });
+                }
             }
         }
 

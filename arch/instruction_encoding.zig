@@ -39,7 +39,7 @@ pub const Mnemonic = enum {
     // Atomics:
     SYNC, ALD, AST, ASTZ, AADD, AINC, ADECNZ, AX, AXE,
     // Memcpy & streaming:
-    MCR, MCRB, MCF, MCFB, SI, SIB, SO, SOB,
+    MCR, MCRB, MCF, MCFB, SI, SIB, SO, SOB, BLD, BST,
     // Faults, interrupts, and context switching:
     FRET, IRET, IFEX, LDRS, STRS, SRS, WFI,
     // Misc:

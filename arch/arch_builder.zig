@@ -1,5 +1,6 @@
 const std = @import("std");
 const allocators = @import("allocators.zig");
+const TempAllocator = @import("temp_allocator");
 const ControlSignals = @import("ControlSignals");
 const uc = @import("microcode");
 const sx = @import("sx");
@@ -137,6 +138,48 @@ pub fn recordInstruction(insn: InstructionEncoding, desc: ?[]const u8) void {
 
 pub fn getInstructionByOpcode(opcode: Opcode) ?*InstructionEncoding {
     return instructions[opcode];
+}
+
+pub fn analyzeControlSignalUsage(temp_arena: *TempAllocator, comptime signals: []const ControlSignals.SignalName, writer: anytype) !void {
+    temp_arena.reset();
+    var temp = std.ArrayList(u8).init(temp_arena.allocator());
+    var data = std.StringHashMap(u16).init(temp_arena.allocator());
+
+    for (microcode) |maybe_cycle| {
+        if (maybe_cycle) |cycle| {
+            temp.clearRetainingCapacity();
+            inline for (signals) |signal| {
+                const v = @field(cycle, @tagName(signal));
+                var w = temp.writer();
+                switch (@typeInfo(@TypeOf(v))) {
+                    .Enum  => try w.print("{s: <20} ", .{ @tagName(v) }),
+                    .Bool  => try w.print("{: <20} ", .{ v }),
+                    .Union => try w.print("{X: <20} ", .{ v.raw() }),
+                    .Int   => try w.print("0x{X: <18} ", .{ v }),
+                    else   => try w.print("{s: <20} ", .{ "?????" }),
+                }
+            }
+
+            var result = try data.getOrPut(temp.items);
+            if (result.found_existing) {
+                result.value_ptr.* += 1;
+            } else {
+                result.key_ptr.* = try temp_arena.allocator().dupe(u8, temp.items);
+                result.value_ptr.* = 1;
+            }
+        }
+    }
+
+    try writer.writeAll("-------- ");
+    inline for (signals) |signal| {
+        try writer.print(" {s: <20}", .{ @tagName(signal) });
+    }
+    try writer.writeAll("\n");
+    var iter = data.iterator();
+    while (iter.next()) |entry| {
+        try writer.print("{: >8}: {s}\n", .{ entry.value_ptr.*, entry.key_ptr.* });
+    }
+    try writer.writeAll("\n");
 }
 
 pub fn writeInstructionData(inner: anytype) !void {

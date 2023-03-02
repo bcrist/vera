@@ -1,14 +1,12 @@
-## Add instructions for doing block transfers to/from FLASH/PSRAM
-
-## Tool to count how many instructions/opcodes use each control signal
-maybe also permutations of multiple control signals
-
 ## Add gui to simulator
 
 ## Rework logic unit
 Fix BB, BBN instructions in _branch.zig
 
 ## Handle alias_XXXX functions in microcode generator (see alias_0100 -> NOPE)
+## Do conditional continuations by passing a function pointer, rather than the continuation number (and relying on )
+
+## block memcpy instruction that uses PSRAM?
 
 ## Implement interrupt controller
 ## Improve SST39VF802C emulation accuracy in memory.zig (timing, status polling, IDs, write protection, etc.)
@@ -26,7 +24,6 @@ Fix BB, BBN instructions in _branch.zig
 ## Add more cycle validation in cycle_builder.finish()
 
 ## Separate AT enable flag for code/stack vs data?
-Then you don't need separate raw read/write instructions, maybe can reuse encoding for fast "DMA" transfers from/to cold storage and ROM
 
 ## Consider faster loading of small constants outside imm5:
     C imma[16,...] -> R*/X*

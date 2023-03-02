@@ -18,6 +18,7 @@ const opcode_high = ib.opcode_high;
 const OB = ib.OB;
 const kernel = ib.kernel;
 const negative = ib.negative;
+const positive = ib.positive;
 const zero = ib.zero;
 
 const op_reg_to_LL = cb.op_reg_to_LL;
@@ -34,6 +35,7 @@ const D_to_DL = cb.D_to_DL;
 const load_next_insn = cb.load_next_insn;
 const exec_next_insn_no_atomic_end = cb.exec_next_insn_no_atomic_end;
 const load_and_exec_next_insn = cb.load_and_exec_next_insn;
+const load_and_exec_next_insn_no_atomic_end = cb.load_and_exec_next_insn_no_atomic_end;
 const op_reg32_plus_op_reg_to_L = cb.op_reg32_plus_op_reg_to_L;
 const op_reg32_plus_literal_to_L = cb.op_reg32_plus_literal_to_L;
 const op_reg32_minus_literal_to_L = cb.op_reg32_minus_literal_to_L;
@@ -44,7 +46,11 @@ const SR_plus_SRL_to_L = cb.SR_plus_SRL_to_L;
 const L_to_op_reg32 = cb.L_to_op_reg32;
 const illegal_instruction = cb.illegal_instruction;
 const PN_to_SR = cb.PN_to_SR;
+const SR_to_PN = cb.SR_to_PN;
 const allow_interrupt = cb.allow_interrupt;
+const block_transfer_to_ram = cb.block_transfer_to_ram;
+const block_transfer_from_ram = cb.block_transfer_from_ram;
+const ZN_from_L = cb.ZN_from_L;
 
 fn fromRegPointer(inc: SignedOffsetForLiteral) void {
     op_reg32_plus_literal_to_L(.OA, inc, .fresh, .no_flags);
@@ -1425,5 +1431,96 @@ pub fn _continuation_219() void {
         op_reg32_minus_literal_to_L(.OA, 1, .fresh, .flags);
         allow_interrupt();
         conditional_next_cycle(0x219);
+    }
+}
+
+pub fn _0D00_0D0F() void {
+    encodingWithSuffix(.BLD, .D, .{ .to, Xa_relative(.D, .imm_0) });
+    desc("Load 8 bytes from FLASH or PSRAM to RAM.  Xa points to the first chunk of RAM to write to (will be incremented by 8).  Block source must be configured beforehand by writing to the configuration port.  Only one pipe may perform a block operation at a time.");
+
+    if (!kernel()) {
+        illegal_instruction();
+        return;
+    }
+
+    op_reg32_to_L(.OA);
+    L_to_SR(.temp_1);
+    load_next_insn(2);
+    next_cycle();
+
+    op_reg32_plus_literal_to_L(.OA, 8, .fresh, .no_flags);
+    L_to_op_reg32(.OA);
+    block_transfer_to_ram(.temp_1, 0, .data);
+    exec_next_insn_no_atomic_end();
+}
+
+pub fn _0D10_0D1F() void {
+    encodingWithSuffix(.BLD, .D, .{ .XaS, .to, .BP });
+    desc("Load from FLASH or PSRAM to RAM.  Xa indicates the number of bytes remaining to be copied (will be decremented by 8 each cycle; operation ends when zero or negative).  BP points to just before the first byte of RAM to write to (will be incremented by 8 before each cycle).  Block source must be configured beforehand by writing to the configuration port.  Only one pipe may perform a block operation at a time.");
+
+    _ = positive(); // Make sure that we query N/Z flags even if K is false
+    
+    if (!kernel()) {
+        illegal_instruction();
+        return;
+    }
+
+    _continuation_204();
+}
+pub fn _continuation_204() void {
+    if (positive()) {
+        block_transfer_to_ram(.bp, 8, .data);
+        PN_to_SR(.bp);
+        op_reg32_minus_literal_to_L(.OA, 8, .fresh, .flags);
+        L_to_op_reg32(.OA);
+        conditional_next_cycle(0x204);
+    } else {
+        load_and_exec_next_insn_no_atomic_end(2);
+    }
+}
+
+
+pub fn _0D20_0D2F() void {
+    encodingWithSuffix(.BST, .D, .{ Xa_relative(.D, .imm_0) });
+    desc("Store 8 bytes from RAM into FLASH or PSRAM.  Xa points to the first chunk of RAM to read (will be incremented by 8).  Block destination must be configured beforehand by writing to the configuration port.  Only one pipe may perform a block operation at a time.");
+
+    if (!kernel()) {
+        illegal_instruction();
+        return;
+    }
+
+    op_reg32_to_L(.OA);
+    L_to_SR(.temp_1);
+    load_next_insn(2);
+    next_cycle();
+
+    op_reg32_plus_literal_to_L(.OA, 8, .fresh, .no_flags);
+    L_to_op_reg32(.OA);
+    block_transfer_from_ram(.temp_1, 0, .data);
+    exec_next_insn_no_atomic_end();
+}
+
+pub fn _0D30_0D3F() void {
+    encodingWithSuffix(.BST, .D, .{ .XaS, .BP });
+    desc("Store from RAM into FLASH or PSRAM.  Xa indicates the number of bytes remaining to be copied (will be decremented by 8 each cycle; operation ends when zero or negative).  BP points to just before the first byte of RAM to read (will be incremented by 8 before each cycle).  Block destination must be configured beforehand by writing to the configuration port.  Only one pipe may perform a block operation at a time.");
+
+    _ = positive(); // Make sure that we query N/Z flags even if K is false
+
+    if (!kernel()) {
+        illegal_instruction();
+        return;
+    }
+
+    _continuation_205();
+}
+pub fn _continuation_205() void {
+    if (positive()) {
+        block_transfer_from_ram(.bp, 8, .data);
+        PN_to_SR(.bp);
+        op_reg32_minus_literal_to_L(.OA, 8, .fresh, .flags);
+        L_to_op_reg32(.OA);
+        conditional_next_cycle(0x205);
+    } else {
+        load_and_exec_next_insn_no_atomic_end(2);
     }
 }

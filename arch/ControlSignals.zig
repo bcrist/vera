@@ -248,7 +248,7 @@ pub const JHSource = enum(u3) {
     neg_one = 1,
     sx_jl = 2,
     // 3 unused
-    jrl = 4,
+    jrl = 4, // TODO unused?
     jrh = 5,
     sr1h = 6,
     sr2h = 7,
@@ -258,7 +258,7 @@ pub const KSource = enum(u3) {
     zero = 0,
     kr = 1,
     sr1l = 2,
-    sr2l = 3,
+    sr2l = 3, // TODO only used by a few instructions, might be able to replace with sr1l?
     literal = 4,
     literal_minus_64 = 5,
     literal_special = 6, // 3:8 decoder on LITERAL[2:0] -> K[13:7], LITERAL[4:3] -> K[15:14]
