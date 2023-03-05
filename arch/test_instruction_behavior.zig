@@ -2,11 +2,11 @@ const std = @import("std");
 const ie = @import("instruction_encoding");
 const ControlSignals = @import("ControlSignals");
 const uc_roms = @import("microcode_rom_serialization.zig");
-const register_file = @import("register_file");
 const misc = @import("misc");
 const rom_data = @import("microcode_roms/roms.zig");
 const ie_data = @import("instruction_encoding_data").data;
 const Simulator = @import("Simulator");
+const RegisterFile = Simulator.RegisterFile;
 
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;

@@ -1,6 +1,5 @@
-const sim = @import("Simulator");
 const ControlSignals = @import("ControlSignals");
-const bus = @import("bus");
+const bus = @import("bus_types");
 
 pub fn setup(in: SetupInputs) bus.VirtualAddressParts {
     const address_offset: i32 = switch (in.cs_offset) {

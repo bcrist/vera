@@ -1,43 +1,41 @@
-const sim = @import("Simulator");
 const ControlSignals = @import("ControlSignals");
 const misc = @import("misc");
-const bus = @import("bus");
+const bus = @import("bus_types");
 const uc = @import("microcode");
-const arith = @import("arith.zig");
 
-pub const LoopState = struct {
-    c: bool,
-    v: bool,
-    n: bool,
-    z: bool,
-    k: bool,
-    next_k: bool,
-    a: bool,
+const StatusRegister = @This();
 
-    pub fn toUCFlags(self: LoopState) uc.FlagSet {
-        var uc_flags = uc.FlagSet{};
-        if (self.n) uc_flags.insert(.N);
-        if (self.k) uc_flags.insert(.K);
-        if (self.z) uc_flags.insert(.Z);
-        if (self.v) uc_flags.insert(.V);
-        if (self.c) uc_flags.insert(.C);
-        return uc_flags;
-    }
+c: bool,
+v: bool,
+n: bool,
+z: bool,
+k: bool,
+next_k: bool,
+a: bool,
 
-    pub fn print(self: LoopState, writer: anytype) !void {
-        const c = if (self.c) "C" else " ";
-        const v = if (self.v) "V" else " ";
-        const n = if (self.n) "N" else " ";
-        const z = if (self.z) "Z" else " ";
-        const nk = if (self.next_k) "n" else " ";
-        const k = if (self.k) "K" else " ";
-        const a = if (self.a) "A" else " ";
-        try writer.print("STAT: {s} {s} {s} {s} {s}{s} {s}", .{ c, v, n, z, nk, k, a });
-    }
-};
+pub fn toUCFlags(self: StatusRegister) uc.FlagSet {
+    var uc_flags = uc.FlagSet{};
+    if (self.n) uc_flags.insert(.N);
+    if (self.k) uc_flags.insert(.K);
+    if (self.z) uc_flags.insert(.Z);
+    if (self.v) uc_flags.insert(.V);
+    if (self.c) uc_flags.insert(.C);
+    return uc_flags;
+}
 
-pub const Inputs = struct {
-    state: LoopState,
+pub fn print(self: StatusRegister, writer: anytype) !void {
+    const c = if (self.c) "C" else " ";
+    const v = if (self.v) "V" else " ";
+    const n = if (self.n) "N" else " ";
+    const z = if (self.z) "Z" else " ";
+    const nk = if (self.next_k) "n" else " ";
+    const k = if (self.k) "K" else " ";
+    const a = if (self.a) "A" else " ";
+    try writer.print("STAT: {s} {s} {s} {s} {s}{s} {s}", .{ c, v, n, z, nk, k, a });
+}
+
+pub const TransactInputs = struct {
+    state: StatusRegister,
     inhibit_writes: bool,
     l: bus.LParts,
     shift_c: bool,
@@ -45,16 +43,24 @@ pub const Inputs = struct {
     arith_n: bool,
     arith_c: bool,
     arith_v: bool,
-    mmu_k: bool,
+    at_k: bool,
 
     cs_stat_op: ControlSignals.StatusRegOp,
     cs_seq_op: ControlSignals.SequencerOp,
     cs_literal: ControlSignals.Literal,
 };
 
-pub fn transact(in: Inputs, power: *misc.PowerMode) LoopState {
+pub const TransactOutputs = struct {
+    state: StatusRegister,
+    power: ?misc.PowerMode,
+};
+
+pub fn getForTransact(in: TransactInputs) TransactOutputs {
     if (in.inhibit_writes) {
-        return in.state;
+        return .{
+            .state = in.state,
+            .power = null,
+        };
     }
 
     const llz = in.l.low == 0;
@@ -64,11 +70,12 @@ pub fn transact(in: Inputs, power: *misc.PowerMode) LoopState {
     const ln = (in.l.high >> 15) == 1;
 
     var state = in.state;
+    var power: ?misc.PowerMode = null;
 
-    state.next_k = in.mmu_k;
+    state.next_k = in.at_k;
 
     switch (in.cs_seq_op) {
-        // next_k is a latch, so it has already been updated from in.mmu_k if necessary
+        // next_k is a latch, so it has already been updated from in.at_k if necessary
         .next_instruction => state.k = state.next_k,
         .next_uop, .next_uop_force_normal, .fault_return => {},
     }
@@ -126,9 +133,12 @@ pub fn transact(in: Inputs, power: *misc.PowerMode) LoopState {
         },
         .clear_a => state.a = false,
         .set_a => state.a = true,
-        .clear_s => power.* = .run,
-        .set_s => power.* = .sleep,
+        .clear_s => power = .run,
+        .set_s => power = .sleep,
     }
 
-    return state;
+    return .{
+        .state = state,
+        .power = power,
+    };
 }

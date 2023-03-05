@@ -1,24 +1,40 @@
 const std = @import("std");
+const zgui = @import("pkg/zig-gamedev/libs/zgui/build.zig");
+const zglfw = @import("pkg/zig-gamedev/libs/zglfw/build.zig");
+const zgpu = @import("pkg/zig-gamedev/libs/zgpu/build.zig");
+const zpool = @import("pkg/zig-gamedev/libs/zpool/build.zig");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const mode = b.standardOptimizeOption(.{});
 
-    //[[!! include 'build' !! 210 ]]
+    const zgui_pkg = zgui.Package.build(b, target, mode, .{
+        .options = .{ .backend = .glfw_wgpu },
+    });
+    const zglfw_pkg = zglfw.Package.build(b, target, mode, .{});
+    const zpool_pkg = zpool.Package.build(b, .{});
+    const zgpu_pkg = zgpu.Package.build(b, .{
+        .deps = .{
+            .zpool = zpool_pkg.zpool,
+            .zglfw = zglfw_pkg.zglfw
+        },
+    });
+
+    //[[!! include 'build' !! 211 ]]
     //[[ ################# !! GENERATED CODE -- DO NOT MODIFY !! ################# ]]
 
     const bits = b.createModule(.{
         .source_file = .{ .path = "pkg/bits.zig" },
     });
 
-    const bus = b.createModule(.{
-        .source_file = .{ .path = "arch/bus.zig" },
+    const bus_types = b.createModule(.{
+        .source_file = .{ .path = "arch/bus_types.zig" },
     });
 
     const misc = b.createModule(.{
         .source_file = .{ .path = "arch/misc.zig" },
         .dependencies = &.{
-            .{ .name = "bus", .module = bus },
+            .{ .name = "bus_types", .module = bus_types },
         },
     });
 
@@ -42,32 +58,29 @@ pub fn build(b: *std.Build) void {
         .source_file = .{ .path = "microsim/Simulator.zig" },
     });
 
-    const physical_address = b.createModule(.{
-        .source_file = .{ .path = "arch/physical_address.zig" },
+    const address_translator_types = b.createModule(.{
+        .source_file = .{ .path = "arch/address_translator_types.zig" },
         .dependencies = &.{
-            .{ .name = "bus", .module = bus },
+            .{ .name = "ControlSignals", .module = ControlSignals },
+            .{ .name = "bus_types", .module = bus_types },
         },
     });
 
-    const register_file = b.createModule(.{
-        .source_file = .{ .path = "microsim/register_file.zig" },
+    const physical_address = b.createModule(.{
+        .source_file = .{ .path = "arch/physical_address.zig" },
         .dependencies = &.{
-            .{ .name = "ControlSignals", .module = ControlSignals },
-            .{ .name = "Simulator", .module = Simulator },
-            .{ .name = "bits", .module = bits },
-            .{ .name = "bus", .module = bus },
-            .{ .name = "misc", .module = misc },
+            .{ .name = "bus_types", .module = bus_types },
         },
     });
 
     Simulator.dependencies.put("ControlSignals", ControlSignals) catch unreachable;
     Simulator.dependencies.put("Simulator", Simulator) catch unreachable;
+    Simulator.dependencies.put("address_translator_types", address_translator_types) catch unreachable;
     Simulator.dependencies.put("bits", bits) catch unreachable;
-    Simulator.dependencies.put("bus", bus) catch unreachable;
+    Simulator.dependencies.put("bus_types", bus_types) catch unreachable;
     Simulator.dependencies.put("microcode", microcode) catch unreachable;
     Simulator.dependencies.put("misc", misc) catch unreachable;
     Simulator.dependencies.put("physical_address", physical_address) catch unreachable;
-    Simulator.dependencies.put("register_file", register_file) catch unreachable;
 
     const deep_hash_map = b.createModule(.{
         .source_file = .{ .path = "pkg/deep_hash_map.zig" },
@@ -161,11 +174,16 @@ pub fn build(b: *std.Build) void {
     });
     microsim.addModule("ControlSignals", ControlSignals);
     microsim.addModule("Simulator", Simulator);
-    microsim.addModule("instruction_encoding", instruction_encoding);
-    microsim.addModule("instruction_encoding_data", instruction_encoding_data);
     microsim.addModule("microcode_rom_serialization", microcode_rom_serialization);
     microsim.addModule("microcode_roms", microcode_roms);
     microsim.addModule("misc", misc);
+    microsim.addModule("zglfw", zglfw_pkg.zglfw);
+    zglfw_pkg.link(microsim);
+    microsim.addModule("zgpu", zgpu_pkg.zgpu);
+    zgpu_pkg.link(microsim);
+    microsim.addModule("zgui", zgui_pkg.zgui);
+    zgui_pkg.link(microsim);
+    microsim.want_lto = false;
     microsim.install();
     _ = makeRunStep(b, microsim, "usim", "run microsim");
 
@@ -180,7 +198,6 @@ pub fn build(b: *std.Build) void {
     tests1.addModule("instruction_encoding_data", instruction_encoding_data);
     tests1.addModule("microcode", microcode);
     tests1.addModule("misc", misc);
-    tests1.addModule("register_file", register_file);
     tests1.addModule("rom_compress", rom_compress);
     tests1.addModule("rom_decompress", rom_decompress);
     tests1.addModule("srec", srec);

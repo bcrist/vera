@@ -15,7 +15,7 @@ const uc_address = ib.uc_address;
 const kernel = ib.kernel;
 
 const SR_plus_literal_to_L = cb.SR_plus_literal_to_L;
-const last_mmu_op_to_L = cb.last_mmu_op_to_L;
+const last_translation_info_to_L = cb.last_translation_info_to_L;
 const op_reg32_to_L = cb.op_reg32_to_L;
 const SR1_to_L = cb.SR1_to_L;
 const OB_OA_to_LL = cb.OB_OA_to_LL;
@@ -80,7 +80,7 @@ fn vectored_fault_handler(zeropage_vector: u5) void {
     toggle_rsn();
     // Copy data about last MMU op into X4
     // For page faults, this is critical for knowing what page to load
-    last_mmu_op_to_L();
+    last_translation_info_to_L();
     L_to_reg32(4);
     next_cycle();
 

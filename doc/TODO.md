@@ -1,4 +1,33 @@
 ## Add gui to simulator
+Single step control
+Register views for pipe 0/1/2
+    Include disassembly view of memory around IP
+
+Memory view - raw (may open multiple for different locations)
+
+Colorization
+    orange=will be updated in the next clock cycle (transact stage)
+    yellow=will be updated at the end of the current microcode cycle (i.e. it is setup or compute stage)
+    cyan=will be read at the next clock cycle (setup stage for registers, transact stage for memory)
+    blue=was or will be read during this micocode cycle
+
+Load/save state from/to file
+
+Interrupt controller
+
+Virtual console
+
+History of instructions executed, microcode cycles
+    Allow undo during single stepping
+    Don't track history when running in real time?
+
+Error console
+    Access to invalid memory
+    Faults
+
+
+## Consider Shifter overflow flag - if any shifted out bits differ from the last bit that wasn't shifted out
+## Consider removing wait states
 
 ## Rework logic unit
 Fix BB, BBN instructions in _branch.zig

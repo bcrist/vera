@@ -84,7 +84,7 @@ pub fn finish() ControlSignals {
     }
 
     switch (cycle.ll_src) {
-        .zero, .stat, .pipe, .last_mmu_op_l => {},
+        .zero, .stat, .pipe, .last_translation_info_l => {},
         .logic_l    => validateComputeMode(.logic),
         .shift_l  => validateComputeMode(.shift),
         .arith_l  => validateComputeMode(.arith),
@@ -95,7 +95,7 @@ pub fn finish() ControlSignals {
     }
 
     switch (cycle.lh_src) {
-        .zero, .sx_ll, .prev_ua, .last_mmu_op_h, .logic_h => {},
+        .zero, .sx_ll, .prev_ua, .last_translation_info_h, .logic_h => {},
         .logic_l => validateComputeMode(.logic),
         .shift_h => validateComputeMode(.shift),
         .arith_h => validateComputeMode(.arith),
@@ -702,9 +702,9 @@ pub fn STAT_to_L() void {
     setControlSignal(.lh_src, .zero);
 }
 
-pub fn last_mmu_op_to_L() void {
-    setControlSignal(.ll_src, .last_mmu_op_l);
-    setControlSignal(.lh_src, .last_mmu_op_h);
+pub fn last_translation_info_to_L() void {
+    setControlSignal(.ll_src, .last_translation_info_l);
+    setControlSignal(.lh_src, .last_translation_info_h);
 }
 
 pub fn PN_to_SR1(index: ControlSignals.SR1Index) void {

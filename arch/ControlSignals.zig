@@ -357,7 +357,7 @@ pub const LLSource = enum(u4) {
     d8_sx = 7,
     stat = 12,
     pipe = 13,
-    last_mmu_op_l = 14,
+    last_translation_info_l = 14,
 };
 
 pub const LHSource = enum(u4) {
@@ -370,7 +370,7 @@ pub const LHSource = enum(u4) {
     sx_ll = 7,
     logic_l = 8,
     prev_ua = 9,
-    last_mmu_op_h = 14,
+    last_translation_info_h = 14,
 };
 
 pub const DataLatchOp = enum(u2) {

@@ -20,7 +20,7 @@ pub fn main() !void {
     try ib.processScope(@import("_call.zig"));
     try ib.processScope(@import("_load_store.zig"));
     try ib.processScope(@import("_stack.zig"));
-    try ib.processScope(@import("_mmu.zig"));
+    try ib.processScope(@import("_address_translator.zig"));
     try ib.processScope(@import("_sync.zig"));
 
     assignReservedOpcodes();

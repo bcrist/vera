@@ -30,6 +30,20 @@ function root_visitor.dir ()
     parser:require_close()
 end
 
+function root_visitor.module ()
+    local name = parser:require_string()
+    local package = {
+        name = name,
+        safe_name = make_safe_name(name),
+        module = true,
+        extra_exe_config = {},
+        pass_exe_to = {},
+    }
+    while nil ~= parser:property(pkg_visitor, package) do end
+    parser:require_close()
+    packages[package.name] = package
+end
+
 function dir_visitor._ ()
     -- Comment
     parser:ignore_remaining_expression()
@@ -43,6 +57,8 @@ function dir_visitor.pkg (_, _, dir_path)
         safe_name = make_safe_name(name),
         dir = dir_path,
         path = default_path,
+        extra_exe_config = {},
+        pass_exe_to = {},
     }
     while nil ~= parser:property(pkg_visitor, package) do end
     parser:require_close()
@@ -57,7 +73,8 @@ function dir_visitor.exe (_, _, dir_path)
         safe_name = make_safe_name(name),
         dir = dir_path,
         path = default_path,
-        link_libc = false,
+        extra_exe_config = {},
+        pass_exe_to = {},
     }
     while nil ~= parser:property(exe_visitor, executable) do end
     parser:require_close()
@@ -75,16 +92,30 @@ function pkg_visitor.path (_, _, package)
     package.path = fs.compose_path_slash(package.dir, filename)
 end
 
+function pkg_visitor.func (_, _, package)
+    package.pass_exe_to[#package.pass_exe_to+1] = parser:require_string()
+    parser:require_close()
+end
+
+function pkg_visitor.config (_, _, package)
+    package.extra_exe_config[#package.extra_exe_config+1] = parser:require_string()
+    parser:require_close()
+end
+
+function pkg_visitor.safe_name (_, _, package)
+    local safe_name = parser:require_string()
+    parser:require_close()
+    package.safe_name = safe_name
+end
+
 function exe_visitor.runStep (_, _, executable)
     executable.runStep = parser:require_string()
     parser:require_close()
 end
 
-function exe_visitor.linkLibC (_, _, executable)
-    executable.link_libc = true
-    parser:require_close()
-end
-
+exe_visitor.func = pkg_visitor.func
+exe_visitor.config = pkg_visitor.config
+exe_visitor.safe_name = pkg_visitor.safe_name
 
 while nil ~= parser:property(root_visitor) do end
 
@@ -140,7 +171,9 @@ end
 for _, package in pairs(packages) do
     if package.deps == nil then
         package.deps = {}
-        collect_named_deps(package.path, package.deps, {})
+        if not package.module then
+            collect_named_deps(package.path, package.deps, {})
+        end
     end
 end
 
@@ -164,6 +197,8 @@ local function get_package (pkg_name)
 end
 
 local function try_write_package (package)
+    if package.module then return end
+
     if not package.written_to_build then
         if package.started_writing_to_build then
             if not package.written_to_build_without_dependencies then
@@ -230,10 +265,20 @@ const `safe_name` = b.addExecutable(.{
 });`
 local packages = ...
 for dep in spairs(deps) do
-    write(nl, safe_name, '.addModule("', dep, '", ', packages[dep].safe_name,');')
+    local pkg = packages[dep]
+    write(nl, safe_name, '.addModule("', dep, '", ', pkg.safe_name,');')
+    for _, fun in ipairs(pkg.extra_exe_config) do 
+        write(nl, safe_name, '.', fun, ';')
+    end
+    for _, fun in ipairs(pkg.pass_exe_to) do
+        write(nl, fun, '(', safe_name, ');')
+    end
 end
-if link_libc then
-    write(nl, safe_name, '.linkLibC();')
+for _, fun in ipairs(extra_exe_config) do 
+    write(nl, safe_name, '.', fun, ';')
+end
+for _, fun in ipairs(pass_exe_to) do
+    writeln(nl, fun, '(', safe_name, ');')
 end`
 `safe_name`.install();
 _ = makeRunStep(b, `safe_name`, "`runStep`", "run `name`");
@@ -278,6 +323,6 @@ end
 
 for _, package in spairs(packages) do
     if not package.used then
-        write(nl, '_ = ', package.name, ';')
+        write(nl, '_ = ', package.safe_name, ';')
     end
 end

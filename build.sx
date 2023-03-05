@@ -13,6 +13,18 @@
     (pkg rom_decompress)
     (pkg deep_hash_map)
 )
+(module zgui
+    (safe_name zgui_pkg.zgui)
+    (func zgui_pkg.link)
+)
+(module zgpu
+    (safe_name zgpu_pkg.zgpu)
+    (func zgpu_pkg.link)
+)
+(module zglfw
+    (safe_name zglfw_pkg.zglfw)
+    (func zglfw_pkg.link)
+)
 (dir arch
     (pkg ControlSignals)
     (pkg instruction_encoding)
@@ -20,7 +32,8 @@
     (pkg microcode)
     (pkg microcode_rom_serialization)
     (pkg misc)
-    (pkg bus)
+    (pkg bus_types)
+    (pkg address_translator_types)
     (pkg physical_address)
     (exe compile_arch (runStep uc))
 )
@@ -29,6 +42,11 @@
 )
 (dir microsim
     (pkg Simulator)
-    (pkg register_file)
-    (exe microsim (runStep usim))
+    (exe microsim
+        (runStep usim)
+        (config "want_lto = false")
+    )
 )
+(dir microsim/cpu)
+(dir microsim/devices)
+(dir microsim/gui)

@@ -191,9 +191,9 @@ pub fn writeCompressedRoms(result_allocator: std.mem.Allocator, temp_allocator: 
     return result;
 }
 
-fn readCompressedRom(comptime RomData: type, compressed_data: []const u8, cs: []ControlSignals) void {
+fn readCompressedRom(comptime RomData: type, compressed_data: []const u8, cs: *[misc.microcode_length]ControlSignals) void {
     const Ctx = struct {
-        cs: []ControlSignals,
+        cs: *[misc.microcode_length]ControlSignals,
         d: RomData = undefined,
 
         const Self = @This();
@@ -210,8 +210,8 @@ fn readCompressedRom(comptime RomData: type, compressed_data: []const u8, cs: []
     rom_decompress.decompress(compressed_data, &ctx);
 }
 
-pub fn readCompressedRoms(roms: Roms, microcode: []ControlSignals) void {
-    std.debug.assert(microcode.len >= misc.microcode_length);
+pub fn readCompressedRoms(roms: Roms, microcode: *[misc.microcode_length]ControlSignals) void {
+    std.mem.set(ControlSignals, microcode, ControlSignals.init());
     inline for ([_]type{ Rom0Data, Rom1Data, Rom2Data, Rom3Data, Rom4Data, Rom5Data }, 0..) |RomData, n| {
         readCompressedRom(RomData, roms[n], microcode);
     }

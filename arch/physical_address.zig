@@ -1,4 +1,4 @@
-const bus = @import("bus");
+const bus = @import("bus_types");
 const PhysicalAddress = bus.PhysicalAddress;
 const Frame = bus.Frame;
 

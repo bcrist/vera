@@ -8,3 +8,7 @@
 	path = kicad
 	url = https://github.com/bcrist/cpu-kicad
 	shallow = true
+[submodule "pkg/zig-gamedev"]
+	path = pkg/zig-gamedev
+	url = https://github.com/bcrist/zig-gamedev
+	shallow = true

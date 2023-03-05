@@ -1,4 +1,4 @@
-const bus = @import("bus");
+const bus = @import("bus_types");
 
 pub const Opcode = u16;
 pub const RegisterIndex = u4; // for GPRs
@@ -7,12 +7,6 @@ pub const RegistersetNumber = u6; // aka RSN
 pub const CombinedOperands = u8; // OperandB in high bits, OperandA in low bits
 pub const OperandB = u4;
 pub const OperandA = u4;
-
-pub const address_translator = struct {
-    pub const AddressSpaceNumber = u4; // aka ASN; The low portion of it that's used by the address translator
-    pub const Slot = u12; // combination of ASN, group, and non-tag bits from page number
-    pub const Tag = u14;
-};
 
 pub const PipeID = enum(u2) {
     zero = 0,

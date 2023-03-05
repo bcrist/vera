@@ -1,73 +1,76 @@
 const std = @import("std");
-const Simulator = @import("Simulator");
 const uc_roms = @import("microcode_rom_serialization");
-const ControlSignals = @import("ControlSignals");
-const ie = @import("instruction_encoding");
 const misc = @import("misc");
+const zglfw = @import("zglfw");
+const ControlSignals = @import("ControlSignals");
+const Simulator = @import("Simulator");
+const Gui = @import("gui/Gui.zig");
 
-const roms = @import("microcode_roms").compressed_data;
-const instruction_encoding_data = @import("instruction_encoding_data").data;
+const glfw_time_reset_interval: f64 = 10_000;
+const cpu_clock_frequency_hz: u64 = 20_000_000;
+const min_realtime_fps = 30;
+const max_microcycles_per_frame: u64 = cpu_clock_frequency_hz / min_realtime_fps;
+const simulation_rate_integration_cycles: u64 = 2 * cpu_clock_frequency_hz;
 
 pub fn main() !void {
-    const stdin = std.io.getStdIn().reader();
-    const stdout = std.io.getStdOut().writer();
-
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
+    var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
 
-    const microcode = try arena.allocator().alloc(ControlSignals, misc.microcode_length);
-    uc_roms.readCompressedRoms(roms, microcode);
-
-    var temp = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    const edb = try ie.EncoderDatabase.init(arena.allocator(), instruction_encoding_data, temp.allocator());
-    temp.deinit();
-
-    var program = [_]ie.Instruction {
-        .{
-            .mnemonic = .B,
-            .suffix = .none,
-            .params = &[_]ie.Parameter{
-                ie.parameter(.constant, 0xFFFF_0002),
-            },
-        },
-    };
-
-    var program_data = [_]u8{0xFF} ** 65536;
-    var encoder = ie.Encoder.init(&program_data);
-    for (program) |insn| {
-        var insn_iter = edb.getMatchingEncodings(insn);
-        try encoder.encode(insn, insn_iter.next().?);
-    }
-
-    const vector_table = misc.ZeropageVectorTable{
-        .double_fault = 0xFFFE,
-        .page_fault = 0xFFFD,
-        .access_fault = 0xFFFC,
-        .page_align_fault = 0xFFFB,
-        .instruction_protection_fault = 0xFFFA,
-        .invalid_instruction = 0xFFF9,
-        .pipe_0_reset = @sizeOf(misc.ZeropageVectorTable),
-    };
-
+    const microcode = try arena.allocator().create([misc.microcode_length]ControlSignals);
+    uc_roms.readCompressedRoms(@import("microcode_roms").compressed_data, microcode);
     var sim = try Simulator.init(arena.allocator(), microcode);
     var xo = std.rand.Xoshiro256.init(12345);
     sim.randomizeState(xo.random());
+    for (&sim.memory.flash) |*chip| {
+        std.mem.set(u16, chip, 0xFFFF);
+    }
 
-    var flash = sim.memory.flashIterator(0x7E_000 * 8);
-    _ = flash.writeAll(std.mem.asBytes(&vector_table));
-    _ = flash.writeAll(&program_data);
+    var gui = try Gui.init(gpa.allocator(), &sim);
+    defer gui.deinit(gpa.allocator());
 
-    sim.resetAndStart();
-    try sim.printState(stdout, .zero);
+    var sim_stats: ?struct {
+        microcycles_elapsed: u64 = 0,
+        microcycles_dropped: u64 = 0,
+    } = null;
 
     while (true) {
-        switch (try stdin.readByte()) {
-            'q' => return,
-            '\n' => {
-                sim.cycle(1);
-                try sim.printState(stdout, .zero);
+        switch (try gui.update()) {
+            .pause => if (sim_stats) |_| {
+                sim_stats = null;
+                gui.setSimulationRate(null);
             },
-            else => {},
+            .run => if (sim_stats) |*stats| {
+                const now = zglfw.getTime();
+                if (now > glfw_time_reset_interval) {
+                    zglfw.setTime(0);
+                }
+
+                const expected_microcycles = @intCast(u32, @floatToInt(u64, @trunc(now * @as(f64, cpu_clock_frequency_hz))));
+                if (expected_microcycles > sim.microcycles_simulated) {
+                    var microcycles_to_simulate = expected_microcycles - sim.microcycles_simulated;
+                    stats.microcycles_elapsed += microcycles_to_simulate;
+                    if (microcycles_to_simulate > max_microcycles_per_frame) {
+                        const microcycles_to_drop = microcycles_to_simulate - max_microcycles_per_frame;
+                        stats.microcycles_dropped += microcycles_to_drop;
+                        sim.microcycles_simulated += microcycles_to_drop;
+                        microcycles_to_simulate = max_microcycles_per_frame;
+                    }
+                    sim.microcycle(microcycles_to_simulate);
+                    if (stats.microcycles_elapsed > simulation_rate_integration_cycles) {
+                        const microcycles_executed = @intToFloat(f64, stats.microcycles_elapsed - stats.microcycles_dropped);
+                        gui.setSimulationRate(microcycles_executed / @intToFloat(f64, stats.microcycles_elapsed));
+                        stats.* = .{};
+                    }
+                }
+
+                if (now > glfw_time_reset_interval) {
+                    sim.microcycles_simulated = 0;
+                }
+            } else {
+                sim_stats = .{};
+                sim.microcycles_simulated = 0;
+            },
+            .exit => break,
         }
     }
 }

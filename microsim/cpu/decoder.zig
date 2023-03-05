@@ -1,9 +1,8 @@
 const ControlSignals = @import("ControlSignals");
-const stat = @import("stat.zig");
 const faults = @import("faults.zig");
 const uc = @import("microcode");
 const misc = @import("misc");
-const bus = @import("bus");
+const bus = @import("bus_types");
 
 pub const TransactInputs = struct {
     exec_mode: misc.ExecutionMode,
@@ -13,7 +12,7 @@ pub const TransactInputs = struct {
     stall_atomic: bool,
     fault: faults.ComputeOutputs,
     interrupt_pending: bool,
-    stat: stat.LoopState,
+    flags: uc.FlagSet,
     dl: bus.D,
     lh: bus.LHigh,
     cs_allow_int: bool,
@@ -27,7 +26,7 @@ pub const TransactOutputs = struct {
     ua: uc.Address,
 };
 
-pub fn transact(in: TransactInputs) TransactOutputs {
+pub fn getForTransact(in: TransactInputs) TransactOutputs {
     return if (in.reset) .{
         .exec_mode = .interrupt_fault,
         .ua = @enumToInt(uc.Vectors.reset),
@@ -44,7 +43,7 @@ pub fn transact(in: TransactInputs) TransactOutputs {
             .ua = if (in.fault.page) @enumToInt(uc.Vectors.page_fault)
                 else if (in.fault.access) @enumToInt(uc.Vectors.access_fault)
                 else if (in.fault.page_align) @enumToInt(uc.Vectors.page_align_fault)
-                else if (in.fault.special) uc.getAddressForContinuation(in.cs_next_uop, in.stat.toUCFlags())
+                else if (in.fault.special) uc.getAddressForContinuation(in.cs_next_uop, in.flags)
                 else undefined,
         } else if (in.exec_mode == .normal and in.interrupt_pending and in.cs_allow_int and !in.want_atomic) .{
             .exec_mode = .interrupt,
@@ -52,15 +51,15 @@ pub fn transact(in: TransactInputs) TransactOutputs {
         } else switch (in.cs_seq_op) {
             .next_uop => .{
                 .exec_mode = in.exec_mode,
-                .ua = uc.getAddressForContinuation(in.cs_next_uop, in.stat.toUCFlags()),
+                .ua = uc.getAddressForContinuation(in.cs_next_uop, in.flags),
             },
             .next_uop_force_normal => .{
                 .exec_mode = .normal,
-                .ua = uc.getAddressForContinuation(in.cs_next_uop, in.stat.toUCFlags()),
+                .ua = uc.getAddressForContinuation(in.cs_next_uop, in.flags),
             },
             .next_instruction => .{
                 .exec_mode = in.exec_mode,
-                .ua = uc.getAddressForOpcode(in.dl, in.stat.toUCFlags()),
+                .ua = uc.getAddressForOpcode(in.dl, in.flags),
             },
             .fault_return => .{
                 .exec_mode = .fault,
@@ -73,15 +72,15 @@ pub fn transact(in: TransactInputs) TransactOutputs {
         } else switch (in.cs_seq_op) {
             .next_uop => .{
                 .exec_mode = in.exec_mode,
-                .ua = uc.getAddressForContinuation(in.cs_next_uop, in.stat.toUCFlags()),
+                .ua = uc.getAddressForContinuation(in.cs_next_uop, in.flags),
             },
             .next_instruction => .{
                 .exec_mode = in.exec_mode,
-                .ua = uc.getAddressForOpcode(in.dl, in.stat.toUCFlags()),
+                .ua = uc.getAddressForOpcode(in.dl, in.flags),
             },
             .next_uop_force_normal => .{
                 .exec_mode = .normal,
-                .ua = uc.getAddressForContinuation(in.cs_next_uop, in.stat.toUCFlags()),
+                .ua = uc.getAddressForContinuation(in.cs_next_uop, in.flags),
             },
             .fault_return => .{
                 .exec_mode = switch (in.exec_mode) {

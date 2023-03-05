@@ -1,7 +1,6 @@
-const sim = @import("Simulator");
 const ControlSignals = @import("ControlSignals");
 const misc = @import("misc");
-const bus = @import("bus");
+const bus = @import("bus_types");
 
 pub fn compute(in: Inputs) Outputs {
     const mode_bits = @bitCast(ControlSignals.LogicModeBits, in.cs_compute_mode.raw());
