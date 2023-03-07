@@ -70,18 +70,8 @@ pub fn init(
         .bitcount => in.bitcount.data,
         .d16 => d,
         .d8_sx => bits.sx(bus.LLow, @truncate(u8, d)),
-        .last_translation_info_l => @truncate(u16, @bitCast(u32, at_info_latch)),
-        .stat => @bitCast(u16, misc.StatusBits{
-            .z = in.reg.stat.z,
-            .n = in.reg.stat.n,
-            .c = in.reg.stat.c,
-            .v = in.reg.stat.v,
-            .k = in.reg.stat.k,
-            .a = in.reg.stat.a,
-            .pipe = in.pipe,
-            .mode = in.reg.exec_mode,
-            .pwr = exec_state.power,
-        }),
+        .last_translation_info_l => @truncate(bus.LLow, @bitCast(u32, at_info_latch)),
+        .stat => in.reg.stat.getForLL(in.pipe, in.reg.exec_mode, exec_state.power),
         .pipe => @enumToInt(in.pipe),
     };
     l.high = switch (in.cs.lh_src) {
@@ -93,12 +83,12 @@ pub fn init(
         .mult_h => in.mult.data.high,
         .d16 => d,
         .sx_ll => bits.sx(bus.LHigh, @truncate(u1, l.low >> 15)),
-        .last_translation_info_h => @intCast(u16, @bitCast(u32, at_info_latch) >> 16),
+        .last_translation_info_h => @intCast(bus.LHigh, @bitCast(u32, at_info_latch) >> 16),
         .prev_ua => in.reg.ua,
     };
 
     var output_ll_to_d = false;
-    if (bus_ctrl.write and in.cs.dl_op != .to_d) {
+    if (in.cs.bus_rw == .write and in.cs.dl_op != .to_d) {
         output_ll_to_d = true;
         d = l.low;
         num_d_drivers += 1;
@@ -162,7 +152,9 @@ pub fn init(
     });
 
     var next_atomic = in.want_atomic;
-    if (!in.inhibit_writes) {
+    if (exec_state.reset) {
+        next_atomic = false;
+    } else if (!in.inhibit_writes) {
         switch (in.cs.special) {
             .atomic_next => {
                 next_atomic = true;
@@ -197,7 +189,7 @@ pub fn init(
         .is_block_transfer = in.cs.special == .block_transfer,
         .update_frame_state = in.at.matching_entry.update_frame_state,
         .register_file = .{
-            .rsn = in.reg.rsn,
+            .rsn = rsn,
             .setup_rsn = in.reg.rsn,
             .oa = in.reg.oa,
             .ob = in.reg.ob,

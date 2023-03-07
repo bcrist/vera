@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    //[[!! include 'build' !! 211 ]]
+    //[[!! include 'build' !! 212 ]]
     //[[ ################# !! GENERATED CODE -- DO NOT MODIFY !! ################# ]]
 
     const bits = b.createModule(.{
@@ -174,6 +174,7 @@ pub fn build(b: *std.Build) void {
     });
     microsim.addModule("ControlSignals", ControlSignals);
     microsim.addModule("Simulator", Simulator);
+    microsim.addModule("microcode", microcode);
     microsim.addModule("microcode_rom_serialization", microcode_rom_serialization);
     microsim.addModule("microcode_roms", microcode_roms);
     microsim.addModule("misc", misc);

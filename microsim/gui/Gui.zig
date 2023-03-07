@@ -4,7 +4,11 @@ const zglfw = @import("zglfw");
 const zgpu = @import("zgpu");
 const wgpu = zgpu.wgpu;
 const misc = @import("misc");
+const uc = @import("microcode");
+const ControlSignals = @import("ControlSignals");
 const Simulator = @import("Simulator");
+
+const registers = @import("registers.zig");
 
     // pub fn printRegs(self: *const RegisterView, writer: anytype) !void {
     //     try writer.print(" R1: {X:0>4}   R0: {X:0>4}      Z: {X:0>8}     Z: {X:0>8}\n", .{
@@ -94,6 +98,7 @@ sim: *Simulator,
 window: *zglfw.Window,
 gctx: *zgpu.GraphicsContext,
 base_style: zgui.Style,
+run: bool = false,
 
 pub fn init(allocator: std.mem.Allocator, sim: *Simulator) !Gui {
     try zglfw.init();
@@ -160,12 +165,33 @@ pub fn update(self: *Gui) !UpdateResult {
         self.gctx.swapchain_descriptor.height,
     );
 
-    zgui.setNextWindowPos(.{ .x = 20.0, .y = 20.0, .cond = .first_use_ever });
-    zgui.setNextWindowSize(.{ .w = -1.0, .h = -1.0, .cond = .first_use_ever });
+    if (zgui.begin("Clock Control", .{})) {
+        if (zgui.button("Microstep", .{})) {
+            self.sim.microcycle(1);
+        }
+        zgui.sameLine(.{});
+        if (zgui.button("Step", .{})) {
+            self.sim.cycle(1);
+        }
+        zgui.sameLine(.{});
+        if (zgui.button("Run", .{})) {
+            self.run = true;
+        }
+        zgui.sameLine(.{});
+        if (zgui.button("Stop", .{})) {
+            self.run = false;
+        }
+        zgui.sameLine(.{});
+        _ = zgui.checkbox("Reset", .{ .v = &self.sim.exec_state.reset });
+    }
+    zgui.end();
 
-    // zgui.pushStyleVar1f(.{ .idx = .window_rounding, .v = 5.0 });
-    // zgui.pushStyleVar2f(.{ .idx = .window_padding, .v = .{ 5.0, 5.0 } });
-    // defer zgui.popStyleVar(.{ .count = 2 });
+
+    //zgui.setNextWindowPos(.{ .x = 20.0, .y = 20.0, .cond = .first_use_ever });
+    //zgui.setNextWindowSize(.{ .w = -1.0, .h = -1.0, .cond = .first_use_ever });
+
+
+
 
     for (std.enums.values(misc.PipeID)) |pipe| {
         if (zgui.begin(switch (pipe) {
@@ -173,78 +199,79 @@ pub fn update(self: *Gui) !UpdateResult {
             .one => "Pipe 1",
             .two => "Pipe 2",
         }, .{})) {
-            zgui.pushItemWidth(-std.math.floatMin(f32));
-            zgui.text("Registers", .{});
+            const rf = self.sim.register_file;
 
-            zgui.beginTable("registers", .{
-                .column = 8,
-                .flags = .{ .sizing = .fixed_fit },
-            });
-            zgui.tableNextRow(.{});
+            var stage: []const u8 = "?";
+            var reg = Simulator.LoopRegisters.init();
+            var cs = ControlSignals.init();
+            if (self.sim.s.pipe == pipe) {
+                stage = "Compute";
+                reg = self.sim.s.reg;
+                cs = self.sim.s.cs;
+            } else if (self.sim.c.pipe == pipe) {
+                stage = "Transact";
+                reg = self.sim.c.reg;
+                cs = self.sim.c.cs;
+            } else if (self.sim.t.pipe == pipe) {
+                stage = "Setup";
+                reg = self.sim.t.reg;
+                cs = self.sim.t.cs;
+            }
+            const rsn = reg.rsn;
 
-            _ = zgui.tableNextColumn(); zgui.text("R1:", .{});
-            _ = zgui.tableNextColumn(); zgui.text("0000", .{});
+            zgui.text("Stage: {s}", .{ stage });
+            zgui.text("RSN: {X:0>2}", .{ rsn });
+            if (uc.getOpcodeForAddress(reg.ua)) |opcode| {
+                zgui.text("UA: {X:0>4} - Opcode {X:0>4}", .{ reg.ua, opcode });
+            } else if (uc.getContinuationNumberForAddress(reg.ua)) |cont| {
+                zgui.text("UA: {X:0>4} - uop {X:0>3}", .{ reg.ua, cont });
+            } else {
+                zgui.text("UA: {X:0>4}", .{ reg.ua });
+            }
 
-            _ = zgui.tableNextColumn(); zgui.text("R0:", .{});
-            _ = zgui.tableNextColumn(); zgui.text("0000", .{});
+            zgui.text("STAT: {X:0>4}", .{ reg.stat.getForLL(pipe, reg.exec_mode, self.sim.exec_state.power) });
+            zgui.sameLine(.{});
+            zgui.text("DL: {X:0>4}", .{ reg.dl });
 
-            _ = zgui.tableNextColumn(); zgui.text("Z:", .{});
-            _ = zgui.tableNextColumn(); zgui.text("00000000", .{});
+            registers.showRegisterFile(rf, rsn, cs, reg.oa, reg.ob, false); // TODO inhibit_writes
 
-            _ = zgui.tableNextColumn(); zgui.text("Z:", .{});
-            _ = zgui.tableNextColumn(); zgui.text("00000000", .{});
+            if (self.sim.s.pipe == pipe) {
+                if (self.sim.s.stall_atomic) {
+                    zgui.text("Stalled", .{});
+                }
+                if (self.sim.s.want_atomic) {
+                    zgui.text("Atomic", .{});
+                }
+                const c = Simulator.ComputeStage.init(self.sim.s, self.sim.address_translator, self.sim.exec_state);
+                zgui.text("arith: {X:0>4}_{X:0>4}", .{ c.arith.data.high, c.arith.data.low });
+                zgui.text("logic: {X:0>4}_{X:0>4}", .{ c.logic.data.high, c.logic.data.low });
 
-            zgui.tableNextRow(.{});
+            } else if (self.sim.c.pipe == pipe) {
+                if (self.sim.c.stall_atomic) {
+                    zgui.text("Stalled", .{});
+                }
+                if (self.sim.c.want_atomic) {
+                    zgui.text("Atomic", .{});
+                }
+                const t = Simulator.TransactStage.init(self.sim.c, self.sim.microcode, self.sim.exec_state, self.sim.memory, self.sim.frame_tracker);
+                zgui.text("L: {X:0>4}_{X:0>4}", .{ t.l.high, t.l.low });
+                zgui.text("D: {X:0>4}", .{ t.data_to_write });
+                zgui.text("DL: {X:0>4}", .{ t.reg.dl });
+                zgui.text("next UA: {X:0>4}", .{ t.reg.ua });
 
-            _ = zgui.tableNextColumn(); zgui.text("R1:", .{});
-            _ = zgui.tableNextColumn(); zgui.text("0000", .{});
-
-            _ = zgui.tableNextColumn(); zgui.text("R0:f", .{});
-            _ = zgui.tableNextColumn(); zgui.text("0000", .{});
-
-            _ = zgui.tableNextColumn(); zgui.text("Zasdf:", .{});
-            _ = zgui.tableNextColumn(); zgui.text("00000000", .{});
-
-            _ = zgui.tableNextColumn(); zgui.text("Zff:", .{});
-            _ = zgui.tableNextColumn(); zgui.text("00000000", .{});
+            } else if (self.sim.t.pipe == pipe) {
+                if (self.sim.t.want_atomic) {
+                    zgui.text("Atomic", .{});
+                }
+            }
 
 
-            // _ = zgui.tableNextColumn(); zgui.text("R3: 0000", .{});
-            // _ = zgui.tableNextColumn(); zgui.text("R2: 0000", .{});
-            // _ = zgui.tableNextColumn(); zgui.text("RP: 00000000", .{});
-            // _ = zgui.tableNextColumn(); zgui.text("IP: 00000000", .{});
-            // zgui.tableNextRow(.{});
-            // _ = zgui.tableNextColumn(); zgui.text("R5: 0000", .{});
-            // _ = zgui.tableNextColumn(); zgui.text("R4: 0000", .{});
-            // _ = zgui.tableNextColumn(); zgui.text("SP: 00000000", .{});
-            // _ = zgui.tableNextColumn(); zgui.text("NIP: 00000000", .{});
-            // zgui.tableNextRow(.{});
-            // _ = zgui.tableNextColumn(); zgui.text("R7: 0000", .{});
-            // _ = zgui.tableNextColumn(); zgui.text("R6: 0000", .{});
-            // _ = zgui.tableNextColumn(); zgui.text("BP: 00000000", .{});
-            // _ = zgui.tableNextColumn(); zgui.text("ASN: 00000000", .{});
-            // zgui.tableNextRow(.{});
-            // _ = zgui.tableNextColumn(); zgui.text("R9: 0000", .{});
-            // _ = zgui.tableNextColumn(); zgui.text("R8: 0000", .{});
-            // _ = zgui.tableNextColumn(); zgui.text("UADL: 00000000", .{});
-            // _ = zgui.tableNextColumn(); zgui.text("KXP: 00000000", .{});
-            // zgui.tableNextRow(.{});
-            // _ = zgui.tableNextColumn(); zgui.text("R11: 0000", .{});
-            // _ = zgui.tableNextColumn(); zgui.text("R10: 0000", .{});
-            // _ = zgui.tableNextColumn(); zgui.text("RSTAT: 00000000", .{});
-            // _ = zgui.tableNextColumn(); zgui.text("UXP: 00000000", .{});
-            // zgui.tableNextRow(.{});
-            // _ = zgui.tableNextColumn(); zgui.text("R13: 0000", .{});
-            // _ = zgui.tableNextColumn(); zgui.text("R12: 0000", .{});
-            // _ = zgui.tableNextColumn(); zgui.text("ROBOA: 00000000", .{});
-            // _ = zgui.tableNextColumn(); zgui.text("RSR: 00000000", .{});
-            // zgui.tableNextRow(.{});
-            // _ = zgui.tableNextColumn(); zgui.text("R15: 0000", .{});
-            // _ = zgui.tableNextColumn(); zgui.text("R14: 0000", .{});
-            // _ = zgui.tableNextColumn(); zgui.text("TMP1: 00000000", .{});
-            // _ = zgui.tableNextColumn(); zgui.text("TMP2: 00000000", .{});
 
-            zgui.endTable();
+            var buf: [4096]u8 = undefined;
+            var stream = std.io.fixedBufferStream(&buf);
+            cs.print(stream.writer()) catch {};
+
+            zgui.textWrapped("{s}", .{ stream.getWritten() });
 
         }
         zgui.end();
@@ -254,7 +281,7 @@ pub fn update(self: *Gui) !UpdateResult {
 
     self.draw();
     if (self.window.shouldClose()) return .exit;
-    return .run;
+    return if (self.run) .run else .pause;
 }
 
 fn draw(self: *Gui) void {
@@ -269,7 +296,6 @@ fn draw(self: *Gui) void {
         const encoder = gctx.device.createCommandEncoder(null);
         defer encoder.release();
 
-        // Gui pass.
         {
             const pass = zgpu.beginRenderPassSimple(encoder, .load, swapchain_texv, null, null, null);
             defer zgpu.endReleasePass(pass);
@@ -284,13 +310,20 @@ fn draw(self: *Gui) void {
     _ = gctx.present();
 }
 
-pub fn setSimulationRate(self: *Gui, sim_rate: ?f64) void {
-    var buf: [256]u8 = undefined;
-    const title = if (sim_rate) |rate|
-        std.fmt.bufPrintZ(&buf, "Microsim: {d:.2}%", .{ rate * 100 }) catch "Microsim: ?%"
-    else "Microsim";
-
-    self.window.setTitle(title);
+pub fn setSimulationRate(self: *Gui, sim_freq: ?f64, target_sim_freq: f64) void {
+    if (sim_freq) |freq_hz| {
+        const freq_mhz = freq_hz / 1_000_000;
+        const percent = 100 * freq_hz / target_sim_freq;
+        var buf: [256]u8 = undefined;
+        const title = std.fmt.bufPrintZ(&buf, "Microsim - {d:.1} fps - {d:.2} MHz ({d:.1}% realtime)", .{
+            self.gctx.stats.fps,
+            freq_mhz,
+            percent,
+        }) catch "Microsim - ? fps - ?% realtime";
+        self.window.setTitle(title);
+    } else {
+        self.window.setTitle("Microsim");
+    }
 }
 
 fn computeScaleFactor(window: *zglfw.Window) f32 {

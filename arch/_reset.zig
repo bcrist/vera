@@ -218,7 +218,6 @@ fn wait_for_interrupt() void {
     literal_to_LL(0x0001);
     LL_to_D();
     D_to_DL();
-    LL_to_STAT();
     next_cycle_force_normal_execution();
 
     exec_latched_insn();

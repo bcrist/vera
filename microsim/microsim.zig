@@ -8,7 +8,7 @@ const Gui = @import("gui/Gui.zig");
 
 const glfw_time_reset_interval: f64 = 10_000;
 const cpu_clock_frequency_hz: u64 = 20_000_000;
-const min_realtime_fps = 30;
+const min_realtime_fps = 56;
 const max_microcycles_per_frame: u64 = cpu_clock_frequency_hz / min_realtime_fps;
 const simulation_rate_integration_cycles: u64 = 2 * cpu_clock_frequency_hz;
 
@@ -37,7 +37,7 @@ pub fn main() !void {
         switch (try gui.update()) {
             .pause => if (sim_stats) |_| {
                 sim_stats = null;
-                gui.setSimulationRate(null);
+                gui.setSimulationRate(null, 0);
             },
             .run => if (sim_stats) |*stats| {
                 const now = zglfw.getTime();
@@ -45,7 +45,7 @@ pub fn main() !void {
                     zglfw.setTime(0);
                 }
 
-                const expected_microcycles = @intCast(u32, @floatToInt(u64, @trunc(now * @as(f64, cpu_clock_frequency_hz))));
+                const expected_microcycles = @floatToInt(u64, @trunc(now * @as(f64, cpu_clock_frequency_hz)));
                 if (expected_microcycles > sim.microcycles_simulated) {
                     var microcycles_to_simulate = expected_microcycles - sim.microcycles_simulated;
                     stats.microcycles_elapsed += microcycles_to_simulate;
@@ -58,7 +58,8 @@ pub fn main() !void {
                     sim.microcycle(microcycles_to_simulate);
                     if (stats.microcycles_elapsed > simulation_rate_integration_cycles) {
                         const microcycles_executed = @intToFloat(f64, stats.microcycles_elapsed - stats.microcycles_dropped);
-                        gui.setSimulationRate(microcycles_executed / @intToFloat(f64, stats.microcycles_elapsed));
+                        const clock_freq = @as(f64, cpu_clock_frequency_hz);
+                        gui.setSimulationRate(microcycles_executed * clock_freq / @intToFloat(f64, stats.microcycles_elapsed), clock_freq);
                         stats.* = .{};
                     }
                 }

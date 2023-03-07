@@ -23,6 +23,20 @@ pub fn toUCFlags(self: StatusRegister) uc.FlagSet {
     return uc_flags;
 }
 
+pub fn getForLL(self: StatusRegister, pipe: misc.PipeID, exec_mode: misc.ExecutionMode, pwr: misc.PowerMode) bus.LLow {
+    return @bitCast(bus.LLow, misc.StatusBits{
+        .z = self.z,
+        .n = self.n,
+        .c = self.c,
+        .v = self.v,
+        .k = self.k,
+        .a = self.a,
+        .pipe = pipe,
+        .mode = exec_mode,
+        .pwr = pwr,
+    });
+}
+
 pub fn print(self: StatusRegister, writer: anytype) !void {
     const c = if (self.c) "C" else " ";
     const v = if (self.v) "V" else " ";
