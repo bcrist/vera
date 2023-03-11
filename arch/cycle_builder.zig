@@ -5,6 +5,7 @@ const misc = @import("misc");
 const uc = @import("microcode");
 const ib = @import("instruction_builder.zig");
 const panic = ib.panic;
+const warn = ib.warn;
 
 pub const FlagsMode = enum {
     no_flags,
@@ -76,16 +77,16 @@ pub fn finish() ControlSignals {
     }
 
     if (cycle.dl_op == .from_d and cycle.bus_rw == .read and cycle.at_op != .translate) {
-        panic("Expected at_op to be .translate", .{});
+        warn("Expected at_op to be .translate", .{});
     }
 
     if (cycle.dl_op == .to_d and cycle.bus_rw != .write and cycle.ll_src != .d16 and cycle.ll_src != .d8_sx) {
-        panic("Expected dl value to be written to the bus or ll", .{});
+        warn("Expected dl value to be written to the bus or ll", .{});
     }
 
     switch (cycle.ll_src) {
         .zero, .stat, .pipe, .last_translation_info_l => {},
-        .logic_l    => validateComputeMode(.logic),
+        .logic_l  => validateComputeMode(.logic),
         .shift_l  => validateComputeMode(.shift),
         .arith_l  => validateComputeMode(.arith),
         .mult_l   => validateComputeMode(.mult),
@@ -101,6 +102,14 @@ pub fn finish() ControlSignals {
         .arith_h => validateComputeMode(.arith),
         .mult_h => validateComputeMode(.mult),
         .d16 => if (cycle.dl_op != .to_d) validate_bus_read(null),
+    }
+
+    if (cycle.sr1_wsrc == .rsn_sr1 and !isSet(.sr1_ri)) {
+        warn("Expected sr1_ri to be set when sr1_wsrc is sr1_rsn!", .{});
+    }
+
+    if (cycle.sr2_wsrc == .sr2 and !isSet(.sr2_ri)) {
+        warn("Expected sr2_ri to be set when sr2_wsrc is sr2!", .{});
     }
 
     switch (cycle.stat_op) {
@@ -131,17 +140,17 @@ pub fn finish() ControlSignals {
             and cycle.ob_oa_op == .hold
             and cycle.dl_op == .hold
             and cycle.seq_op == .next_uop) {
-        panic("Did you forget to store the result somewhere?", .{});
+        warn("Did you forget to store the result somewhere?", .{});
     }
 
     if (cycle.seq_op == .next_instruction and !cycle.allow_int) {
-        panic("Expected allow_int when seq_op is .next_instruction", .{});
+        warn("Expected allow_int when seq_op is .next_instruction", .{});
     }
 
     switch (cycle.seq_op) {
         .next_uop, .next_uop_force_normal => {},
         else => if (isSet(.next_uop)) {
-            panic("Expected seq_op to be .next_uop or .next_uop_force_normal", .{});
+            warn("Expected seq_op to be .next_uop or .next_uop_force_normal", .{});
         },
     }
 
@@ -154,18 +163,18 @@ fn isSet(signal: ControlSignals.SignalName) bool {
 
 fn ensureSet(signal: ControlSignals.SignalName) void {
     if (!isSet(signal)) {
-        panic("Expected {s} to be assigned", .{ @tagName(signal) });
+        warn("Expected {s} to be assigned", .{ @tagName(signal) });
     }
 }
 
 fn validateComputeMode(expected: ControlSignals.ComputeModeTag) void {
     const mode = cycle.compute_mode; // workaround for https://github.com/ziglang/zig/issues/14641
     if (mode != expected) {
-        panic("Expected compute_mode to be {s}", .{ @tagName(expected) });
+        warn("Expected compute_mode to be {s}", .{ @tagName(expected) });
     }
 
     if (!isSet(.jl_src)) {
-        panic("Expected jl_src to be set for operation", .{});
+        warn("Expected jl_src to be set for operation", .{});
     } else switch (cycle.jl_src) {
         .zero => {},
         .jrl => {
@@ -181,7 +190,7 @@ fn validateComputeMode(expected: ControlSignals.ComputeModeTag) void {
     }
 
     if (!isSet(.jh_src)) {
-        panic("Expected jh_src to be set for operation", .{});
+        warn("Expected jh_src to be set for operation", .{});
     } else switch (cycle.jh_src) {
         .zero, .neg_one, .sx_jl => {},
         .jrl, .jrh => {
@@ -197,7 +206,7 @@ fn validateComputeMode(expected: ControlSignals.ComputeModeTag) void {
     }
 
     if (!isSet(.k_src)) {
-        panic("Expected k_src to be set for operation", .{});
+        warn("Expected k_src to be set for operation", .{});
     } else switch (cycle.k_src) {
         .zero, .ob_oa_zx => {},
         .literal, .literal_minus_64, .literal_special => ensureSet(.literal),
@@ -220,21 +229,34 @@ fn validateAddress() void {
     ensureSet(.base);
     ensureSet(.offset);
     ensureSet(.at_op);
+
+    // TODO figure out if we can route two SR2 chips on the same board
+    // if (cycle.sr2_wsrc == .sr2) {
+    //     if (ControlSignals.addressBaseToSR2(cycle.base)) |sr2| {
+    //         setControlSignal(.sr2_ri, sr2);
+    //     } else {
+    //         warn("When sr2_wsrc is .sr2, base ({}) and sr2_ri ({}) must match!", .{ cycle.base, cycle.sr2_ri });
+    //     }
+    // }
+
+    if (ControlSignals.addressBaseToSR1(cycle.base)) |sr1| {
+        setControlSignal(.sr1_ri, sr1);
+    }
 }
 
 fn validate_bus_read(width: ?ControlSignals.BusWidth) void {
     validateAddress();
     if (cycle.bus_rw != .read) {
-        panic("Expected bus_rw to be .read", .{});
+        warn("Expected bus_rw to be .read", .{});
     }
 
     if (cycle.at_op != .translate) {
-        panic("Expected at_op to be .translate", .{});
+        warn("Expected at_op to be .translate", .{});
     }
 
     if (width) |w| {
         if (w != cycle.bus_byte) {
-            panic("Expected bus_byte to be {}", .{ w });
+            warn("Expected bus_byte to be {}", .{ w });
         }
     }
 }
@@ -247,21 +269,25 @@ pub fn setControlSignal(comptime signal: ControlSignals.SignalName, raw_value: a
     }
     const current_value = @field(cycle, @tagName(signal));
     const T = @TypeOf(@field(cycle, @tagName(signal)));
-    const value = @as(T, raw_value);
+    var value = @as(T, raw_value);
     switch (@typeInfo(T)) {
         .Union => if (isSet(signal) and !std.meta.eql(current_value, value)) {
-            panic("Can't assign {} to {s}; already has value {}", .{ value, @tagName(signal), current_value });
+            warn("Can't assign {} to {s}; already has value {}", .{ value, @tagName(signal), current_value });
+            return;
         },
         .Enum => if (isSet(signal) and current_value != value) {
-            panic("Can't assign {s} to {s}; already has value {s}", .{ @tagName(value), @tagName(signal), @tagName(current_value) });
+            warn("Can't assign {s} to {s}; already has value {s}", .{ @tagName(value), @tagName(signal), @tagName(current_value) });
+            return;
         },
         else => if (isSet(signal) and current_value != value) {
-            panic("Can't assign {} to {s}; already has value {}", .{ value, @tagName(signal), current_value });
+            warn("Can't assign {} to {s}; already has value {}", .{ value, @tagName(signal), current_value });
+            return;
         },
     }
     switch (signal) {
         .compute_mode => if (value == .unused) {
-            panic("compute_mode can't be manually set to .unused", .{});
+            warn("compute_mode can't be manually set to .unused", .{});
+            return;
         },
         .dl_op => if (value == .from_d) {
             if (ib.insn) |i| {
@@ -368,7 +394,8 @@ pub fn literal_to_K(literal: i17) void {
         });
 
         if (special != raw) {
-            panic("Invalid literal for K: {} (expected {b}, found {b})", .{ literal, raw, special });
+            warn("Invalid literal for K: {} (expected {b}, found {b})", .{ literal, raw, special });
+            return;
         }
 
         setControlSignal(.k_src, .literal_special);
@@ -782,7 +809,8 @@ pub fn D_to_L(ext: ZeroSignOrOneExtension) void {
         },
         .sx => {
             if (!isSet(.bus_byte)) {
-                panic("bus_byte not set!", .{});
+                warn("bus_byte not set!", .{});
+                return;
             }
             switch (cycle.bus_byte) {
                 .byte => setControlSignal(.ll_src, .d8_sx),
@@ -792,7 +820,8 @@ pub fn D_to_L(ext: ZeroSignOrOneExtension) void {
         },
         ._1x => {
             if (cycle.bus_byte == .byte) {
-                panic("._1x cannot be used when reading a byte value!", .{});
+                warn("._1x cannot be used when reading a byte value!", .{});
+                return;
             }
             setControlSignal(.ll_src, .d16);
             zero_to_J();

@@ -37,17 +37,6 @@ pub fn getForLL(self: StatusRegister, pipe: misc.PipeID, exec_mode: misc.Executi
     });
 }
 
-pub fn print(self: StatusRegister, writer: anytype) !void {
-    const c = if (self.c) "C" else " ";
-    const v = if (self.v) "V" else " ";
-    const n = if (self.n) "N" else " ";
-    const z = if (self.z) "Z" else " ";
-    const nk = if (self.next_k) "n" else " ";
-    const k = if (self.k) "K" else " ";
-    const a = if (self.a) "A" else " ";
-    try writer.print("STAT: {s} {s} {s} {s} {s}{s} {s}", .{ c, v, n, z, nk, k, a });
-}
-
 pub const TransactInputs = struct {
     state: StatusRegister,
     inhibit_writes: bool,

@@ -35,7 +35,7 @@ pub const Mnemonic = enum {
     // MMU:
     CAT, CATM, CATO, SAT, CSAT, RAT,
     // Stack:
-    FRAME, UNFRAME, THINK, UNTHINK, POP, PUSH,
+    FRAME, UNFRAME, POP, PUSH,
     // Atomics:
     SYNC, ALD, AST, ASTZ, AADD, AINC, ADECNZ, AX, AXE,
     // Memcpy & streaming:
@@ -116,8 +116,6 @@ pub fn mnemonicName(mnemonic: Mnemonic) []const u8 {
         .RAT => "Remove Address Translation(s)",
         .FRAME => "Set Up Stack Frame",
         .UNFRAME => "Tear Down Stack Frame",
-        .THINK => "Set Up Stack Frame with RP",
-        .UNTHINK => "Tear Down Stack Frame with RP",
         .POP => "Pop from Stack",
         .PUSH => "Push to Stack",
         .SYNC => "Synchronize Next Instruction",

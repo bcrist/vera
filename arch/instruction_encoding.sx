@@ -16,14 +16,6 @@
       (desc "Subtract immediate from stack pointer")
       (param constant (base-src IP_plus_2_16) (range 0 65535))
    )
-   (0006 0006 UNTHINK
-      (desc "Load RP from stack, add immediate to stack pointer")
-      (param constant (base-src IP_plus_2_16) (range 0 65535))
-   )
-   (0007 0007 THINK
-      (desc "Subtract immediate from stack pointer, write RP to stack")
-      (param constant (base-src IP_plus_2_16) (range 0 65535))
-   )
    (0008 0008 RAT W
       (desc "Remove address translation entry or entries corresponding to X4 and tag mask R0")
    )
@@ -871,14 +863,6 @@
       (desc "Copy immediate to 32b register")
       (param constant (base-src OB) (range -16 -1))
       (param -> reg32 (base-src OA))
-   )
-   (6A00 6AFF UNTHINK
-      (desc "Load RP from stack, add immediate to stack pointer")
-      (param constant (base-src OB_OA) (range 0 255))
-   )
-   (6B00 6BFF THINK
-      (desc "Subtract immediate from stack pointer, write RP to stack")
-      (param constant (base-src OB_OA) (range 0 255))
    )
    (7000 70FF ADD
       (desc "Add signed 8b immediate to 32b regiser")
@@ -1736,14 +1720,6 @@
    )
    (FBA0 FBAF FRAME
       (desc "Subtract 16b register from stack pointer")
-      (param reg16s (base-src OA))
-   )
-   (FBB0 FBBF UNTHINK
-      (desc "Load RP from stack, add 16b register to stack pointer")
-      (param reg16s (base-src OA))
-   )
-   (FBC0 FBCF THINK
-      (desc "Subtract 16b register from stack pointer, write RP to stack")
       (param reg16s (base-src OA))
    )
    (FBD0 FBDF C

@@ -722,6 +722,15 @@ pub fn panic(comptime format: []const u8, args: anytype) noreturn {
     std.os.exit(0);
 }
 
+pub fn warn(comptime format: []const u8, args: anytype) void {
+    if (insn) |i| {
+        printCyclePath(i.initial_uc_address, i.encoding);
+    }
+    var stderr = std.io.getStdErr().writer();
+    stderr.print(format, args) catch @panic("IO Error");
+    stderr.writeAll("\n") catch @panic("IO Error");
+}
+
 pub fn printCyclePath(initial_uc_address: uc.Address, insn_encoding: ?InstructionEncoding) void {
     var stderr = std.io.getStdErr().writer();
 

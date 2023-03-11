@@ -1062,7 +1062,7 @@ test "Instruction encoding" {
             ie.toParameter(.SP, 0),
         },
     });
-    for ([_]ie.Mnemonic{ .UNFRAME, .FRAME, .UNTHINK, .THINK }) |mnemonic| {
+    for ([_]ie.Mnemonic{ .UNFRAME, .FRAME }) |mnemonic| {
         try ie.testIdempotence(&ddb, &edb, 1, .{
             .mnemonic = mnemonic,
             .suffix = .none,

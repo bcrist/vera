@@ -63,46 +63,6 @@ pub fn _FBA0_FBAF() void {
     load_and_exec_next_insn(2);
 }
 
-pub fn _FBB0_FBBF() void {
-    encoding(.UNTHINK, .{ .RaS });
-    //syntax("UNTHINK SRa");
-    desc("Load RP from stack, add 16b register to stack pointer");
-
-    read_to_D(.sp, 0, .word, .stack);
-    D_to_L(.zx);
-    L_to_SR(.temp_2);
-    next_cycle();
-
-    read_to_D(.sp, 2, .word, .stack);
-    D_to_LH();
-    SRL_to_LL(.temp_2);
-    L_to_SR(.rp);
-    next_cycle();
-
-    SR_plus_op_reg_to_L(.sp, .OA, .sx, .fresh, .no_flags);
-    L_to_SR(.sp);
-    load_and_exec_next_insn(2);
-}
-
-pub fn _FBC0_FBCF() void {
-    encoding(.THINK, .{ .RaS });
-    //syntax("THINK SRa");
-    desc("Subtract 16b register from stack pointer, write RP to stack");
-
-    SR_minus_op_reg_to_L(.sp, .OA, .sx, .fresh, .no_flags);
-    L_to_SR(.sp);
-    load_next_insn(2);
-    next_cycle();
-
-    SR_to_L(.rp);
-    write_from_LL(.sp, 0, .word, .stack);
-    next_cycle();
-
-    SRH_to_LL(.rp);
-    write_from_LL(.sp, 2, .word, .stack);
-    exec_next_insn();
-}
-
 pub fn _5A00_5AFF() void {
     encoding(.UNFRAME, .{ .immba8u });
     //syntax("UNFRAME immba[0,255]");
@@ -125,50 +85,6 @@ pub fn _5B00_5BFF() void {
     sub_to_L(.zx, .fresh, .no_flags);
     L_to_SR(.sp);
     load_and_exec_next_insn(2);
-}
-
-pub fn _6A00_6AFF() void {
-    encoding(.UNTHINK, .{ .immba8u });
-    //syntax("UNTHINK immba[0,255]");
-    desc("Load RP from stack, add immediate to stack pointer");
-
-    read_to_D(.sp, 0, .word, .stack);
-    D_to_L(.zx);
-    L_to_SR(.temp_2);
-    next_cycle();
-
-    read_to_D(.sp, 2, .word, .stack);
-    D_to_LH();
-    SRL_to_LL(.temp_2);
-    L_to_SR(.rp);
-    next_cycle();
-
-    SR_to_J(.sp);
-    OB_OA_to_K();
-    add_to_L(.zx, .fresh, .no_flags);
-    L_to_SR(.sp);
-    load_and_exec_next_insn(2);
-}
-
-pub fn _6B00_6BFF() void {
-    encoding(.THINK, .{ .immba8u });
-    //syntax("THINK immba[0,255]");
-    desc("Subtract immediate from stack pointer, write RP to stack");
-
-    SR_to_J(.sp);
-    OB_OA_to_K();
-    sub_to_L(.zx, .fresh, .no_flags);
-    L_to_SR(.sp);
-    load_next_insn(2);
-    next_cycle();
-
-    SR_to_L(.rp);
-    write_from_LL(.sp, 0, .word, .stack);
-    next_cycle();
-
-    SRH_to_LL(.rp);
-    write_from_LL(.sp, 2, .word, .stack);
-    exec_next_insn();
 }
 
 pub fn _0004() void {
@@ -203,60 +119,6 @@ pub fn _0005() void {
     sub_to_L(.zx, .fresh, .no_flags);
     L_to_SR(.sp);
     load_and_exec_next_insn(4);
-}
-
-pub fn _0006() void {
-    encoding(.UNTHINK, .{ .imm16u });
-    //syntax("UNTHINK imm16[0,65535]");
-    desc("Load RP from stack, add immediate to stack pointer");
-
-    read_to_D(.sp, 0, .word, .stack);
-    D_to_L(.zx);
-    L_to_SR(.temp_2);
-    next_cycle();
-
-    read_to_D(.sp, 2, .word, .stack);
-    D_to_LH();
-    SRL_to_LL(.temp_2);
-    L_to_SR(.rp);
-    next_cycle();
-
-    IP_read_to_D(2, .word);
-    D_to_L(.zx);
-    L_to_SR(.temp_2);
-    next_cycle();
-
-    SR_to_J(.sp);
-    SRL_to_K(.temp_2);
-    add_to_L(.zx, .fresh, .no_flags);
-    L_to_SR(.sp);
-    load_and_exec_next_insn(4);
-}
-
-pub fn _0007() void {
-    encoding(.THINK, .{ .imm16u });
-    //syntax("THINK imm16[0,65535]");
-    desc("Subtract immediate from stack pointer, write RP to stack");
-
-    IP_read_to_D(2, .word);
-    D_to_L(.zx);
-    L_to_SR(.temp_2);
-    next_cycle();
-
-    SR_to_J(.sp);
-    SRL_to_K(.temp_2);
-    sub_to_L(.zx, .fresh, .no_flags);
-    L_to_SR(.sp);
-    load_next_insn(4);
-    next_cycle();
-
-    SR_to_L(.rp);
-    write_from_LL(.sp, 0, .word, .stack);
-    next_cycle();
-
-    SRH_to_LL(.rp);
-    write_from_LL(.sp, 2, .word, .stack);
-    exec_next_insn();
 }
 
 pub fn _E480_E49F() void {

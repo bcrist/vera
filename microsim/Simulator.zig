@@ -96,14 +96,11 @@ pub fn microcycle(self: *Simulator, n: u64) void {
     while (i < n) : (i += 1) {
         self.exec_state.pipe = self.exec_state.pipe.next();
 
-        const s = SetupStage.init(self.t, self.register_file);
+        const s = SetupStage.init(self.t, self.register_file, self.s.isAtomic(), self.c.isAtomic());
         const c = ComputeStage.init(self.s, self.address_translator, self.exec_state);
         const t = TransactStage.init(self.c, self.microcode, self.exec_state, self.memory, self.frame_tracker);
 
-        const atomic_compute = self.s.want_atomic and !self.s.stall_atomic;
-        const atomic_transact = self.c.want_atomic and !self.c.stall_atomic;
-
-        self.s.update(s, atomic_compute, atomic_transact);
+        self.s.update(s);
         self.c.update(c);
         self.t.update(t, &self.exec_state, self.register_file, self.address_translator, self.memory, self.frame_tracker);
 
@@ -118,7 +115,7 @@ pub fn cycle(self: *Simulator, n: u64) void {
 pub fn resetAndCycle(self: *Simulator) void {
     self.exec_state.reset = true;
     self.cycle(1);
-    while (self.s.pipe != .zero) {
+    while (self.t.pipe != .zero) {
         self.microcycle(1);
     }
     self.exec_state.reset = false;
@@ -126,7 +123,7 @@ pub fn resetAndCycle(self: *Simulator) void {
 
 pub fn resetAndInit(self: *Simulator) void {
     self.resetAndCycle();
-    while (self.s.cs.seq_op != .next_instruction) {
+    while (self.t.cs.seq_op != .next_instruction) {
         self.cycle(1);
     }
     self.cycle(1);

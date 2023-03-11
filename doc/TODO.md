@@ -25,7 +25,6 @@ Error console
     Access to invalid memory
     Faults
 
-
 ## Consider Shifter overflow flag - if any shifted out bits differ from the last bit that wasn't shifted out
 ## Consider removing wait states
 

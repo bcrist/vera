@@ -21,18 +21,31 @@ pub const TransactInputs = struct {
     cs_special: ControlSignals.SpecialOp,
 };
 
+pub const UASource = enum {
+    reset,
+    stall,
+    fault,
+    interrupt,
+    continuation,
+    opcode,
+    lh,
+};
+
 pub const TransactOutputs = struct {
     exec_mode: misc.ExecutionMode,
     ua: uc.Address,
+    ua_src: UASource,
 };
 
 pub fn getForTransact(in: TransactInputs) TransactOutputs {
     return if (in.reset) .{
         .exec_mode = .interrupt_fault,
         .ua = @enumToInt(uc.Vectors.reset),
+        .ua_src = .reset,
     } else if (in.stall_atomic) .{
         .exec_mode = in.exec_mode,
         .ua = in.ua,
+        .ua_src = .stall,
     } else switch (in.exec_mode) {
         .normal, .interrupt => if (in.fault.any) .{
             .exec_mode = switch (in.exec_mode) {
@@ -45,42 +58,52 @@ pub fn getForTransact(in: TransactInputs) TransactOutputs {
                 else if (in.fault.page_align) @enumToInt(uc.Vectors.page_align_fault)
                 else if (in.fault.special) uc.getAddressForContinuation(in.cs_next_uop, in.flags)
                 else undefined,
+            .ua_src = .fault,
         } else if (in.exec_mode == .normal and in.interrupt_pending and in.cs_allow_int and !in.want_atomic) .{
             .exec_mode = .interrupt,
             .ua = @enumToInt(uc.Vectors.interrupt),
+            .ua_src = .interrupt,
         } else switch (in.cs_seq_op) {
             .next_uop => .{
                 .exec_mode = in.exec_mode,
                 .ua = uc.getAddressForContinuation(in.cs_next_uop, in.flags),
+                .ua_src = .continuation,
             },
             .next_uop_force_normal => .{
                 .exec_mode = .normal,
                 .ua = uc.getAddressForContinuation(in.cs_next_uop, in.flags),
+                .ua_src = .continuation,
             },
             .next_instruction => .{
                 .exec_mode = in.exec_mode,
                 .ua = uc.getAddressForOpcode(in.dl, in.flags),
+                .ua_src = .opcode,
             },
             .fault_return => .{
                 .exec_mode = .fault,
                 .ua = @enumToInt(uc.Vectors.instruction_protection_fault),
+                .ua_src = .fault,
             },
         },
         .fault, .interrupt_fault => if (in.fault.any) .{
             .exec_mode = in.exec_mode,
             .ua = @enumToInt(uc.Vectors.double_fault),
+            .ua_src = .fault,
         } else switch (in.cs_seq_op) {
             .next_uop => .{
                 .exec_mode = in.exec_mode,
                 .ua = uc.getAddressForContinuation(in.cs_next_uop, in.flags),
+                .ua_src = .continuation,
             },
             .next_instruction => .{
                 .exec_mode = in.exec_mode,
                 .ua = uc.getAddressForOpcode(in.dl, in.flags),
+                .ua_src = .opcode,
             },
             .next_uop_force_normal => .{
                 .exec_mode = .normal,
                 .ua = uc.getAddressForContinuation(in.cs_next_uop, in.flags),
+                .ua_src = .continuation,
             },
             .fault_return => .{
                 .exec_mode = switch (in.exec_mode) {
@@ -89,6 +112,7 @@ pub fn getForTransact(in: TransactInputs) TransactOutputs {
                     else => unreachable,
                 },
                 .ua = in.lh,
+                .ua_src = .lh,
             },
         },
     };

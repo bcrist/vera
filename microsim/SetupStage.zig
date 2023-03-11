@@ -14,13 +14,17 @@ pipe: misc.PipeID,
 cs: ControlSignals,
 reg: LoopRegisters,
 want_atomic: bool,
+stall_atomic: bool,
 sr1: bus.JParts,
 sr2: bus.JParts,
 j: bus.JParts,
 k: bus.K,
 virtual_address: bus.VirtualAddressParts,
 
-pub fn init(in: TransactStage.PipelineRegister, register_file: *const RegisterFile) SetupStage {
+debug_base: u32,
+debug_offset: i7,
+
+pub fn init(in: TransactStage.PipelineRegister, register_file: *const RegisterFile, atomic_compute: bool, atomic_transact: bool) SetupStage {
     const rf = register_file.setup(.{
         .rsn = in.reg.rsn,
         .oa = in.reg.oa,
@@ -39,21 +43,27 @@ pub fn init(in: TransactStage.PipelineRegister, register_file: *const RegisterFi
     });
 
     const want_atomic = in.want_atomic or in.cs.special == .atomic_this or in.cs.special == .atomic_next;
+    const stall_atomic = want_atomic and (atomic_compute or atomic_transact);
+
+    const address_out = address_generator.setup(.{
+        .base = rf.address_base,
+        .cs_offset = in.cs.offset,
+        .cs_literal = in.cs.literal,
+    });
 
     return .{
         .pipe = in.pipe,
         .cs = in.cs,
         .reg = in.reg,
         .want_atomic = want_atomic,
+        .stall_atomic = stall_atomic,
         .j = rf.j,
         .k = rf.k,
         .sr1 = rf.sr1,
         .sr2 = rf.sr2,
-        .virtual_address = address_generator.setup(.{
-            .base = rf.address_base,
-            .cs_offset = in.cs.offset,
-            .cs_literal = in.cs.literal,
-        }),
+        .virtual_address = address_out.virtual_address,
+        .debug_base = rf.address_base,
+        .debug_offset = address_out.debug_offset,
     };
 }
 
@@ -94,16 +104,21 @@ pub const PipelineRegister = struct {
         };
     }
 
-    pub fn update(self: *PipelineRegister, out: SetupStage, atomic_compute: bool, atomic_transact: bool) void {
+    pub fn update(self: *PipelineRegister, out: SetupStage) void {
         self.pipe = out.pipe;
         self.cs = out.cs;
         self.reg = out.reg;
         self.want_atomic = out.want_atomic;
-        self.stall_atomic = out.want_atomic and (atomic_compute or atomic_transact);
+        self.stall_atomic = out.stall_atomic;
         self.sr1 = out.sr1;
         self.sr2 = out.sr2;
         self.j = out.j;
         self.k = out.k;
         self.virtual_address = out.virtual_address;
     }
+
+    pub fn isAtomic(self: PipelineRegister) bool {
+        return self.want_atomic and !self.stall_atomic;
+    }
+
 };

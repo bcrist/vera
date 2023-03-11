@@ -233,4 +233,9 @@ pub const PipelineRegister = struct {
         self.fault = out.fault;
         self.inhibit_writes = out.inhibit_writes;
     }
+
+    pub fn isAtomic(self: PipelineRegister) bool {
+        return self.want_atomic and !self.stall_atomic;
+    }
+
 };

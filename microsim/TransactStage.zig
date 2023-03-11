@@ -32,6 +32,8 @@ power: ?misc.PowerMode,
 register_file: RegisterFile.TransactInputs,
 address_translator: AddressTranslator.TransactInputs,
 
+debug_ua_src: decoder.UASource,
+
 pub fn init(
     in: ComputeStage.PipelineRegister,
     microcode: *const [misc.microcode_length]ControlSignals,
@@ -215,6 +217,8 @@ pub fn init(
             .tag = in.at.info.tag,
             .cs_at_op = in.at.info.cs_at_op,
         },
+
+        .debug_ua_src = decode_out.ua_src,
     };
 }
 

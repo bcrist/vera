@@ -219,7 +219,7 @@ pub fn address_offset(self: *ControlSignals) misc.SignedOffsetForLiteral {
 
 pub const Literal = u6;
 
-// what determines which general purpose registers to read/write?
+// determines which general purpose registers to read/write
 pub const RegFileIndexingSource = enum(u2) {
     zero = 0,
     literal = 1,
