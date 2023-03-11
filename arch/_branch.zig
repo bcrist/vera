@@ -36,7 +36,7 @@ const JH_to_LH = cb.JH_to_LH;
 const L_to_SR = cb.L_to_SR;
 const JL_to_LL = cb.JL_to_LL;
 const SR_minus_SRL_to_L = cb.SR_minus_SRL_to_L;
-const SR_plus_op_reg_to_L = cb.SR_plus_op_reg_to_L;
+const SR_plus_reg_to_L = cb.SR_plus_reg_to_L;
 const SR_plus_SRL_to_L = cb.SR_plus_SRL_to_L;
 const SRL_to_LL = cb.SRL_to_LL;
 const reg32_to_L = cb.reg32_to_L;
@@ -155,24 +155,24 @@ pub fn _017F() void {
     branch(.next_ip, 0);
 }
 
-pub fn _FA90_FA9F() void {
-    encoding(.B, .{ IP_relative(.RaU) });
-    //syntax("B IP+URa");
+pub fn _0006() void {
+    encoding(.B, .{ IP_relative(.R0) });
+    //syntax("B IP+UR0");
     desc("IP-relative unsigned register unconditional branch");
 
-    SR_plus_op_reg_to_L(.ip, .OA, .zx, .fresh, .no_flags);
+    SR_plus_reg_to_L(.ip, 0, .zx, .fresh, .no_flags);
     L_to_SR(.next_ip);
     next_cycle();
 
     branch(.next_ip, 0);
 }
 
-pub fn _FAA0_FAAF() void {
-    encoding(.B, .{ IP_relative(.RaS) });
-    //syntax("B IP+SRa");
+pub fn _0007() void {
+    encoding(.B, .{ IP_relative(.R0) });
+    //syntax("B IP+SR0");
     desc("IP-relative signed register unconditional branch");
 
-    SR_plus_op_reg_to_L(.ip, .OA, .sx, .fresh, .no_flags);
+    SR_plus_reg_to_L(.ip, 0, .sx, .fresh, .no_flags);
     L_to_SR(.next_ip);
     next_cycle();
 
@@ -490,7 +490,7 @@ pub fn _0185() void {
     //syntax("BPN");
     desc("Branch to start of next page");
 
-    SRL_logic_literal_to_LL(.ip, .jl_or_not_k, 0xF000, .fresh, .no_flags);
+    SRL_logic_literal_to_LL(.ip, .njl_nand_k, 0xF000, .fresh, .no_flags);
     JH_to_LH();
     L_to_SR(.next_ip);
     next_cycle();

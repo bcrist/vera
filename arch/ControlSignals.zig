@@ -473,34 +473,36 @@ pub const ArithModeBits = packed struct {
 };
 
 pub const LogicMode = enum(u4) {
-    jl_and_k     = @bitCast(u4, LogicModeBits { .op = .jl_and_k,         .invert_k = false }),
-    jl_nand_k    = @bitCast(u4, LogicModeBits { .op = .jl_nand_k,        .invert_k = false }),
-    jl_and_not_k = @bitCast(u4, LogicModeBits { .op = .jl_and_k,         .invert_k = true  }),
-    jl_or_not_k  = @bitCast(u4, LogicModeBits { .op = .jl_or_k,          .invert_k = true  }),
-    jl_nor_k     = @bitCast(u4, LogicModeBits { .op = .jl_nor_k,         .invert_k = false }),
-    jl_or_k      = @bitCast(u4, LogicModeBits { .op = .jl_or_k,          .invert_k = false }),
-    jl_xor_k     = @bitCast(u4, LogicModeBits { .op = .jl_xor_k,         .invert_k = false }),
-    jl_xnor_k    = @bitCast(u4, LogicModeBits { .op = .jl_xor_k,         .invert_k = true  }),
-    cb_k         = @bitCast(u4, LogicModeBits { .op = .count_k,          .invert_k = false }), // count set bits
-    cz_k         = @bitCast(u4, LogicModeBits { .op = .count_k,          .invert_k = true  }), // count zero bits
-    ctb_k        = @bitCast(u4, LogicModeBits { .op = .count_trailing_k, .invert_k = false }), // count trailing (lsb) set bits
-    ctz_k        = @bitCast(u4, LogicModeBits { .op = .count_trailing_k, .invert_k = true  }), // count trailing (lsb) zero bits
-    clb_k        = @bitCast(u4, LogicModeBits { .op = .count_leading_k,  .invert_k = false }), // count leading (msb) set bits
-    clz_k        = @bitCast(u4, LogicModeBits { .op = .count_leading_k,  .invert_k = true  }), // count leading (msb) zero bits
+    jl_and_k     = @bitCast(u4, LogicModeBits { .op = .jl_and_k,               .invert_jl = false }),
+    njl_and_k    = @bitCast(u4, LogicModeBits { .op = .jl_and_k,               .invert_jl = true }),
+    jl_nand_k    = @bitCast(u4, LogicModeBits { .op = .jl_nand_k,              .invert_jl = false }),
+    njl_nand_k   = @bitCast(u4, LogicModeBits { .op = .jl_nand_k,              .invert_jl = true }),
+    jl_xor_k     = @bitCast(u4, LogicModeBits { .op = .jl_xor_k,               .invert_jl = false }),
+    jl_xnor_k    = @bitCast(u4, LogicModeBits { .op = .jl_xor_k,               .invert_jl = true  }),
+    jl_nor_k     = @bitCast(u4, LogicModeBits { .op = .jl_nor_k,               .invert_jl = false }),
+    njl_nor_k    = @bitCast(u4, LogicModeBits { .op = .jl_nor_k,               .invert_jl = true }),
+    jl_or_k      = @bitCast(u4, LogicModeBits { .op = .jl_or_k,                .invert_jl = false }),
+    njl_or_k     = @bitCast(u4, LogicModeBits { .op = .jl_or_k,                .invert_jl = true }),
+    cb_jl_or_k   = @bitCast(u4, LogicModeBits { .op = .count_jl_or_k,          .invert_jl = false }), // count set bits
+    cz_jl_or_k   = @bitCast(u4, LogicModeBits { .op = .count_jl_or_k,          .invert_jl = true  }), // count zero bits
+    ctb_jl_or_k  = @bitCast(u4, LogicModeBits { .op = .count_trailing_jl_or_k, .invert_jl = false }), // count trailing (lsb) set bits
+    ctz_jl_or_k  = @bitCast(u4, LogicModeBits { .op = .count_trailing_jl_or_k, .invert_jl = true  }), // count trailing (lsb) zero bits
+    clb_jl_or_k  = @bitCast(u4, LogicModeBits { .op = .count_leading_jl_or_k,  .invert_jl = false }), // count leading (msb) set bits
+    clz_jl_or_k  = @bitCast(u4, LogicModeBits { .op = .count_leading_jl_or_k,  .invert_jl = true  }), // count leading (msb) zero bits
 };
 pub const LogicModeBits = packed struct {
     op: LogicOp,
-    invert_k: bool,
+    invert_jl: bool,
 };
 pub const LogicOp = enum(u3) {
-    jl_or_k = 0,
-    jl_nor_k = 1,
-    jl_and_k = 2,
-    jl_nand_k = 3,
-    jl_xor_k = 4,
-    count_k = 5,
-    count_trailing_k = 6,
-    count_leading_k = 7,
+    jl_and_k = 0,
+    jl_nand_k = 1,
+    jl_xor_k = 2,
+    jl_nor_k = 3,
+    jl_or_k = 4,
+    count_jl_or_k = 5,
+    count_trailing_jl_or_k = 6,
+    count_leading_jl_or_k = 7,
 };
 
 pub const MultMode = enum(u4) {

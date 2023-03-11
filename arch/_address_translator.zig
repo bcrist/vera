@@ -11,7 +11,9 @@ const opcode = ib.opcode;
 
 const zero_to_LH = cb.zero_to_LH;
 const reg_to_LL = cb.reg_to_LL;
+const op_reg_to_LL = cb.op_reg_to_LL;
 const reg32_to_L = cb.reg32_to_L;
+const op_reg32_to_L = cb.op_reg32_to_L;
 const L_to_SR = cb.L_to_SR;
 const load_next_insn = cb.load_next_insn;
 const exec_next_insn = cb.exec_next_insn;
@@ -19,97 +21,97 @@ const illegal_instruction = cb.illegal_instruction;
 const update_address_translation_from_L = cb.update_address_translation_from_L;
 const invalidate_address_translation_from_L = cb.invalidate_address_translation_from_L;
 
-pub fn _0018_001B() void {
+pub fn _1F00_1F3F() void {
     var mode: ControlSignals.BusMode = undefined;
     var dir: ControlSignals.BusDirection = undefined;
-    switch (opcode() & 0x3) {
-        0 => {
+    switch (opcode() & 0xF0) {
+        0x00 => {
             mode = .data;
             dir = .write;
-            encodingWithSuffix(.SAT, .W, .{});
+            encodingWithSuffix(.SAT, .W, .{ .Xa });
             //syntax("SAT.W");
         },
-        1 => {
+        0x10 => {
             mode = .data;
             dir = .read;
-            encodingWithSuffix(.SAT, .R, .{});
+            encodingWithSuffix(.SAT, .R, .{ .Xa });
             //syntax("SAT.R");
         },
-        2 => {
+        0x20 => {
             mode = .stack;
             dir = .read;
-            encodingWithSuffix(.SAT, .S, .{});
+            encodingWithSuffix(.SAT, .S, .{ .Xa });
             //syntax("SAT.S");
         },
-        3 => {
+        0x30 => {
             mode = .insn;
             dir = .read;
-            encodingWithSuffix(.SAT, .I, .{});
+            encodingWithSuffix(.SAT, .I, .{ .Xa });
             //syntax("SAT.I");
         },
         else => unreachable,
     }
-    desc("Set address translation entry corresponding to X4 with data in X0; discard secondary entry if necessary");
+    desc("Set address translation entry corresponding to X0 with data in Xa; discard secondary entry if necessary");
 
     if (!kernel()) {
         illegal_instruction();
         return;
     }
 
-    reg32_to_L(4);
+    reg32_to_L(0);
     L_to_SR(.temp_1);
     load_next_insn(2);
     next_cycle();
 
+    op_reg32_to_L(.OA);
     update_address_translation_from_L(.temp_1, mode, dir);
-    reg32_to_L(0);
     exec_next_insn();
 }
 
-pub fn _0008_000B() void {
+pub fn _1F40_1F7F() void {
     var mode: ControlSignals.BusMode = undefined;
     var dir: ControlSignals.BusDirection = undefined;
-    switch (opcode() & 0x3) {
-        0 => {
+    switch (opcode() & 0xF0) {
+        0x40 => {
             mode = .data;
             dir = .write;
-            encodingWithSuffix(.RAT, .W, .{});
+            encodingWithSuffix(.RAT, .W, .{ .Ra });
             //syntax("RAT.W");
         },
-        1 => {
+        0x50 => {
             mode = .data;
             dir = .read;
-            encodingWithSuffix(.RAT, .R, .{});
+            encodingWithSuffix(.RAT, .R, .{ .Ra });
             //syntax("RAT.R");
         },
-        2 => {
+        0x60 => {
             mode = .stack;
             dir = .read;
-            encodingWithSuffix(.RAT, .S, .{});
+            encodingWithSuffix(.RAT, .S, .{ .Ra });
             //syntax("RAT.S");
         },
-        3 => {
+        0x70 => {
             mode = .insn;
             dir = .read;
-            encodingWithSuffix(.RAT, .I, .{});
+            encodingWithSuffix(.RAT, .I, .{ .Ra });
             //syntax("RAT.I");
         },
         else => unreachable,
     }
-    desc("Remove address translation entry or entries corresponding to X4 and tag mask R0");
+    desc("Remove address translation entry or entries corresponding to X0 with tag mask Ra");
 
     if (!kernel()) {
         illegal_instruction();
         return;
     }
 
-    reg32_to_L(4);
+    reg32_to_L(0);
     L_to_SR(.temp_1);
     load_next_insn(2);
     next_cycle();
 
-    invalidate_address_translation_from_L(.temp_1, mode, dir);
-    reg_to_LL(0);
     zero_to_LH();
+    op_reg_to_LL(.OA);
+    invalidate_address_translation_from_L(.temp_1, mode, dir);
     exec_next_insn();
 }

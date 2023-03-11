@@ -26,6 +26,7 @@ const L_to_SR = cb.L_to_SR;
 const D_to_L = cb.D_to_L;
 const D_to_LL = cb.D_to_LL;
 const D_to_LH = cb.D_to_LH;
+const D8_to_LL = cb.D8_to_LL;
 const op_reg_to_LL = cb.op_reg_to_LL;
 const op_reg_to_L = cb.op_reg_to_L;
 const op_reg32_to_L = cb.op_reg32_to_L;
@@ -83,22 +84,22 @@ pub fn _4B00_4BFF() void {
 }
 
 pub fn _4C00_4CFF() void {
-    encoding(.C, .{ IP_relative(.RaS), .to, .Xb });
-    //syntax("C IP+SRa -> Xb");
+    encoding(.C, .{ IP_relative(.RbS), .to, .Xa });
+    //syntax("C IP+SRb -> Xa");
     desc("Copy IP-relative address to 32b register");
 
-    SR_plus_op_reg_to_L(.ip, .OA, .sx, .fresh, .no_flags);
-    L_to_op_reg32(.OB);
+    SR_plus_op_reg_to_L(.ip, .OB, .sx, .fresh, .no_flags);
+    L_to_op_reg32(.OA);
     load_and_exec_next_insn(2);
 }
 
 pub fn _4D00_4DFF() void {
-    encoding(.C, .{ SP_relative(.RaS), .to, .Xb });
-    //syntax("C SP+SRa -> Xb");
+    encoding(.C, .{ SP_relative(.RbS), .to, .Xa });
+    //syntax("C SP+SRb -> Xa");
     desc("Copy SP-relative address to 32b register");
 
-    SR_plus_op_reg_to_L(.sp, .OA, .sx, .fresh, .no_flags);
-    L_to_op_reg32(.OB);
+    SR_plus_op_reg_to_L(.sp, .OB, .sx, .fresh, .no_flags);
+    L_to_op_reg32(.OA);
     load_and_exec_next_insn(2);
 }
 
@@ -249,7 +250,7 @@ pub fn _FB00_FB0F() void {
     desc("Copy immediate to 16b register");
 
     IP_read_to_D(2, .byte);
-    D_to_LL();
+    D8_to_LL(.zx);
     LL_to_op_reg(.OA);
     next_cycle();
 
@@ -372,7 +373,7 @@ pub fn _5900_59FF() void {
     //syntax("DUP Ra -> Xb");
     desc("Concatenate 16b register with itself, storing result in 32b register");
 
-    op_reg_to_JL(.OB);
+    op_reg_to_JL(.OA);
     JL_to_LL_and_LH();
     L_to_op_reg32(.OB);
     load_and_exec_next_insn(2);
@@ -519,6 +520,28 @@ pub fn _93E0_93EF() void {
 
     op_reg32_to_L(.OA);
     L_to_SR(.uxp);
+    next_cycle();
+
+    load_and_exec_next_insn(2);
+}
+
+pub fn _9380_938F() void {
+    encoding(.C, .{ .SP, .to, Xa_relative(.S, .imm_0) });
+    //syntax("C SP -> Xa");
+    desc("Copy stack pointer to 32b register");
+
+    SR_to_L(.sp);
+    L_to_op_reg32(.OA);
+    load_and_exec_next_insn(2);
+}
+
+pub fn _9390_939F() void {
+    encoding(.C, .{ Xa_relative(.S, .imm_0), .to, .SP });
+    //syntax("C Xa -> SP");
+    desc("Copy 32b register to stack pointer");
+
+    op_reg32_to_L(.OA);
+    L_to_SR(.sp);
     next_cycle();
 
     load_and_exec_next_insn(2);

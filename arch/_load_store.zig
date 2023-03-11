@@ -84,7 +84,7 @@ fn fromRegPointerPlusImmOffset(offset: SignedOffsetForLiteral) void {
 }
 
 fn fromSPPlusRegOffset() void {
-    SR_plus_op_reg_to_L(.sp, .OA, .sx, .fresh, .no_flags);
+    SR_plus_op_reg_to_L(.sp, .OB, .sx, .fresh, .no_flags);
     L_to_SR(.temp_1);
     load_next_insn(2);
     next_cycle();
@@ -565,54 +565,54 @@ pub fn _C060_C06F() void {
 
 // SP+reg load/store
 pub fn _BC00_BCFF() void {
-    encodingWithSuffix(.LD, .S, .{ SP_relative(.RaS), .to, .BbU });
-    //syntax("LD.S SP+SRa -> UBb");
+    encodingWithSuffix(.LD, .S, .{ SP_relative(.RbS), .to, .BaU });
+    //syntax("LD.S SP+SRb -> UBa");
     desc("Load unsigned byte from stack with 16b register offset");
     fromSPPlusRegOffset();
-    opLoad8(.OB, .stack, .zx, 0);
+    opLoad8(.OA, .stack, .zx, 0);
 }
 pub fn _BD00_BDFF() void {
-    encodingWithSuffix(.LD, .S, .{ SP_relative(.RaS), .to, .BbS });
-    //syntax("LD.S SP+SRa -> SBb");
+    encodingWithSuffix(.LD, .S, .{ SP_relative(.RbS), .to, .BaS });
+    //syntax("LD.S SP+SRb -> SBa");
     desc("Load signed byte from stack with 16b register offset");
     fromSPPlusRegOffset();
-    opLoad8(.OB, .stack, .sx, 0);
+    opLoad8(.OA, .stack, .sx, 0);
 }
 pub fn _BE00_BEFF() void {
-    encodingWithSuffix(.LD, .S, .{ SP_relative(.RaS), .to, .Rb });
-    //syntax("LD.S SP+SRa -> Rb");
+    encodingWithSuffix(.LD, .S, .{ SP_relative(.RbS), .to, .Ra });
+    //syntax("LD.S SP+SRb -> Ra");
     desc("Load 16b register from stack with 16b register offset");
     fromSPPlusRegOffset();
-    opLoad16(.OB, .stack, 0);
+    opLoad16(.OA, .stack, 0);
 }
 pub fn _BF00_BFFF() void {
-    encodingWithSuffix(.LD, .S, .{ SP_relative(.RaS), .to, .Xb });
-    //syntax("LD.S SP+SRa -> Xb");
+    encodingWithSuffix(.LD, .S, .{ SP_relative(.RbS), .to, .Xa });
+    //syntax("LD.S SP+SRb -> Xa");
     desc("Load 32b register from stack with 16b register offset");
     fromSPPlusRegOffset();
-    opLoad32(.OB, .stack, 0);
+    opLoad32(.OA, .stack, 0);
 }
 
 pub fn _2000_20FF() void {
-    encodingWithSuffix(.ST, .S, .{ .Bb, .to, SP_relative(.RaS) });
-    //syntax("ST.S Bb -> SP+SRa");
+    encodingWithSuffix(.ST, .S, .{ .Ba, .to, SP_relative(.RbS) });
+    //syntax("ST.S Ba -> SP+SRb");
     desc("Store byte to stack with 16b register offset");
     fromSPPlusRegOffset();
-    opStore8(.OB, .stack, 0);
+    opStore8(.OA, .stack, 0);
 }
 pub fn _2100_21FF() void {
-    encodingWithSuffix(.ST, .S, .{ .Rb, .to, SP_relative(.RaS) });
-    //syntax("ST.S Rb -> SP+SRa");
+    encodingWithSuffix(.ST, .S, .{ .Ra, .to, SP_relative(.RbS) });
+    //syntax("ST.S Ra -> SP+SRb");
     desc("Store 16b register to stack with 16b register offset");
     fromSPPlusRegOffset();
-    opStore16(.OB, .stack, 0);
+    opStore16(.OA, .stack, 0);
 }
 pub fn _2200_22FF() void {
-    encodingWithSuffix(.ST, .S, .{ .Xb, .to, SP_relative(.RaS) });
-    //syntax("ST.S Xb -> SP+SRa");
+    encodingWithSuffix(.ST, .S, .{ .Xa, .to, SP_relative(.RbS) });
+    //syntax("ST.S Xa -> SP+SRb");
     desc("Store 32b register to stack with 16b register offset");
     fromSPPlusRegOffset();
-    opStore32(.OB, .stack, 0);
+    opStore32(.OA, .stack, 0);
 }
 
 // postincrement load/store

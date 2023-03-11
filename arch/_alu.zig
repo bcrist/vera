@@ -324,14 +324,14 @@ pub fn _8500_86FF() void {
     var freshness: cb.Freshness = undefined;
     switch (opcode_high()) {
         0x85 => {
-            encoding(.SUB, .{ .imm8s, .Ra, .to, .Rb });
-            //syntax("SUB imm8[-128,127], Ra -> Rb");
+            encoding(.SUB, .{ .imm8s, .Rb, .to, .Ra });
+            //syntax("SUB imm8[-128,127], Rb -> Ra");
             desc("Subtract register from immediate and store result in another register");
             freshness = .fresh;
         },
         0x86 => {
-            encoding(.SUBB, .{ .imm8s, .Ra, .to, .Rb });
-            //syntax("SUBB imm8[-128,127], Ra -> Rb");
+            encoding(.SUBB, .{ .imm8s, .Rb, .to, .Ra });
+            //syntax("SUBB imm8[-128,127], Rb -> Ra");
             desc("Subtract register from immediate and store result in another register, with borrow");
             freshness = .cont;
         },
@@ -343,8 +343,8 @@ pub fn _8500_86FF() void {
     L_to_SR(.temp_1);
     next_cycle();
 
-    SRL_minus_op_reg_to_LL(.temp_1, .OA, freshness, .flags);
-    LL_to_op_reg(.OB);
+    SRL_minus_op_reg_to_LL(.temp_1, .OB, freshness, .flags);
+    LL_to_op_reg(.OA);
     load_and_exec_next_insn(3);
 }
 
@@ -352,14 +352,14 @@ pub fn _8700_88FF() void {
     var freshness: cb.Freshness = undefined;
     switch (opcode_high()) {
         0x87 => {
-            encoding(.SUB, .{ .imm16, .Ra, .to, .Rb });
-            //syntax("SUB imm16[0,65535], Ra -> Rb");
+            encoding(.SUB, .{ .imm16, .Rb, .to, .Ra });
+            //syntax("SUB imm16[0,65535], Rb -> Ra");
             desc("Subtract register from immediate and store result in another register");
             freshness = .fresh;
         },
         0x88 => {
-            encoding(.SUBB, .{ .imm16, .Ra, .to, .Rb });
-            //syntax("SUBB imm16[0,65535], Ra -> Rb");
+            encoding(.SUBB, .{ .imm16, .Rb, .to, .Ra });
+            //syntax("SUBB imm16[0,65535], Rb -> Ra");
             desc("Subtract register from immediate and store result in another register, with borrow");
             freshness = .cont;
         },
@@ -371,8 +371,8 @@ pub fn _8700_88FF() void {
     L_to_SR(.temp_1);
     next_cycle();
 
-    SRL_minus_op_reg_to_LL(.temp_1, .OA, freshness, .flags);
-    LL_to_op_reg(.OB);
+    SRL_minus_op_reg_to_LL(.temp_1, .OB, freshness, .flags);
+    LL_to_op_reg(.OA);
     load_and_exec_next_insn(4);
 }
 
@@ -491,25 +491,22 @@ pub fn _9360_937F() void {
     load_and_exec_next_insn(2);
 }
 
-pub fn _9380_939F() void {
-    var freshness: cb.Freshness = undefined;
-    switch (OB()) {
-        0x8 => {
-            encoding(.NEG, .{ .Ra, .to, .Ra });
-            //syntax("NEG Ra -> Ra");
-            desc("Negate 16b register");
-            freshness = .fresh;
-        },
-        0x9 => {
-            encoding(.NEGB, .{ .Ra, .to, .Ra });
-            //syntax("NEGB Ra -> Ra");
-            desc("Negate 16b register, with borrow");
-            freshness = .cont;
-        },
-        else => unreachable,
-    }
+pub fn _9400_94FF() void {
+    encoding(.NEG, .{ .Rb, .to, .Ra });
+    //syntax("NEG Rb -> Ra");
+    desc("Negate 16b register");
 
-    zero_minus_op_reg_to_LL(.OA, freshness, .flags);
+    zero_minus_op_reg_to_LL(.OB, .fresh, .flags);
+    L_to_op_reg32(.OA);
+    load_and_exec_next_insn(2);
+}
+
+pub fn _9500_95FF() void {
+    encoding(.NEGB, .{ .Rb, .to, .Ra });
+    //syntax("NEGB Rb -> Ra");
+    desc("Negate 16b register, with borrow");
+
+    zero_minus_op_reg_to_LL(.OB, .cont, .flags);
     L_to_op_reg32(.OA);
     load_and_exec_next_insn(2);
 }
@@ -529,13 +526,13 @@ pub fn _B000_B6FF() void {
     var mn: Mnemonic = undefined;
     var d: []const u8 = undefined;
     switch (opcode_high()) {
-        0xB0 => { mn = .XOR;    op = .jl_xor_k;     d = "Bitwise XOR of two 16b registers";},
-        0xB1 => { mn = .XNOR;   op = .jl_xnor_k;    d = "Bitwise XNOR of two 16b registers";},
-        0xB2 => { mn = .OR;     op = .jl_or_k;      d = "Bitwise OR of two 16b registers";},
-        0xB3 => { mn = .NOR;    op = .jl_nor_k;     d = "Bitwise NOR of two 16b registers";},
-        0xB4 => { mn = .AND;    op = .jl_and_k;     d = "Bitwise AND of two 16b registers";},
-        0xB5 => { mn = .NAND;   op = .jl_nand_k;    d = "Bitwise NAND of two 16b registers";},
-        0xB6 => { mn = .ANDNOT; op = .jl_and_not_k; d = "Bitwise AND of two 16b registers (second register is complemented)";},
+        0xB0 => { mn = .XOR;    op = .jl_xor_k;  d = "Bitwise XOR of two 16b registers"; },
+        0xB1 => { mn = .XNOR;   op = .jl_xnor_k; d = "Bitwise XNOR of two 16b registers"; },
+        0xB2 => { mn = .OR;     op = .jl_or_k;   d = "Bitwise OR of two 16b registers"; },
+        0xB3 => { mn = .NOR;    op = .jl_nor_k;  d = "Bitwise NOR of two 16b registers"; },
+        0xB4 => { mn = .AND;    op = .jl_and_k;  d = "Bitwise AND of two 16b registers"; },
+        0xB5 => { mn = .NAND;   op = .jl_nand_k; d = "Bitwise NAND of two 16b registers"; },
+        0xB6 => { mn = .ANDNOT; op = .njl_nor_k; d = "Bitwise AND of two 16b registers (second register is complemented)"; },
         else => unreachable,
     }
 
@@ -618,7 +615,7 @@ pub fn _A000_A0FF() void {
     //syntax("CLRB Ra, immb[0,15] -> Ra");
     desc("Clear single bit in 16b register");
 
-    op_reg_logic_literal_to_LL(.OA, .jl_and_not_k, @as(u16, 1) << OB(), .fresh, .flags);
+    op_reg_logic_literal_to_LL(.OA, .njl_nor_k, @as(u16, 1) << OB(), .fresh, .flags);
     LL_to_op_reg(.OA);
     load_and_exec_next_insn(2);
 }

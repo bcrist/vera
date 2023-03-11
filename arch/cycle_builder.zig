@@ -173,15 +173,12 @@ fn validateComputeMode(expected: ControlSignals.ComputeModeTag) void {
     }
 
     switch (mode) {
-        .logic => |logic_mode| {
-            const logic_mode_bits = @bitCast(ControlSignals.LogicModeBits, @enumToInt(logic_mode));
-            switch (logic_mode_bits.op) {
-                .count_k, .count_trailing_k, .count_leading_k => {},
-                else => validateJL(),
-            }
+        .logic, .mult => {
+            validateJL();
             validateK();
         },
-        .mult => {
+        .shift => {
+            validateJH();
             validateJL();
             validateK();
         },
@@ -190,11 +187,6 @@ fn validateComputeMode(expected: ControlSignals.ComputeModeTag) void {
             if (arith_mode_bits.width != .jl_k) {
                 validateJH();
             }
-            validateJL();
-            validateK();
-        },
-        .shift => {
-            validateJH();
             validateJL();
             validateK();
         },
@@ -385,6 +377,10 @@ pub fn zero_to_J() void {
 
 pub fn zero_to_JL() void {
     setControlSignal(.jl_src, .zero);
+}
+
+pub fn zero_to_JH() void {
+    setControlSignal(.jh_src, .zero);
 }
 
 pub fn neg_one_to_JH() void {
@@ -738,8 +734,16 @@ pub fn op_reg_to_L(which: OperandSelectionWithXor, ext: ZeroSignOrOneExtension) 
 }
 
 pub fn op_reg_to_LL(which: OperandSelectionWithXor) void {
-    op_reg_to_J(which, null);
-    JL_to_LL();
+    switch (which) {
+        .OA, .OAxor1 => {
+            op_reg_to_J(which, null);
+            JL_to_LL();
+        },
+        .OB, .OBxor1 => {
+            op_reg_to_K(which);
+            K_to_LL();
+        },
+    }
 }
 
 pub fn op_reg32_to_J(which: OperandSelectionWithXor) void {
@@ -785,12 +789,14 @@ pub fn JH_to_LH() void {
 }
 
 pub fn JH_to_LL() void {
+    zero_to_JL();
     zero_to_K();
     setControlSignal(.compute_mode, .{ .shift = .jh_shr_k4 });
     setControlSignal(.ll_src, .shift_l);
 }
 
 pub fn JL_to_LH() void {
+    zero_to_JH();
     zero_to_K();
     setControlSignal(.compute_mode, .{ .shift = .jh_shr_k4 });
     setControlSignal(.lh_src, .shift_h);
@@ -798,9 +804,9 @@ pub fn JL_to_LH() void {
 
 pub fn J_to_L() void {
     zero_to_K();
-    setControlSignal(.compute_mode, .{ .arith = .j_plus_k_zx });
-    setControlSignal(.ll_src, .arith_l);
-    setControlSignal(.lh_src, .arith_h);
+    setControlSignal(.compute_mode, .{ .shift = .j_shr_k5 });
+    setControlSignal(.ll_src, .shift_l);
+    setControlSignal(.lh_src, .shift_h);
 }
 
 pub fn K_to_L(ext: ZeroSignOrOneExtension) void {
@@ -812,6 +818,11 @@ pub fn K_to_L(ext: ZeroSignOrOneExtension) void {
     } });
     setControlSignal(.ll_src, .arith_l);
     setControlSignal(.lh_src, .arith_h);
+}
+pub fn K_to_LL() void {
+    zero_to_JL();
+    setControlSignal(.compute_mode, .{ .logic = .jl_xor_k });
+    setControlSignal(.ll_src, .logic);
 }
 
 pub fn STAT_to_LL() void {
@@ -1293,6 +1304,17 @@ pub fn SR_minus_literal_to_L(left: ControlSignals.AnySRIndex, right: i17, freshn
     sub_to_L(if (right < 0) ._1x else .zx, freshness, flags);
 }
 
+pub fn SR_plus_reg_to_L(left: ControlSignals.AnySRIndex, right: misc.RegisterIndex, ext: ZeroSignOrOneExtension, freshness: Freshness, flags: FlagsMode) void {
+    SR_to_J(left);
+    reg_to_K(right);
+    add_to_L(ext, freshness, flags);
+}
+pub fn SR_minus_reg_to_L(left: ControlSignals.AnySRIndex, right: misc.RegisterIndex, ext: ZeroSignOrOneExtension, freshness: Freshness, flags: FlagsMode) void {
+    SR_to_J(left);
+    reg_to_K(right);
+    sub_to_L(ext, freshness, flags);
+}
+
 pub fn SR_plus_op_reg_to_L(left: ControlSignals.AnySRIndex, right: OperandSelectionWithXor, ext: ZeroSignOrOneExtension, freshness: Freshness, flags: FlagsMode) void {
     SR_to_J(left);
     op_reg_to_K(right);
@@ -1561,12 +1583,13 @@ pub fn op_reg_shift_literal_to_LL(left: OperandSelectionWithXor, ext: ZeroSignOr
 }
 
 pub fn bitcount_op_reg_to_LL(which: OperandSelectionWithXor, mode: BitcountDirection, polarity: u1, flags: FlagsMode) void {
-    op_reg_to_K(which);
+    op_reg_to_JL(which);
+    zero_to_K();
 
     const logic_mode = switch (mode) {
-        .all      => switch (polarity) { 0 => ControlSignals.LogicMode.cz_k, 1 => .cb_k, },
-        .leading  => switch (polarity) { 0 => ControlSignals.LogicMode.clz_k, 1 => .clb_k, },
-        .trailing => switch (polarity) { 0 => ControlSignals.LogicMode.ctz_k, 1 => .ctb_k, },
+        .all      => switch (polarity) { 0 => ControlSignals.LogicMode.cz_jl_or_k, 1 => .cb_jl_or_k, },
+        .leading  => switch (polarity) { 0 => ControlSignals.LogicMode.clz_jl_or_k, 1 => .clb_jl_or_k, },
+        .trailing => switch (polarity) { 0 => ControlSignals.LogicMode.ctz_jl_or_k, 1 => .ctb_jl_or_k, },
     };
 
     setControlSignal(.compute_mode, .{ .logic = logic_mode });

@@ -40,7 +40,7 @@ pub fn getOrCreateUnconditionalContinuation(cycle: *ControlSignals) uc.Address {
 
         // occasionally useful for debugging changes that cause unexpected increases in continuation use:
         // if (@import("instruction_builder.zig").insn) |i| {
-        //     std.debug.print("Allocating continuation {}:\n", .{ n });
+        //     std.debug.print("Allocating continuation {X:0>3}:\n", .{ n });
         //     @import("instruction_builder.zig").printCyclePath(i.initial_uc_address, i.encoding);
         // }
 
@@ -138,6 +138,27 @@ pub fn recordInstruction(insn: InstructionEncoding, desc: ?[]const u8) void {
 
 pub fn getInstructionByOpcode(opcode: Opcode) ?*InstructionEncoding {
     return instructions[opcode];
+}
+
+pub fn analyzeCustom(temp_arena: *TempAllocator, writer: anytype) !void {
+    temp_arena.reset();
+    for (microcode, 0..) |maybe_cycle, ua_usize| {
+        if (maybe_cycle) |cycle| {
+            switch (cycle.kr_rsel) {
+                .oa => {
+                    const ua = @intCast(uc.Address, ua_usize);
+                    if (uc.getOpcodeForAddress(ua)) |opcode| {
+                        try writer.print("kr_rsel is {} for opcode {X:0>4}\n", .{ cycle.kr_rsel, opcode });
+                    } else if (uc.getContinuationNumberForAddress(ua)) |cont| {
+                        try writer.print("kr_rsel is {} for continuation {X:0>3}\n", .{ cycle.kr_rsel, cont });
+                    } else {
+                        try writer.print("kr_rsel is {} for address {X:0>4}\n", .{ cycle.kr_rsel, ua });
+                    }
+                },
+                else => {},
+            }
+        }
+    }
 }
 
 pub fn analyzeControlSignalUsage(temp_arena: *TempAllocator, comptime signals: []const ControlSignals.SignalName, writer: anytype) !void {

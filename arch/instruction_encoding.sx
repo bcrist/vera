@@ -16,29 +16,21 @@
       (desc "Subtract immediate from stack pointer")
       (param constant (base-src IP_plus_2_16) (range 0 65535))
    )
-   (0008 0008 RAT W
-      (desc "Remove address translation entry or entries corresponding to X4 and tag mask R0")
+   (0006 0006 B
+      (desc "IP-relative unsigned register unconditional branch")
+      (param IP reg16 (reg 0 0))
    )
-   (0009 0009 RAT R
-      (desc "Remove address translation entry or entries corresponding to X4 and tag mask R0")
+   (0007 0007 B
+      (desc "IP-relative signed register unconditional branch")
+      (param IP reg16 (reg 0 0))
    )
-   (000A 000A RAT S
-      (desc "Remove address translation entry or entries corresponding to X4 and tag mask R0")
+   (0008 0008 UNFRAME
+      (desc "Add 16b register to stack pointer")
+      (param reg16 (reg 0 0))
    )
-   (000B 000B RAT I
-      (desc "Remove address translation entry or entries corresponding to X4 and tag mask R0")
-   )
-   (0018 0018 SAT W
-      (desc "Set address translation entry corresponding to X4 with data in X0; discard secondary entry if necessary")
-   )
-   (0019 0019 SAT R
-      (desc "Set address translation entry corresponding to X4 with data in X0; discard secondary entry if necessary")
-   )
-   (001A 001A SAT S
-      (desc "Set address translation entry corresponding to X4 with data in X0; discard secondary entry if necessary")
-   )
-   (001B 001B SAT I
-      (desc "Set address translation entry corresponding to X4 with data in X0; discard secondary entry if necessary")
+   (0009 0009 FRAME
+      (desc "Subtract 16b register from stack pointer")
+      (param reg16 (reg 0 0))
    )
    (0100 013C B
       (desc "IP-relative unconditional branch")
@@ -572,20 +564,52 @@
       (param reg32 (base-src OA))
       (param -> SP constant (offset-src OB) (range 0 60) (align 4))
    )
+   (1F00 1F0F SAT W
+      (desc "Set address translation entry corresponding to X0 with data in Xa; discard secondary entry if necessary")
+      (param reg32 (base-src OA))
+   )
+   (1F10 1F1F SAT R
+      (desc "Set address translation entry corresponding to X0 with data in Xa; discard secondary entry if necessary")
+      (param reg32 (base-src OA))
+   )
+   (1F20 1F2F SAT S
+      (desc "Set address translation entry corresponding to X0 with data in Xa; discard secondary entry if necessary")
+      (param reg32 (base-src OA))
+   )
+   (1F30 1F3F SAT I
+      (desc "Set address translation entry corresponding to X0 with data in Xa; discard secondary entry if necessary")
+      (param reg32 (base-src OA))
+   )
+   (1F40 1F4F RAT W
+      (desc "Remove address translation entry or entries corresponding to X0 with tag mask Ra")
+      (param reg16 (base-src OA))
+   )
+   (1F50 1F5F RAT R
+      (desc "Remove address translation entry or entries corresponding to X0 with tag mask Ra")
+      (param reg16 (base-src OA))
+   )
+   (1F60 1F6F RAT S
+      (desc "Remove address translation entry or entries corresponding to X0 with tag mask Ra")
+      (param reg16 (base-src OA))
+   )
+   (1F70 1F7F RAT I
+      (desc "Remove address translation entry or entries corresponding to X0 with tag mask Ra")
+      (param reg16 (base-src OA))
+   )
    (2000 20FF ST S
       (desc "Store byte to stack with 16b register offset")
-      (param reg8 (base-src OB))
-      (param -> SP reg16s (offset-src OA))
+      (param reg8 (base-src OA))
+      (param -> SP reg16s (offset-src OB))
    )
    (2100 21FF ST S
       (desc "Store 16b register to stack with 16b register offset")
-      (param reg16 (base-src OB))
-      (param -> SP reg16s (offset-src OA))
+      (param reg16 (base-src OA))
+      (param -> SP reg16s (offset-src OB))
    )
    (2200 22FF ST S
       (desc "Store 32b register to stack with 16b register offset")
-      (param reg32 (base-src OB))
-      (param -> SP reg16s (offset-src OA))
+      (param reg32 (base-src OA))
+      (param -> SP reg16s (offset-src OB))
    )
    (2300 23FF STI D
       (desc "Store byte using pointer to data memory; postincrement")
@@ -661,25 +685,25 @@
       (param reg32 (base-src OB))
       (param -> ptr32d (base-src OA))
    )
-   (3800 38FF AINC D
-      (desc "16b Atomic increment using pointer to data memory")
+   (3800 380F AINC D
+      (desc "16b Atomic increment using pointer to data memory, overwriting pointer with new value")
       (param ptr32d (base-src OA))
-      (param -> reg16 (base-src OB))
+      (param -> reg16 (base-src OA))
    )
    (3900 39FF AINC D
-      (desc "32b Atomic increment using pointer to data memory")
+      (desc "32b Atomic increment using pointer to data memory, overwriting pointer with new value")
       (param ptr32d (base-src OA))
-      (param -> reg32 (base-src OB))
+      (param -> reg32 (base-src OA))
    )
-   (3A00 3AFF ADECNZ D
-      (desc "16b Atomic decrement using pointer to data memory, if stored value is not zero")
+   (3A00 3A0F ADECNZ D
+      (desc "16b Atomic decrement using pointer to data memory, if stored value is not zero.  Overwrites address with final value.")
       (param ptr32d (base-src OA))
-      (param -> reg16 (base-src OB))
+      (param -> reg16 (base-src OA))
    )
-   (3B00 3BFF ADECNZ D
-      (desc "32b Atomic decrement using pointer to data memory, if stored value is not zero")
+   (3B00 3B0F ADECNZ D
+      (desc "32b Atomic decrement using pointer to data memory, if stored value is not zero.  Overwrites address with final value.")
       (param ptr32d (base-src OA))
-      (param -> reg32 (base-src OB))
+      (param -> reg32 (base-src OA))
    )
    (3C00 3C0F AX D
       (desc "16b Atomic exchange using pointer to data memory")
@@ -733,13 +757,13 @@
    )
    (4C00 4CFF C
       (desc "Copy IP-relative address to 32b register")
-      (param IP reg16s (offset-src OA))
-      (param -> reg32 (base-src OB))
+      (param IP reg16s (offset-src OB))
+      (param -> reg32 (base-src OA))
    )
    (4D00 4DFF C
       (desc "Copy SP-relative address to 32b register")
-      (param SP reg16s (offset-src OA))
-      (param -> reg32 (base-src OB))
+      (param SP reg16s (offset-src OB))
+      (param -> reg32 (base-src OA))
    )
    (4E00 4EFF C
       (desc "Copy IP-relative (immediate offset) address to 32b register")
@@ -955,26 +979,26 @@
    (8500 85FF SUB
       (desc "Subtract register from immediate and store result in another register")
       (param constant (base-src IP_plus_2_8) (range 0 127) (range -128 -1))
-      (param reg16 (base-src OA))
-      (param -> reg16 (base-src OB))
+      (param reg16 (base-src OB))
+      (param -> reg16 (base-src OA))
    )
    (8600 86FF SUBB
       (desc "Subtract register from immediate and store result in another register, with borrow")
       (param constant (base-src IP_plus_2_8) (range 0 127) (range -128 -1))
-      (param reg16 (base-src OA))
-      (param -> reg16 (base-src OB))
+      (param reg16 (base-src OB))
+      (param -> reg16 (base-src OA))
    )
    (8700 87FF SUB
       (desc "Subtract register from immediate and store result in another register")
       (param constant (base-src IP_plus_2_16) (range 0 65535) (alt-range 0 32767) (alt-range -32768 -1))
-      (param reg16 (base-src OA))
-      (param -> reg16 (base-src OB))
+      (param reg16 (base-src OB))
+      (param -> reg16 (base-src OA))
    )
    (8800 88FF SUBB
       (desc "Subtract register from immediate and store result in another register, with borrow")
       (param constant (base-src IP_plus_2_16) (range 0 65535) (alt-range 0 32767) (alt-range -32768 -1))
-      (param reg16 (base-src OA))
-      (param -> reg16 (base-src OB))
+      (param reg16 (base-src OB))
+      (param -> reg16 (base-src OA))
    )
    (8900 89FF SUB
       (desc "Subtract register from another register")
@@ -1048,15 +1072,15 @@
       (param reg32 (base-src OA))
       (param -> reg32 (base-src OA))
    )
-   (9380 938F NEG
-      (desc "Negate 16b register")
-      (param reg16 (base-src OA))
-      (param -> reg16 (base-src OA))
+   (9380 938F C
+      (desc "Copy stack pointer to 32b register")
+      (param SP)
+      (param -> ptr32s (base-src OA))
    )
-   (9390 939F NEGB
-      (desc "Negate 16b register, with borrow")
-      (param reg16 (base-src OA))
-      (param -> reg16 (base-src OA))
+   (9390 939F C
+      (desc "Copy 32b register to stack pointer")
+      (param ptr32s (base-src OA))
+      (param -> SP)
    )
    (93A0 93AF NOT
       (desc "Bitwise complement of 16b register")
@@ -1082,6 +1106,16 @@
       (desc "Copy 32b register to user context pointer")
       (param ptr32d (base-src OA))
       (param -> UXP)
+   )
+   (9400 94FF NEG
+      (desc "Negate 16b register")
+      (param reg16 (base-src OB))
+      (param -> reg16 (base-src OA))
+   )
+   (9500 95FF NEGB
+      (desc "Negate 16b register, with borrow")
+      (param reg16 (base-src OB))
+      (param -> reg16 (base-src OA))
    )
    (9800 98FF LDI D
       (desc "Load unsigned byte using pointer to data memory; postincrement")
@@ -1205,23 +1239,23 @@
    )
    (BC00 BCFF LD S
       (desc "Load unsigned byte from stack with 16b register offset")
-      (param SP reg16s (offset-src OA))
-      (param -> reg8u (base-src OB))
+      (param SP reg16s (offset-src OB))
+      (param -> reg8u (base-src OA))
    )
    (BD00 BDFF LD S
       (desc "Load signed byte from stack with 16b register offset")
-      (param SP reg16s (offset-src OA))
-      (param -> reg8s (base-src OB))
+      (param SP reg16s (offset-src OB))
+      (param -> reg8s (base-src OA))
    )
    (BE00 BEFF LD S
       (desc "Load 16b register from stack with 16b register offset")
-      (param SP reg16s (offset-src OA))
-      (param -> reg16 (base-src OB))
+      (param SP reg16s (offset-src OB))
+      (param -> reg16 (base-src OA))
    )
    (BF00 BFFF LD S
       (desc "Load 32b register from stack with 16b register offset")
-      (param SP reg16s (offset-src OA))
-      (param -> reg32 (base-src OB))
+      (param SP reg16s (offset-src OB))
+      (param -> reg32 (base-src OA))
    )
    (C000 C00F LD S
       (desc "Load unsigned byte from stack with immediate offset")
@@ -1645,14 +1679,6 @@
       (desc "Call register-addressed subroutine")
       (param ptr32i (base-src OA))
    )
-   (FA90 FA9F B
-      (desc "IP-relative unsigned register unconditional branch")
-      (param IP reg16u (offset-src OA))
-   )
-   (FAA0 FAAF B
-      (desc "IP-relative signed register unconditional branch")
-      (param IP reg16s (offset-src OA))
-   )
    (FAB0 FABF B
       (desc "Register unconditional branch")
       (param ptr32i (base-src OA))
@@ -1713,14 +1739,6 @@
       (desc "Copy 32b register to stack pointer")
       (param ptr32s (base-src OA))
       (param -> SP)
-   )
-   (FB90 FB9F UNFRAME
-      (desc "Add 16b register to stack pointer")
-      (param reg16s (base-src OA))
-   )
-   (FBA0 FBAF FRAME
-      (desc "Subtract 16b register from stack pointer")
-      (param reg16s (base-src OA))
    )
    (FBD0 FBDF C
       (desc "Copy status register to 16b register")

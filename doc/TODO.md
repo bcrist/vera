@@ -1,3 +1,7 @@
+## Keep track of "don't care" control signals
+## Allow KSource.literal_special to generate 0xFF and 0x00FF
+Fix BB, BBN instructions in _branch.zig
+
 ## Add gui to simulator
 Single step control
 Register views for pipe 0/1/2
@@ -28,13 +32,11 @@ Error console
 ## Consider Shifter overflow flag - if any shifted out bits differ from the last bit that wasn't shifted out
 ## Consider removing wait states
 
-## Rework logic unit
-Fix BB, BBN instructions in _branch.zig
-
 ## Handle alias_XXXX functions in microcode generator (see alias_0100 -> NOPE)
 ## Do conditional continuations by passing a function pointer, rather than the continuation number (and relying on )
 
 ## block memcpy instruction that uses PSRAM?
+## count zeroes with mask instruction?
 
 ## Implement interrupt controller
 ## Improve SST39VF802C emulation accuracy in memory.zig (timing, status polling, IDs, write protection, etc.)

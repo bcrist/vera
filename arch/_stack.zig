@@ -26,8 +26,8 @@ const SRL_to_K = cb.SRL_to_K;
 const SRL_to_LL = cb.SRL_to_LL;
 const SRH_to_LL = cb.SRH_to_LL;
 const SR_plus_literal_to_L = cb.SR_plus_literal_to_L;
-const SR_plus_op_reg_to_L = cb.SR_plus_op_reg_to_L;
-const SR_minus_op_reg_to_L = cb.SR_minus_op_reg_to_L;
+const SR_plus_reg_to_L = cb.SR_plus_reg_to_L;
+const SR_minus_reg_to_L = cb.SR_minus_reg_to_L;
 const SR_minus_literal_to_L = cb.SR_minus_literal_to_L;
 const add_to_L = cb.add_to_L;
 const sub_to_L = cb.sub_to_L;
@@ -45,22 +45,22 @@ pub fn _FB80_FB8F() void {
     load_and_exec_next_insn(2);
 }
 
-pub fn _FB90_FB9F() void {
-    encoding(.UNFRAME, .{ .RaS });
+pub fn _0008() void {
+    encoding(.UNFRAME, .{ .R0 });
     //syntax("UNFRAME SRa");
     desc("Add 16b register to stack pointer");
 
-    SR_plus_op_reg_to_L(.sp, .OA, .sx, .fresh, .no_flags);
+    SR_plus_reg_to_L(.sp, 0, .sx, .fresh, .no_flags);
     L_to_SR(.sp);
     load_and_exec_next_insn(2);
 }
 
-pub fn _FBA0_FBAF() void {
-    encoding(.FRAME, .{ .RaS });
+pub fn _0009() void {
+    encoding(.FRAME, .{ .R0 });
     //syntax("FRAME SRa");
     desc("Subtract 16b register from stack pointer");
 
-    SR_minus_op_reg_to_L(.sp, .OA, .sx, .fresh, .no_flags);
+    SR_minus_reg_to_L(.sp, 0, .sx, .fresh, .no_flags);
     L_to_SR(.sp);
     load_and_exec_next_insn(2);
 }

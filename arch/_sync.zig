@@ -211,8 +211,8 @@ pub fn _3600_36FF() void {
     next_cycle();
 
     atomic_this_cycle();
-    op_reg_to_JL(.OB);
-    reg_to_K(0);
+    op_reg_to_K(.OB);
+    reg_to_JL(0);
     add_to_LL(.fresh, .flags);
     LL_to_reg(0);
     write_from_LL(.temp_1, 0, .word, .data);
@@ -242,16 +242,16 @@ pub fn _3700_37FF() void {
     next_cycle();
 
     atomic_this_cycle();
-    op_reg_to_JL(.OB);
-    reg_to_K(0);
+    op_reg_to_K(.OB);
+    reg_to_JL(0);
     add_to_LL(.fresh, .flags);
     LL_to_reg(0);
     write_from_LL(.temp_1, 0, .word, .data);
     next_cycle();
 
     atomic_this_cycle();
-    op_reg_to_JL(.OBxor1);
-    reg_to_K(0);
+    op_reg_to_K(.OBxor1);
+    reg_to_JL(0);
     add_to_LL(.cont, .flags);
     LL_to_reg(1);
     write_from_LL(.temp_1, 2, .word, .data);
@@ -261,10 +261,10 @@ pub fn _3700_37FF() void {
 // Atomic increment & decrement
 // Useful for implementing semaphores, mutexes, and latches
 
-pub fn _3800_38FF() void {
-    encodingWithSuffix(.AINC, .D, .{ Xa_relative(.D, .imm_0), .to, .Rb });
-    //syntax("AINC.D Xa -> Rb");
-    desc("16b Atomic increment using pointer to data memory");
+pub fn _3800_380F() void {
+    encodingWithSuffix(.AINC, .D, .{ Xa_relative(.D, .imm_0), .to, .Ra });
+    //syntax("AINC.D Xa -> Ra");
+    desc("16b Atomic increment using pointer to data memory, overwriting pointer with new value");
 
     op_reg32_to_L(.OA);
     L_to_SR(.temp_1);
@@ -274,20 +274,20 @@ pub fn _3800_38FF() void {
     atomic_this_cycle();
     read_to_D(.temp_1, 0, .word, .data);
     D_to_LL();
-    LL_to_op_reg(.OB);
+    LL_to_op_reg(.OA);
     next_cycle();
 
     atomic_this_cycle();
-    op_reg_plus_literal_to_LL(.OB, 1, .fresh, .flags);
-    LL_to_op_reg(.OB);
+    op_reg_plus_literal_to_LL(.OA, 1, .fresh, .flags);
+    LL_to_op_reg(.OA);
     write_from_LL(.temp_1, 0, .word, .data);
     exec_next_insn();
 }
 
 pub fn _3900_39FF() void {
-    encodingWithSuffix(.AINC, .D, .{ Xa_relative(.D, .imm_0), .to, .Xb });
-    //syntax("AINC.D Xa -> Xb");
-    desc("32b Atomic increment using pointer to data memory");
+    encodingWithSuffix(.AINC, .D, .{ Xa_relative(.D, .imm_0), .to, .Xa });
+    //syntax("AINC.D Xa -> Xa");
+    desc("32b Atomic increment using pointer to data memory, overwriting pointer with new value");
 
     op_reg32_to_L(.OA);
     L_to_SR(.temp_1);
@@ -297,31 +297,31 @@ pub fn _3900_39FF() void {
     atomic_this_cycle();
     read_to_D(.temp_1, 0, .word, .data);
     D_to_LL();
-    LL_to_op_reg(.OB);
+    LL_to_op_reg(.OA);
     next_cycle();
 
     atomic_this_cycle();
     read_to_D(.temp_1, 2, .word, .data);
     D_to_LL();
-    LL_to_op_reg(.OBxor1);
+    LL_to_op_reg(.OAxor1);
     next_cycle();
 
     atomic_this_cycle();
-    op_reg32_plus_literal_to_L(.OB, 1, .fresh, .flags);
-    L_to_op_reg32(.OB);
+    op_reg32_plus_literal_to_L(.OA, 1, .fresh, .flags);
+    L_to_op_reg32(.OA);
     write_from_LL(.temp_1, 0, .word, .data);
     next_cycle();
 
     atomic_this_cycle();
-    op_reg_to_LL(.OBxor1);
+    op_reg_to_LL(.OAxor1);
     write_from_LL(.temp_1, 2, .word, .data);
     exec_next_insn();
 }
 
-pub fn _3A00_3AFF() void {
-    encodingWithSuffix(.ADECNZ, .D, .{ Xa_relative(.D, .imm_0), .to, .Rb });
+pub fn _3A00_3A0F() void {
+    encodingWithSuffix(.ADECNZ, .D, .{ Xa_relative(.D, .imm_0), .to, .Ra });
     //syntax("ADECNZ.D Xa -> Rb");
-    desc("16b Atomic decrement using pointer to data memory, if stored value is not zero");
+    desc("16b Atomic decrement using pointer to data memory, if stored value is not zero.  Overwrites address with final value.");
 
     op_reg32_to_L(.OA);
     L_to_SR(.temp_1);
@@ -331,7 +331,7 @@ pub fn _3A00_3AFF() void {
     atomic_this_cycle();
     read_to_D(.temp_1, 0, .word, .data);
     D_to_LL();
-    LL_to_op_reg(.OB);
+    LL_to_op_reg(.OA);
     ZN_from_LL(.fresh);
     conditional_next_cycle(0x222);
 }
@@ -341,17 +341,17 @@ pub fn _continuation_222() void {
         exec_next_insn();
     } else {
         atomic_this_cycle();
-        op_reg_minus_literal_to_LL(.OB, 1, .fresh, .no_flags);
-        LL_to_op_reg(.OB);
+        op_reg_minus_literal_to_LL(.OA, 1, .fresh, .no_flags);
+        LL_to_op_reg(.OA);
         write_from_LL(.temp_1, 0, .word, .data);
         exec_next_insn();
     }
 }
 
-pub fn _3B00_3BFF() void {
-    encodingWithSuffix(.ADECNZ, .D, .{ Xa_relative(.D, .imm_0), .to, .Xb });
-    //syntax("ADECNZ.D Xa -> Xb");
-    desc("32b Atomic decrement using pointer to data memory, if stored value is not zero");
+pub fn _3B00_3B0F() void {
+    encodingWithSuffix(.ADECNZ, .D, .{ Xa_relative(.D, .imm_0), .to, .Xa });
+    //syntax("ADECNZ.D Xa -> Xa");
+    desc("32b Atomic decrement using pointer to data memory, if stored value is not zero.  Overwrites address with final value.");
 
     op_reg32_to_L(.OA);
     L_to_SR(.temp_1);
@@ -361,14 +361,14 @@ pub fn _3B00_3BFF() void {
     atomic_this_cycle();
     read_to_D(.temp_1, 0, .word, .data);
     D_to_LL();
-    LL_to_op_reg(.OB);
+    LL_to_op_reg(.OA);
     ZN_from_LL(.fresh);
     next_cycle();
 
     atomic_this_cycle();
     read_to_D(.temp_1, 2, .word, .data);
     D_to_LL();
-    LL_to_op_reg(.OBxor1);
+    LL_to_op_reg(.OAxor1);
     ZN_from_LL(.cont);
     conditional_next_cycle(0x223);
 }
@@ -378,13 +378,13 @@ pub fn _continuation_223() void {
         exec_next_insn();
     } else {
         atomic_this_cycle();
-        op_reg32_minus_literal_to_L(.OB, 1, .fresh, .no_flags);
-        L_to_op_reg32(.OB);
+        op_reg32_minus_literal_to_L(.OA, 1, .fresh, .no_flags);
+        L_to_op_reg32(.OA);
         write_from_LL(.temp_1, 0, .word, .data);
         next_cycle();
 
         atomic_this_cycle();
-        op_reg_to_LL(.OBxor1);
+        op_reg_to_LL(.OAxor1);
         write_from_LL(.temp_1, 2, .word, .data);
         exec_next_insn();
     }

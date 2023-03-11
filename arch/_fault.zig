@@ -81,10 +81,10 @@ fn vectored_fault_handler(zeropage_vector: u5) void {
 
     // Switch to fault registerset:
     toggle_rsn();
-    // Copy data about last MMU op into X4
+    // Copy data about last MMU op into X0
     // For page faults, this is critical for knowing what page to load
     last_translation_info_to_L();
-    L_to_reg32(4);
+    L_to_reg32(0);
     next_cycle();
 
     // May need to update ASN after changing RSN
