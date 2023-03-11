@@ -9,11 +9,10 @@ const next_cycle = ib.next_cycle;
 
 const IP_read_to_D = cb.IP_read_to_D;
 const read_to_D = cb.read_to_D;
-const JL_to_LL = cb.JL_to_LL;
 const D_to_L = cb.D_to_L;
 const D_to_LH = cb.D_to_LH;
 const L_to_SR = cb.L_to_SR;
-const SR_to_J = cb.SR_to_J;
+const SRL_to_LL = cb.SRL_to_LL;
 const SR_plus_SRL_to_L = cb.SR_plus_SRL_to_L;
 const SR_plus_literal_to_L = cb.SR_plus_literal_to_L;
 const branch = cb.branch;
@@ -70,8 +69,7 @@ pub fn _0183() void {
 
     IP_read_to_D(4, .word);
     D_to_LH();
-    SR_to_J(.temp_1);
-    JL_to_LL();
+    SRL_to_LL(.temp_1);
     L_to_SR(.next_ip);
     next_cycle();
 

@@ -31,6 +31,8 @@ const write_from_LL = cb.write_from_LL;
 const write_from_DL = cb.write_from_DL;
 const read_to_D = cb.read_to_D;
 const D_to_L = cb.D_to_L;
+const D_to_LL = cb.D_to_LL;
+const D8_to_LL = cb.D8_to_LL;
 const D_to_DL = cb.D_to_DL;
 const load_next_insn = cb.load_next_insn;
 const exec_next_insn_no_atomic_end = cb.exec_next_insn_no_atomic_end;
@@ -107,9 +109,9 @@ fn fromSPPlusImm16Offset() void {
     next_cycle();
 }
 
-fn opLoad8(reg: cb.OperandSelection, bus_mode: ControlSignals.BusMode, ext: cb.ZeroSignOrOneExtension, offset: SignedOffsetForLiteral) void {
+fn opLoad8(reg: cb.OperandSelection, bus_mode: ControlSignals.BusMode, ext: cb.ZeroOrSignExtension, offset: SignedOffsetForLiteral) void {
     read_to_D(.temp_1, offset, .byte, bus_mode);
-    D_to_L(ext);
+    D8_to_LL(ext);
     LL_to_op_reg(switch (reg) {
         .OA => .OA,
         .OB => .OB,
@@ -118,7 +120,7 @@ fn opLoad8(reg: cb.OperandSelection, bus_mode: ControlSignals.BusMode, ext: cb.Z
 }
 fn opLoad16(reg: cb.OperandSelection, bus_mode: ControlSignals.BusMode, offset: SignedOffsetForLiteral) void {
     read_to_D(.temp_1, offset, .word, bus_mode);
-    D_to_L(.zx);
+    D_to_LL();
     LL_to_op_reg(switch (reg) {
         .OA => .OA,
         .OB => .OB,
@@ -127,7 +129,7 @@ fn opLoad16(reg: cb.OperandSelection, bus_mode: ControlSignals.BusMode, offset: 
 }
 fn opLoad32(reg: cb.OperandSelection, bus_mode: ControlSignals.BusMode, offset: SignedOffsetForLiteral) void {
     read_to_D(.temp_1, offset, .word, bus_mode);
-    D_to_L(.zx);
+    D_to_LL();
     LL_to_op_reg(switch (reg) {
         .OA => .OA,
         .OB => .OB,
@@ -135,7 +137,7 @@ fn opLoad32(reg: cb.OperandSelection, bus_mode: ControlSignals.BusMode, offset: 
     next_cycle();
 
     read_to_D(.temp_1, offset + 2, .word, bus_mode);
-    D_to_L(.zx);
+    D_to_LL();
     LL_to_op_reg(switch (reg) {
         .OA => .OAxor1,
         .OB => .OBxor1,
@@ -143,26 +145,26 @@ fn opLoad32(reg: cb.OperandSelection, bus_mode: ControlSignals.BusMode, offset: 
     exec_next_insn_no_atomic_end();
 }
 
-fn load8(reg: misc.RegisterIndex, bus_mode: ControlSignals.BusMode, ext: cb.ZeroSignOrOneExtension, offset: SignedOffsetForLiteral) void {
+fn load8(reg: misc.RegisterIndex, bus_mode: ControlSignals.BusMode, ext: cb.ZeroOrSignExtension, offset: SignedOffsetForLiteral) void {
     read_to_D(.temp_1, offset, .byte, bus_mode);
-    D_to_L(ext);
+    D8_to_LL(ext);
     LL_to_reg(reg);
     exec_next_insn_no_atomic_end();
 }
 fn load16(reg: misc.RegisterIndex, bus_mode: ControlSignals.BusMode, offset: SignedOffsetForLiteral) void {
     read_to_D(.temp_1, offset, .word, bus_mode);
-    D_to_L(.zx);
+    D_to_LL();
     LL_to_reg(reg);
     exec_next_insn_no_atomic_end();
 }
 fn load32(reg: misc.RegisterIndex, bus_mode: ControlSignals.BusMode, offset: SignedOffsetForLiteral) void {
     read_to_D(.temp_1, offset, .word, bus_mode);
-    D_to_L(.zx);
+    D_to_LL();
     LL_to_reg(reg);
     next_cycle();
 
     read_to_D(.temp_1, offset + 2, .word, bus_mode);
-    D_to_L(.zx);
+    D_to_LL();
     LL_to_reg(reg ^ 1);
     exec_next_insn_no_atomic_end();
 }

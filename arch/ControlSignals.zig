@@ -247,7 +247,7 @@ pub const JHSource = enum(u3) {
     neg_one = 1,
     sx_jl = 2,
     // 3 unused
-    jrl = 4, // TODO unused?
+    // 4 unused
     jrh = 5,
     sr1h = 6,
     sr2h = 7,

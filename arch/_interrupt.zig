@@ -15,11 +15,10 @@ const uc_address = ib.uc_address;
 const zero_to_LL = cb.zero_to_LL;
 const pipe_id_to_LL = cb.pipe_id_to_LL;
 const STAT_to_LL = cb.STAT_to_LL;
-const JH_to_LL = cb.JH_to_LL;
 const SRL_to_LL = cb.SRL_to_LL;
-const JH_to_LH = cb.JH_to_LH;
+const SRH_to_LL = cb.SRH_to_LL;
+const SRH_to_LH = cb.SRH_to_LH;
 const literal_to_LH = cb.literal_to_LH;
-const SR1_to_J = cb.SR1_to_J;
 const LL_to_STAT = cb.LL_to_STAT;
 const LL_to_RSN = cb.LL_to_RSN;
 const L_to_SR = cb.L_to_SR;
@@ -39,8 +38,7 @@ pub fn _handler_7() void {
     const vector_register = physical_address.fromFrame(@enumToInt(physical_address.DeviceFrame.sys_interrupt_controller));
 
     // Persist STAT for when we return
-    SR1_to_J(.fault_rsn_stat);
-    JH_to_LH();
+    SRH_to_LH(.fault_rsn_stat);
     STAT_to_LL();
     L_to_SR1(.fault_rsn_stat);
     next_cycle();
@@ -78,8 +76,7 @@ pub fn _018C() void {
         return;
     }
 
-    SR1_to_J(.int_rsn_fault_ob_oa);
-    JH_to_LL();
+    SRH_to_LL(.int_rsn_fault_ob_oa);
     LL_to_RSN();
     next_cycle();
 

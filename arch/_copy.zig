@@ -24,6 +24,7 @@ const LL_to_op_reg = cb.LL_to_op_reg;
 const L_to_op_reg32 = cb.L_to_op_reg32;
 const L_to_SR = cb.L_to_SR;
 const D_to_L = cb.D_to_L;
+const D_to_LL = cb.D_to_LL;
 const D_to_LH = cb.D_to_LH;
 const op_reg_to_LL = cb.op_reg_to_LL;
 const op_reg_to_L = cb.op_reg_to_L;
@@ -36,7 +37,7 @@ const SRL_to_LL = cb.SRL_to_LL;
 const D_to_OB_OA = cb.D_to_OB_OA;
 const SR_to_L = cb.SR_to_L;
 const JL_to_LL_and_LH = cb.JL_to_LL_and_LH;
-const op_reg_to_J = cb.op_reg_to_J;
+const op_reg_to_JL = cb.op_reg_to_JL;
 const SR_minus_op_reg_to_L = cb.SR_minus_op_reg_to_L;
 const STAT_to_L = cb.STAT_to_L;
 const LL_to_ZNVC = cb.LL_to_ZNVC;
@@ -248,7 +249,7 @@ pub fn _FB00_FB0F() void {
     desc("Copy immediate to 16b register");
 
     IP_read_to_D(2, .byte);
-    D_to_L(.zx);
+    D_to_LL();
     LL_to_op_reg(.OA);
     next_cycle();
 
@@ -274,7 +275,7 @@ pub fn _FB20_FB2F() void {
     desc("Copy immediate to 16b register");
 
     IP_read_to_D(2, .word);
-    D_to_L(.zx);
+    D_to_LL();
     LL_to_op_reg(.OA);
     next_cycle();
 
@@ -371,7 +372,7 @@ pub fn _5900_59FF() void {
     //syntax("DUP Ra -> Xb");
     desc("Concatenate 16b register with itself, storing result in 32b register");
 
-    op_reg_to_J(.OB, .zx);
+    op_reg_to_JL(.OB);
     JL_to_LL_and_LH();
     L_to_op_reg32(.OB);
     load_and_exec_next_insn(2);

@@ -226,7 +226,6 @@ pub fn setup(self: *const RegisterFile, in: SetupInputs) SetupOutputs {
                     .sr1l => @intCast(u1, sr1.low >> 15),
                     .sr2l => @intCast(u1, sr2.low >> 15),
                 }),
-                .jrl => jr.low,
                 .jrh => jr.high,
                 .sr1h => sr1.high,
                 .sr2h => sr2.high,

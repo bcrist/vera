@@ -360,7 +360,7 @@ fn doRegisterLine(
         zgui.text("{X:0>4}", .{ rf.readGPR(rsn, second_gpr) });
 
         var reads = [_]u8 {' '} ** 2;
-        if ((cs.jl_src == .jrl or cs.jh_src == .jrl or cs.jh_src == .sx_jl) and second_gpr == jr_index) {
+        if ((cs.jl_src == .jrl) and second_gpr == jr_index) {
             reads[0] = 'J';
         } else if (cs.jh_src == .jrh and second_gpr == (jr_index ^ 1)) {
             reads[0] = 'J';
@@ -389,7 +389,7 @@ fn doRegisterLine(
         zgui.text("{X:0>4}", .{ rf.readGPR(rsn, first_gpr) });
 
         var reads = [_]u8 {' '} ** 2;
-        if ((cs.jl_src == .jrl or cs.jh_src == .jrl or cs.jh_src == .sx_jl) and first_gpr == jr_index) {
+        if ((cs.jl_src == .jrl) and first_gpr == jr_index) {
             reads[0] = 'J';
         } else if (cs.jh_src == .jrh and first_gpr == (jr_index ^ 1)) {
             reads[0] = 'J';
@@ -471,17 +471,6 @@ fn doSetupLines(cs: ControlSignals, j: bus.JParts, k: bus.K, base: u32, offset: 
         .zero        => "  0000  ",
         .neg_one     => "  FFFF  ",
         .sx_jl       => "   SX   ",
-        .jrl => if (!cs.jr_rx) switch (cs.jr_rsel) {
-            .zero    => "  R(0)  ",
-            .literal => " R(lit) ",
-            .oa      => " R(OA)  ",
-            .ob      => " R(OB)  ",
-        } else switch (cs.jr_rsel) {
-            .zero    => " R(0^1) ",
-            .literal => "R(lit^1)",
-            .oa      => "R(OA^1) ",
-            .ob      => "R(OB^1) ",
-        },
         .jrh => if (cs.jr_rx) switch (cs.jr_rsel) {
             .zero    => "  R(0)  ",
             .literal => " R(lit) ",

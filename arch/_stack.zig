@@ -11,7 +11,9 @@ const write_from_LL = cb.write_from_LL;
 const read_to_D = cb.read_to_D;
 const IP_read_to_D = cb.IP_read_to_D;
 const D_to_L = cb.D_to_L;
+const D_to_LL = cb.D_to_LL;
 const D_to_LH = cb.D_to_LH;
+const D8_to_LL = cb.D8_to_LL;
 const op_reg_to_LL = cb.op_reg_to_LL;
 const L_to_SR = cb.L_to_SR;
 const L_to_op_reg32 = cb.L_to_op_reg32;
@@ -122,7 +124,7 @@ pub fn _0005() void {
 }
 
 pub fn _E480_E49F() void {
-    var ext: cb.ZeroSignOrOneExtension = undefined;
+    var ext: cb.ZeroOrSignExtension = undefined;
     switch (OB()) {
         0x8 => {
             encoding(.POP, .{ .BaU });
@@ -140,7 +142,7 @@ pub fn _E480_E49F() void {
     }
 
     read_to_D(.sp, 0, .byte, .stack);
-    D_to_L(ext);
+    D8_to_LL(ext);
     LL_to_op_reg(.OA);
     next_cycle();
 
@@ -155,7 +157,7 @@ pub fn _E4A0_E4AF() void {
     desc("Pop word from stack to 16b register");
 
     read_to_D(.sp, 0, .word, .stack);
-    D_to_L(.zx);
+    D_to_LL();
     LL_to_op_reg(.OA);
     next_cycle();
 

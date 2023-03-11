@@ -19,7 +19,7 @@ const zero = ib.zero;
 const illegal_instruction = cb.illegal_instruction;
 const load_and_exec_next_insn = cb.load_and_exec_next_insn;
 const block_transfer_to_ram = cb.block_transfer_to_ram;
-const reg_to_J = cb.reg_to_J;
+const reg_to_JL = cb.reg_to_JL;
 const reg32_to_J = cb.reg32_to_J;
 const literal_to_K = cb.literal_to_K;
 const OB_OA_to_K = cb.OB_OA_to_K;
@@ -155,7 +155,7 @@ pub fn _continuation_201() void {
     if (!zero()) {
         // We need to copy more data
         block_transfer_to_ram(.temp_1, 8, .raw);
-        reg_to_J(0, .zx);
+        reg_to_JL(0);
         reg_to_K(1);
         sub_to_LL(.fresh, .flags);
         LL_to_reg(0);

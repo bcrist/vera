@@ -38,7 +38,7 @@ const JL_to_LL = cb.JL_to_LL;
 const SR_minus_SRL_to_L = cb.SR_minus_SRL_to_L;
 const SR_plus_op_reg_to_L = cb.SR_plus_op_reg_to_L;
 const SR_plus_SRL_to_L = cb.SR_plus_SRL_to_L;
-const SR_to_J = cb.SR_to_J;
+const SRL_to_LL = cb.SRL_to_LL;
 const reg32_to_L = cb.reg32_to_L;
 const op_reg32_to_L = cb.op_reg32_to_L;
 const branch = cb.branch;
@@ -202,8 +202,7 @@ pub fn _0180() void {
     next_cycle();
 
     IP_read_to_D(4, .word);
-    SR_to_J(.temp_1);
-    JL_to_LL();
+    SRL_to_LL(.temp_1);
     D_to_LH();
     L_to_SR(.next_ip);
     next_cycle();

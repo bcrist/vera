@@ -207,7 +207,7 @@ fn validateJH() void {
         warn("Expected jh_src to be set for operation", .{});
     } else switch (cycle.jh_src) {
         .zero, .neg_one, .sx_jl => {},
-        .jrl, .jrh => {
+        .jrh => {
             ensureSet(.jr_rsel);
             ensureSet(.jr_rx);
         },
@@ -492,9 +492,24 @@ pub fn SR1H_to_JH(index: ControlSignals.SR1Index) void {
     setControlSignal(.jh_src, .sr1h);
 }
 
+pub fn SR1H_to_LH(index: ControlSignals.SR1Index) void {
+    SR1H_to_JH(index);
+    JH_to_LH();
+}
+
+pub fn SR1H_to_LL(index: ControlSignals.SR1Index) void {
+    SR1H_to_JH(index);
+    JH_to_LL();
+}
+
 pub fn SR1L_to_JL(index: ControlSignals.SR1Index) void {
     setControlSignal(.sr1_ri, index);
     setControlSignal(.jl_src, .sr1l);
+}
+
+pub fn SR1L_to_LL(index: ControlSignals.SR1Index) void {
+    SR1L_to_JL(index);
+    JL_to_LL();
 }
 
 pub fn SR1_to_J(index: ControlSignals.SR1Index) void {
@@ -521,6 +536,21 @@ pub fn SR2_to_J(index: ControlSignals.SR2Index) void {
 pub fn SR2H_to_JH(index: ControlSignals.SR2Index) void {
     setControlSignal(.sr2_ri, index);
     setControlSignal(.jh_src, .sr2h);
+}
+
+pub fn SR2H_to_LH(index: ControlSignals.SR2Index) void {
+    SR2H_to_JH(index);
+    JH_to_LH();
+}
+
+pub fn SR2H_to_LL(index: ControlSignals.SR2Index) void {
+    SR2H_to_JH(index);
+    JH_to_LL();
+}
+
+pub fn SR2L_to_LL(index: ControlSignals.SR2Index) void {
+    SR2L_to_JL(index);
+    JL_to_LL();
 }
 
 pub fn SR2L_to_JL(index: ControlSignals.SR2Index) void {
@@ -571,6 +601,15 @@ pub fn SRL_to_LL(which: ControlSignals.AnySRIndex) void {
     JL_to_LL();
 }
 
+pub fn SRH_to_LH(which: ControlSignals.AnySRIndex) void {
+    if (ControlSignals.addressBaseToSR1(which)) |sr1| {
+        SR1H_to_JH(sr1);
+    } else if (ControlSignals.addressBaseToSR2(which)) |sr2| {
+        SR2H_to_JH(sr2);
+    }
+    JH_to_LH();
+}
+
 pub fn SRH_to_LL(which: ControlSignals.AnySRIndex) void {
     if (ControlSignals.addressBaseToSR1(which)) |sr1| {
         SR1H_to_JH(sr1);
@@ -602,6 +641,9 @@ pub fn reg_to_J(register: misc.RegisterIndex, ext: ?ZeroSignOrOneExtension) void
         .zx => setControlSignal(.jh_src, .zero),
         .sx => setControlSignal(.jh_src, .sx_jl),
     };
+}
+pub fn reg_to_JL(register: misc.RegisterIndex) void {
+    reg_to_J(register, null);
 }
 
 pub fn reg_to_K(register: misc.RegisterIndex) void {
@@ -658,7 +700,7 @@ pub fn reg32_to_L(register: misc.RegisterIndex) void {
     J_to_L();
 }
 
-pub fn op_reg_to_J(which: OperandSelectionWithXor, ext: ZeroSignOrOneExtension) void {
+pub fn op_reg_to_J(which: OperandSelectionWithXor, ext: ?ZeroSignOrOneExtension) void {
     switch (which) {
         .OA, .OAxor1 => setControlSignal(.jr_rsel, .oa),
         .OB, .OBxor1 => setControlSignal(.jr_rsel, .ob),
@@ -668,11 +710,14 @@ pub fn op_reg_to_J(which: OperandSelectionWithXor, ext: ZeroSignOrOneExtension) 
         .OAxor1, .OBxor1 => true,
     });
     setControlSignal(.jl_src, .jrl);
-    switch (ext) {
+    if (ext) |jh_ext| switch (jh_ext) {
         ._1x => setControlSignal(.jh_src, .neg_one),
         .zx => setControlSignal(.jh_src, .zero),
         .sx => setControlSignal(.jh_src, .sx_jl),
-    }
+    };
+}
+pub fn op_reg_to_JL(which: OperandSelectionWithXor) void {
+    op_reg_to_J(which, null);
 }
 
 pub fn op_reg_to_K(which: OperandSelectionWithXor) void {
@@ -693,7 +738,7 @@ pub fn op_reg_to_L(which: OperandSelectionWithXor, ext: ZeroSignOrOneExtension) 
 }
 
 pub fn op_reg_to_LL(which: OperandSelectionWithXor) void {
-    op_reg_to_J(which, .zx);
+    op_reg_to_J(which, null);
     JL_to_LL();
 }
 
@@ -715,7 +760,7 @@ pub fn op_reg32_to_L(which: OperandSelectionWithXor) void {
     J_to_L();
 }
 
-pub fn JL_to_L() void {
+pub fn JL_to_L_zx() void {
     zero_to_K();
     setControlSignal(.compute_mode, .{ .logic = .jl_xor_k });
     setControlSignal(.ll_src, .logic);
@@ -882,11 +927,42 @@ pub fn D_to_L(ext: ZeroSignOrOneExtension) void {
 }
 
 pub fn D_to_LH() void {
+    if (!isSet(.bus_byte)) {
+        warn("bus_byte not set!", .{});
+        return;
+    }
+    if (cycle.bus_byte == .byte) {
+        warn("D_to_LH() not supported for byte loads!", .{});
+        return;
+    }
     setControlSignal(.lh_src, .d16);
 }
 
 pub fn D_to_LL() void {
+    if (!isSet(.bus_byte)) {
+        warn("bus_byte not set!", .{});
+        return;
+    }
+    if (cycle.bus_byte == .byte) {
+        warn("Use D8_to_LL() instead!", .{});
+        return;
+    }
     setControlSignal(.ll_src, .d16);
+}
+
+pub fn D8_to_LL(ext: ZeroOrSignExtension) void {
+    if (!isSet(.bus_byte)) {
+        warn("bus_byte not set!", .{});
+        return;
+    }
+    if (cycle.bus_byte != .byte) {
+        warn("Use D_to_LL() instead!", .{});
+        return;
+    }
+    switch (ext) {
+        .zx => setControlSignal(.ll_src, .d16),
+        .sx => setControlSignal(.ll_src, .d8_sx),
+    }
 }
 
 pub fn D_to_DL() void {

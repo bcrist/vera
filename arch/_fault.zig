@@ -34,13 +34,18 @@ const LL_to_STAT = cb.LL_to_STAT;
 const LL_to_D = cb.LL_to_D;
 const LL_to_RSN = cb.LL_to_RSN;
 const LL_to_op_reg = cb.LL_to_op_reg;
-const SR1H_to_JH = cb.SR1H_to_JH;
+const SR1H_to_LH = cb.SR1H_to_LH;
+const SR1H_to_LL = cb.SR1H_to_LL;
+const SR2H_to_LL = cb.SR2H_to_LL;
+const SR1L_to_LL = cb.SR1L_to_LL;
+const SR2L_to_LL = cb.SR2L_to_LL;
 const SR1_to_J = cb.SR1_to_J;
 const SR2_to_J = cb.SR2_to_J;
 const SR2_to_SR2 = cb.SR2_to_SR2;
 const read_to_D = cb.read_to_D;
 const write_from_LL = cb.write_from_LL;
 const D_to_L = cb.D_to_L;
+const D_to_LL = cb.D_to_LL;
 const D_to_LH = cb.D_to_LH;
 const D_to_DL = cb.D_to_DL;
 const D_to_OB_OA = cb.D_to_OB_OA;
@@ -63,15 +68,13 @@ fn vectored_fault_handler(zeropage_vector: u5) void {
     next_cycle();
 
     // Store STAT into SR1 (without disturbing high byte):
-    SR1H_to_JH(.fault_rsn_stat);
-    JH_to_LH();
+    SR1H_to_LH(.fault_rsn_stat);
     STAT_to_LL();
     L_to_SR1(.fault_rsn_stat);
     next_cycle();
 
     // Store OB/OA into SR1 (without disturbing high byte):
-    SR1H_to_JH(.int_rsn_fault_ob_oa);
-    JH_to_LH();
+    SR1H_to_LH(.int_rsn_fault_ob_oa);
     OB_OA_to_LL();
     L_to_SR1(.int_rsn_fault_ob_oa);
     next_cycle();
@@ -211,7 +214,7 @@ pub fn _FD00_FDFF() void {
     var r: u5 = 0;
     while (r < 16) : (r += 1) {
         read_to_D(.rs_reserved, r * 2, .word, .data);
-        D_to_L(.zx);
+        D_to_LL();
         LL_to_op_reg(.OB);
         increment_OB();
         next_cycle();
@@ -235,8 +238,7 @@ pub fn _FD00_FDFF() void {
         next_cycle();
 
         read_to_D(.rs_reserved, offset + 2, .word, .data);
-        SR1_to_J(.temp_1);
-        JL_to_LL();
+        SR1L_to_LL(.temp_1);
         D_to_LH();
         if (@hasField(ControlSignals.SR1Index, reg)) {
             L_to_SR1(@field(ControlSignals.SR1Index, reg));
@@ -298,20 +300,18 @@ pub fn _FE00_FEFF() void {
         const offset = @offsetOf(misc.RegistersetState, reg) - 32;
 
         if (@hasField(ControlSignals.SR1Index, reg)) {
-            SR1_to_J(@field(ControlSignals.SR1Index, reg));
+            SR1L_to_LL(@field(ControlSignals.SR1Index, reg));
         } else {
-            SR2_to_J(@field(ControlSignals.SR2Index, reg));
+            SR2L_to_LL(@field(ControlSignals.SR2Index, reg));
         }
-        JL_to_LL();
         write_from_LL(.rs_reserved, offset, .word, .data);
         next_cycle();
 
         if (@hasField(ControlSignals.SR1Index, reg)) {
-            SR1_to_J(@field(ControlSignals.SR1Index, reg));
+            SR1H_to_LL(@field(ControlSignals.SR1Index, reg));
         } else {
-            SR2_to_J(@field(ControlSignals.SR2Index, reg));
+            SR2H_to_LL(@field(ControlSignals.SR2Index, reg));
         }
-        JH_to_LL();
         write_from_LL(.rs_reserved, offset + 2, .word, .data);
         next_cycle();
     }
