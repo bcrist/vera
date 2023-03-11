@@ -6,8 +6,8 @@ pub fn compute(in: Inputs) Outputs {
     const mode_bits = @bitCast(ControlSignals.MultModeBits, in.cs_compute_mode.raw());
 
     const j = switch (mode_bits.jl) {
-        .unsigned => bits.zx(i64, in.j),
-        .signed => bits.sx(i64, in.j),
+        .unsigned => bits.zx(i64, in.jl),
+        .signed => bits.sx(i64, in.jl),
     };
 
     const k = switch (mode_bits.k) {
@@ -28,7 +28,7 @@ pub fn compute(in: Inputs) Outputs {
 }
 
 pub const Inputs = struct {
-    j: bus.JLow,
+    jl: bus.JLow,
     k: bus.K,
     cs_compute_mode: ControlSignals.ComputeMode,
 };

@@ -264,7 +264,7 @@ pub fn doPipeWindow(pipe: misc.PipeID, sim: *const Simulator) void {
     if (sim.s.pipe == pipe) {
         const c = Simulator.ComputeStage.init(sim.s, sim.address_translator, sim.exec_state);
         zgui.text("arith: {X:0>4}_{X:0>4}", .{ c.arith.data.high, c.arith.data.low });
-        zgui.text("logic: {X:0>4}_{X:0>4}", .{ c.logic.data.high, c.logic.data.low });
+        zgui.text("logic: {X:0>4}", .{ c.logic });
 
     } else if (sim.c.pipe == pipe) {
         const t = Simulator.TransactStage.init(sim.c, sim.microcode, sim.exec_state, sim.memory, sim.frame_tracker);

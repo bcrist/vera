@@ -6,7 +6,6 @@ const misc = @import("misc");
 const bus = @import("bus_types");
 
 pub const arithmetic_unit = @import("cpu/arithmetic_unit.zig");
-pub const bitcount_unit = @import("cpu/bitcount_unit.zig");
 pub const logic_unit = @import("cpu/logic_unit.zig");
 pub const shifter_unit = @import("cpu/shifter_unit.zig");
 pub const multiplier_unit = @import("cpu/multiplier_unit.zig");

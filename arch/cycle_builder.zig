@@ -86,21 +86,20 @@ pub fn finish() ControlSignals {
 
     switch (cycle.ll_src) {
         .zero, .stat, .pipe, .last_translation_info_l => {},
-        .logic_l  => validateComputeMode(.logic),
+        .logic    => validateComputeMode(.logic),
         .shift_l  => validateComputeMode(.shift),
         .arith_l  => validateComputeMode(.arith),
         .mult_l   => validateComputeMode(.mult),
-        .bitcount => validateComputeMode(.bitcount),
         .d16      => if (cycle.dl_op != .to_d) validate_bus_read(null),
         .d8_sx    => if (cycle.dl_op != .to_d) validate_bus_read(.byte),
     }
 
     switch (cycle.lh_src) {
-        .zero, .sx_ll, .prev_ua, .last_translation_info_h, .logic_h => {},
-        .logic_l => validateComputeMode(.logic),
+        .zero, .sx_ll, .prev_ua, .last_translation_info_h, .jh => {},
+        .logic   => validateComputeMode(.logic),
         .shift_h => validateComputeMode(.shift),
         .arith_h => validateComputeMode(.arith),
-        .mult_h => validateComputeMode(.mult),
+        .mult_h  => validateComputeMode(.mult),
         .d16 => if (cycle.dl_op != .to_d) validate_bus_read(null),
     }
 
@@ -173,22 +172,37 @@ fn validateComputeMode(expected: ControlSignals.ComputeModeTag) void {
         warn("Expected compute_mode to be {s}", .{ @tagName(expected) });
     }
 
-    if (!isSet(.jl_src)) {
-        warn("Expected jl_src to be set for operation", .{});
-    } else switch (cycle.jl_src) {
-        .zero => {},
-        .jrl => {
-            ensureSet(.jr_rsel);
-            ensureSet(.jr_rx);
+    switch (mode) {
+        .logic => |logic_mode| {
+            const logic_mode_bits = @bitCast(ControlSignals.LogicModeBits, @enumToInt(logic_mode));
+            switch (logic_mode_bits.op) {
+                .count_k, .count_trailing_k, .count_leading_k => {},
+                else => validateJL(),
+            }
+            validateK();
         },
-        .sr1l => {
-            ensureSet(.sr1_ri);
+        .mult => {
+            validateJL();
+            validateK();
         },
-        .sr2l => {
-            ensureSet(.sr2_ri);
+        .arith => |arith_mode| {
+            const arith_mode_bits = @bitCast(ControlSignals.ArithModeBits, @enumToInt(arith_mode));
+            if (arith_mode_bits.width != .jl_k) {
+                validateJH();
+            }
+            validateJL();
+            validateK();
         },
+        .shift => {
+            validateJH();
+            validateJL();
+            validateK();
+        },
+        .unused, .unknown => {},
     }
+}
 
+fn validateJH() void {
     if (!isSet(.jh_src)) {
         warn("Expected jh_src to be set for operation", .{});
     } else switch (cycle.jh_src) {
@@ -204,7 +218,27 @@ fn validateComputeMode(expected: ControlSignals.ComputeModeTag) void {
             ensureSet(.sr2_ri);
         },
     }
+}
 
+fn validateJL() void {
+    if (!isSet(.jl_src)) {
+        warn("Expected jl_src to be set for operation", .{});
+    } else switch (cycle.jl_src) {
+        .zero => {},
+        .jrl => {
+            ensureSet(.jr_rsel);
+            ensureSet(.jr_rx);
+        },
+        .sr1l => {
+            ensureSet(.sr1_ri);
+        },
+        .sr2l => {
+            ensureSet(.sr2_ri);
+        },
+    }
+}
+
+fn validateK() void {
     if (!isSet(.k_src)) {
         warn("Expected k_src to be set for operation", .{});
     } else switch (cycle.k_src) {
@@ -407,20 +441,20 @@ pub fn literal_to_LL(literal: i17) void {
     if (literal == 0) {
         zero_to_LL();
     } else {
-        zero_to_J();
+        zero_to_JL();
         literal_to_K(literal);
         setControlSignal(.compute_mode, .{ .logic = .jl_xor_k });
-        setControlSignal(.ll_src, .logic_l);
+        setControlSignal(.ll_src, .logic);
     }
 }
 pub fn literal_to_LH(literal: i17) void {
     if (literal == 0) {
         zero_to_LH();
     } else {
-        zero_to_J();
+        zero_to_JL();
         literal_to_K(literal);
         setControlSignal(.compute_mode, .{ .logic = .jl_xor_k });
-        setControlSignal(.lh_src, .logic_l);
+        setControlSignal(.lh_src, .logic);
     }
 }
 pub fn literal_to_L(literal: i17) void {
@@ -443,19 +477,24 @@ pub fn OB_OA_to_LL() void {
     setControlSignal(.jl_src, .zero);
     setControlSignal(.k_src, .ob_oa_zx);
     setControlSignal(.compute_mode, .{ .logic = .jl_xor_k });
-    setControlSignal(.ll_src, .logic_l);
+    setControlSignal(.ll_src, .logic);
 }
 
 pub fn OB_OA_to_LH() void {
     setControlSignal(.jl_src, .zero);
     setControlSignal(.k_src, .ob_oa_zx);
     setControlSignal(.compute_mode, .{ .logic = .jl_xor_k });
-    setControlSignal(.lh_src, .logic_l);
+    setControlSignal(.lh_src, .logic);
 }
 
 pub fn SR1H_to_JH(index: ControlSignals.SR1Index) void {
     setControlSignal(.sr1_ri, index);
     setControlSignal(.jh_src, .sr1h);
+}
+
+pub fn SR1L_to_JL(index: ControlSignals.SR1Index) void {
+    setControlSignal(.sr1_ri, index);
+    setControlSignal(.jl_src, .sr1l);
 }
 
 pub fn SR1_to_J(index: ControlSignals.SR1Index) void {
@@ -477,6 +516,16 @@ pub fn SR2_to_J(index: ControlSignals.SR2Index) void {
     setControlSignal(.sr2_ri, index);
     setControlSignal(.jl_src, .sr2l);
     setControlSignal(.jh_src, .sr2h);
+}
+
+pub fn SR2H_to_JH(index: ControlSignals.SR2Index) void {
+    setControlSignal(.sr2_ri, index);
+    setControlSignal(.jh_src, .sr2h);
+}
+
+pub fn SR2L_to_JL(index: ControlSignals.SR2Index) void {
+    setControlSignal(.sr2_ri, index);
+    setControlSignal(.jl_src, .sr2l);
 }
 
 pub fn SR2L_to_K(index: ControlSignals.SR2Index) void {
@@ -515,23 +564,23 @@ pub fn SR_to_L(which: ControlSignals.AnySRIndex) void {
 
 pub fn SRL_to_LL(which: ControlSignals.AnySRIndex) void {
     if (ControlSignals.addressBaseToSR1(which)) |sr1| {
-        SR1_to_J(sr1);
+        SR1L_to_JL(sr1);
     } else if (ControlSignals.addressBaseToSR2(which)) |sr2| {
-        SR2_to_J(sr2);
+        SR2L_to_JL(sr2);
     }
     JL_to_LL();
 }
 
 pub fn SRH_to_LL(which: ControlSignals.AnySRIndex) void {
     if (ControlSignals.addressBaseToSR1(which)) |sr1| {
-        SR1_to_J(sr1);
+        SR1H_to_JH(sr1);
     } else if (ControlSignals.addressBaseToSR2(which)) |sr2| {
-        SR2_to_J(sr2);
+        SR2H_to_JH(sr2);
     }
     JH_to_LL();
 }
 
-pub fn reg_to_J(register: misc.RegisterIndex, ext: ZeroSignOrOneExtension) void {
+pub fn reg_to_J(register: misc.RegisterIndex, ext: ?ZeroSignOrOneExtension) void {
     if (register == 0) {
         setControlSignal(.jr_rsel, .zero);
         setControlSignal(.jr_rx, false);
@@ -548,11 +597,11 @@ pub fn reg_to_J(register: misc.RegisterIndex, ext: ZeroSignOrOneExtension) void 
         setControlSignal(.literal, register);
     }
     setControlSignal(.jl_src, .jrl);
-    switch (ext) {
+    if (ext) |jh_ext| switch (jh_ext) {
         ._1x => setControlSignal(.jh_src, .neg_one),
         .zx => setControlSignal(.jh_src, .zero),
         .sx => setControlSignal(.jh_src, .sx_jl),
-    }
+    };
 }
 
 pub fn reg_to_K(register: misc.RegisterIndex) void {
@@ -669,25 +718,25 @@ pub fn op_reg32_to_L(which: OperandSelectionWithXor) void {
 pub fn JL_to_L() void {
     zero_to_K();
     setControlSignal(.compute_mode, .{ .logic = .jl_xor_k });
-    setControlSignal(.ll_src, .logic_l);
+    setControlSignal(.ll_src, .logic);
     setControlSignal(.lh_src, .zero);
 }
 
 pub fn JL_to_LL() void {
     zero_to_K();
     setControlSignal(.compute_mode, .{ .logic = .jl_xor_k });
-    setControlSignal(.ll_src, .logic_l);
+    setControlSignal(.ll_src, .logic);
 }
 
 pub fn JL_to_LL_and_LH() void {
     zero_to_K();
     setControlSignal(.compute_mode, .{ .logic = .jl_xor_k });
-    setControlSignal(.ll_src, .logic_l);
-    setControlSignal(.lh_src, .logic_l);
+    setControlSignal(.ll_src, .logic);
+    setControlSignal(.lh_src, .logic);
 }
 
 pub fn JH_to_LH() void {
-    setControlSignal(.lh_src, .logic_h);
+    setControlSignal(.lh_src, .jh);
 }
 
 pub fn JH_to_LL() void {
@@ -824,10 +873,10 @@ pub fn D_to_L(ext: ZeroSignOrOneExtension) void {
                 return;
             }
             setControlSignal(.ll_src, .d16);
-            zero_to_J();
+            zero_to_JL();
             zero_to_K();
             setControlSignal(.compute_mode, .{ .logic = .jl_xnor_k });
-            setControlSignal(.lh_src, .logic_l);
+            setControlSignal(.lh_src, .logic);
         },
     }
 }
@@ -1273,7 +1322,7 @@ pub fn op_reg_minus_op_reg_to_LL(left: OperandSelectionWithXor, right: OperandSe
 
 pub fn logic_to_LL(mode: ControlSignals.LogicMode, freshness: Freshness, flags: FlagsMode) void {
     setControlSignal(.compute_mode, .{ .logic = mode });
-    setControlSignal(.ll_src, .logic_l);
+    setControlSignal(.ll_src, .logic);
     switch (flags) {
         .no_flags => {},
         .flags => switch (freshness) {
@@ -1436,17 +1485,16 @@ pub fn op_reg_shift_literal_to_LL(left: OperandSelectionWithXor, ext: ZeroSignOr
 }
 
 pub fn bitcount_op_reg_to_LL(which: OperandSelectionWithXor, mode: BitcountDirection, polarity: u1, flags: FlagsMode) void {
-    op_reg_to_J(which, .zx);
-    zero_to_K();
+    op_reg_to_K(which);
 
-    const bitcount_mode = switch (mode) {
-        .all      => switch (polarity) { 0 => ControlSignals.BitcountMode.cz_jl, 1 => .cb_jl, },
-        .leading  => switch (polarity) { 0 => ControlSignals.BitcountMode.clz_jl, 1 => .clb_jl, },
-        .trailing => switch (polarity) { 0 => ControlSignals.BitcountMode.ctz_jl, 1 => .ctb_jl, },
+    const logic_mode = switch (mode) {
+        .all      => switch (polarity) { 0 => ControlSignals.LogicMode.cz_k, 1 => .cb_k, },
+        .leading  => switch (polarity) { 0 => ControlSignals.LogicMode.clz_k, 1 => .clb_k, },
+        .trailing => switch (polarity) { 0 => ControlSignals.LogicMode.ctz_k, 1 => .ctb_k, },
     };
 
-    setControlSignal(.compute_mode, .{ .bitcount = bitcount_mode });
-    setControlSignal(.ll_src, .bitcount);
+    setControlSignal(.compute_mode, .{ .logic = logic_mode });
+    setControlSignal(.ll_src, .logic);
     switch (flags) {
         .no_flags => {},
         .flags => setControlSignal(.stat_op, .zn_from_ll),

@@ -65,11 +65,10 @@ pub fn init(
     var l: bus.LParts = undefined;
     l.low = switch (in.cs.ll_src) {
         .zero => 0,
-        .logic_l => in.logic.data.low,
+        .logic => in.logic,
         .shift_l => in.shift.data.low,
         .arith_l => in.arith.data.low,
         .mult_l => in.mult.data.low,
-        .bitcount => in.bitcount.data,
         .d16 => d,
         .d8_sx => bits.sx(bus.LLow, @truncate(u8, d)),
         .last_translation_info_l => @truncate(bus.LLow, @bitCast(u32, at_info_latch)),
@@ -78,12 +77,12 @@ pub fn init(
     };
     l.high = switch (in.cs.lh_src) {
         .zero => 0,
-        .logic_l => in.logic.data.low,
-        .logic_h => in.logic.data.high,
+        .logic => in.logic,
         .shift_h => in.shift.data.high,
         .arith_h => in.arith.data.high,
         .mult_h => in.mult.data.high,
         .d16 => d,
+        .jh => in.jh,
         .sx_ll => bits.sx(bus.LHigh, @truncate(u1, l.low >> 15)),
         .last_translation_info_h => @intCast(bus.LHigh, @bitCast(u32, at_info_latch) >> 16),
         .prev_ua => in.reg.ua,

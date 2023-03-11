@@ -8,7 +8,6 @@ const arithmetic_unit = Simulator.arithmetic_unit;
 const shifter_unit = Simulator.shifter_unit;
 const logic_unit = Simulator.logic_unit;
 const multiplier_unit = Simulator.multiplier_unit;
-const bitcount_unit = Simulator.bitcount_unit;
 const faults = Simulator.faults;
 const AddressTranslator = Simulator.AddressTranslator;
 const LoopRegisters = Simulator.LoopRegisters;
@@ -25,11 +24,11 @@ want_atomic: bool,
 stall_atomic: bool,
 sr1: bus.JParts,
 sr2: bus.JParts,
+jh: bus.JHigh,
 arith: arithmetic_unit.Outputs,
 shift: shifter_unit.Outputs,
 mult: multiplier_unit.Outputs,
-logic: logic_unit.Outputs,
-bitcount: bitcount_unit.Outputs,
+logic: bus.JLow,
 virtual_address: bus.VirtualAddressParts,
 at: AddressTranslator.ComputeOutputsExceptFaults,
 fault: faults.ComputeOutputs,
@@ -48,17 +47,13 @@ pub fn init(in: SetupStage.PipelineRegister, address_translator: *const AddressT
         .cs_compute_mode = in.cs.compute_mode,
     });
     const mult_out = multiplier_unit.compute(.{
-        .j = in.j.low,
+        .jl = in.j.low,
         .k = in.k,
         .cs_compute_mode = in.cs.compute_mode,
     });
     const logic_out = logic_unit.compute(.{
-        .j = in.j,
+        .jl = in.j.low,
         .k = in.k,
-        .cs_compute_mode = in.cs.compute_mode,
-    });
-    const bitcount_out = bitcount_unit.compute(.{
-        .j = in.j.low,
         .cs_compute_mode = in.cs.compute_mode,
     });
 
@@ -92,11 +87,11 @@ pub fn init(in: SetupStage.PipelineRegister, address_translator: *const AddressT
         .stall_atomic = in.stall_atomic,
         .sr1 = in.sr1,
         .sr2 = in.sr2,
+        .jh = in.j.high,
         .arith = arith_out,
         .shift = shift_out,
         .mult = mult_out,
         .logic = logic_out,
-        .bitcount = bitcount_out,
         .virtual_address = in.virtual_address,
         .at = at_out.base,
         .fault = fault,
@@ -112,6 +107,7 @@ pub const PipelineRegister = struct {
     stall_atomic: bool = false,
     sr1: bus.JParts = bus.JParts.zero,
     sr2: bus.JParts = bus.JParts.zero,
+    jh: bus.JHigh = 0,
     arith: arithmetic_unit.Outputs = .{
         .data = bus.LParts.zero,
         .z = false,
@@ -126,12 +122,7 @@ pub const PipelineRegister = struct {
     mult: multiplier_unit.Outputs = .{
         .data = bus.LParts.zero,
     },
-    logic: logic_unit.Outputs = .{
-        .data = bus.LParts.zero,
-    },
-    bitcount: bitcount_unit.Outputs = .{
-        .data = 0,
-    },
+    logic: bus.LLow = 0,
     virtual_address: bus.VirtualAddressParts = bus.VirtualAddressParts.zero,
     at: AddressTranslator.ComputeOutputsExceptFaults = .{
         .info = at_types.TranslationInfo{},
@@ -164,6 +155,7 @@ pub const PipelineRegister = struct {
             .low = rnd.int(bus.JLow),
             .high = rnd.int(bus.JHigh),
         };
+        self.jh = rnd.int(bus.JHigh);
         self.arith = .{
             .data = .{
                 .low = rnd.int(bus.LLow),
@@ -185,13 +177,7 @@ pub const PipelineRegister = struct {
             .low = rnd.int(bus.LLow),
             .high = rnd.int(bus.LHigh),
         };
-        self.logic.data = .{
-            .low = rnd.int(bus.LLow),
-            .high = rnd.int(bus.LHigh),
-        };
-        self.bitcount = .{
-            .data = rnd.int(u16),
-        };
+        self.logic = rnd.int(bus.LLow);
         self.virtual_address = .{
             .offset = rnd.int(bus.PageOffset),
             .page = rnd.int(bus.Page),
@@ -223,11 +209,11 @@ pub const PipelineRegister = struct {
         self.stall_atomic = out.stall_atomic;
         self.sr1 = out.sr1;
         self.sr2 = out.sr2;
+        self.jh = out.jh;
         self.arith = out.arith;
         self.shift = out.shift;
         self.mult = out.mult;
         self.logic = out.logic;
-        self.bitcount = out.bitcount;
         self.virtual_address = out.virtual_address;
         self.at = out.at;
         self.fault = out.fault;
