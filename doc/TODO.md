@@ -1,4 +1,3 @@
-## Keep track of "don't care" control signals
 ## Allow KSource.literal_special to generate 0xFF and 0x00FF
 Fix BB, BBN instructions in _branch.zig
 

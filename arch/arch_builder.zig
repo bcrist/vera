@@ -15,17 +15,18 @@ const perm_arena = &allocators.global_arena;
 const Opcode = misc.Opcode;
 const InstructionEncoding = instruction_encoding.InstructionEncoding;
 
-var instructions: [65536]?*InstructionEncoding = .{ null } ** 65536;
-var descriptions: [65536]?[]const u8 = .{ null } ** 65536;
-
 var cycle_dedup = deep_hash_map.DeepAutoHashMap(*ControlSignals, *ControlSignals).init(gpa.allocator());
 var unconditional_continuations = deep_hash_map.DeepAutoHashMap(*ControlSignals, uc.Address).init(gpa.allocator());
-pub var microcode: [65536]?*ControlSignals = [_]?*ControlSignals { null } ** 65536;
+pub var microcode: [misc.microcode_length]?*ControlSignals = [_]?*ControlSignals { null } ** misc.microcode_length;
+var used_signals: [misc.microcode_length]std.EnumSet(ControlSignals.SignalName) = .{ std.EnumSet(ControlSignals.SignalName).initEmpty() } ** misc.microcode_length;
+var instructions: [misc.microcode_length]?*InstructionEncoding = .{ null } ** misc.microcode_length;
+var descriptions: [misc.microcode_length]?[]const u8 = .{ null } ** misc.microcode_length;
 
 var next_unconditional_continuation: uc.Continuation = 0x1FF;
 
-pub fn getOrCreateUnconditionalContinuation(cycle: *ControlSignals) uc.Address {
+pub fn getOrCreateUnconditionalContinuation(cycle: *ControlSignals, signals_used_in_cycle: std.EnumSet(ControlSignals.SignalName)) uc.Address {
     if (unconditional_continuations.get(cycle)) |ua| {
+        used_signals[ua].setUnion(signals_used_in_cycle);
         return ua;
     } else {
         const min_n = @enumToInt(uc.Vectors.last) + 1;
@@ -50,7 +51,7 @@ pub fn getOrCreateUnconditionalContinuation(cycle: *ControlSignals) uc.Address {
         }
         next_unconditional_continuation = n - 1;
 
-        const deduped = putMicrocodeCycle(ua, cycle);
+        const deduped = putMicrocodeCycle(ua, cycle, signals_used_in_cycle);
         unconditional_continuations.put(deduped, ua) catch @panic("Out of memory!");
         return ua;
     }
@@ -65,7 +66,11 @@ pub fn getMicrocodeCycle(ua: uc.Address) ?*ControlSignals {
     return microcode[ua];
 }
 
-pub fn putMicrocodeCycle(ua: uc.Address, cycle: *ControlSignals) *ControlSignals {
+pub fn getUsedSignalsForAddress(ua: uc.Address) std.EnumSet(ControlSignals.SignalName) {
+    return used_signals[ua];
+}
+
+pub fn putMicrocodeCycle(ua: uc.Address, cycle: *ControlSignals, signals_used_in_cycle: std.EnumSet(ControlSignals.SignalName)) *ControlSignals {
     var deduped = cycle;
     if (cycle_dedup.get(cycle)) |c| {
         deduped = c;
@@ -75,12 +80,12 @@ pub fn putMicrocodeCycle(ua: uc.Address, cycle: *ControlSignals) *ControlSignals
         cycle_dedup.put(deduped, deduped) catch @panic("Out of memory!");
     }
 
-    putMicrocodeCycleNoDedup(ua, deduped);
+    putMicrocodeCycleNoDedup(ua, deduped, signals_used_in_cycle);
     return deduped;
 }
 
 // provided cycle should be from perm_arena
-pub fn putMicrocodeCycleNoDedup(ua: uc.Address, cycle: *ControlSignals) void {
+pub fn putMicrocodeCycleNoDedup(ua: uc.Address, cycle: *ControlSignals, signals_used_in_cycle: std.EnumSet(ControlSignals.SignalName)) void {
     if (microcode[ua] != null) {
         if (uc.getOpcodeForAddress(ua)) |opcode| {
             if (getInstructionByOpcode(opcode)) |insn| {
@@ -93,6 +98,7 @@ pub fn putMicrocodeCycleNoDedup(ua: uc.Address, cycle: *ControlSignals) void {
         }
     } else {
         microcode[ua] = cycle;
+        used_signals[ua].setUnion(signals_used_in_cycle);
     }
 }
 
@@ -166,18 +172,23 @@ pub fn analyzeControlSignalUsage(temp_arena: *TempAllocator, comptime signals: [
     var temp = std.ArrayList(u8).init(temp_arena.allocator());
     var data = std.StringHashMap(u16).init(temp_arena.allocator());
 
-    for (microcode) |maybe_cycle| {
+    for (microcode, 0..) |maybe_cycle, ua| {
         if (maybe_cycle) |cycle| {
             temp.clearRetainingCapacity();
+            const signals_used_in_cycle = used_signals[ua];
             inline for (signals) |signal| {
-                const v = @field(cycle, @tagName(signal));
-                var w = temp.writer();
-                switch (@typeInfo(@TypeOf(v))) {
-                    .Enum  => try w.print("{s: <20} ", .{ @tagName(v) }),
-                    .Bool  => try w.print("{: <20} ", .{ v }),
-                    .Union => try w.print("{X: <20} ", .{ v.raw() }),
-                    .Int   => try w.print("0x{X: <18} ", .{ v }),
-                    else   => try w.print("{s: <20} ", .{ "?????" }),
+                if (signals_used_in_cycle.contains(signal)) {
+                    const v = @field(cycle, @tagName(signal));
+                    var w = temp.writer();
+                    switch (@typeInfo(@TypeOf(v))) {
+                        .Enum  => try w.print("{s: <20} ", .{ @tagName(v) }),
+                        .Bool  => try w.print("{: <20} ", .{ v }),
+                        .Union => try w.print("{X: <20} ", .{ v.raw() }),
+                        .Int   => try w.print("0x{X: <18} ", .{ v }),
+                        else   => try w.print("{s: <20} ", .{ "?????" }),
+                    }
+                } else {
+                    try temp.appendSlice("---                  ");
                 }
             }
 

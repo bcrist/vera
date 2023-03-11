@@ -10,7 +10,7 @@ const cycle_builder = @import("cycle_builder.zig");
 const assert = std.debug.assert;
 
 const Opcode = misc.Opcode;
-
+const CycleData = cycle_builder.CycleData;
 const Mnemonic = instruction_encoding.Mnemonic;
 const MnemonicSuffix = instruction_encoding.MnemonicSuffix;
 const InstructionEncoding = instruction_encoding.InstructionEncoding;
@@ -78,7 +78,7 @@ const InstructionData = struct {
     }
 };
 pub var insn: ?*InstructionData = null;
-var completed_cycles = std.ArrayList(ControlSignals).init(allocators.global_arena.allocator());
+var completed_cycles = std.ArrayList(CycleData).init(allocators.global_arena.allocator());
 
 pub fn encoding(mnemonic: Mnemonic, comptime args: anytype) void {
     if (insn) |i| {
@@ -459,7 +459,7 @@ pub fn processContinuation(continuation: uc.Continuation, func: *const fn () voi
     var unqueried_flags = result.queried_flags;
     unqueried_flags.toggleAll();
     unqueried_flags.setIntersection(config.allowed_flags);
-    storeInitialContinuationCycleFlagPermutations(continuation, result.initial_cycle, .{}, unqueried_flags);
+    storeInitialContinuationCycleFlagPermutations(continuation, result.initial_cycle, result.initial_cycle_signals_used, .{}, unqueried_flags);
 
     // Don't allow new flags to be queried on subsequent processing, since that will mess up our unqueried_flags handling
     config.allowed_flags = result.queried_flags;
@@ -478,17 +478,23 @@ pub fn processContinuation(continuation: uc.Continuation, func: *const fn () voi
             }
         }
 
-        storeInitialContinuationCycleFlagPermutations(continuation, permutation_result.initial_cycle, queried_flag_permutation, unqueried_flags);
+        storeInitialContinuationCycleFlagPermutations(continuation, permutation_result.initial_cycle, permutation_result.initial_cycle_signals_used, queried_flag_permutation, unqueried_flags);
     }
 }
 
-fn storeInitialContinuationCycleFlagPermutations(continuation: uc.Continuation, initial_cycle: *ControlSignals, queried_flag_permutation: uc.FlagSet, unqueried_flags: uc.FlagSet) void {
+fn storeInitialContinuationCycleFlagPermutations(
+    continuation: uc.Continuation,
+    initial_cycle: *ControlSignals,
+    initial_cycle_signals_used: std.EnumSet(ControlSignals.SignalName),
+    queried_flag_permutation: uc.FlagSet,
+    unqueried_flags: uc.FlagSet
+) void {
     var unqueried_permutations = uc.flagPermutationIterator(unqueried_flags);
     _ = unqueried_permutations.next(); // we already processed the no-flags case
     while (unqueried_permutations.next()) |unqueried_flag_permutation| {
         var combined_flags = queried_flag_permutation;
         combined_flags.setUnion(unqueried_flag_permutation);
-        arch.putMicrocodeCycleNoDedup(uc.getAddressForContinuation(continuation, combined_flags), initial_cycle);
+        arch.putMicrocodeCycleNoDedup(uc.getAddressForContinuation(continuation, combined_flags), initial_cycle, initial_cycle_signals_used);
     }
 }
 
@@ -524,13 +530,15 @@ pub fn processOpcodes(first_opcode: Opcode, last_opcode: Opcode, func: *const fn
         {
             var flagIter = uc.flagPermutationIterator(checked_flags);
             while (flagIter.next()) |flag_variant| {
-                const cycle = arch.getMicrocodeCycle(uc.getAddressForOpcode(first_opcode, flag_variant)).?;
+                const ua = uc.getAddressForOpcode(first_opcode, flag_variant);
+                const cycle = arch.getMicrocodeCycle(ua).?;
+                const used_signals = arch.getUsedSignalsForAddress(ua);
 
                 var opIter = uc.opcodeIterator(first_opcode, last_opcode);
                 _ = opIter.next();
                 while (opIter.next()) |cur_opcode| {
                     const address = uc.getAddressForOpcode(cur_opcode, flag_variant);
-                    arch.putMicrocodeCycleNoDedup(address, cycle);
+                    arch.putMicrocodeCycleNoDedup(address, cycle, used_signals);
                 }
             }
         }
@@ -576,7 +584,7 @@ fn processOpcode(original_range: instruction_encoding.OpcodeRange, the_opcode: O
     var unqueried_flags = result.queried_flags;
     unqueried_flags.toggleAll();
     unqueried_flags.setIntersection(config.allowed_flags);
-    storeInitialCycleFlagPermutations(the_opcode, result.initial_cycle, .{}, unqueried_flags);
+    storeInitialCycleFlagPermutations(the_opcode, result.initial_cycle, result.initial_cycle_signals_used, .{}, unqueried_flags);
 
     // Don't allow new flags to be queried on subsequent processing, since that will mess up our unqueried_flags handling
     config.allowed_flags = result.queried_flags;
@@ -610,7 +618,7 @@ fn processOpcode(original_range: instruction_encoding.OpcodeRange, the_opcode: O
             }
         }
 
-        storeInitialCycleFlagPermutations(the_opcode, permutation_result.initial_cycle, queried_flag_permutation, unqueried_flags);
+        storeInitialCycleFlagPermutations(the_opcode, permutation_result.initial_cycle, permutation_result.initial_cycle_signals_used, queried_flag_permutation, unqueried_flags);
     }
 
     if (result.next_unread_insn_offset < 0) {
@@ -629,13 +637,13 @@ fn processOpcode(original_range: instruction_encoding.OpcodeRange, the_opcode: O
     };
 }
 
-fn storeInitialCycleFlagPermutations(the_opcode: Opcode, initial_cycle: *ControlSignals, queried_flag_permutation: uc.FlagSet, unqueried_flags: uc.FlagSet) void {
+fn storeInitialCycleFlagPermutations(the_opcode: Opcode, initial_cycle: *ControlSignals, used_signals: std.EnumSet(ControlSignals.SignalName), queried_flag_permutation: uc.FlagSet, unqueried_flags: uc.FlagSet) void {
     var unqueried_permutations = uc.flagPermutationIterator(unqueried_flags);
     _ = unqueried_permutations.next(); // we already processed the no-flags case
     while (unqueried_permutations.next()) |unqueried_flag_permutation| {
         var combined_flags = queried_flag_permutation;
         combined_flags.setUnion(unqueried_flag_permutation);
-        arch.putMicrocodeCycleNoDedup(uc.getAddressForOpcode(the_opcode, combined_flags), initial_cycle);
+        arch.putMicrocodeCycleNoDedup(uc.getAddressForOpcode(the_opcode, combined_flags), initial_cycle, used_signals);
     }
 }
 
@@ -652,6 +660,7 @@ const ProcessResult = struct {
     encoding: ?InstructionEncoding,
     description: ?[]const u8,
     initial_cycle: *ControlSignals,
+    initial_cycle_signals_used: std.EnumSet(ControlSignals.SignalName),
     queried_opcode: bool,
     queried_flags: uc.FlagSet,
     next_unread_insn_offset: misc.SignedOffsetForLiteral,
@@ -689,21 +698,22 @@ fn process(config: ProcessConfig) ProcessResult {
 
     var c = cycles.len - 1;
     while (c > 0) : (c -= 1) {
-        const cycle = &cycles[c];
-        const ua = arch.getOrCreateUnconditionalContinuation(cycle);
-        cycles[c - 1].next_uop = uc.getContinuationNumberForAddress(ua).?;
+        const ua = arch.getOrCreateUnconditionalContinuation(&cycles[c].cs, cycles[c].used_signals);
+        cycles[c - 1].cs.next_uop = uc.getContinuationNumberForAddress(ua).?;
     }
 
     if (!uc.isContinuationOrHandler(config.initial_uc_address)) {
         if (i.encoding == null) panic("Encoding not specified!", .{});
     }
 
-    const cs = arch.putMicrocodeCycle(i.initial_uc_address, &cycles[0]);
+    const used_signals = cycles[0].used_signals;
+    const cs = arch.putMicrocodeCycle(i.initial_uc_address, &cycles[0].cs, used_signals);
 
     return .{
         .encoding = i.encoding,
         .description = i.description,
         .initial_cycle = cs,
+        .initial_cycle_signals_used = used_signals,
         .queried_opcode = i.queried_opcode,
         .queried_flags = i.queried_flags,
         .next_unread_insn_offset = i.next_unread_insn_offset,

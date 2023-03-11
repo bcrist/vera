@@ -64,7 +64,12 @@ pub fn start() void {
     assigned_signals = .{};
 }
 
-pub fn finish() ControlSignals {
+pub const CycleData = struct {
+    cs: ControlSignals,
+    used_signals: std.EnumSet(ControlSignals.SignalName),
+};
+
+pub fn finish() CycleData {
     switch (cycle.at_op) {
         .none => {},
         .translate => {
@@ -153,7 +158,21 @@ pub fn finish() ControlSignals {
         },
     }
 
-    return cycle;
+    if (!isSet(.special)) setControlSignal(.special, .none);
+    if (!isSet(.at_op)) setControlSignal(.at_op, .none);
+    if (!isSet(.jkr_wmode)) setControlSignal(.jkr_wmode, .no_write);
+    if (!isSet(.sr1_wsrc)) setControlSignal(.sr1_wsrc, .no_write);
+    if (!isSet(.sr2_wsrc)) setControlSignal(.sr2_wsrc, .no_write);
+    if (!isSet(.stat_op)) setControlSignal(.stat_op, .hold);
+    if (!isSet(.dl_op)) setControlSignal(.dl_op, .hold);
+    if (!isSet(.ob_oa_op)) setControlSignal(.ob_oa_op, .hold);
+    if (!isSet(.allow_int)) setControlSignal(.allow_int, false);
+    if (!isSet(.seq_op)) setControlSignal(.seq_op, .next_uop);
+
+    return .{
+        .cs = cycle,
+        .used_signals = assigned_signals,
+    };
 }
 
 fn isSet(signal: ControlSignals.SignalName) bool {
@@ -255,15 +274,6 @@ fn validateAddress() void {
     ensureSet(.base);
     ensureSet(.offset);
     ensureSet(.at_op);
-
-    // TODO figure out if we can route two SR2 chips on the same board
-    // if (cycle.sr2_wsrc == .sr2) {
-    //     if (ControlSignals.addressBaseToSR2(cycle.base)) |sr2| {
-    //         setControlSignal(.sr2_ri, sr2);
-    //     } else {
-    //         warn("When sr2_wsrc is .sr2, base ({}) and sr2_ri ({}) must match!", .{ cycle.base, cycle.sr2_ri });
-    //     }
-    // }
 
     if (ControlSignals.addressBaseToSR1(cycle.base)) |sr1| {
         setControlSignal(.sr1_ri, sr1);

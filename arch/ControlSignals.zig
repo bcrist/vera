@@ -221,9 +221,9 @@ pub const Literal = u6;
 // determines which general purpose registers to read/write
 pub const RegFileIndexingSource = enum(u2) {
     zero = 0,
-    literal = 1,
-    oa = 2,
-    ob = 3,
+    oa = 1, // TODO unused for kr_rsel
+    ob = 2, // TODO unused for jr_rsel
+    literal = 3, // TODO unused
 };
 
 pub const RegFileWriteMode = enum(u2) {
