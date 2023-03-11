@@ -498,31 +498,31 @@ pub fn _0185() void {
     branch(.next_ip, 1);
 }
 
-// pub fn _0186() void {
-//     encoding(.BB, .{});
-//     //syntax("BB");
-//     desc("Branch to start of current 256-byte-aligned block");
+pub fn _0186() void {
+    encoding(.BB, .{});
+    //syntax("BB");
+    desc("Branch to start of current 256-byte-aligned block");
 
-//     SRL_logic_literal_to_LL(.ip, .jl_and_k, 0xFF00, .fresh, .no_flags);
-//     JH_to_LH();
-//     L_to_SR(.next_ip);
-//     next_cycle();
+    SRL_logic_literal_to_LL(.ip, .jl_and_k, 0xFF00, .fresh, .no_flags);
+    JH_to_LH();
+    L_to_SR(.next_ip);
+    next_cycle();
 
-//     branch(.next_ip, 0);
-// }
+    branch(.next_ip, 0);
+}
 
-// pub fn _0187() void {
-//     encoding(.BBN, .{});
-//     //syntax("BBN");
-//     desc("Branch to start of next 256-byte-aligned block");
+pub fn _0187() void {
+    encoding(.BBN, .{});
+    //syntax("BBN");
+    desc("Branch to start of next 256-byte-aligned block");
 
-//     SRL_logic_literal_to_LL(.ip, .jl_or_k, 0xFF, .fresh, .no_flags);
-//     JH_to_LH();
-//     L_to_SR(.next_ip);
-//     next_cycle();
+    SRL_logic_literal_to_LL(.ip, .jl_or_k, 0xFF, .fresh, .no_flags);
+    JH_to_LH();
+    L_to_SR(.next_ip);
+    next_cycle();
 
-//     branch(.next_ip, 1);
-// }
+    branch(.next_ip, 1);
+}
 
 pub fn _0188() void {
     encoding(.EAB, .{ X0_relative(.I, .imm_0) });

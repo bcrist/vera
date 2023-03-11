@@ -78,6 +78,12 @@
    (0185 0185 BPN
       (desc "Branch to start of next page")
    )
+   (0186 0186 BB
+      (desc "Branch to start of current 256-byte-aligned block")
+   )
+   (0187 0187 BBN
+      (desc "Branch to start of next 256-byte-aligned block")
+   )
    (0188 0188 EAB
       (desc "Enable address translation + register unconditional branch")
       (param ptr32i (reg 0 0))

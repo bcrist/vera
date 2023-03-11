@@ -239,11 +239,7 @@ pub fn setup(self: *const RegisterFile, in: SetupInputs) SetupOutputs {
             .ob_oa_zx         => bits.zx(u16, bits.concat2(in.oa, in.ob)),
             .literal          => bits.zx(u16, in.cs_literal),
             .literal_minus_64 => bits._1x(u16, in.cs_literal),
-            .literal_special  => bits.concat(.{
-                @as(u6, 0),
-                @truncate(u7, @shlExact(@as(u8, 1), @truncate(u3, in.cs_literal))),
-                @truncate(u3, in.cs_literal >> 3),
-            }),
+            .literal_special  => misc.decodeSpecialKLiteral(in.cs_literal),
         },
         .sr1 = @bitCast(bus.JParts, sr1),
         .sr2 = @bitCast(bus.JParts, sr2),

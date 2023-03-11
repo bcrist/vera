@@ -421,25 +421,11 @@ pub fn literal_to_K(literal: i17) void {
     } else if (literal < 0 and literal >= -64) {
         setControlSignal(.k_src, .literal_minus_64);
         setControlSignal(.literal, @intCast(ControlSignals.Literal, literal + 64));
-    } else {
-        const raw = @bitCast(u17, literal);
-        const encoded_bits = @truncate(u7, raw >> 6);
-        const encoded: u3 = @ctz(encoded_bits);
-        const high_bits = @truncate(u3, raw >> 13);
-
-        const special = bits.concat(.{
-            @as(u6, 0),
-            @truncate(u7, @shlExact(@as(u8, 1), encoded)),
-            high_bits,
-        });
-
-        if (special != raw) {
-            warn("Invalid literal for K: {} (expected {b}, found {b})", .{ literal, raw, special });
-            return;
-        }
-
+    } else if (misc.encodeSpecialKLiteral(@bitCast(u17, literal))) |encoded| {
         setControlSignal(.k_src, .literal_special);
-        setControlSignal(.literal, bits.concat2(encoded, high_bits));
+        setControlSignal(.literal, encoded);
+    } else {
+        warn("Invalid literal for K: {}", .{ literal });
     }
 }
 

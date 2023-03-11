@@ -20,11 +20,15 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    //[[!! include 'build' !! 213 ]]
+    //[[!! include 'build' !! 225 ]]
     //[[ ################# !! GENERATED CODE -- DO NOT MODIFY !! ################# ]]
 
     const bits = b.createModule(.{
         .source_file = .{ .path = "pkg/bits.zig" },
+    });
+
+    const ControlSignals = b.createModule(.{
+        .source_file = .{ .path = "arch/ControlSignals.zig" },
     });
 
     const bus_types = b.createModule(.{
@@ -34,6 +38,8 @@ pub fn build(b: *std.Build) void {
     const misc = b.createModule(.{
         .source_file = .{ .path = "arch/misc.zig" },
         .dependencies = &.{
+            .{ .name = "ControlSignals", .module = ControlSignals },
+            .{ .name = "bits", .module = bits },
             .{ .name = "bus_types", .module = bus_types },
         },
     });
@@ -46,13 +52,8 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    const ControlSignals = b.createModule(.{
-        .source_file = .{ .path = "arch/ControlSignals.zig" },
-        .dependencies = &.{
-            .{ .name = "microcode", .module = microcode },
-            .{ .name = "misc", .module = misc },
-        },
-    });
+    ControlSignals.dependencies.put("microcode", microcode) catch unreachable;
+    ControlSignals.dependencies.put("misc", misc) catch unreachable;
 
     const Simulator = b.createModule(.{
         .source_file = .{ .path = "microsim/Simulator.zig" },
@@ -199,6 +200,7 @@ pub fn build(b: *std.Build) void {
     tests1.addModule("instruction_encoding", instruction_encoding);
     tests1.addModule("instruction_encoding_data", instruction_encoding_data);
     tests1.addModule("microcode", microcode);
+    tests1.addModule("microcode_roms", microcode_roms);
     tests1.addModule("misc", misc);
     tests1.addModule("rom_compress", rom_compress);
     tests1.addModule("rom_decompress", rom_decompress);
@@ -213,24 +215,34 @@ pub fn build(b: *std.Build) void {
     tests2.addModule("instruction_encoding_data", instruction_encoding_data);
 
     const tests3 = b.addTest(.{
+        .root_source_file = .{ .path = "arch/test_misc.zig"},
+        .target = target,
+        .optimize = mode,
+    });
+    tests3.addModule("ControlSignals", ControlSignals);
+    tests3.addModule("bus_types", bus_types);
+    tests3.addModule("misc", misc);
+
+    const tests4 = b.addTest(.{
         .root_source_file = .{ .path = "pkg/bits.zig"},
         .target = target,
         .optimize = mode,
     });
 
-    const tests4 = b.addTest(.{
+    const tests5 = b.addTest(.{
         .root_source_file = .{ .path = "pkg/rom_decompress.zig"},
         .target = target,
         .optimize = mode,
     });
-    tests4.addModule("bits", bits);
-    tests4.addModule("rom_compress", rom_compress);
+    tests5.addModule("bits", bits);
+    tests5.addModule("rom_compress", rom_compress);
 
     const test_step = b.step("test", "Run all tests");
     test_step.dependOn(&tests1.step);
     test_step.dependOn(&tests2.step);
     test_step.dependOn(&tests3.step);
     test_step.dependOn(&tests4.step);
+    test_step.dependOn(&tests5.step);
 
     //[[ ######################### END OF GENERATED CODE ######################### ]]
 }

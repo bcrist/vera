@@ -1,6 +1,3 @@
-## Allow KSource.literal_special to generate 0xFF and 0x00FF
-Fix BB, BBN instructions in _branch.zig
-
 ## Add gui to simulator
 Single step control
 Register views for pipe 0/1/2

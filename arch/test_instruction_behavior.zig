@@ -3,7 +3,6 @@ const ie = @import("instruction_encoding");
 const ControlSignals = @import("ControlSignals");
 const uc_roms = @import("microcode_rom_serialization.zig");
 const misc = @import("misc");
-const rom_data = @import("microcode_roms/roms.zig");
 const ie_data = @import("instruction_encoding_data").data;
 const Simulator = @import("Simulator");
 const RegisterFile = Simulator.RegisterFile;
@@ -14,7 +13,7 @@ const expectEqual = std.testing.expectEqual;
 var arena: std.heap.ArenaAllocator = undefined;
 var ddb: ie.DecoderDatabase = undefined;
 var edb: ie.EncoderDatabase = undefined;
-var microcode: []ControlSignals = undefined;
+var microcode: *const [misc.microcode_length]ControlSignals = undefined;
 var globals_loaded = false;
 
 fn initSimulator(program: []const ie.Instruction) !Simulator {
@@ -22,8 +21,9 @@ fn initSimulator(program: []const ie.Instruction) !Simulator {
         arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
         ddb = try ie.DecoderDatabase.init(arena.allocator(), ie_data, std.testing.allocator);
         edb = try ie.EncoderDatabase.init(arena.allocator(), ie_data, std.testing.allocator);
-        microcode = try arena.allocator().alloc(ControlSignals, misc.microcode_length);
-        uc_roms.readCompressedRoms(rom_data.compressed_data, microcode);
+        var new_microcode = try arena.allocator().create([misc.microcode_length]ControlSignals);
+        uc_roms.readCompressedRoms(@import("microcode_roms").compressed_data, new_microcode);
+        microcode = new_microcode;
         globals_loaded = true;
     }
 
@@ -52,12 +52,12 @@ fn initSimulator(program: []const ie.Instruction) !Simulator {
     _ = flash.writeAll(std.mem.asBytes(&vector_table));
     _ = flash.writeAll(program_data);
 
-    s.resetAndStart();
+    s.resetAndInit();
     return s;
 }
 
 fn deinitSimulator(simulator: *Simulator) void {
-    simulator.deinit();
+    simulator.deinit(std.testing.allocator);
 }
 
 test "ADD X12, -128 -> X1" {
@@ -73,29 +73,28 @@ test "ADD X12, -128 -> X1" {
         },
     });
     defer deinitSimulator(&s);
-    var rv = register_file.RegisterView.init(s.reg_file, s.s.reg.rsn);
 
     s.cycle(2);
-    try expectEqual(@as(u32, 0xFFFFFF80), rv.readGPR32(1));
+    try expectEqual(@as(u32, 0xFFFFFF80), s.register_file.readGPR32(0, 1));
     try expect(s.s.reg.stat.n);
     try expect(!s.s.reg.stat.c);
     try expect(!s.s.reg.stat.v);
     try expect(!s.s.reg.stat.z);
 
-    s.resetAndStart();
-    rv.writeGPR32(12, 123456);
+    s.resetAndInit();
+    s.register_file.writeGPR32(0, 12, 123456);
     s.cycle(2);
-    try expectEqual(@as(u32, 123328), rv.readGPR32(1));
+    try expectEqual(@as(u32, 123328), s.register_file.readGPR32(0, 1));
     try expect(!s.s.reg.stat.n);
     try expect(s.s.reg.stat.c);
     try expect(!s.s.reg.stat.v);
     try expect(!s.s.reg.stat.z);
 
-    s.resetAndStart();
-    rv.writeGPR32(12, 128);
+    s.resetAndInit();
+    s.register_file.writeGPR32(0, 12, 128);
     //try s.debugCycle(2, .one);
     s.cycle(2);
-    try expectEqual(@as(u32, 0), rv.readGPR32(1));
+    try expectEqual(@as(u32, 0), s.register_file.readGPR32(0, 1));
     try expect(!s.s.reg.stat.n);
     try expect(s.s.reg.stat.c);
     try expect(!s.s.reg.stat.v);
@@ -115,19 +114,18 @@ test "ADD X0, R4U -> X0" {
         },
     });
     defer deinitSimulator(&s);
-    var rv = register_file.RegisterView.init(s.reg_file, s.s.reg.rsn);
 
     s.cycle(1);
-    rv.writeGPR32(0, 33000);
-    try expectEqual(@as(u32, 33000), rv.readGPR32(0));
+    s.register_file.writeGPR32(0, 0, 33000);
+    try expectEqual(@as(u32, 33000), s.register_file.readGPR32(0, 0));
     try expect(!s.s.reg.stat.n);
     try expect(!s.s.reg.stat.c);
     try expect(!s.s.reg.stat.v);
     try expect(!s.s.reg.stat.z);
 
-    s.resetAndStart();
+    s.resetAndInit();
     s.cycle(1);
-    try expectEqual(@as(u32, 66000), rv.readGPR32(0));
+    try expectEqual(@as(u32, 66000), s.register_file.readGPR32(0, 0));
     try expect(!s.s.reg.stat.n);
     try expect(!s.s.reg.stat.c);
     try expect(!s.s.reg.stat.v);
@@ -147,19 +145,18 @@ test "ADD X1, R3S, X1" {
         },
     });
     defer deinitSimulator(&s);
-    var rv = register_file.RegisterView.init(s.reg_file, s.s.reg.rsn);
 
-    rv.writeSignedGPR(3, @as(i16, -32000));
+    s.register_file.writeSignedGPR(0, 3, @as(i16, -32000));
     s.cycle(1);
-    try expectEqual(@as(i32, -32000), rv.readSignedGPR32(1));
+    try expectEqual(@as(i32, -32000), s.register_file.readSignedGPR32(0, 1));
     try expect(s.s.reg.stat.n);
     try expect(!s.s.reg.stat.c);
     try expect(!s.s.reg.stat.v);
     try expect(!s.s.reg.stat.z);
 
-    s.resetAndStart();
+    s.resetAndInit();
     s.cycle(1);
-    try expectEqual(@as(i32, -64000), rv.readSignedGPR32(1));
+    try expectEqual(@as(i32, -64000), s.register_file.readSignedGPR32(0, 1));
     try expect(s.s.reg.stat.n);
     try expect(s.s.reg.stat.c);
     try expect(!s.s.reg.stat.v);
@@ -177,10 +174,9 @@ test "ADDC R5, 12345, R4" {
         },
     }});
     defer deinitSimulator(&s);
-    var rv = register_file.RegisterView.init(s.reg_file, s.s.reg.rsn);
     s.s.reg.stat.c = true;
     s.cycle(2);
-    try expectEqual(@as(u32, 12346), rv.readGPR(4));
+    try expectEqual(@as(u32, 12346), s.register_file.readGPR(0, 4));
     try expect(!s.s.reg.stat.n);
     try expect(!s.s.reg.stat.c);
     try expect(!s.s.reg.stat.v);
