@@ -78,6 +78,7 @@ pub const ZeropageVectorTable = extern struct {
 };
 
 pub const microcode_length = 0x10000;
+pub const opcode_count = 0x10000;
 
 pub fn decodeSpecialKLiteral(encoded: ControlSignals.Literal) bus.K {
     const l4 = @truncate(u4, encoded);

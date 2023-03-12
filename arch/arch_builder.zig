@@ -4,6 +4,7 @@ const TempAllocator = @import("temp_allocator");
 const ControlSignals = @import("ControlSignals");
 const uc = @import("microcode");
 const sx = @import("sx");
+const bits = @import("bits");
 const instruction_encoding = @import("instruction_encoding");
 const misc = @import("misc");
 const deep_hash_map = @import("deep_hash_map");
@@ -19,8 +20,9 @@ var cycle_dedup = deep_hash_map.DeepAutoHashMap(*ControlSignals, *ControlSignals
 var unconditional_continuations = deep_hash_map.DeepAutoHashMap(*ControlSignals, uc.Address).init(gpa.allocator());
 pub var microcode: [misc.microcode_length]?*ControlSignals = [_]?*ControlSignals { null } ** misc.microcode_length;
 var used_signals: [misc.microcode_length]std.EnumSet(ControlSignals.SignalName) = .{ std.EnumSet(ControlSignals.SignalName).initEmpty() } ** misc.microcode_length;
-var instructions: [misc.microcode_length]?*InstructionEncoding = .{ null } ** misc.microcode_length;
-var descriptions: [misc.microcode_length]?[]const u8 = .{ null } ** misc.microcode_length;
+
+var instructions: [misc.opcode_count]?*InstructionEncoding = .{ null } ** misc.opcode_count;
+var descriptions: [misc.opcode_count]?[]const u8 = .{ null } ** misc.opcode_count;
 
 var next_unconditional_continuation: uc.Continuation = 0x1FF;
 
@@ -137,8 +139,10 @@ pub fn recordInstruction(insn: InstructionEncoding, desc: ?[]const u8) void {
                 @tagName(existing.mnemonic),
             });
         }
-        instructions[cur_opcode] = ptr;
-        descriptions[cur_opcode] = desc;
+        for (0..uc.getOpcodeGranularity(cur_opcode)) |offset| {
+            instructions[cur_opcode + offset] = ptr;
+            descriptions[cur_opcode + offset] = desc;
+        }
     }
 }
 
@@ -212,6 +216,99 @@ pub fn analyzeControlSignalUsage(temp_arena: *TempAllocator, comptime signals: [
         try writer.print("{: >8}: {s}\n", .{ entry.value_ptr.*, entry.key_ptr.* });
     }
     try writer.writeAll("\n");
+}
+
+pub fn writeOpcodeTableSmall(writer: anytype) !void {
+    try writer.writeAll("  ");
+    for (0..0x10) |col| {
+        try writer.writeByte(' ');
+        try writer.writeByte('x');
+        try writer.writeByte("0123456789ABCDEF"[col]);
+        try writer.writeByte(' ');
+    }
+
+    for (0..0x10) |row| {
+        for (0..2) |subrow| {
+            try writer.writeByte('\n');
+            try writer.writeByte(switch (subrow) {
+                0 => "0123456789ABCDEF"[row],
+                else => ' ',
+            });
+            try writer.writeByte(' ');
+
+            for (0..0x10) |col| {
+                for (0..4) |subcol| {
+                    var num_occupied: usize = 0;
+                    for (0..4) |subsubcol| {
+                        for (0..8) |subsubrow| {
+                            const opcode = bits.concat(.{
+                                @intCast(u2, subsubcol),
+                                @intCast(u3, subsubrow),
+                                @intCast(u2, subcol),
+                                @intCast(u1, subrow),
+                                @intCast(u4, col),
+                                @intCast(u4, row),
+                            });
+                            if (instructions[opcode]) |_| {
+                                num_occupied += 1;
+                            }
+                        }
+                    }
+
+                    const ch: u8 = switch (num_occupied) {
+                        else => '#',
+                        24...31 => 'X',
+                        16...23 => '=',
+                        8...15 => ':',
+                        1...7 => '.',
+                        0 => ' ',
+                    };
+
+                    try writer.writeByte(ch);
+                }
+            }
+        }
+    }
+    try writer.writeAll("\n\n");
+}
+
+pub fn writeOpcodeTableLarge(writer: anytype) !void {
+    try writer.writeAll("   ");
+    for (0..0x100) |col| {
+        try writer.writeByte("0123456789ABCDEF"[col >> 4]);
+    }
+    try writer.writeAll("\n   ");
+    for (0..0x100) |col| {
+        try writer.writeByte("0123456789ABCDEF"[@truncate(u4, col)]);
+    }
+
+    for (0..0x10) |row| {
+        for (0..0x10) |subrow| {
+            try writer.writeByte('\n');
+            try writer.writeByte("0123456789ABCDEF"[row]);
+            try writer.writeByte("0123456789ABCDEF"[subrow]);
+            try writer.writeByte(' ');
+            for (0..0x10) |col| {
+                for (0..0x10) |subcol| {
+                    const opcode = bits.concat(.{
+                        @intCast(u4, subcol),
+                        @intCast(u4, subrow),
+                        @intCast(u4, col),
+                        @intCast(u4, row),
+                    });
+
+                    if (instructions[opcode]) |_| {
+                        try writer.writeByte('#');
+                    } else if (subrow == 0xF or subcol == 0xF) {
+                        try writer.writeByte('.');
+                    } else {
+                        try writer.writeByte(' ');
+                    }
+                }
+            }
+        }
+    }
+    try writer.writeAll("\n\n");
 }
 
 pub fn writeInstructionData(inner: anytype) !void {

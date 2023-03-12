@@ -325,7 +325,7 @@ fn doRegisterLine(
         .literal => @truncate(misc.RegisterIndex, cs.literal),
         .oa => oa,
         .ob => ob,
-    };
+    } ^ @boolToInt(cs.jr_rx);
     const kr_index: misc.RegisterIndex = switch (cs.kr_rsel) {
         .zero => 0,
         .literal => @truncate(misc.RegisterIndex, cs.literal),
