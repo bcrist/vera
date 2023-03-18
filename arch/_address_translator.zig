@@ -28,25 +28,25 @@ pub fn _1F00_1F3F() void {
         0x00 => {
             mode = .data;
             dir = .write;
-            encodingWithSuffix(.SAT, .W, .{ .Xa });
+            encodingWithSuffix(.SAT, .W, .{ .Xa, .to, .X0 });
             //syntax("SAT.W");
         },
         0x10 => {
             mode = .data;
             dir = .read;
-            encodingWithSuffix(.SAT, .R, .{ .Xa });
+            encodingWithSuffix(.SAT, .R, .{ .Xa, .to, .X0 });
             //syntax("SAT.R");
         },
         0x20 => {
             mode = .stack;
             dir = .read;
-            encodingWithSuffix(.SAT, .S, .{ .Xa });
+            encodingWithSuffix(.SAT, .S, .{ .Xa, .to, .X0 });
             //syntax("SAT.S");
         },
         0x30 => {
             mode = .insn;
             dir = .read;
-            encodingWithSuffix(.SAT, .I, .{ .Xa });
+            encodingWithSuffix(.SAT, .I, .{ .Xa, .to, .X0 });
             //syntax("SAT.I");
         },
         else => unreachable,
@@ -66,6 +66,17 @@ pub fn _1F00_1F3F() void {
     op_reg32_to_L(.OA);
     update_address_translation_from_L(.temp_1, mode, dir);
     exec_next_insn();
+}
+
+pub fn _alias_1F00_1F3F_SAT() void {
+    switch (opcode() & 0xF0) {
+        0x00 => encodingWithSuffix(.SAT, .W, .{ .Xa }),
+        0x10 => encodingWithSuffix(.SAT, .R, .{ .Xa }),
+        0x20 => encodingWithSuffix(.SAT, .S, .{ .Xa }),
+        0x30 => encodingWithSuffix(.SAT, .I, .{ .Xa }),
+        else => unreachable,
+    }
+    desc("Set address translation entry corresponding to X0 with data in Xa; discard secondary entry if necessary");
 }
 
 pub fn _1F40_1F7F() void {

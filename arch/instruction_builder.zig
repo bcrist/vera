@@ -556,7 +556,11 @@ pub fn processOpcodes(first_opcode: Opcode, last_opcode: Opcode, func: *const fn
     } else {
         result.encoding.opcodes.min = first_opcode;
         result.encoding.opcodes.max = first_opcode + first_granularity - 1;
-        arch.recordInstruction(result.encoding, result.description);
+        if (is_alias) {
+            try arch.recordAlias(result.encoding, result.description);
+        } else {
+            arch.recordInstruction(result.encoding, result.description);
+        }
 
         var opIter = uc.opcodeIterator(first_opcode, last_opcode);
         _ = opIter.next();
@@ -643,17 +647,24 @@ fn processOpcode(original_range: instruction_encoding.OpcodeRange, the_opcode: O
         storeInitialCycleFlagPermutations(the_opcode, permutation_result.initial_cycle, permutation_result.initial_cycle_signals_used, queried_flag_permutation, unqueried_flags);
     }
 
+    const insn_encoding = result.encoding orelse panic("Expected encoding to be specified", .{});
+
     if (result.next_unread_insn_offset < 0) {
         result.next_unread_insn_offset = 2;
     }
 
-    if (result.next_insn_executed and result.next_insn_offset != result.next_unread_insn_offset) {
-        printCyclePath(uc.getAddressForOpcode(the_opcode, .{}), result.encoding);
-        panic("Expected next instruction to be loaded from an offset of {} but it was actually from {}", .{ result.next_unread_insn_offset, result.next_insn_offset });
+    if (result.next_insn_executed) {
+        if (result.next_insn_offset != result.next_unread_insn_offset) {
+            printCyclePath(uc.getAddressForOpcode(the_opcode, .{}), result.encoding);
+            panic("Expected next instruction to be loaded from an offset of {} but it was actually from {}", .{ result.next_unread_insn_offset, result.next_insn_offset });
+        } else if (result.next_insn_offset != instruction_encoding.getInstructionLength(insn_encoding)) {
+            printCyclePath(uc.getAddressForOpcode(the_opcode, .{}), result.encoding);
+            panic("Expected instruction length of {} based on encoding, but next instruction was loaded from {}", .{ instruction_encoding.getInstructionLength(insn_encoding), result.next_insn_offset });
+        }
     }
 
     return .{
-        .encoding = result.encoding orelse panic("Expected encoding to be specified", .{}),
+        .encoding = insn_encoding,
         .description = result.description,
         .queried_opcode = result.queried_opcode,
     };

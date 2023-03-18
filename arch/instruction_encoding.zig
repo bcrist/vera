@@ -362,6 +362,7 @@ pub const InstructionEncodingAndDescription = struct {
 };
 
 pub fn eql(a: InstructionEncoding, b: InstructionEncoding) bool {
+    // Note intentionally not checking opcodes.min or opcodes.max
     return a.mnemonic == b.mnemonic
         and a.suffix == b.suffix
         and a.opcode_base == b.opcode_base

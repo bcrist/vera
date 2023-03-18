@@ -1,6 +1,3 @@
-## Validate that aliases have a non-alias definition
-## Validate that aliases use the same code layout as their non-alias definition
-
 ## Do conditional continuations by passing a function pointer, rather than the continuation number
 
 ## Validate that the same instruction encoding doesn't map to multiple opcodes/aliases

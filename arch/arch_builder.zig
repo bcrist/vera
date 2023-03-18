@@ -149,14 +149,32 @@ pub fn recordInstruction(insn: InstructionEncoding, desc: ?[]const u8) void {
     }
 }
 
+pub fn getInstructionByOpcode(opcode: Opcode) ?*InstructionEncoding {
+    return instructions[opcode];
+}
+
 pub fn recordAlias(insn: InstructionEncoding, desc: ?[]const u8) !void {
     var alias = try aliases.addOne();
     alias.encoding = insn;
     alias.desc = desc orelse "";
 }
 
-pub fn getInstructionByOpcode(opcode: Opcode) ?*InstructionEncoding {
-    return instructions[opcode];
+pub fn validateAliases() !void {
+    var stderr = std.io.getStdErr().writer();
+    for (aliases.items) |alias| {
+        var opcode_iter = uc.opcodeIterator(alias.encoding.opcodes.min, alias.encoding.opcodes.max);
+        while (opcode_iter.next()) |opcode| {
+            if (getInstructionByOpcode(opcode)) |ie| {
+                const original_len = instruction_encoding.getInstructionLength(ie.*);
+                const alias_len = instruction_encoding.getInstructionLength(alias.encoding);
+                if (original_len != alias_len) {
+                    try stderr.print("Alias for opcode {X:0>4} has length {} but expected lenth is {}\n", .{ opcode, alias_len, original_len });
+                }
+            } else {
+                try stderr.print("Alias defined for opcode {X:0>4} but there is no non-alias definition for it!\n", .{ opcode });
+            }
+        }
+    }
 }
 
 pub fn analyzeCustom(temp_arena: *TempAllocator, writer: anytype) !void {

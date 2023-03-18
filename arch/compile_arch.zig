@@ -23,17 +23,18 @@ pub fn main() !void {
     try ib.processScope(@import("_address_translator.zig"));
     try ib.processScope(@import("_sync.zig"));
 
+    try arch.validateAliases();
+
     var stdout = std.io.getStdOut().writer();
     try arch.writeOpcodeTableSmall(stdout);
 
     try assignReservedOpcodes();
 
-
     // try arch.analyzeCustom(&allocators.temp_arena, stdout);
     
-    inline for (comptime std.enums.values(ControlSignals.SignalName)) |signal| {
-        try arch.analyzeControlSignalUsage(&allocators.temp_arena, &.{ signal }, stdout);
-    }
+    // inline for (comptime std.enums.values(ControlSignals.SignalName)) |signal| {
+    //     try arch.analyzeControlSignalUsage(&allocators.temp_arena, &.{ signal }, stdout);
+    // }
 
     // try arch.analyzeControlSignalUsage(&allocators.temp_arena, &.{ .jl_src, .jh_src }, stdout);
     // try arch.analyzeControlSignalUsage(&allocators.temp_arena, &.{ .jr_rsel, .kr_rsel }, stdout);
