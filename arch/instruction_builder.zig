@@ -409,10 +409,12 @@ pub fn processScope(comptime T: type) !void {
                 var continuation = try std.fmt.parseUnsigned(uc.Continuation, decl.name[14..], 16);
                 processContinuation(continuation, @field(T, decl.name));
             } else {
+                const is_alias = comptime std.mem.startsWith(u8, decl.name, "_alias_");
+                const opcodes_str = if (is_alias) decl.name[7..] else decl.name[1..];
                 var first_opcode: Opcode = undefined;
                 var last_opcode: Opcode = undefined;
 
-                var iter = std.mem.tokenize(u8, decl.name[1..], "_");
+                var iter = std.mem.tokenize(u8, opcodes_str, "_");
                 if (iter.next()) |first| {
                     first_opcode = try std.fmt.parseUnsigned(Opcode, first, 16);
                 }
@@ -423,7 +425,7 @@ pub fn processScope(comptime T: type) !void {
                     last_opcode = @intCast(Opcode, @as(u32, first_opcode) + uc.getOpcodeGranularity(first_opcode) - 1);
                 }
 
-                processOpcodes(first_opcode, last_opcode, @field(T, decl.name));
+                try processOpcodes(first_opcode, last_opcode, @field(T, decl.name), is_alias);
             }
         }
     }
@@ -498,7 +500,7 @@ fn storeInitialContinuationCycleFlagPermutations(
     }
 }
 
-pub fn processOpcodes(first_opcode: Opcode, last_opcode: Opcode, func: *const fn () void) void {
+pub fn processOpcodes(first_opcode: Opcode, last_opcode: Opcode, func: *const fn () void, is_alias: bool) !void {
     allocators.temp_arena.reset();
 
     const first_granularity = uc.getOpcodeGranularity(first_opcode);
@@ -514,7 +516,7 @@ pub fn processOpcodes(first_opcode: Opcode, last_opcode: Opcode, func: *const fn
     var result = processOpcode(.{
         .min = first_opcode,
         .max = last_opcode,
-    }, first_opcode, func);
+    }, first_opcode, func, is_alias);
 
     if (!result.queried_opcode) {
         var checked_flags = uc.getCheckedFlagsForOpcode(first_opcode);
@@ -545,7 +547,12 @@ pub fn processOpcodes(first_opcode: Opcode, last_opcode: Opcode, func: *const fn
 
         assert(result.encoding.opcodes.min == first_opcode);
         assert(result.encoding.opcodes.max == last_opcode);
-        arch.recordInstruction(result.encoding, result.description);
+
+        if (is_alias) {
+            try arch.recordAlias(result.encoding, result.description);
+        } else {
+            arch.recordInstruction(result.encoding, result.description);
+        }
     } else {
         result.encoding.opcodes.min = first_opcode;
         result.encoding.opcodes.max = first_opcode + first_granularity - 1;
@@ -557,10 +564,15 @@ pub fn processOpcodes(first_opcode: Opcode, last_opcode: Opcode, func: *const fn
             result = processOpcode(.{
                 .min = first_opcode,
                 .max = last_opcode,
-            }, cur_opcode, func);
+            }, cur_opcode, func, is_alias);
             result.encoding.opcodes.min = cur_opcode;
             result.encoding.opcodes.max = cur_opcode + uc.getOpcodeGranularity(cur_opcode) - 1;
-            arch.recordInstruction(result.encoding, result.description);
+
+            if (is_alias) {
+                try arch.recordAlias(result.encoding, result.description);
+            } else {
+                arch.recordInstruction(result.encoding, result.description);
+            }
         }
     }
 }
@@ -571,7 +583,7 @@ const ProcessOpcodeResult = struct {
     queried_opcode: bool,
 };
 
-fn processOpcode(original_range: instruction_encoding.OpcodeRange, the_opcode: Opcode, func: *const fn () void) ProcessOpcodeResult {
+fn processOpcode(original_range: instruction_encoding.OpcodeRange, the_opcode: Opcode, func: *const fn () void, is_alias: bool) ProcessOpcodeResult {
     var config = ProcessConfig{
         .func = func,
         .original_opcode_range = original_range,
@@ -580,6 +592,16 @@ fn processOpcode(original_range: instruction_encoding.OpcodeRange, the_opcode: O
         .flags = .{},
         .initial_dl_ob_oa_state = .current_insn,
     };
+
+    if (is_alias) {
+        var result = processAlias(config);
+        return .{
+            .encoding = result.encoding orelse panic("Expected encoding to be specified for alias of opcode {X:0>4}", .{ the_opcode }),
+            .description = result.description,
+            .queried_opcode = result.queried_opcode,
+        };
+    }
+
     var result = process(config);
     var unqueried_flags = result.queried_flags;
     unqueried_flags.toggleAll();
@@ -689,7 +711,9 @@ fn process(config: ProcessConfig) ProcessResult {
 
     cycle_builder.start();
     i.cycle_started = true;
+
     config.func();
+
     if (i.cycle_started) {
         completed_cycles.append(cycle_builder.finish()) catch @panic("Out of memory");
     }
@@ -719,6 +743,45 @@ fn process(config: ProcessConfig) ProcessResult {
         .next_unread_insn_offset = i.next_unread_insn_offset,
         .next_insn_offset = i.next_insn_offset,
         .next_insn_executed = i.next_insn_executed,
+    };
+}
+
+const ProcessAliasResult = struct {
+    encoding: ?InstructionEncoding,
+    description: ?[]const u8,
+    queried_opcode: bool,
+};
+
+fn processAlias(config: ProcessConfig) ProcessAliasResult {
+    if (insn != null) {
+        @panic("There is already another instruction being processed");
+    }
+
+    var i = InstructionData{
+        .original_opcode_range = config.original_opcode_range,
+        .initial_uc_address = config.initial_uc_address,
+        .allowed_flags = config.allowed_flags,
+        .flags = config.flags,
+        .dl_state = config.initial_dl_ob_oa_state,
+        .oa_state = config.initial_dl_ob_oa_state,
+        .ob_state = config.initial_dl_ob_oa_state,
+    };
+
+    completed_cycles.clearRetainingCapacity();
+    insn = &i;
+    defer insn = null;
+
+    config.func();
+
+    std.debug.assert(completed_cycles.items.len == 0);
+    std.debug.assert(i.queried_flags.count() == 0);
+
+    if (i.encoding == null) panic("Encoding not specified!", .{});
+
+    return .{
+        .encoding = i.encoding,
+        .description = i.description,
+        .queried_opcode = i.queried_opcode,
     };
 }
 

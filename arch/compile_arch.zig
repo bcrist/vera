@@ -26,7 +26,7 @@ pub fn main() !void {
     var stdout = std.io.getStdOut().writer();
     try arch.writeOpcodeTableSmall(stdout);
 
-    assignReservedOpcodes();
+    try assignReservedOpcodes();
 
 
     // try arch.analyzeCustom(&allocators.temp_arena, stdout);
@@ -85,13 +85,13 @@ fn reserved() void {
     cb.invalid_instruction();
 }
 
-fn assignReservedOpcodes() void {
+fn assignReservedOpcodes() !void {
     var opIter = uc.opcodeIterator(0x0000, 0xFFFF);
     while (opIter.next()) |cur_opcode| {
         if (arch.getMicrocodeCycle(uc.getAddressForOpcode(cur_opcode, .{})) == null) {
             const granularity = uc.getOpcodeGranularity(cur_opcode);
             const last_opcode = cur_opcode +% granularity -% 1;
-            ib.processOpcodes(cur_opcode, last_opcode, reserved);
+            try ib.processOpcodes(cur_opcode, last_opcode, reserved, false);
         }
     }
 }

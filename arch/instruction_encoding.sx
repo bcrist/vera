@@ -1771,4 +1771,7 @@
       (param reg16 (base-src OB))
       (param -> ptr32d (base-src OA))
    )
+   (0100 0100 NOPE
+      (desc "No operation; equivalent to B IP+3")
+   )
 )

@@ -1,3 +1,10 @@
+## Validate that aliases have a non-alias definition
+## Validate that aliases use the same code layout as their non-alias definition
+
+## Do conditional continuations by passing a function pointer, rather than the continuation number
+
+## Validate that the same instruction encoding doesn't map to multiple opcodes/aliases
+
 ## Add gui to simulator
 Single step control
 Register views for pipe 0/1/2
@@ -27,9 +34,6 @@ Error console
 
 ## Consider Shifter overflow flag - if any shifted out bits differ from the last bit that wasn't shifted out
 ## Consider removing wait states
-
-## Handle alias_XXXX functions in microcode generator (see alias_0100 -> NOPE)
-## Do conditional continuations by passing a function pointer, rather than the continuation number (and relying on )
 
 ## block memcpy instruction that uses PSRAM?
 ## count zeroes with mask instruction?

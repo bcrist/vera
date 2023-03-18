@@ -82,7 +82,7 @@ pub fn _013D_017B() void {
 
     branch(.ip, getParameterOffset(0));
 }
-pub fn alias_0100() void {
+pub fn _alias_0100() void {
     encoding(.NOPE, .{});
     desc("No operation; equivalent to B IP+3");
 }
