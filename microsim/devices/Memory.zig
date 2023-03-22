@@ -98,15 +98,18 @@ pub fn transact(self: *Memory, bus_ctrl: SystemBusControl, data: bus.D, block_tr
             switch (@truncate(u2, bus_ctrl.address.offset >> 9)) {
                 1 => {
                     self.block_flash = true;
+                    self.block_psram = false;
                 },
                 2 => {
                     self.block_psram = true;
+                    self.block_flash = false;
                 },
                 else => {
                     self.block_flash = false;
                     self.block_psram = false;
                 },
             }
+            // std.debug.print("Block Transfer Address: {X:0>6}  Advance: {}  Flash: {}  PSRAM: {}\n", .{ self.block_ptr, self.block_advance, self.block_flash, self.block_psram });
         },
         else => {},
     }
