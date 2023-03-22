@@ -49,11 +49,11 @@ pub fn init(allocator: std.mem.Allocator, sim: *Simulator) !Gui {
 
     const scale_factor = computeScaleFactor(window);
 
-    // const font_size = 16.0 * scale_factor;
-    // const font_large = zgui.io.addFontFromMemory(embedded_font_data, math.floor(font_size * 1.1));
-    // const font_normal = zgui.io.addFontFromFile(content_dir ++ "Roboto-Medium.ttf", math.floor(font_size));
-    // assert(zgui.io.getFont(0) == font_large);
-    // assert(zgui.io.getFont(1) == font_normal);
+    const embedded_font_data = @embedFile("iosevka-custom-regular.ttf");
+
+    const font_size = 14.0 * scale_factor;
+    const font = zgui.io.addFontFromMemory(embedded_font_data, font_size);
+    std.debug.assert(zgui.io.getFont(0) == font);
 
     zgui.backend.initWithConfig(
         window,
