@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    //[[!! include 'build' !! 225 ]]
+    //[[!! include 'build' !! 252 ]]
     //[[ ################# !! GENERATED CODE -- DO NOT MODIFY !! ################# ]]
 
     const bits = b.createModule(.{
@@ -146,6 +146,16 @@ pub fn build(b: *std.Build) void {
         .source_file = .{ .path = "pkg/tempallocator/temp_allocator.zig" },
     });
 
+    const assemble = b.addExecutable(.{
+        .name = "assemble",
+        .root_source_file = .{ .path = "assembler/assemble.zig" },
+        .target = target,
+        .optimize = mode,
+    });
+    assemble.addModule("instruction_encoding", instruction_encoding);
+    assemble.install();
+    _ = makeRunStep(b, assemble, "assemble", "run assemble");
+
     const compile_arch = b.addExecutable(.{
         .name = "compile_arch",
         .root_source_file = .{ .path = "arch/compile_arch.zig" },
@@ -176,6 +186,8 @@ pub fn build(b: *std.Build) void {
     microsim.addModule("ControlSignals", ControlSignals);
     microsim.addModule("Simulator", Simulator);
     microsim.addModule("bus_types", bus_types);
+    microsim.addModule("instruction_encoding", instruction_encoding);
+    microsim.addModule("instruction_encoding_data", instruction_encoding_data);
     microsim.addModule("microcode", microcode);
     microsim.addModule("microcode_rom_serialization", microcode_rom_serialization);
     microsim.addModule("microcode_roms", microcode_roms);
@@ -224,18 +236,31 @@ pub fn build(b: *std.Build) void {
     tests3.addModule("misc", misc);
 
     const tests4 = b.addTest(.{
-        .root_source_file = .{ .path = "pkg/bits.zig"},
+        .root_source_file = .{ .path = "assembler/lex.zig"},
         .target = target,
         .optimize = mode,
     });
 
     const tests5 = b.addTest(.{
+        .root_source_file = .{ .path = "assembler/parse.zig"},
+        .target = target,
+        .optimize = mode,
+    });
+    tests5.addModule("instruction_encoding", instruction_encoding);
+
+    const tests6 = b.addTest(.{
+        .root_source_file = .{ .path = "pkg/bits.zig"},
+        .target = target,
+        .optimize = mode,
+    });
+
+    const tests7 = b.addTest(.{
         .root_source_file = .{ .path = "pkg/rom_decompress.zig"},
         .target = target,
         .optimize = mode,
     });
-    tests5.addModule("bits", bits);
-    tests5.addModule("rom_compress", rom_compress);
+    tests7.addModule("bits", bits);
+    tests7.addModule("rom_compress", rom_compress);
 
     const test_step = b.step("test", "Run all tests");
     test_step.dependOn(&tests1.step);
@@ -243,6 +268,8 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&tests3.step);
     test_step.dependOn(&tests4.step);
     test_step.dependOn(&tests5.step);
+    test_step.dependOn(&tests6.step);
+    test_step.dependOn(&tests7.step);
 
     //[[ ######################### END OF GENERATED CODE ######################### ]]
 }

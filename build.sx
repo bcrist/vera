@@ -50,3 +50,6 @@
 (dir microsim/cpu)
 (dir microsim/devices)
 (dir microsim/gui)
+(dir assembler
+    (exe assemble)
+)
