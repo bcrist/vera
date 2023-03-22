@@ -68,9 +68,24 @@ pub fn _0001() void {
     exec_latched_insn();
 }
 
-pub fn _0100_013C() void {
-    encoding(.B, .{ IP_relative(.imm_3_63) });
-    //syntax("B IP+immba[3,63]");
+pub fn _0100() void {
+    encoding(.NOPE, .{});
+    desc("No operation; equivalent to B IP+3");
+
+    // fake an access to IP+2 so that the instruction builder doesn't
+    // complain that we're loading the next instruction from IP+3:
+    ib.insn.?.onIPRelativeAccess(2, 1);
+    
+    load_and_exec_next_insn(3);
+}
+pub fn _alias_0100() void {
+    encoding(.B, .{ IP_relative(.imm_3_3) });
+    //syntax("B IP+immba[3,3]");
+    desc("IP-relative unconditional branch to IP+3; equivalent to NOPE");
+}
+pub fn _0101_013C() void {
+    encoding(.B, .{ IP_relative(.imm_4_63) });
+    //syntax("B IP+immba[4,63]");
     desc("IP-relative unconditional branch");
 
     branch(.ip, getParameterOffset(0));
@@ -81,10 +96,6 @@ pub fn _013D_017B() void {
     desc("IP-relative unconditional branch");
 
     branch(.ip, getParameterOffset(0));
-}
-pub fn _alias_0100() void {
-    encoding(.NOPE, .{});
-    desc("No operation; equivalent to B IP+3");
 }
 
 pub fn _017C() void {
@@ -156,7 +167,7 @@ pub fn _017F() void {
 }
 
 pub fn _0006() void {
-    encoding(.B, .{ IP_relative(.R0) });
+    encoding(.B, .{ IP_relative(.R0U) });
     //syntax("B IP+UR0");
     desc("IP-relative unsigned register unconditional branch");
 
@@ -168,7 +179,7 @@ pub fn _0006() void {
 }
 
 pub fn _0007() void {
-    encoding(.B, .{ IP_relative(.R0) });
+    encoding(.B, .{ IP_relative(.R0S) });
     //syntax("B IP+SR0");
     desc("IP-relative signed register unconditional branch");
 

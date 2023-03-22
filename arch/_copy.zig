@@ -534,15 +534,3 @@ pub fn _9380_938F() void {
     L_to_op_reg32(.OA);
     load_and_exec_next_insn(2);
 }
-
-pub fn _9390_939F() void {
-    encoding(.C, .{ Xa_relative(.S, .imm_0), .to, .SP });
-    //syntax("C Xa -> SP");
-    desc("Copy 32b register to stack pointer");
-
-    op_reg32_to_L(.OA);
-    L_to_SR(.sp);
-    next_cycle();
-
-    load_and_exec_next_insn(2);
-}

@@ -1,6 +1,7 @@
 const std = @import("std");
 const uc_roms = @import("microcode_rom_serialization");
 const misc = @import("misc");
+const ie = @import("instruction_encoding");
 const zglfw = @import("zglfw");
 const ControlSignals = @import("ControlSignals");
 const Simulator = @import("Simulator");
@@ -24,6 +25,67 @@ pub fn main() !void {
     for (&sim.memory.flash) |*chip| {
         std.mem.set(u16, chip, 0xFFFF);
     }
+
+    const ie_data = @import("instruction_encoding_data").data;
+    const edb = try ie.EncoderDatabase.init(arena.allocator(), ie_data, arena.allocator());
+
+    var program_data: [256]u8 = undefined;
+    var encoder = ie.Encoder.init(&program_data);
+    const program = [_]ie.Instruction {
+        .{
+            .mnemonic = .C,
+            .suffix = .none,
+            .params = &[_]ie.Parameter{
+                ie.parameter(.constant, 0),
+                ie.toParameter(.reg32, 12),
+            },
+        },
+        .{
+            .mnemonic = .ADD,
+            .suffix = .none,
+            .params = &[_]ie.Parameter{
+                ie.parameter(.reg32, 12),
+                ie.parameter(.constant, -128),
+                ie.toParameter(.reg32, 1),
+            },
+        },
+    };
+    for (program) |insn| {
+        var insn_iter = edb.getMatchingEncodings(insn);
+        try encoder.encode(insn, insn_iter.next().?);
+    }
+    const vector_table = misc.ZeropageVectorTable{
+        .double_fault = 0xFFFE,
+        .page_fault = 0xFFFD,
+        .access_fault = 0xFFFC,
+        .page_align_fault = 0xFFFB,
+        .instruction_protection_fault = 0xFFFA,
+        .invalid_instruction = 0xFFF9,
+        .pipe_0_reset = @sizeOf(misc.ZeropageVectorTable),
+    };
+    
+    var flash = sim.memory.flashIterator(0x7E_000 * 8);
+    _ = flash.writeAll(std.mem.asBytes(&vector_table));
+    _ = flash.writeAll(&program_data);
+
+
+    var ram_iter = sim.memory.flashIterator(0);
+    var i: usize = 0;
+    while (ram_iter.readByte()) |b| {
+        if (b != 0xFF) {
+            std.debug.print("{X:0>4}: {X:0>2}\n", .{ i, b });
+        }
+        i += 1;
+    }
+    std.debug.print("\n", .{});
+
+    sim.resetAndInit();
+
+    ram_iter = sim.memory.sramIterator(0);
+    for (0..256) |_| {
+        std.debug.print(" {X:0>2}", .{ ram_iter.readByte().? });
+    }
+    std.debug.print("\n", .{});
 
     var gui = try Gui.init(gpa.allocator(), &sim);
     defer gui.deinit(gpa.allocator());

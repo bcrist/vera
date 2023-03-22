@@ -28,6 +28,7 @@ const JH_to_LH = cb.JH_to_LH;
 const pipe_id_to_L = cb.pipe_id_to_L;
 const literal_to_L = cb.literal_to_L;
 const literal_to_LL = cb.literal_to_LL;
+const reg_to_LL = cb.reg_to_LL;
 const zero_to_L = cb.zero_to_L;
 const D_to_L = cb.D_to_L;
 const D_to_DL = cb.D_to_DL;
@@ -91,12 +92,10 @@ pub fn _continuation_200() void {
 
         literal_to_LL(@intCast(i17, base_block_transfer_address >> 16));
         LL_to_reg(1);
-        clear_OB();
         next_cycle();
 
         literal_to_LL(@truncate(u16, base_block_transfer_address));
         LL_to_reg(0);
-        increment_OB();
         next_cycle();
 
         // 0x800 indicates that we want the address to auto-increment after every block transfer:
@@ -105,23 +104,25 @@ pub fn _continuation_200() void {
         JH_to_LH();
         logic_to_LL(.jl_or_k, .fresh, .no_flags);
         L_to_SR(.temp_1);
-        increment_OB();
         next_cycle();
 
         // 0x200 indicates that we want to copy from FLASH, not PSRAM
         SRL_logic_literal_to_LL(.temp_1, .jl_or_k, 0x200, .fresh, .no_flags);
         JH_to_LH();
         L_to_SR(.temp_1);
-        increment_OB();
         next_cycle();
 
         // The FLASH address is 0x7E000, and the low 16 bits are the value we write to the register.
         // 0xE000 is generated with the equivalent of @truncate(u16, 0xFFFF0000 >> 3):
         neg_one_to_JH();
         zero_to_JL();
-        OB_OA_to_K(); // 3; we can't use literal_to_K(3) because we need to use the literal for the temp_1 offset of 7
+        literal_to_K(3);
         shift_to_LL(.right, .no_flags);
+        LL_to_reg(0);
+        next_cycle();
+
         // The high 3 bits of the FLASH address get added as an offset to the address where we write it:
+        reg_to_LL(0);
         write_from_LL(.temp_1, 0x7, .word, .raw);
         next_cycle();
 

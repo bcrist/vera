@@ -28,6 +28,13 @@ pub fn randomize(self: *RegisterFile, rnd: std.rand.Random) void {
     rnd.bytes(std.mem.sliceAsBytes(self.sr2[0..]));
 }
 
+pub fn setAllZeroes(self: *RegisterFile) void {
+    std.mem.set(u16, &self.gpr_even, 0);
+    std.mem.set(u16, &self.gpr_odd, 0);
+    std.mem.set(u32, &self.sr1, 0);
+    std.mem.set(u32, &self.sr2, 0);
+}
+
 fn gprAddress(rsn: RegistersetNumber, index: RegisterIndex) u9 {
     return bits.concat2(@truncate(u3, index >> 1), rsn);
 }

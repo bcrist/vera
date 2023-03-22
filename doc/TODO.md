@@ -2,6 +2,8 @@
 
 ## Validate that the same instruction encoding doesn't map to multiple opcodes/aliases
 
+## InstructionEncoding should track whether or there's a possible straight-through flow control?  Or just make assumptions based on mnemonic?
+
 ## Add gui to simulator
 Single step control
 Register views for pipe 0/1/2

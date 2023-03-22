@@ -33,7 +33,7 @@ pub const Mnemonic = enum {
     // Basic data movement:
     C, DUP, LD, LDI, ILD, ST, STI, IST,
     // MMU:
-    CAT, CATM, CATO, SAT, CSAT, RAT,
+    SAT, RAT,
     // Stack:
     FRAME, UNFRAME, POP, PUSH,
     // Atomics:
@@ -152,6 +152,8 @@ pub const MnemonicSuffix = enum {
     NN, // not negative
     C, // carry
     NC, // not carry
+    V, // overflow
+    NV, // not overflow
     LS, // less (signed)
     NLS, // not less (signed)
     GS, // greater (signed)
@@ -790,7 +792,7 @@ fn validateParameterEncodingConstants(comptime param: ParameterEncoding, src: Pa
     comptime {
         var min_total_values: usize = switch (src) {
             .implicit => 0,
-            .opcode => 2,
+            .opcode => 1,
             .OA, .OB, .IP_plus_2_OA, .IP_plus_2_OB => 16,
             .OB_OA, .IP_plus_2_8 => 256,
             .IP_plus_2_16, .IP_plus_4_16 => 65536,
@@ -899,6 +901,12 @@ pub fn comptimeParameterEncodings(comptime args: anytype) []const ParameterEncod
 
 pub fn getInstructionLength(encoding: InstructionEncoding) usize {
     var len: usize = 2;
+
+    if (encoding.mnemonic == .NOPE) {
+        // special case; NOPE is really a branch, that skips a byte,
+        // but from the programmer's perspective it's an instruction with length 3.
+        return 3;
+    }
 
     for (encoding.params) |param| {
         const len_for_param = std.math.max(getMinLengthForParamSource(param.base_src), getMinLengthForParamSource(param.offset_src));
@@ -1087,6 +1095,10 @@ pub fn encodeInstruction(insn: Instruction, encoding: InstructionEncoding, buf: 
 
     writeOpcode(buf, encoding.opcodes.min);
 
+    if (insn.mnemonic == .NOPE) {
+        writeImm8(buf, 0);
+    }
+
     var i: usize = 0;
     while (i < encoding.params.len) : (i += 1) {
         const param = insn.params[i];
@@ -1116,8 +1128,13 @@ pub const Encoder = struct {
         return .{
             .mem = mem,
             .remaining = mem,
-            .last_instruction_encoded = &[_]u8{},
+            .last_instruction_encoded = "",
         };
+    }
+
+    pub fn reset(self: *Encoder) void {
+        self.remaining = self.mem;
+        self.last_instruction_encoded = "";
     }
 
     pub fn encode(self: *Encoder, insn: Instruction, encoding: InstructionEncoding) !void {
@@ -1126,15 +1143,18 @@ pub const Encoder = struct {
     }
 
     pub fn encodeU8(self: *Encoder, d: u8) void {
+        std.debug.assert(self.remaining.len >= 1);
         self.remaining[0] = d;
         self.remaining = self.remaining[1..];
     }
     pub fn encodeU16(self: *Encoder, d: u16) void {
+        std.debug.assert(self.remaining.len >= 2);
         self.remaining[0] = @truncate(u8, d);
         self.remaining[1] = @intCast(u8, d >> 8);
         self.remaining = self.remaining[2..];
     }
     pub fn encodeU32(self: *Encoder, d: u32) void {
+        std.debug.assert(self.remaining.len >= 4);
         self.remaining[0] = @truncate(u8, d);
         self.remaining[1] = @truncate(u8, d >> 8);
         self.remaining[2] = @truncate(u8, d >> 16);
@@ -1672,41 +1692,45 @@ pub const DecoderDatabase = struct {
             const min_opcode = encoding_and_desc.encoding.opcodes.min;
             const max_opcode = encoding_and_desc.encoding.opcodes.max;
 
+            // We ignore any duplicate encodings for the same opcode;
+            // In other words we never decode aliases, since they always
+            // appear at the end of instruction_encoding.sx
+
             if (encoding_and_desc.desc.len > 0) {
                 const desc = encoding_and_desc.desc;
                 var opcode: u32 = min_opcode;
                 while (opcode <= max_opcode and (opcode & 0xF) != 0) : (opcode += 1) {
-                    try temp_desc_16b.putNoClobber(@intCast(u16, opcode), desc);
+                    _ = try temp_desc_16b.getOrPutValue(@intCast(u16, opcode), desc);
                 }
                 while (opcode + 0xF <= max_opcode and (opcode & 0xFF) != 0) : (opcode += 0x10) {
-                    try temp_desc_12b.putNoClobber(@intCast(u12, opcode >> 4), desc);
+                    _ = try temp_desc_12b.getOrPutValue(@intCast(u12, opcode >> 4), desc);
                 }
                 while (opcode + 0xFF <= max_opcode) : (opcode += 0x100) {
-                    try temp_desc_8b.putNoClobber(@intCast(u8, opcode >> 8), desc);
+                    _ = try temp_desc_8b.getOrPutValue(@intCast(u8, opcode >> 8), desc);
                 }
                 while (opcode + 0xF <= max_opcode) : (opcode += 0x10) {
-                    try temp_desc_12b.putNoClobber(@intCast(u12, opcode >> 4), desc);
+                    _ = try temp_desc_12b.getOrPutValue(@intCast(u12, opcode >> 4), desc);
                 }
                 while (opcode <= max_opcode) : (opcode += 1) {
-                    try temp_desc_16b.putNoClobber(@intCast(u16, opcode), desc);
+                    _ = try temp_desc_16b.getOrPutValue(@intCast(u16, opcode), desc);
                 }
             }
 
             var opcode: u32 = min_opcode;
             while (opcode <= max_opcode and (opcode & 0xF) != 0) : (opcode += 1) {
-                try temp_enc_16b.putNoClobber(@intCast(u16, opcode), encoding_and_desc.encoding);
+                _ = try temp_enc_16b.getOrPutValue(@intCast(u16, opcode), encoding_and_desc.encoding);
             }
             while (opcode + 0xF <= max_opcode and (opcode & 0xFF) != 0) : (opcode += 0x10) {
-                try temp_enc_12b.putNoClobber(@intCast(u12, opcode >> 4), encoding_and_desc.encoding);
+                _ = try temp_enc_12b.getOrPutValue(@intCast(u12, opcode >> 4), encoding_and_desc.encoding);
             }
             while (opcode + 0xFF <= max_opcode) : (opcode += 0x100) {
-                try temp_enc_8b.putNoClobber(@intCast(u8, opcode >> 8), encoding_and_desc.encoding);
+                _ = try temp_enc_8b.getOrPutValue(@intCast(u8, opcode >> 8), encoding_and_desc.encoding);
             }
             while (opcode + 0xF <= max_opcode) : (opcode += 0x10) {
-                try temp_enc_12b.putNoClobber(@intCast(u12, opcode >> 4), encoding_and_desc.encoding);
+                _ = try temp_enc_12b.getOrPutValue(@intCast(u12, opcode >> 4), encoding_and_desc.encoding);
             }
             while (opcode <= max_opcode) : (opcode += 1) {
-                try temp_enc_16b.putNoClobber(@intCast(u16, opcode), encoding_and_desc.encoding);
+                _ = try temp_enc_16b.getOrPutValue(@intCast(u16, opcode), encoding_and_desc.encoding);
             }
         }
 

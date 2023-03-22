@@ -513,14 +513,14 @@ test "Instruction encoding" {
         .mnemonic = .B,
         .suffix = .none,
         .params = &[_]ie.Parameter{
-            ie.parameterWithOffset(.IP, 0, .reg16u, 2),
+            ie.parameterWithOffset(.IP, 0, .reg16u, 0),
         },
     });
     try ie.testIdempotence(&ddb, &edb, 1, .{
         .mnemonic = .B,
         .suffix = .none,
         .params = &[_]ie.Parameter{
-            ie.parameterWithOffset(.IP, 0, .reg16s, 2),
+            ie.parameterWithOffset(.IP, 0, .reg16s, 0),
         },
     });
     try ie.testIdempotence(&ddb, &edb, 1, .{
@@ -1044,15 +1044,32 @@ test "Instruction encoding" {
         });
     }
 
-    for ([_]ie.Mnemonic{ .CAT, .CATM, .CATO, .SAT, .CSAT, .RAT }) |mnemonic| {
-        for ([_]ie.MnemonicSuffix{ .W, .R, .S, .I }) |suffix| {
-            try ie.testIdempotence(&ddb, &edb, 1, .{
-                .mnemonic = mnemonic,
-                .suffix = suffix,
-                .params = &[_]ie.Parameter{},
-            });
-        }
+    for ([_]ie.MnemonicSuffix{ .W, .R, .S, .I }) |suffix| {
+        try ie.testIdempotence(&ddb, &edb, 1, .{
+            .mnemonic = .SAT,
+            .suffix = suffix,
+            .params = &.{
+                ie.parameter(.reg32, 5),
+                ie.toParameter(.reg32, 0),
+            },
+        });
     }
+
+    for ([_]ie.MnemonicSuffix{ .W, .R, .S, .I }) |suffix| {
+        try ie.testIdempotence(&ddb, &edb, 1, .{
+            .mnemonic = .RAT,
+            .suffix = suffix,
+            .params = &.{
+                ie.parameter(.reg16, 5),
+            },
+        });
+    }
+
+
+
+
+
+
 
     try ie.testIdempotence(&ddb, &edb, 1, .{
         .mnemonic = .C,
@@ -1067,7 +1084,7 @@ test "Instruction encoding" {
             .mnemonic = mnemonic,
             .suffix = .none,
             .params = &[_]ie.Parameter{
-                ie.parameter(.reg16s, 3),
+                ie.parameter(.reg16u, 0),
             },
         });
         try ie.testIdempotence(&ddb, &edb, 2, .{
@@ -1075,6 +1092,13 @@ test "Instruction encoding" {
             .suffix = .none,
             .params = &[_]ie.Parameter{
                 ie.parameter(.constant, 129),
+            },
+        });
+        try ie.testIdempotence(&ddb, &edb, 1, .{
+            .mnemonic = mnemonic,
+            .suffix = .none,
+            .params = &[_]ie.Parameter{
+                ie.parameter(.constant, 12999),
             },
         });
     }
@@ -1179,7 +1203,7 @@ test "Instruction encoding" {
         .suffix = .D,
         .params = &[_]ie.Parameter{
             ie.parameter(.ptr32d, 3),
-            ie.toParameter(.reg16, 5),
+            ie.toParameter(.reg16, 3),
         },
     });
     try ie.testIdempotence(&ddb, &edb, 1, .{
@@ -1187,7 +1211,7 @@ test "Instruction encoding" {
         .suffix = .D,
         .params = &[_]ie.Parameter{
             ie.parameter(.ptr32d, 3),
-            ie.toParameter(.reg32, 5),
+            ie.toParameter(.reg32, 3),
         },
     });
 
@@ -1196,7 +1220,7 @@ test "Instruction encoding" {
         .suffix = .D,
         .params = &[_]ie.Parameter{
             ie.parameter(.ptr32d, 3),
-            ie.toParameter(.reg16, 5),
+            ie.toParameter(.reg16, 3),
         },
     });
     try ie.testIdempotence(&ddb, &edb, 1, .{
@@ -1204,7 +1228,7 @@ test "Instruction encoding" {
         .suffix = .D,
         .params = &[_]ie.Parameter{
             ie.parameter(.ptr32d, 3),
-            ie.toParameter(.reg32, 5),
+            ie.toParameter(.reg32, 3),
         },
     });
 

@@ -18,23 +18,26 @@
    )
    (0006 0006 B
       (desc "IP-relative unsigned register unconditional branch")
-      (param IP reg16 (reg 0 0))
+      (param IP reg16u (reg 0 0))
    )
    (0007 0007 B
       (desc "IP-relative signed register unconditional branch")
-      (param IP reg16 (reg 0 0))
+      (param IP reg16s (reg 0 0))
    )
    (0008 0008 UNFRAME
       (desc "Add 16b register to stack pointer")
-      (param reg16 (reg 0 0))
+      (param reg16u (reg 0 0))
    )
    (0009 0009 FRAME
       (desc "Subtract 16b register from stack pointer")
-      (param reg16 (reg 0 0))
+      (param reg16u (reg 0 0))
    )
-   (0100 013C B
+   (0100 0100 NOPE
+      (desc "No operation; equivalent to B IP+3")
+   )
+   (0101 013C B
       (desc "IP-relative unconditional branch")
-      (param IP constant (offset-src opcode) (range 3 63))
+      (param IP constant (offset-src opcode) (range 4 63))
    )
    (013D 017B B
       (desc "IP-relative unconditional branch")
@@ -1087,11 +1090,6 @@
       (param SP)
       (param -> ptr32s (base-src OA))
    )
-   (9390 939F C
-      (desc "Copy 32b register to stack pointer")
-      (param ptr32s (base-src OA))
-      (param -> SP)
-   )
    (93A0 93AF NOT
       (desc "Bitwise complement of 16b register")
       (param reg16 (base-src OA))
@@ -1775,8 +1773,9 @@
       (param reg16 (base-src OB))
       (param -> ptr32d (base-src OA))
    )
-   (0100 0100 NOPE
-      (desc "No operation; equivalent to B IP+3")
+   (0100 0100 B
+      (desc "IP-relative unconditional branch to IP+3; equivalent to NOPE")
+      (param IP constant (offset-src opcode) (range 3 3))
    )
    (1F00 1F0F SAT W
       (desc "Set address translation entry corresponding to X0 with data in Xa; discard secondary entry if necessary")

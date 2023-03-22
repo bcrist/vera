@@ -46,21 +46,21 @@ pub fn _FB80_FB8F() void {
 }
 
 pub fn _0008() void {
-    encoding(.UNFRAME, .{ .R0 });
+    encoding(.UNFRAME, .{ .R0U });
     //syntax("UNFRAME SRa");
     desc("Add 16b register to stack pointer");
 
-    SR_plus_reg_to_L(.sp, 0, .sx, .fresh, .no_flags);
+    SR_plus_reg_to_L(.sp, 0, .zx, .fresh, .no_flags);
     L_to_SR(.sp);
     load_and_exec_next_insn(2);
 }
 
 pub fn _0009() void {
-    encoding(.FRAME, .{ .R0 });
+    encoding(.FRAME, .{ .R0U });
     //syntax("FRAME SRa");
     desc("Subtract 16b register from stack pointer");
 
-    SR_minus_reg_to_L(.sp, 0, .sx, .fresh, .no_flags);
+    SR_minus_reg_to_L(.sp, 0, .zx, .fresh, .no_flags);
     L_to_SR(.sp);
     load_and_exec_next_insn(2);
 }
