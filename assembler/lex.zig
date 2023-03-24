@@ -38,6 +38,126 @@ pub const Token = struct {
 
     pub const Handle = u31;
 
+    pub fn printContext(self: Token, source: []const u8, print_writer: anytype, max_line_width: usize) !void {
+        var initial_line_number = 1;
+        var prev_line_offset = 0;
+        for (source, 0..) |ch, offset| {
+            if (offset >= self.offset) {
+                break;
+            }
+            if (ch == '\n') {
+                initial_line_number += 1;
+                prev_line_offset = offset + 1;
+            }
+        }
+        var line_number = initial_line_number;
+        var offset = prev_line_offset;
+        // if (line_number > 1) {
+        //     line_number -= 1;
+        // }
+
+        const highlight_location = self.location(source);
+        const highlight_start = @ptrToInt(highlight_location.ptr) - @ptrToInt(source.ptr);
+        const highlight_end = highlight_start + highlight_location.len;
+
+        var iter = std.mem.split(u8, source[offset..], "\n");
+        while (iter.next()) |line| {
+            if (std.mem.endsWith(u8, line, "\r")) {
+                try printLine(print_writer, initial_line_number, line_number, offset, line[0..line.len - 1], highlight_start, highlight_end, max_line_width);
+            } else {
+                try printLine(print_writer, initial_line_number, line_number, offset, line, highlight_start, highlight_end, max_line_width);
+            }
+
+            if (offset >= highlight_end) {
+                break;
+            }
+
+            line_number += 1;
+            offset += line.len + 1;
+        }
+    }
+
+    fn printLine(
+        print_writer: anytype,
+        initial_line_number: usize,
+        line_number: usize,
+        offset: usize,
+        line: []const u8,
+        highlight_start: usize,
+        highlight_end: usize,
+        max_line_width: usize
+    ) !void {
+        try printLineNumber(print_writer, initial_line_number, line_number);
+
+        var end_of_line = offset + line.len;
+        var end_of_display = end_of_line;
+        if (line.len > max_line_width) {
+            try print_writer.writeAll(line[0..max_line_width - 3]);
+            try print_writer.writeAll("...\n");
+            end_of_display = offset + max_line_width - 3;
+        } else {
+            try print_writer.writeAll(line);
+            try print_writer.writeAll("\n");
+        }
+
+        if (highlight_start < end_of_line and highlight_end > offset) {
+            try printLineNumberPadding(print_writer, initial_line_number);
+            if (highlight_start <= offset) {
+                if (highlight_end >= end_of_display) {
+                    // highlight full line
+                    if (line.len > max_line_width and highlight_end > end_of_display) {
+                        try print_writer.writeByteNTimes('^', max_line_width - 3);
+                        try print_writer.writeAll("   ^");
+                    } else {
+                        try print_writer.writeByteNTimes('^', end_of_display - offset);
+                    }
+                } else {
+                    // highlight start of line
+                    try print_writer.writeByteNTimes('^', highlight_end - offset);
+                }
+            } else if (highlight_end >= end_of_display) {
+                // highlight end of line
+                if (line.len > max_line_width and highlight_end > end_of_display) {
+                    if (highlight_start < end_of_display) {
+                        try print_writer.writeByteNTimes(' ', highlight_start - offset);
+                        try print_writer.writeByteNTimes('^', end_of_display - highlight_start);
+                    } else {
+                        try print_writer.writeByteNTimes(' ', max_line_width - 3);
+                    }
+                    try print_writer.writeAll("   ^");
+                } else {
+                    try print_writer.writeByteNTimes(' ', highlight_start - offset);
+                    try print_writer.writeByteNTimes('^', end_of_display - highlight_start);
+                }
+            } else {
+                // highlight within line
+                try print_writer.writeByteNTimes(' ', highlight_start - offset);
+                try print_writer.writeByteNTimes('^', highlight_end - highlight_start);
+            }
+            try print_writer.writeAll("\n");
+        }
+    }
+
+    fn printLineNumber(print_writer: anytype, initial_line: usize, line: usize) !void {
+        if (initial_line < 900) {
+            try print_writer.print("{:>4} |", .{ line });
+        } else if (initial_line < 90_000) {
+            try print_writer.print("{:>6} |", .{ line });
+        } else {
+            try print_writer.print("{:>8} |", .{ line });
+        }
+    }
+
+    fn printLineNumberPadding(print_writer: anytype, initial_line: usize) !void {
+        if (initial_line < 900) {
+            try print_writer.writeAll("     |");
+        } else if (initial_line < 90_000) {
+            try print_writer.writeAll("       |");
+        } else {
+            try print_writer.writeAll("         |");
+        }
+    }
+
     pub fn location(self: Token, source: []const u8) []const u8 {
         var remaining = source[self.offset..];
         var token_len = switch (self.kind) {

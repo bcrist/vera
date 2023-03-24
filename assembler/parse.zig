@@ -76,7 +76,7 @@ pub fn deinit() void {
 
 pub const AstInstruction = struct {
     label: ?[]const u8,
-    token: ?Token.Handle,
+    token: Token.Handle,
     mnemonic: Mnemonic,
     suffix: MnemonicSuffix,
     params: ?AstExpr.Handle,
@@ -215,6 +215,7 @@ const Parser = struct {
     }
 
     fn parseInstruction(self: *Parser) !bool {
+        const label_token = self.next_token;
         const label = self.parseLabel();
         self.skipLinespace();
         if (self.tryToken(.dot)) {
@@ -355,7 +356,7 @@ const Parser = struct {
         } else if (label) |_| {
             try self.results.instructions.append(self.alloc, .{
                 .label = label,
-                .token = null,
+                .token = label_token,
                 .mnemonic = ._reserved,
                 .suffix = .none,
                 .params = null,
@@ -425,7 +426,6 @@ test "Parser" {
     var insn = results.instructions.items[0];
     try std.testing.expect(insn.label != null);
     try std.testing.expectEqualStrings("label", insn.label.?);
-    try std.testing.expect(insn.token == null);
     try std.testing.expectEqual(Mnemonic._reserved, insn.mnemonic);
 
     insn = results.instructions.items[1];

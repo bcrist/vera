@@ -256,7 +256,7 @@ pub const ParameterSource = enum {
     opcode, // Like implicit, but used when there are multiple opcodes in the encoding, and the parameter value is linearly related to the opcode
 };
 
-fn getMinLengthForParamSource(src: ParameterSource) usize {
+fn getMinLengthForParamSource(src: ParameterSource) u7 {
     return switch (src) {
         .implicit, .OA, .OB, .OB_OA, .opcode => 2,
         .IP_plus_2_OA, .IP_plus_2_OB, .IP_plus_2_8 => 3,
@@ -899,8 +899,8 @@ pub fn comptimeParameterEncodings(comptime args: anytype) []const ParameterEncod
     }
 }
 
-pub fn getInstructionLength(encoding: InstructionEncoding) usize {
-    var len: usize = 2;
+pub fn getInstructionLength(encoding: InstructionEncoding) u7 {
+    var len: u7 = 2;
 
     if (encoding.mnemonic == .NOPE) {
         // special case; NOPE is really a branch, that skips a byte,

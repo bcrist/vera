@@ -4,7 +4,7 @@ const ie = @import("instruction_encoding");
 
 const ParseResult = parse.ParseResult;
 
-const SectionData = struct {
+pub const SectionData = struct {
     name: []const u8,
     base_address: u32,
     section_type: enum {
@@ -17,7 +17,7 @@ const SectionData = struct {
     data: []const u8,
 };
 
-pub fn encode(alloc: std.mem.Allocator, ast_data: ParseResult) !std.StringHashMap(SectionData) {
+pub fn encode(alloc: std.mem.Allocator, ast_data: ParseResult) !std.StringHashMapUnmanaged(SectionData) {
     var sections = std.StringHashMap(SectionData).init(alloc);
     errdefer sections.deinit();
     errdefer {
@@ -78,5 +78,5 @@ pub fn encode(alloc: std.mem.Allocator, ast_data: ParseResult) !std.StringHashMa
         }
     }
 
-    return sections;
+    return sections.unmanaged;
 }

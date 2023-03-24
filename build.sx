@@ -51,5 +51,6 @@
 (dir microsim/devices)
 (dir microsim/gui)
 (dir assembler
-    (exe assemble)
+    (pkg assemble)
+    (exe main)
 )
