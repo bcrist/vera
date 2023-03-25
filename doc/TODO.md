@@ -1,8 +1,15 @@
+## Microcode decompiler
+
 ## Validate that the same instruction encoding doesn't map to multiple opcodes/aliases
 
 ## InstructionEncoding should track whether or there's a possible straight-through flow control?  Or just make assumptions based on mnemonic?
 
 ## Add gui to simulator
+SX config file
+    next to exe, not in working dir
+    add to .gitignore
+    GLFW window size/location
+
 Single step control
 Register views for pipe 0/1/2
     Include disassembly view of memory around IP
@@ -42,8 +49,7 @@ Error console
 ## Refactor instruction encoding
 ## ParameterEncoding.default_to_param
 
-## microcode_builder.zig: use conditional slots if we run out of unconditional ones.
-## Add instruction parameters to instruction_builder.print_cycle_path()
+## Revamp instruction_builder.print_cycle_path()
 ## HTML instruction documentation with "disassembly" of control signals
 ## HTML instruction opcode table
 

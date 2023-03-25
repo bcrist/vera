@@ -25,6 +25,8 @@ fn addSuffix(comptime text: []const u8, suffix: MnemonicSuffix) !void {
 pub fn init() !void {
     @setEvalBranchQuota(10_000);
     var alloc = lookup_arena.allocator();
+    mnemonic_lookup = .{};
+    mnemonic_suffix_lookup = .{};
     try mnemonic_lookup.ensureTotalCapacity(alloc, 500);
     try mnemonic_suffix_lookup.ensureTotalCapacity(alloc, 300);
     inline for (comptime std.enums.values(Mnemonic)) |mnemonic| {
@@ -72,6 +74,7 @@ pub fn deinit() void {
     mnemonic_lookup.deinit(alloc);
     mnemonic_suffix_lookup.deinit(alloc);
     lookup_arena.deinit();
+    lookup_arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
 }
 
 pub const AstInstruction = struct {

@@ -35,10 +35,13 @@ test {
     const ddb = try ie.DecoderDatabase.init(arena.allocator(), ie_data, temp.allocator());
     temp.deinit();
 
+    try parse.init();
+    defer parse.deinit();
+
     const src =
         \\label:
         \\   nop //comment
-        \\   sync.D
+        \\   sync
         \\   fret
         \\
         \\asdf: WFI

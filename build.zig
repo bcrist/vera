@@ -243,13 +243,13 @@ pub fn build(b: *std.Build) void {
     tests3.addModule("bus_types", bus_types);
     tests3.addModule("misc", misc);
 
-    // const tests4 = b.addTest(.{
-    //     .root_source_file = .{ .path = "assembler/assemble.zig"},
-    //     .target = target,
-    //     .optimize = mode,
-    // });
-    // tests4.addModule("instruction_encoding", instruction_encoding);
-    // tests4.addModule("instruction_encoding_data", instruction_encoding_data);
+    const tests4 = b.addTest(.{
+        .root_source_file = .{ .path = "assembler/assemble.zig"},
+        .target = target,
+        .optimize = mode,
+    });
+    tests4.addModule("instruction_encoding", instruction_encoding);
+    tests4.addModule("instruction_encoding_data", instruction_encoding_data);
 
     const tests5 = b.addTest(.{
         .root_source_file = .{ .path = "assembler/lex.zig"},
@@ -282,7 +282,7 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&tests1.step);
     test_step.dependOn(&tests2.step);
     test_step.dependOn(&tests3.step);
-    // test_step.dependOn(&tests4.step);
+    test_step.dependOn(&tests4.step);
     test_step.dependOn(&tests5.step);
     test_step.dependOn(&tests6.step);
     test_step.dependOn(&tests7.step);
