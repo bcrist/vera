@@ -9,6 +9,7 @@ const encode = @import("encode.zig");
 const ParseError = parse.ParseError;
 
 const Result = struct {
+    tokens: lex.TokenList,
     sections: std.StringHashMapUnmanaged(encode.SectionData),
     errors: std.ArrayListUnmanaged(ParseError),
 };
@@ -19,6 +20,7 @@ pub fn assemble(alloc: std.mem.Allocator, edb: ie.EncoderDatabase, source: []con
     try infer.inferTypes(&parsed);
     try infer.inferEncodings(&parsed, alloc, edb, origin_address);
     return .{
+        .tokens = tokens,
         .errors = parsed.errors,
         .sections = try encode.encode(alloc, parsed),
     };
@@ -46,10 +48,11 @@ test {
 
     var results = try assemble(arena.allocator(), edb, src, 0);
     for (results.errors.items) |err| {
-        try err.token.printContext(src, stderr, 160);
+        const token = results.tokens.get(err.token);
+        try token.printContext(src, stderr, 160);
         try stderr.print("{s}\n", .{ err.desc });
     }
-    try std.testing.expectEqual(@as(usize, 0), results.errors.len);
+    try std.testing.expectEqual(@as(usize, 0), results.errors.items.len);
 
     _ = ddb;
 }

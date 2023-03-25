@@ -33,17 +33,17 @@ pub fn encode(alloc: std.mem.Allocator, ast_data: ParseResult) !std.StringHashMa
     defer {
         var data_iter = data.valueIterator();
         while (data_iter.next()) |list| {
-            list.deinit();
+            list.deinit(alloc);
         }
     }
 
-    var section_data = data.getOrPutValue("text", .{}).value_ptr;
-    var section = sections.getOrPutValue("text", .{
+    var section_data = (try data.getOrPutValue("text", .{})).value_ptr;
+    var section = (try sections.getOrPutValue("text", .{
         .name = "text",
         .base_address = 0,
         .section_type = .program,
         .data = "",
-    }).value_ptr;
+    })).value_ptr;
 
 
     var temp: [16]u8 = undefined;
@@ -55,13 +55,13 @@ pub fn encode(alloc: std.mem.Allocator, ast_data: ParseResult) !std.StringHashMa
         if (insn.encoding) |encoding| {
             // TODO build temp_parameters
 
-            encoder.encode(.{
+            try encoder.encode(.{
                 .mnemonic = encoding.mnemonic,
                 .suffix = encoding.suffix,
                 .params = temp_parameters.items,
             }, encoding);
             temp_parameters.clearRetainingCapacity();
-            try section_data.appendSlice(encoder.getData());
+            try section_data.appendSlice(alloc, encoder.getData());
             encoder.reset();
         }
     }
@@ -70,10 +70,10 @@ pub fn encode(alloc: std.mem.Allocator, ast_data: ParseResult) !std.StringHashMa
 
     var data_iter = data.iterator();
     while (data_iter.next()) |entry| {
-        if (sections.get(entry.key_ptr.*)) |s| {
+        if (sections.getPtr(entry.key_ptr.*)) |s| {
             const data_items = entry.value_ptr.items;
             if (data_items.len > 0) {
-                s.data = try alloc.dupe(data_items);
+                s.data = try alloc.dupe(u8, data_items);
             }
         }
     }

@@ -39,8 +39,8 @@ pub const Token = struct {
     pub const Handle = u31;
 
     pub fn printContext(self: Token, source: []const u8, print_writer: anytype, max_line_width: usize) !void {
-        var initial_line_number = 1;
-        var prev_line_offset = 0;
+        var initial_line_number: usize = 1;
+        var prev_line_offset: usize = 0;
         for (source, 0..) |ch, offset| {
             if (offset >= self.offset) {
                 break;
