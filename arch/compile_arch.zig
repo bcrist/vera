@@ -48,7 +48,7 @@ pub fn main() !void {
     // try arch.analyzeControlSignalUsage(&allocators.temp_arena, &.{ .allow_int, .seq_op }, stdout);
     // try arch.analyzeControlSignalUsage(&allocators.temp_arena, &.{ .ll_src, .lh_src }, stdout);
 
-    std.debug.print("{} continuations left\n", .{ arch.getContinuationsLeft() });
+    // std.debug.print("{} continuations left\n", .{ arch.getContinuationsLeft() });
 
     {
         var f = try std.fs.cwd().createFile("arch/instruction_encoding.sx", .{});

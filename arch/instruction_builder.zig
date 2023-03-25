@@ -31,7 +31,7 @@ pub const InstructionRegState = enum {
 
 const InstructionData = struct {
     original_opcode_range: ?instruction_encoding.OpcodeRange,
-    initial_uc_address: uc.Address,
+    initial_uc_address: ?uc.Address,
     allowed_flags: uc.FlagSet,
     flags: uc.FlagSet,
 
@@ -48,6 +48,8 @@ const InstructionData = struct {
     next_unread_insn_offset: misc.SignedOffsetForLiteral = -1,
     next_insn_offset: misc.SignedOffsetForLiteral = 0,
     next_insn_executed: bool = false,
+
+    next_conditional_cycle_func: ?*const fn () void = null,
 
     pub fn onIPRelativeAccess(self: *InstructionData, offset: misc.SignedOffsetForLiteral, size: u2) void {
         self.next_unread_insn_offset = std.math.max(self.next_unread_insn_offset, offset + size);
@@ -236,14 +238,14 @@ pub fn desc(s: []const u8) void {
 pub fn uc_address() uc.Address {
     if (insn) |i| {
         i.queried_opcode = true;
-        return i.initial_uc_address;
+        return i.initial_uc_address.?;
     }
     panic("Not currently processing an instruction", .{});
 }
 
 pub fn opcode() Opcode {
     if (insn) |i| {
-        if (uc.getOpcodeForAddress(i.initial_uc_address)) |v| {
+        if (uc.getOpcodeForAddress(i.initial_uc_address.?)) |v| {
             i.queried_opcode = true;
             return v;
         }
@@ -253,7 +255,7 @@ pub fn opcode() Opcode {
 
 pub fn opcode_high() u8 {
     if (insn) |i| {
-        if (uc.getOpcodeForAddress(i.initial_uc_address)) |v| {
+        if (uc.getOpcodeForAddress(i.initial_uc_address.?)) |v| {
             i.queried_opcode = true;
             return @intCast(u8, v >> 8);
         }
@@ -263,7 +265,7 @@ pub fn opcode_high() u8 {
 
 pub fn opcode_low() u8 {
     if (insn) |i| {
-        if (uc.getOpcodeForAddress(i.initial_uc_address)) |v| {
+        if (uc.getOpcodeForAddress(i.initial_uc_address.?)) |v| {
             i.queried_opcode = true;
             return @truncate(u8, v);
         }
@@ -273,7 +275,7 @@ pub fn opcode_low() u8 {
 
 pub fn OA() misc.OperandA {
     if (insn) |i| {
-        if (uc.getOAForAddress(i.initial_uc_address)) |v| {
+        if (uc.getOAForAddress(i.initial_uc_address.?)) |v| {
             i.queried_opcode = true;
             return v;
         } else {
@@ -285,7 +287,7 @@ pub fn OA() misc.OperandA {
 
 pub fn OB() misc.OperandB {
     if (insn) |i| {
-        if (uc.getOBForAddress(i.initial_uc_address)) |v| {
+        if (uc.getOBForAddress(i.initial_uc_address.?)) |v| {
             i.queried_opcode = true;
             return v;
         } else {
@@ -299,7 +301,7 @@ fn checkFlags(flags_to_check: []const uc.Flags) uc.FlagSet {
     if (insn) |i| {
         for (flags_to_check) |f| {
             if (!i.allowed_flags.contains(f)) {
-                if (uc.getCheckedFlagsForAddress(i.initial_uc_address).contains(f)) {
+                if (uc.getCheckedFlagsForAddress(i.initial_uc_address.?).contains(f)) {
                     panic("{} was not queried the first time this instruction was processed.  Try saving it to a variable before doing other checks.", .{ f });
                 } else {
                     panic("This opcode cannot have different implementations based on {}", .{ f });
@@ -371,9 +373,15 @@ pub fn next_cycle_force_normal_execution() void {
     next_cycle();
 }
 
-pub fn conditional_next_cycle(continuation: uc.Continuation) void {
+pub fn next_cycle_explicit(continuation: uc.Continuation) void {
     cycle_builder.setControlSignal(.next_uop, continuation);
     end_instruction();
+}
+
+pub fn next_cycle_conditional(func: *const fn () void) void {
+    cycle_builder.setControlSignal(.next_uop, 0);
+    end_instruction();
+    insn.?.next_conditional_cycle_func = func;
 }
 
 pub fn fault_return() void {
@@ -407,7 +415,7 @@ pub fn processScope(comptime T: type) !void {
                 processHandler(handler, @field(T, decl.name));
             } else if (comptime std.mem.startsWith(u8, decl.name, "_continuation_")) {
                 var continuation = try std.fmt.parseUnsigned(uc.Continuation, decl.name[14..], 16);
-                processContinuation(continuation, @field(T, decl.name));
+                _ = processContinuation(continuation, @field(T, decl.name));
             } else {
                 const is_alias = comptime std.mem.startsWith(u8, decl.name, "_alias_");
                 const opcodes_str = if (is_alias) decl.name[7..] else decl.name[1..];
@@ -432,36 +440,68 @@ pub fn processScope(comptime T: type) !void {
 }
 
 pub fn processHandler(handler: uc.Address, func: *const fn () void) void {
+    if (uc.getContinuationNumberForAddress(handler)) |continuation| {
+        if (uc.getCheckedFlagsForAddress(handler).count() > 0) {
+            panic("Address {X:0>4} is conditional continuation {X}\n", .{ handler, continuation });
+        }
+    }
+    if (uc.getOpcodeForAddress(handler)) |the_opcode| {
+        panic("Address {X:0>4} is opcode {X:0>4}\n", .{ handler, the_opcode });
+    }
+
     allocators.temp_arena.reset();
 
-    _ = process(.{
+    const result = process(.{
         .func = func,
         .original_opcode_range = null,
         .initial_uc_address = handler,
         .allowed_flags = .{},
         .flags = .{},
         .initial_dl_ob_oa_state = .unknown,
+        .require_encoding = false,
     });
+
+    _ = arch.putMicrocodeCycle(handler, result.initial_cycle, result.initial_cycle_signals_used);
 }
 
-pub fn processContinuation(continuation: uc.Continuation, func: *const fn () void) void {
-    allocators.temp_arena.reset();
-
-    const initial_uc_address = uc.getAddressForContinuation(continuation, .{});
-
+pub fn processContinuation(maybe_continuation: ?uc.Continuation, func: *const fn () void) uc.Continuation {
     var config = ProcessConfig{
         .func = func,
         .original_opcode_range = null,
-        .initial_uc_address = initial_uc_address,
-        .allowed_flags = uc.getCheckedFlagsForAddress(initial_uc_address),
+        .initial_uc_address = null,
+        .allowed_flags = uc.conditional_continuation_checked_flags,
         .flags = .{},
         .initial_dl_ob_oa_state = .unknown,
+        .require_encoding = false,
     };
-    var result = process(config);
+
+    if (maybe_continuation) |continuation| {
+        allocators.temp_arena.reset();
+        const initial_uc_address = uc.getAddressForContinuation(continuation, .{});
+        config.initial_uc_address = initial_uc_address;
+        config.allowed_flags = uc.getCheckedFlagsForAddress(initial_uc_address);
+    }
+
+    const result = process(config);
+
+    const num_queried_flags = @intCast(u4, result.queried_flags.count());
+    if (num_queried_flags == 0) {
+        return arch.getOrCreateUnconditionalContinuation(maybe_continuation, result.initial_cycle, result.initial_cycle_signals_used);
+    }
+
     var unqueried_flags = result.queried_flags;
     unqueried_flags.toggleAll();
     unqueried_flags.setIntersection(config.allowed_flags);
-    storeInitialContinuationCycleFlagPermutations(continuation, result.initial_cycle, result.initial_cycle_signals_used, .{}, unqueried_flags);
+
+    var initial_cycle_data = std.ArrayList(arch.ConditionalCycleData)
+        .initCapacity(allocators.temp_arena.allocator(), @as(usize, 1) << num_queried_flags)
+        catch @panic("Out of memory!");
+
+    initial_cycle_data.appendAssumeCapacity(.{
+        .flags = .{},
+        .cs = arch.dedupMicrocodeCycle(result.initial_cycle),
+        .used_signals = result.initial_cycle_signals_used,
+    });
 
     // Don't allow new flags to be queried on subsequent processing, since that will mess up our unqueried_flags handling
     config.allowed_flags = result.queried_flags;
@@ -469,35 +509,20 @@ pub fn processContinuation(continuation: uc.Continuation, func: *const fn () voi
     var queried_permutations = uc.flagPermutationIterator(result.queried_flags);
     _ = queried_permutations.next(); // we already processed the no-flags case
     while (queried_permutations.next()) |queried_flag_permutation| {
-        config.initial_uc_address = uc.getAddressForContinuation(continuation, queried_flag_permutation);
+        if (maybe_continuation) |continuation| {
+            config.initial_uc_address = uc.getAddressForContinuation(continuation, queried_flag_permutation);
+        }
         config.flags = queried_flag_permutation;
         var permutation_result = process(config);
 
-        if (result.encoding) |result_enc| {
-            if (!instruction_encoding.eql(permutation_result.encoding.?, result_enc)) {
-                printCyclePath(config.initial_uc_address, permutation_result.encoding);
-                panic("Expected all permutations to have the same encoding.", .{});
-            }
-        }
-
-        storeInitialContinuationCycleFlagPermutations(continuation, permutation_result.initial_cycle, permutation_result.initial_cycle_signals_used, queried_flag_permutation, unqueried_flags);
+        initial_cycle_data.appendAssumeCapacity(.{
+            .flags = queried_flag_permutation,
+            .cs = arch.dedupMicrocodeCycle(permutation_result.initial_cycle),
+            .used_signals = permutation_result.initial_cycle_signals_used,
+        });
     }
-}
 
-fn storeInitialContinuationCycleFlagPermutations(
-    continuation: uc.Continuation,
-    initial_cycle: *ControlSignals,
-    initial_cycle_signals_used: std.EnumSet(ControlSignals.SignalName),
-    queried_flag_permutation: uc.FlagSet,
-    unqueried_flags: uc.FlagSet
-) void {
-    var unqueried_permutations = uc.flagPermutationIterator(unqueried_flags);
-    _ = unqueried_permutations.next(); // we already processed the no-flags case
-    while (unqueried_permutations.next()) |unqueried_flag_permutation| {
-        var combined_flags = queried_flag_permutation;
-        combined_flags.setUnion(unqueried_flag_permutation);
-        arch.putMicrocodeCycleNoDedup(uc.getAddressForContinuation(continuation, combined_flags), initial_cycle, initial_cycle_signals_used);
-    }
+    return arch.getOrCreateConditionalContinuation(maybe_continuation, initial_cycle_data.items, unqueried_flags);
 }
 
 pub fn processOpcodes(first_opcode: Opcode, last_opcode: Opcode, func: *const fn () void, is_alias: bool) !void {
@@ -549,7 +574,7 @@ pub fn processOpcodes(first_opcode: Opcode, last_opcode: Opcode, func: *const fn
         assert(result.encoding.opcodes.max == last_opcode);
 
         if (is_alias) {
-            try arch.recordAlias(result.encoding, result.description);
+            arch.recordAlias(result.encoding, result.description);
         } else {
             arch.recordInstruction(result.encoding, result.description);
         }
@@ -557,7 +582,7 @@ pub fn processOpcodes(first_opcode: Opcode, last_opcode: Opcode, func: *const fn
         result.encoding.opcodes.min = first_opcode;
         result.encoding.opcodes.max = first_opcode + first_granularity - 1;
         if (is_alias) {
-            try arch.recordAlias(result.encoding, result.description);
+            arch.recordAlias(result.encoding, result.description);
         } else {
             arch.recordInstruction(result.encoding, result.description);
         }
@@ -573,7 +598,7 @@ pub fn processOpcodes(first_opcode: Opcode, last_opcode: Opcode, func: *const fn
             result.encoding.opcodes.max = cur_opcode + uc.getOpcodeGranularity(cur_opcode) - 1;
 
             if (is_alias) {
-                try arch.recordAlias(result.encoding, result.description);
+                arch.recordAlias(result.encoding, result.description);
             } else {
                 arch.recordInstruction(result.encoding, result.description);
             }
@@ -595,6 +620,7 @@ fn processOpcode(original_range: instruction_encoding.OpcodeRange, the_opcode: O
         .allowed_flags = uc.getCheckedFlagsForOpcode(the_opcode),
         .flags = .{},
         .initial_dl_ob_oa_state = .current_insn,
+        .require_encoding = true,
     };
 
     if (is_alias) {
@@ -610,7 +636,7 @@ fn processOpcode(original_range: instruction_encoding.OpcodeRange, the_opcode: O
     var unqueried_flags = result.queried_flags;
     unqueried_flags.toggleAll();
     unqueried_flags.setIntersection(config.allowed_flags);
-    storeInitialCycleFlagPermutations(the_opcode, result.initial_cycle, result.initial_cycle_signals_used, .{}, unqueried_flags);
+    _ = arch.putMicrocodeCycleOpcodePermutations(the_opcode, .{}, unqueried_flags, result.initial_cycle, result.initial_cycle_signals_used);
 
     // Don't allow new flags to be queried on subsequent processing, since that will mess up our unqueried_flags handling
     config.allowed_flags = result.queried_flags;
@@ -618,7 +644,8 @@ fn processOpcode(original_range: instruction_encoding.OpcodeRange, the_opcode: O
     var queried_permutations = uc.flagPermutationIterator(result.queried_flags);
     _ = queried_permutations.next(); // we already processed the no-flags case
     while (queried_permutations.next()) |queried_flag_permutation| {
-        config.initial_uc_address = uc.getAddressForOpcode(the_opcode, queried_flag_permutation);
+        const initial_uc_address = uc.getAddressForOpcode(the_opcode, queried_flag_permutation);
+        config.initial_uc_address = initial_uc_address;
         config.flags = queried_flag_permutation;
         var permutation_result = process(config);
 
@@ -628,7 +655,7 @@ fn processOpcode(original_range: instruction_encoding.OpcodeRange, the_opcode: O
                 result.next_insn_executed = true;
                 result.next_insn_offset = permutation_result.next_insn_offset;
             } else if (result.next_insn_offset != permutation_result.next_insn_offset) {
-                printCyclePath(config.initial_uc_address, permutation_result.encoding);
+                printCyclePath(initial_uc_address, permutation_result.encoding);
                 panic("Expected all permutations to load the next instruction from the same offset!  Use branch() instead of exec_next_insn() for branches.", .{});
             }
         }
@@ -639,12 +666,12 @@ fn processOpcode(original_range: instruction_encoding.OpcodeRange, the_opcode: O
 
         if (result.encoding) |result_enc| {
             if (!instruction_encoding.eql(permutation_result.encoding.?, result_enc)) {
-                printCyclePath(config.initial_uc_address, permutation_result.encoding);
+                printCyclePath(initial_uc_address, permutation_result.encoding);
                 panic("Expected all permutations to have the same encoding.", .{});
             }
         }
 
-        storeInitialCycleFlagPermutations(the_opcode, permutation_result.initial_cycle, permutation_result.initial_cycle_signals_used, queried_flag_permutation, unqueried_flags);
+        _ = arch.putMicrocodeCycleOpcodePermutations(the_opcode, queried_flag_permutation, unqueried_flags, permutation_result.initial_cycle, permutation_result.initial_cycle_signals_used);
     }
 
     const insn_encoding = result.encoding orelse panic("Expected encoding to be specified", .{});
@@ -670,23 +697,14 @@ fn processOpcode(original_range: instruction_encoding.OpcodeRange, the_opcode: O
     };
 }
 
-fn storeInitialCycleFlagPermutations(the_opcode: Opcode, initial_cycle: *ControlSignals, used_signals: std.EnumSet(ControlSignals.SignalName), queried_flag_permutation: uc.FlagSet, unqueried_flags: uc.FlagSet) void {
-    var unqueried_permutations = uc.flagPermutationIterator(unqueried_flags);
-    _ = unqueried_permutations.next(); // we already processed the no-flags case
-    while (unqueried_permutations.next()) |unqueried_flag_permutation| {
-        var combined_flags = queried_flag_permutation;
-        combined_flags.setUnion(unqueried_flag_permutation);
-        arch.putMicrocodeCycleNoDedup(uc.getAddressForOpcode(the_opcode, combined_flags), initial_cycle, used_signals);
-    }
-}
-
 const ProcessConfig = struct {
     func: *const fn () void,
     original_opcode_range: ?instruction_encoding.OpcodeRange,
-    initial_uc_address: uc.Address,
+    initial_uc_address: ?uc.Address,
     allowed_flags: uc.FlagSet,
     flags: uc.FlagSet,
     initial_dl_ob_oa_state: InstructionRegState,
+    require_encoding: bool,
 };
 
 const ProcessResult = struct {
@@ -725,30 +743,33 @@ fn process(config: ProcessConfig) ProcessResult {
 
     config.func();
 
+    if (config.require_encoding and i.encoding == null) {
+        panic("Encoding not specified!", .{});
+    }
+
     if (i.cycle_started) {
         completed_cycles.append(cycle_builder.finish()) catch @panic("Out of memory");
     }
 
     var cycles = completed_cycles.items;
 
+    if (i.next_conditional_cycle_func) |func| {
+        const cycles_clone = allocators.temp_arena.allocator().dupe(CycleData, cycles) catch @panic("Out of memory");
+        cycles = cycles_clone;
+        insn = null;
+        cycles[cycles.len - 1].cs.next_uop = processContinuation(null, func);
+    }
+
     var c = cycles.len - 1;
     while (c > 0) : (c -= 1) {
-        const ua = arch.getOrCreateUnconditionalContinuation(&cycles[c].cs, cycles[c].used_signals);
-        cycles[c - 1].cs.next_uop = uc.getContinuationNumberForAddress(ua).?;
+        cycles[c - 1].cs.next_uop = arch.getOrCreateUnconditionalContinuation(null, &cycles[c].cs, cycles[c].used_signals);
     }
-
-    if (!uc.isContinuationOrHandler(config.initial_uc_address)) {
-        if (i.encoding == null) panic("Encoding not specified!", .{});
-    }
-
-    const used_signals = cycles[0].used_signals;
-    const cs = arch.putMicrocodeCycle(i.initial_uc_address, &cycles[0].cs, used_signals);
 
     return .{
         .encoding = i.encoding,
         .description = i.description,
-        .initial_cycle = cs,
-        .initial_cycle_signals_used = used_signals,
+        .initial_cycle = &cycles[0].cs,
+        .initial_cycle_signals_used = cycles[0].used_signals,
         .queried_opcode = i.queried_opcode,
         .queried_flags = i.queried_flags,
         .next_unread_insn_offset = i.next_unread_insn_offset,
@@ -798,7 +819,9 @@ fn processAlias(config: ProcessConfig) ProcessAliasResult {
 
 pub fn panic(comptime format: []const u8, args: anytype) noreturn {
     if (insn) |i| {
-        printCyclePath(i.initial_uc_address, i.encoding);
+        if (i.initial_uc_address) |ua| {
+            printCyclePath(ua, i.encoding);
+        }
     }
     var stderr = std.io.getStdErr().writer();
     stderr.print(format, args) catch @panic("IO Error");
@@ -808,7 +831,9 @@ pub fn panic(comptime format: []const u8, args: anytype) noreturn {
 
 pub fn warn(comptime format: []const u8, args: anytype) void {
     if (insn) |i| {
-        printCyclePath(i.initial_uc_address, i.encoding);
+        if (i.initial_uc_address) |ua| {
+            printCyclePath(ua, i.encoding);
+        }
     }
     var stderr = std.io.getStdErr().writer();
     stderr.print(format, args) catch @panic("IO Error");

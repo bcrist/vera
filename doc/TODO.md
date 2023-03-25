@@ -1,5 +1,3 @@
-## Do conditional continuations by passing a function pointer, rather than the continuation number
-
 ## Validate that the same instruction encoding doesn't map to multiple opcodes/aliases
 
 ## InstructionEncoding should track whether or there's a possible straight-through flow control?  Or just make assumptions based on mnemonic?

@@ -1120,7 +1120,7 @@ pub fn encodeInstruction(insn: Instruction, encoding: InstructionEncoding, buf: 
 }
 
 pub const Encoder = struct {
-    mem: []const u8,
+    mem: []u8,
     remaining: []u8,
     last_instruction_encoded: []const u8,
 

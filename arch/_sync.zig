@@ -6,7 +6,7 @@ const encoding = ib.encoding;
 const encodingWithSuffix = ib.encodingWithSuffix;
 const desc = ib.desc;
 const next_cycle = ib.next_cycle;
-const conditional_next_cycle = ib.conditional_next_cycle;
+const next_cycle_conditional = ib.next_cycle_conditional;
 const zero = ib.zero;
 
 const op_reg32_to_L = cb.op_reg32_to_L;
@@ -141,9 +141,9 @@ pub fn _3400_34FF() void {
     read_to_D(.temp_1, 0, .word, .data);
     D_to_LL();
     ZN_from_LL(.fresh);
-    conditional_next_cycle(0x220);
+    next_cycle_conditional(astz16_continuation);
 }
-pub fn _continuation_220() void {
+fn astz16_continuation() void {
     assume_next_insn_loaded(2);
     if (zero()) {
         atomic_this_cycle();
@@ -175,9 +175,9 @@ pub fn _3500_35FF() void {
     read_to_D(.temp_1, 2, .word, .data);
     D_to_LL();
     ZN_from_LL(.cont);
-    conditional_next_cycle(0x221);
+    next_cycle_conditional(astz32_continuation);
 }
-pub fn _continuation_221() void {
+fn astz32_continuation() void {
     assume_next_insn_loaded(2);
     if (zero()) {
         atomic_this_cycle();
@@ -333,9 +333,9 @@ pub fn _3A00_3A0F() void {
     D_to_LL();
     LL_to_op_reg(.OA);
     ZN_from_LL(.fresh);
-    conditional_next_cycle(0x222);
+    next_cycle_conditional(adecnz16_continuation);
 }
-pub fn _continuation_222() void {
+fn adecnz16_continuation() void {
     assume_next_insn_loaded(2);
     if (zero()) {
         exec_next_insn();
@@ -370,9 +370,9 @@ pub fn _3B00_3B0F() void {
     D_to_LL();
     LL_to_op_reg(.OAxor1);
     ZN_from_LL(.cont);
-    conditional_next_cycle(0x223);
+    next_cycle_conditional(adecnz32_continuation);
 }
-pub fn _continuation_223() void {
+fn adecnz32_continuation() void {
     assume_next_insn_loaded(2);
     if (zero()) {
         exec_next_insn();
@@ -477,9 +477,9 @@ pub fn _3C20_3C2F() void {
     reg_to_JL(0);
     op_reg_to_K(.OB);
     sub_to_LL(.fresh, .flags);
-    conditional_next_cycle(0x224);
+    next_cycle_conditional(axe16_continuation);
 }
-pub fn _continuation_224() void {
+fn axe16_continuation() void {
     assume_next_insn_loaded(3);
     if (zero()) {
         atomic_this_cycle();
@@ -515,9 +515,9 @@ pub fn _3C30_3C3F() void {
     reg_to_JL(0);
     op_reg_to_K(.OB);
     sub_to_LL(.fresh, .flags);
-    conditional_next_cycle(0x225);
+    next_cycle_conditional(axe32_continuation_1);
 }
-pub fn _continuation_225() void {
+fn axe32_continuation_1() void {
     assume_next_insn_loaded(3);
     if (zero()) {
         atomic_this_cycle();
@@ -530,12 +530,12 @@ pub fn _continuation_225() void {
         reg_to_JL(1);
         op_reg_to_K(.OBxor1);
         sub_to_LL(.cont, .flags);
-        conditional_next_cycle(0x226);
+        next_cycle_conditional(axe32_continuation_2);
     } else {
         exec_next_insn();
     }
 }
-pub fn _continuation_226() void {
+fn axe32_continuation_2() void {
     assume_next_insn_loaded(3);
     if (zero()) {
         atomic_this_cycle();

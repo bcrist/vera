@@ -312,6 +312,16 @@ pub fn getContinuationNumberForAddress(ua: Address) ?Continuation {
     }
 }
 
+pub const conditional_continuation_checked_flags = blk: {
+    var flags = FlagSet.initEmpty();
+    flags.insert(.N);
+    flags.insert(.K);
+    flags.insert(.Z);
+    flags.insert(.C);
+    flags.insert(.V);
+    break :blk flags;
+};
+
 pub fn getCheckedFlagsForAddress(ua: Address) FlagSet {
     var result = FlagSet{};
 
@@ -327,11 +337,7 @@ pub fn getCheckedFlagsForAddress(ua: Address) FlagSet {
         }
     } else if ((ua & 0x4000) == 0x4000) {
         // conditional continuation cycle
-        result.insert(.N);
-        result.insert(.K);
-        result.insert(.Z);
-        result.insert(.C);
-        result.insert(.V);
+        result.setUnion(conditional_continuation_checked_flags);
     } else if ((ua & 0x2000) == 0x2000) {
         // KZ opcode
         result.insert(.K);

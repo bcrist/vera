@@ -18,7 +18,10 @@ const InstructionEncoding = instruction_encoding.InstructionEncoding;
 const InstructionEncodingAndDescription = instruction_encoding.InstructionEncodingAndDescription;
 
 var cycle_dedup = deep_hash_map.DeepAutoHashMap(*ControlSignals, *ControlSignals).init(gpa.allocator());
-var unconditional_continuations = deep_hash_map.DeepAutoHashMap(*ControlSignals, uc.Address).init(gpa.allocator());
+
+var unconditional_continuations = deep_hash_map.DeepAutoHashMap(*ControlSignals, uc.Continuation).init(gpa.allocator());
+var conditional_continuations = deep_hash_map.DeepRecursiveAutoHashMap(ConditionalContinuationKey, uc.Continuation).init(gpa.allocator());
+
 pub var microcode: [misc.microcode_length]?*ControlSignals = [_]?*ControlSignals { null } ** misc.microcode_length;
 var used_signals: [misc.microcode_length]std.EnumSet(ControlSignals.SignalName) = .{ std.EnumSet(ControlSignals.SignalName).initEmpty() } ** misc.microcode_length;
 
@@ -28,43 +31,144 @@ var descriptions: [misc.opcode_count]?[]const u8 = .{ null } ** misc.opcode_coun
 var aliases = std.ArrayList(InstructionEncodingAndDescription).init(gpa.allocator());
 
 var next_unconditional_continuation: uc.Continuation = 0x1FF;
+var next_conditional_continuation: uc.Continuation = 0x3FF;
 
-pub fn getOrCreateUnconditionalContinuation(cycle: *ControlSignals, signals_used_in_cycle: std.EnumSet(ControlSignals.SignalName)) uc.Address {
-    if (unconditional_continuations.get(cycle)) |ua| {
-        used_signals[ua].setUnion(signals_used_in_cycle);
-        return ua;
-    } else {
-        const min_n = @enumToInt(uc.Vectors.last) + 1;
-
-        var n = next_unconditional_continuation;
-        var ua = uc.getAddressForContinuation(n, .{});
-
-        while (n >= min_n and microcode[ua] != null) {
-            n -= 1;
-            ua = uc.getAddressForContinuation(n, .{});
+pub fn getOrCreateUnconditionalContinuation(requested_continuation: ?uc.Continuation, cycle: *ControlSignals, signals_used_in_cycle: std.EnumSet(ControlSignals.SignalName)) uc.Continuation {
+    if (requested_continuation == null) {
+        if (unconditional_continuations.get(cycle)) |continuation| {
+            used_signals[uc.getAddressForContinuation(continuation, .{})].setUnion(signals_used_in_cycle);
+            return continuation;
         }
-
-        // occasionally useful for debugging changes that cause unexpected increases in continuation use:
-        // if (@import("instruction_builder.zig").insn) |i| {
-        //     std.debug.print("Allocating continuation {X:0>3}:\n", .{ n });
-        //     @import("instruction_builder.zig").printCyclePath(i.initial_uc_address, i.encoding);
-        // }
-
-        if (n < min_n) {
-            // TODO use conditional slots?
-            std.debug.panic("No more continuations left!", .{});
-        }
-        next_unconditional_continuation = n - 1;
-
-        const deduped = putMicrocodeCycle(ua, cycle, signals_used_in_cycle);
-        unconditional_continuations.put(deduped, ua) catch @panic("Out of memory!");
-        return ua;
     }
+
+    const selected_continuation = requested_continuation orelse blk: {
+        const min_continuation = @enumToInt(uc.Vectors.last) + 1;
+
+        var continuation = next_unconditional_continuation;
+
+        while (continuation >= min_continuation and microcode[uc.getAddressForContinuation(continuation, .{})] != null) {
+            continuation -= 1;
+        }
+
+        if (continuation < min_continuation) {
+            continuation = 0x200;
+
+            while (continuation <= next_conditional_continuation and microcode[uc.getAddressForContinuation(continuation, .{})] != null) {
+                continuation += 1;
+            }
+
+            if (continuation > next_conditional_continuation) {
+                std.debug.panic("No more continuations left!", .{});
+            }
+        }
+        next_unconditional_continuation = continuation - 1;
+        break :blk continuation;
+    };
+
+    if (microcode[uc.getAddressForContinuation(selected_continuation, .{})] != null) {
+        panic("Unconditional continuation {X} is already in use", .{ selected_continuation });
+    }
+
+    // occasionally useful for debugging changes that cause unexpected increases in continuation use:
+    // if (@import("instruction_builder.zig").insn) |i| {
+    //     if (i.initial_uc_address) |ua| {
+    //         @import("instruction_builder.zig").printCyclePath(ua, i.encoding);
+    //     }
+    // }
+    // std.debug.print("Allocating unconditional continuation {X:0>3}\n", .{ selected_continuation });
+
+    const deduped = putMicrocodeCycle(uc.getAddressForContinuation(selected_continuation, .{}), cycle, signals_used_in_cycle);
+    unconditional_continuations.put(deduped, selected_continuation) catch @panic("Out of memory!");
+
+    if (selected_continuation >= 0x200) {
+        // if we run out of unconditional continuations and use a conditional one instead,
+        // make sure we write it to the addresses for all flag permutations:
+        var permutations = uc.flagPermutationIterator(uc.conditional_continuation_checked_flags);
+        _ = permutations.next(); // we already wrote the no-flags case
+        while (permutations.next()) |flags| {
+            putMicrocodeCycleNoDedup(uc.getAddressForContinuation(selected_continuation, flags), deduped, signals_used_in_cycle);
+        }
+    }
+
+    return selected_continuation;
 }
 
-pub fn getContinuationsLeft() usize {
+pub const ConditionalCycleData = struct {
+    flags: uc.FlagSet,
+    cs: *ControlSignals,
+    used_signals: std.EnumSet(ControlSignals.SignalName),
+};
+const ConditionalContinuationKey = struct {
+    cycles: []const ConditionalCycleData,
+    unqueried_flags: uc.FlagSet,
+};
+
+pub fn getOrCreateConditionalContinuation(requested_continuation: ?uc.Continuation, cycle_data: []const ConditionalCycleData, unqueried_flags: uc.FlagSet) uc.Continuation {
+    if (requested_continuation == null) {
+        if (conditional_continuations.get(.{
+            .cycles = cycle_data,
+            .unqueried_flags = unqueried_flags,
+        })) |found_continuation| {
+            // TODO merge used signals data
+            return found_continuation;
+        }
+    }
+
+    var selected_continuation = requested_continuation orelse blk: {
+        const min_continuation = 0x200;
+
+        var continuation = next_conditional_continuation;
+
+        while (continuation >= min_continuation and microcode[uc.getAddressForContinuation(continuation, .{})] != null) {
+            continuation -= 1;
+        }
+
+        if (continuation < min_continuation) {
+            std.debug.panic("No more conditional continuations left!", .{});
+        }
+        next_conditional_continuation = continuation - 1;
+        break :blk continuation;
+    };
+
+    if (microcode[uc.getAddressForContinuation(selected_continuation, .{})] != null) {
+        panic("Conditional continuation {X} is already in use", .{ selected_continuation });
+    }
+
+    // occasionally useful for debugging changes that cause unexpected increases in continuation use:
+    // if (@import("instruction_builder.zig").insn) |i| {
+    //     if (i.initial_uc_address) |ua| {
+    //         @import("instruction_builder.zig").printCyclePath(ua, i.encoding);
+    //     }
+    // }
+    // std.debug.print("Allocating conditional continuation {X:0>3}:\n", .{ selected_continuation });
+
+    const copied_cycle_data = perm_arena.allocator().dupe(ConditionalCycleData, cycle_data) catch @panic("Out of memory!");
+    for (copied_cycle_data) |*cycle| {
+        cycle.cs = dedupMicrocodeCycle(cycle.cs);
+        var permutations = uc.flagPermutationIterator(unqueried_flags);
+        while (permutations.next()) |unqueried_flag_permutation| {
+            var combined_flags = cycle.flags;
+            combined_flags.setUnion(unqueried_flag_permutation);
+            const ua = uc.getAddressForContinuation(selected_continuation, combined_flags);
+            putMicrocodeCycleNoDedup(ua, cycle.cs, cycle.used_signals);
+        }
+    }
+
+    conditional_continuations.put(.{
+        .cycles = copied_cycle_data,
+        .unqueried_flags = unqueried_flags,
+    }, selected_continuation) catch @panic("Out of memory!");
+
+    return selected_continuation;
+}
+
+pub fn getUnconditionalContinuationsLeft() usize {
     const min_n = @enumToInt(uc.Vectors.last) + 1;
     return next_unconditional_continuation - min_n + 1;
+}
+
+pub fn getConditionalContinuationsLeft() usize {
+    return next_conditional_continuation - 0x200 + 1;
 }
 
 pub fn getMicrocodeCycle(ua: uc.Address) ?*ControlSignals {
@@ -75,19 +179,35 @@ pub fn getUsedSignalsForAddress(ua: uc.Address) std.EnumSet(ControlSignals.Signa
     return used_signals[ua];
 }
 
-pub fn putMicrocodeCycle(ua: uc.Address, cycle: *ControlSignals, signals_used_in_cycle: std.EnumSet(ControlSignals.SignalName)) *ControlSignals {
-    var deduped = cycle;
+pub fn dedupMicrocodeCycle(cycle: *ControlSignals) *ControlSignals {
     if (cycle_dedup.get(cycle)) |c| {
-        deduped = c;
+        return c;
     } else {
-        deduped = perm_arena.allocator().create(ControlSignals) catch @panic("Out of memory!");
+        var deduped = perm_arena.allocator().create(ControlSignals) catch @panic("Out of memory!");
         deduped.* = cycle.*;
         cycle_dedup.put(deduped, deduped) catch @panic("Out of memory!");
+        return deduped;
     }
+}
 
+pub fn putMicrocodeCycleOpcodePermutations(opcode: Opcode, queried_flag_permutation: uc.FlagSet, unqueried_flags: uc.FlagSet, cycle: *ControlSignals, signals_used_in_cycle: std.EnumSet(ControlSignals.SignalName)) *ControlSignals {
+    const deduped = dedupMicrocodeCycle(cycle);
+    var permutations = uc.flagPermutationIterator(unqueried_flags);
+    while (permutations.next()) |unqueried_flag_permutation| {
+        var combined_flags = queried_flag_permutation;
+        combined_flags.setUnion(unqueried_flag_permutation);
+        const ua = uc.getAddressForOpcode(opcode, combined_flags);
+        putMicrocodeCycleNoDedup(ua, deduped, signals_used_in_cycle);
+    }
+    return deduped;
+}
+
+pub fn putMicrocodeCycle(ua: uc.Address, cycle: *ControlSignals, signals_used_in_cycle: std.EnumSet(ControlSignals.SignalName)) *ControlSignals {
+    const deduped = dedupMicrocodeCycle(cycle);
     putMicrocodeCycleNoDedup(ua, deduped, signals_used_in_cycle);
     return deduped;
 }
+
 
 // provided cycle should be from perm_arena
 pub fn putMicrocodeCycleNoDedup(ua: uc.Address, cycle: *ControlSignals, signals_used_in_cycle: std.EnumSet(ControlSignals.SignalName)) void {
@@ -137,7 +257,7 @@ pub fn recordInstruction(insn: InstructionEncoding, desc: ?[]const u8) void {
     var iter = uc.opcodeIterator(insn.opcodes.min, insn.opcodes.max);
     while (iter.next()) |cur_opcode| {
         if (instructions[cur_opcode]) |existing| {
-            std.debug.print("Opcode {X} has already been assigned to {s}\n", .{
+            panic("Opcode {X} has already been assigned to {s}\n", .{
                 cur_opcode,
                 @tagName(existing.mnemonic),
             });
@@ -153,8 +273,8 @@ pub fn getInstructionByOpcode(opcode: Opcode) ?*InstructionEncoding {
     return instructions[opcode];
 }
 
-pub fn recordAlias(insn: InstructionEncoding, desc: ?[]const u8) !void {
-    var alias = try aliases.addOne();
+pub fn recordAlias(insn: InstructionEncoding, desc: ?[]const u8) void {
+    var alias = aliases.addOne() catch @panic("Out of memory");
     alias.encoding = insn;
     alias.desc = desc orelse "";
 }
@@ -167,7 +287,7 @@ pub fn validateAliases() !void {
             if (getInstructionByOpcode(opcode)) |ie| {
                 const original_len = instruction_encoding.getInstructionLength(ie.*);
                 const alias_len = instruction_encoding.getInstructionLength(alias.encoding);
-                if (original_len != alias_len) {
+                if (original_len != alias_len and !(ie.mnemonic == .NOPE and alias.encoding.mnemonic == .B and alias.encoding.suffix == .none)) {
                     try stderr.print("Alias for opcode {X:0>4} has length {} but expected lenth is {}\n", .{ opcode, alias_len, original_len });
                 }
             } else {

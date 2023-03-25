@@ -10,7 +10,8 @@ const assert = std.debug.assert;
 const encoding = ib.encoding;
 const desc = ib.desc;
 const next_cycle = ib.next_cycle;
-const conditional_next_cycle = ib.conditional_next_cycle;
+const next_cycle_explicit = ib.next_cycle_explicit;
+const next_cycle_conditional = ib.next_cycle_conditional;
 const next_cycle_force_normal_execution = ib.next_cycle_force_normal_execution;
 const uc_address = ib.uc_address;
 const kernel = ib.kernel;
@@ -79,10 +80,10 @@ pub fn _handler_0() void {
     L_to_SR1(.zero);
     L_to_SR2(.zero);
     disable_address_translation();
-    conditional_next_cycle(0x200);
+    next_cycle_conditional(check_for_pipe_0);
 }
 
-pub fn _continuation_200() void {
+fn check_for_pipe_0() void {
     if (zero()) {
         // We are pipe 0; proceed with copying the boot rom into ram immediately.
 
@@ -141,17 +142,17 @@ pub fn _continuation_200() void {
         literal_to_L(0x2000);
         LL_to_reg(0);
         ZN_from_LL(.fresh);
-        conditional_next_cycle(0x201);
+        next_cycle_explicit(0x200);
     } else {
         // We are pipe 1 or 2.
         // Subtract 1 from .temp_1 so that next cycle we will know which next cycle.
         SR_minus_literal_to_L(.temp_1, 1, .fresh, .flags);
         L_to_SR1(.temp_1);
-        conditional_next_cycle(0x202);
+        next_cycle_conditional(check_for_pipe_1);
     }
 }
 
-pub fn _continuation_201() void {
+pub fn _continuation_200() void {
     // do pipe 0's block transfer
     if (!zero()) {
         // We need to copy more data
@@ -160,7 +161,7 @@ pub fn _continuation_201() void {
         reg_to_K(1);
         sub_to_LL(.fresh, .flags);
         LL_to_reg(0);
-        conditional_next_cycle(0x201);
+        next_cycle_explicit(0x200);
     } else {
         // Done with the block transfer!
         // Time to read the reset vector:
@@ -180,7 +181,7 @@ pub fn _continuation_201() void {
     }
 }
 
-pub fn _continuation_202() void {
+pub fn check_for_pipe_1() void {
     if (zero()) {
         // We are pipe 1.
         // Our job is to initialize the .zero registers for all registersets.
@@ -188,14 +189,14 @@ pub fn _continuation_202() void {
         LL_to_RSN();
         L_to_SR(.temp_1);
         ZN_from_LL(.fresh);
-        conditional_next_cycle(0x203);
+        next_cycle_explicit(0x201);
     } else {
         // We are pipe 2.
         wait_for_interrupt();
     }
 }
 
-pub fn _continuation_203() void {
+pub fn _continuation_201() void {
     if (!zero()) {
         zero_to_L();
         L_to_SR1(.zero);
@@ -205,7 +206,7 @@ pub fn _continuation_203() void {
         SR_minus_literal_to_L(.temp_1, 1, .fresh, .flags);
         LL_to_RSN();
         L_to_SR1(.temp_1);
-        conditional_next_cycle(0x203);
+        next_cycle_explicit(0x201);
     } else {
         pipe_id_to_L();
         LL_to_RSN();
