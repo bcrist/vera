@@ -7,7 +7,6 @@ const misc = @import("misc");
 const uc = @import("microcode");
 const ControlSignals = @import("ControlSignals");
 const Simulator = @import("Simulator");
-
 const colors = @import("colors.zig");
 const pipes = @import("pipes.zig");
 
@@ -30,17 +29,29 @@ const pipes = @import("pipes.zig");
 
 const Gui = @This();
 
+pub const WindowSettings = struct {
+    pos: [2]i32,
+    size: [2]i32,
+    maximized: bool,
+};
+
 sim: *Simulator,
 window: *zglfw.Window,
 gctx: *zgpu.GraphicsContext,
 base_style: zgui.Style,
 run: bool = false,
 
-pub fn init(allocator: std.mem.Allocator, sim: *Simulator) !Gui {
+pub fn init(allocator: std.mem.Allocator, sim: *Simulator, window_settings: ?WindowSettings, frame_settings: []zgui.WindowSettings) !Gui {
     try zglfw.init();
 
     const window = try zglfw.Window.create(1600, 1000, "Microsim", null);
     window.setSizeLimits(600, 400, -1, -1);
+
+    if (window_settings) |settings| {
+        window.setSize(settings.size[0], settings.size[1]);
+        window.setPos(settings.pos[0], settings.pos[1]);
+        window.setAttribute(.maximized, settings.maximized);
+    }
 
     const gctx = try zgpu.GraphicsContext.create(allocator, window);
 
@@ -55,6 +66,8 @@ pub fn init(allocator: std.mem.Allocator, sim: *Simulator) !Gui {
     const font = zgui.io.addFontFromMemory(embedded_font_data, font_size);
     std.debug.assert(zgui.io.getFont(0) == font);
 
+    zgui.io.setIniFilename(null);
+
     zgui.backend.initWithConfig(
         window,
         gctx.device,
@@ -62,8 +75,7 @@ pub fn init(allocator: std.mem.Allocator, sim: *Simulator) !Gui {
         .{ .texture_filter_mode = .linear, .pipeline_multisample_count = 1 },
     );
 
-    // This call is optional. Initially, zgui.io.getFont(0) is a default font.
-    // zgui.io.setDefaultFont(font_normal);
+    zgui.updateWindowSettings(frame_settings);
 
     const current_style = zgui.getStyle();
     current_style.window_min_size = .{ 320.0, 240.0 };

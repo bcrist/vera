@@ -5,11 +5,6 @@
 ## InstructionEncoding should track whether or there's a possible straight-through flow control?  Or just make assumptions based on mnemonic?
 
 ## Add gui to simulator
-SX config file
-    next to exe, not in working dir
-    add to .gitignore
-    GLFW window size/location
-
 Single step control
 Register views for pipe 0/1/2
     Include disassembly view of memory around IP
@@ -35,6 +30,8 @@ History of instructions executed, microcode cycles
 Error console
     Access to invalid memory
     Faults
+
+## Add bit to address translator entries? - allow pages to disallow kernel access - extra layer of protection to avoid kernel accidentally running user code with privilege.
 
 ## Consider Shifter overflow flag - if any shifted out bits differ from the last bit that wasn't shifted out
 ## Consider removing wait states

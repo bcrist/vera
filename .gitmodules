@@ -12,3 +12,6 @@
 	path = pkg/zig-gamedev
 	url = https://github.com/bcrist/zig-gamedev
 	shallow = true
+[submodule "pkg/nfd-zig"]
+	path = pkg/nfd-zig
+	url = https://github.com/fabioarnold/nfd-zig

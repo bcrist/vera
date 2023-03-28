@@ -8,19 +8,19 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const mode = b.standardOptimizeOption(.{});
 
-    const zgui_pkg = zgui.Package.build(b, target, mode, .{
+    const zgui_pkg = zgui.package(b, target, mode, .{
         .options = .{ .backend = .glfw_wgpu },
     });
-    const zglfw_pkg = zglfw.Package.build(b, target, mode, .{});
-    const zpool_pkg = zpool.Package.build(b, .{});
-    const zgpu_pkg = zgpu.Package.build(b, .{
+    const zglfw_pkg = zglfw.package(b, target, mode, .{});
+    const zpool_pkg = zpool.package(b, target, mode, .{});
+    const zgpu_pkg = zgpu.package(b, target, mode, .{
         .deps = .{
             .zpool = zpool_pkg.zpool,
             .zglfw = zglfw_pkg.zglfw
         },
     });
 
-    //[[!! include 'build' !! 269 ]]
+    //[[!! include 'build' !! 270 ]]
     //[[ ################# !! GENERATED CODE -- DO NOT MODIFY !! ################# ]]
 
     const bits = b.createModule(.{
@@ -200,6 +200,7 @@ pub fn build(b: *std.Build) void {
     microsim.addModule("microcode_rom_serialization", microcode_rom_serialization);
     microsim.addModule("microcode_roms", microcode_roms);
     microsim.addModule("misc", misc);
+    microsim.addModule("sx", sx);
     microsim.addModule("zglfw", zglfw_pkg.zglfw);
     zglfw_pkg.link(microsim);
     microsim.addModule("zgpu", zgpu_pkg.zgpu);

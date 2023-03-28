@@ -576,22 +576,22 @@
    (1F00 1F0F SAT W
       (desc "Set address translation entry corresponding to X0 with data in Xa; discard secondary entry if necessary")
       (param reg32 (base-src OA))
-      (param -> reg32 (reg 0 0))
+      (param -> ptr32d (reg 0 0))
    )
    (1F10 1F1F SAT R
       (desc "Set address translation entry corresponding to X0 with data in Xa; discard secondary entry if necessary")
       (param reg32 (base-src OA))
-      (param -> reg32 (reg 0 0))
+      (param -> ptr32d (reg 0 0))
    )
    (1F20 1F2F SAT S
       (desc "Set address translation entry corresponding to X0 with data in Xa; discard secondary entry if necessary")
       (param reg32 (base-src OA))
-      (param -> reg32 (reg 0 0))
+      (param -> ptr32s (reg 0 0))
    )
    (1F30 1F3F SAT I
       (desc "Set address translation entry corresponding to X0 with data in Xa; discard secondary entry if necessary")
       (param reg32 (base-src OA))
-      (param -> reg32 (reg 0 0))
+      (param -> ptr32i (reg 0 0))
    )
    (1F40 1F4F RAT W
       (desc "Remove address translation entry or entries corresponding to X0 with tag mask Ra")

@@ -6,6 +6,7 @@ const zglfw = @import("zglfw");
 const ControlSignals = @import("ControlSignals");
 const Simulator = @import("Simulator");
 const Gui = @import("gui/Gui.zig");
+const Config = @import("Config.zig");
 
 const glfw_time_reset_interval: f64 = 10_000;
 const cpu_clock_frequency_hz: u64 = 20_000_000;
@@ -87,8 +88,12 @@ pub fn main() !void {
     }
     std.debug.print("\n", .{});
 
-    var gui = try Gui.init(gpa.allocator(), &sim);
+    var loaded_config = try Config.load(gpa.allocator(), gpa.allocator());
+    var gui = try Gui.init(gpa.allocator(), &sim, loaded_config.window, loaded_config.frames);
     defer gui.deinit(gpa.allocator());
+    loaded_config.deinit(gpa.allocator());
+
+    defer saveConfig(gpa.allocator(), &gui);
 
     var sim_stats: ?struct {
         microcycles_elapsed: u64 = 0,
@@ -136,4 +141,17 @@ pub fn main() !void {
             .exit => break,
         }
     }
+}
+
+fn saveConfig(alloc: std.mem.Allocator, gui: *Gui) void {
+    var config = Config.init(alloc, gui) catch |err| {
+        std.log.warn("Failed to collect config data: {}", .{ err });
+        return;
+    };
+
+    config.save(alloc) catch |err| {
+        std.log.warn("Failed to save config data: {}", .{ err });
+    };
+
+    config.deinit(alloc);
 }

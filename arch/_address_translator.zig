@@ -8,6 +8,7 @@ const desc = ib.desc;
 const next_cycle = ib.next_cycle;
 const kernel = ib.kernel;
 const opcode = ib.opcode;
+const X0_relative = ib.X0_relative;
 
 const zero_to_LH = cb.zero_to_LH;
 const reg_to_LL = cb.reg_to_LL;
@@ -28,25 +29,25 @@ pub fn _1F00_1F3F() void {
         0x00 => {
             mode = .data;
             dir = .write;
-            encodingWithSuffix(.SAT, .W, .{ .Xa, .to, .X0 });
+            encodingWithSuffix(.SAT, .W, .{ .Xa, .to, X0_relative(.D, .imm_0) });
             //syntax("SAT.W");
         },
         0x10 => {
             mode = .data;
             dir = .read;
-            encodingWithSuffix(.SAT, .R, .{ .Xa, .to, .X0 });
+            encodingWithSuffix(.SAT, .R, .{ .Xa, .to, X0_relative(.D, .imm_0) });
             //syntax("SAT.R");
         },
         0x20 => {
             mode = .stack;
             dir = .read;
-            encodingWithSuffix(.SAT, .S, .{ .Xa, .to, .X0 });
+            encodingWithSuffix(.SAT, .S, .{ .Xa, .to, X0_relative(.S, .imm_0) });
             //syntax("SAT.S");
         },
         0x30 => {
             mode = .insn;
             dir = .read;
-            encodingWithSuffix(.SAT, .I, .{ .Xa, .to, .X0 });
+            encodingWithSuffix(.SAT, .I, .{ .Xa, .to, X0_relative(.I, .imm_0) });
             //syntax("SAT.I");
         },
         else => unreachable,
