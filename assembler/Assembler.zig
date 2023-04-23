@@ -246,7 +246,6 @@ fn dumpType(writer: anytype, expr_type: types.Type, prefix: []const u8) !void {
     }
 }
 
-
 pub fn recordError(self: *Assembler, file_handle: SourceFile.Handle, token: lex.Token.Handle, desc: []const u8) void {
     self.errors.append(self.gpa, .{
         .file = file_handle,
@@ -354,13 +353,21 @@ pub fn assemble(self: *Assembler) void {
         dead_code.markBlocksToKeep(self, file, @intCast(SourceFile.Handle, file_handle));
     }
 
+    var fixed_org_chunks = std.ArrayListUnmanaged(SourceFile.Chunk) {};
+    var auto_org_chunks = std.ArrayListUnmanaged(SourceFile.Chunk) {};
+    defer fixed_org_chunks.deinit(self.gpa);
+    defer auto_org_chunks.deinit(self.gpa);
+    for (self.files.items, 0..) |*file, file_handle| {
+        file.collectChunks(@intCast(SourceFile.Handle, file_handle), self.gpa, &fixed_org_chunks, &auto_org_chunks);
+    }
+
     var try_again = true;
     while (try_again) {
         self.pages.len = 0;
         self.page_lookup.clearRetainingCapacity();
 
-        try_again = layout.doForcedOrgLayout(self);
-        try_again = layout.doAutoOrgLayout(self) or try_again;
+        try_again = layout.doFixedOrgLayout(self, fixed_org_chunks);
+        try_again = layout.doAutoOrgLayout(self, auto_org_chunks) or try_again;
         if (self.invalid_layout) return;
     }
 

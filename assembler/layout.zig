@@ -6,17 +6,18 @@ const Section = @import("Section.zig");
 
 
 
-pub fn doForcedOrgLayout(a: *Assembler) bool {
+pub fn doFixedOrgLayout(a: *Assembler, chunks: std.ArrayListUnmanaged(SourceFile.Chunk)) bool {
+    _ = chunks;
     var layout_changed = false;
     for (a.files.items, 0..) |*file, file_handle| {
-        if (doForcedOrgLayoutFile(a, file, @intCast(SourceFile.Handle, file_handle))) {
+        if (doFixedOrgLayoutFile(a, file, @intCast(SourceFile.Handle, file_handle))) {
             layout_changed = true;
         }
     }
     return layout_changed;
 }
 
-fn doForcedOrgLayoutFile(a: *Assembler, file: *const SourceFile, file_handle: SourceFile.Handle) bool {
+fn doFixedOrgLayoutFile(a: *Assembler, file: *const SourceFile, file_handle: SourceFile.Handle) bool {
     _ = a;
     _ = file;
     _ = file_handle;
@@ -69,7 +70,8 @@ fn doForcedOrgLayoutFile(a: *Assembler, file: *const SourceFile, file_handle: So
 
 }
 
-pub fn doAutoOrgLayout(a: *Assembler) bool {
+pub fn doAutoOrgLayout(a: *Assembler, chunks: std.ArrayListUnmanaged(SourceFile.Chunk)) bool {
+    _ = chunks;
     var layout_changed = false;
     for (a.files.items, 0..) |*file, file_handle| {
         if (doAutoOrgLayoutFile(a, file, @intCast(SourceFile.Handle, file_handle))) {

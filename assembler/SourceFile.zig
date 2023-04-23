@@ -64,7 +64,7 @@ pub fn parse(gpa: std.mem.Allocator, handle: Handle, name: []const u8, source: [
     var block_begin: Instruction.Handle = 0;
     for (operations, 0..) |op, insn_handle| {
         if (Instruction.isSectionDirective(op)) {
-            const new_block_begin = backtrackSectionLabels(operations, @intCast(Instruction.Handle, insn_handle));
+            const new_block_begin = backtrackLabels(operations, @intCast(Instruction.Handle, insn_handle));
             file.tryAddBlock(gpa, block_begin, new_block_begin);
             block_begin = new_block_begin;
         }
@@ -75,6 +75,34 @@ pub fn parse(gpa: std.mem.Allocator, handle: Handle, name: []const u8, source: [
     return file;
 }
 
+fn tryAddBlock(self: *SourceFile, gpa: std.mem.Allocator, first_insn: Instruction.Handle, end_insn: Instruction.Handle) void {
+    if (first_insn >= end_insn) return;
+
+    var first_token = self.instructions.items(.token)[first_insn];
+    if (self.instructions.items(.label)[first_insn]) |label_expr| {
+        first_token = self.expressions.items(.token)[label_expr];
+    }
+
+    self.blocks.append(gpa, .{
+        .first_token = first_token,
+        .first_insn = first_insn,
+        .end_insn = end_insn,
+        .section = null,
+        .keep = false,
+    }) catch @panic("OOM");
+}
+
+pub fn deinit(self: SourceFile, gpa: std.mem.Allocator, maybe_arena: ?std.mem.Allocator) void {
+    self.tokens.deinit(gpa);
+    self.instructions.deinit(gpa);
+    self.expressions.deinit(gpa);
+    self.blocks.deinit(gpa);
+    if (maybe_arena) |arena| {
+        arena.free(self.name);
+        arena.free(self.source);
+    }
+}
+
 pub fn blockInstructions(self: *const SourceFile, block_handle: SectionBlock.Handle) Instruction.Iterator {
     return .{
         .begin = self.blocks.items(.first_insn)[block_handle],
@@ -82,8 +110,60 @@ pub fn blockInstructions(self: *const SourceFile, block_handle: SectionBlock.Han
     };
 }
 
+pub const Chunk = struct {
+    file: SourceFile.Handle,
+    instructions: Instruction.Iterator,
+};
+
+pub fn collectChunks(
+    self: *const SourceFile,
+    file_handle: SourceFile.Handle,
+    gpa: std.mem.Allocator,
+    fixed_org: *std.ArrayListUnmanaged(Chunk),
+    auto_org: *std.ArrayListUnmanaged(Chunk),
+) void {
+    const operations = self.instructions.items(.operation);
+    for (self.blocks.items(.keep), self.blocks.items(.first_insn), self.blocks.items(.end_insn)) |keep, begin, end| {
+        if (!keep) continue;
+
+        var block_iter = Instruction.Iterator{
+            .begin = begin,
+            .end = end,
+        };
+        var chunk_begin = begin;
+        var dest = auto_org;
+        while (block_iter.next()) |insn_handle| {
+            if (operations[insn_handle] == .org) {
+                const new_chunk_begin = backtrackOrgHeaders(operations, insn_handle);
+                if (chunk_begin < new_chunk_begin) {
+                    dest.append(gpa, .{
+                        .file = file_handle,
+                        .instructions = .{
+                            .begin = chunk_begin,
+                            .end = new_chunk_begin,
+                        },
+                    }) catch @panic("OOM");
+                }
+                chunk_begin = new_chunk_begin;
+                dest = fixed_org;
+            }
+        }
+
+        if (chunk_begin < end) {
+            dest.append(gpa, .{
+                .file = file_handle,
+                .instructions = .{
+                    .begin = chunk_begin,
+                    .end = end,
+                },
+            }) catch @panic("OOM");
+        }
+    }
+}
+
 // Note this may not work correctly for a needle token in a label, which preceeds the main Instruction.token unless there is only a label on that line.
 // It's meant to be used when you know the token is from Instruction.token or an Expression.token being used as a parameter.
+// It will only work for tokens within a label expression if the operation for that line is `.none`
 pub fn findInstructionByToken(self: *const SourceFile, token_handle: Token.Handle) Instruction.Handle {
     var haystack = self.instructions.items(.token);
     var base: usize = 0;
@@ -155,24 +235,7 @@ pub fn findBlockByInstruction(self: *const SourceFile, insn_handle: Instruction.
     return @intCast(SectionBlock.Handle, block_index orelse unreachable);
 }
 
-fn tryAddBlock(self: *SourceFile, gpa: std.mem.Allocator, first_insn: Instruction.Handle, end_insn: Instruction.Handle) void {
-    if (first_insn >= end_insn) return;
-
-    var first_token = self.instructions.items(.token)[first_insn];
-    if (self.instructions.items(.label)[first_insn]) |label_expr| {
-        first_token = self.expressions.items(.token)[label_expr];
-    }
-
-    self.blocks.append(gpa, .{
-        .first_token = first_token,
-        .first_insn = first_insn,
-        .end_insn = end_insn,
-        .section = null,
-        .keep = false,
-    }) catch @panic("OOM");
-}
-
-fn backtrackSectionLabels(operations: []const Instruction.Operation, handle: Instruction.Handle) Instruction.Handle {
+fn backtrackLabels(operations: []const Instruction.Operation, handle: Instruction.Handle) Instruction.Handle {
     var result = handle;
     while (result > 0 and operations[result - 1] == .none) {
         result -= 1;
@@ -180,15 +243,12 @@ fn backtrackSectionLabels(operations: []const Instruction.Operation, handle: Ins
     return result;
 }
 
-pub fn deinit(self: SourceFile, gpa: std.mem.Allocator, maybe_arena: ?std.mem.Allocator) void {
-    self.tokens.deinit(gpa);
-    self.instructions.deinit(gpa);
-    self.expressions.deinit(gpa);
-    self.blocks.deinit(gpa);
-    if (maybe_arena) |arena| {
-        arena.free(self.name);
-        arena.free(self.source);
+fn backtrackOrgHeaders(operations: []const Instruction.Operation, handle: Instruction.Handle) Instruction.Handle {
+    var result = handle;
+    while (result > 0 and Instruction.isOrgHeader(operations[result - 1])) {
+        result -= 1;
     }
+    return result;
 }
 
 const Parser = struct {

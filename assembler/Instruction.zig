@@ -91,3 +91,36 @@ pub fn isSectionDirective(op: OperationType) bool {
         => false,
     };
 }
+
+pub fn isOrgHeader(op: OperationType) bool {
+    // When these operations appear before a .org directive, they are included in the fixed-org chunk that follows, not the previous chunk (if any)
+    // See SourceFile.collectChunks and SourceFile.backtrackOrgHeaders
+    return switch (op) {
+        .section,
+        .code,
+        .kcode,
+        .entry,
+        .kentry,
+        .data,
+        .kdata,
+        .@"const",
+        .kconst,
+        .stack,
+        .none,
+        .@"align",
+        .keep,
+        .def,
+        .undef,
+        => true,
+
+        .org,
+        .insn,
+        .bound_insn,
+        .db,
+        .dw,
+        .dd,
+        .push,
+        .pop,
+        => false,
+    };
+}

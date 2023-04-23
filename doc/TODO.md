@@ -1,5 +1,5 @@
 ## Assembler
-Automatically insert branch or nop instructions when control flow sees a forced address jump due to .org, .align, or an implicit .align on a page boundary.
+Warn when .org, .align, or an implied .align causes a hole in code that is reachable through control flow
 
 How do we deal with stack labels since Sections arent set up until encode phase?
 
