@@ -8,17 +8,25 @@ Each line consists of:
 
 # Comments
 The token `//` indicates the start of a comment.  Anything else on that line is ignored completely.
-There are no multi-line comments.
+There are no multi-line comments.  Other common comment characters in assembly (e.g. `;`) are _not_ supported.
 
 # Pseudo-instruction Directives
 
 ## Non-outputting Directives
     .org <expr>
 Forces the address assigned to this line to be the constant expression that follows.
-If the address within the current section is already larger than the requested address, it is an error.
+It is possible to accidentally cause code or data to overlap using this directive, which the assembler will report as an error.
 
-    .align <expr>
+    .align <alignment> [offset]
 Ensures that the alignment of the address assigned to this line is at least equal to the constant expression that follows
+The alignment must be a power of two > 0 (i.e. popcnt alignment == 1)
+The second parameter allows an offset to be added to the aligned value, and defaults to 0.
+The exact algorithm for modifying the address is as follows:
+
+    temp = (address & ~(alignment - 1)) + offset
+    while (temp < address) temp += alignment
+    address = temp
+
 
     .keep
 Prevents the section containing this directive (or any sections referenced by it) from being removed via dead-code elimination
@@ -40,6 +48,22 @@ If a named expression is created with the same name as a label, the named expres
 
     .undef <symbol>
  Ends the scope of a named expression created with `.def`
+
+    .local <symbol> <expr>
+Similar to `.def`, but with a few differences:
+* The declaration is visible to the entire file
+* `.undef` has no effect on the symbol
+* The symbol can be referenced before it is defined
+
+File-local labels can also be defined:
+
+    .local <label>:
+This is equivalent to `.local <label> $` except that it can be used on the same line as another instruction/directive.  This makes it possible to reference private labels in different sections of the same file, without making the label visible globally in other files:
+
+    .code
+        ld hidden -> r0   // normally _private wouldn't be in scope here
+	.local hidden: .data
+        .dw 0x1234
 
 
     .db <expr-list>      // "Declare bytes" (8-bit)
@@ -117,29 +141,26 @@ When an instruction has both source and destination parameters, the sources appe
 There are 3 types of literals: registers, integers, and strings.
 
 ### Register literals
-byte: B0-B15, B0S-B15S, B0U-B15U
-word: R0-R15, R0S-R15S, R0U-R15U
-dword: X0-X15, X0S-X15S, X0U-X15U
+byte: B0-B15
+word: R0-R15
+dword: X0-X15
 special: IP, RP, SP, BP, KXP, UXP, ASN, STAT
 
 ### Integer literals
 Decimal:
-    [0-9][0-9_]*('[0-9]+)?
-    0d[0-9_]*('[0-9]+)?
+    [0-9][0-9_]*
+    0d[0-9_]*
 Hex:
-    0x[0-9A-Fa-f_]*('[0-9]+)?
+    0x[0-9A-Fa-f_]*
 Binary:
-    0b[01_]*('[0-9]+)?
+    0b[01_]*
 Octal:
-    0o[0-7_]*('[0-9]+)?
+    0o[0-7_]*
 
-If an integer literal ends with a `'x` suffix, it indicates the bit width of the number.
-If the literal would overflow an integer with the specified size, it is an error.
-For positive literals, this assumes an unsigned representation.
-For negative literals, this assumes a 2's complement representation.
-For negative literals, the sign bit may be extended beyond the specified bit-width depending on the context it is used in.
+All constants have an associated bit width.
 The default bit-width for decimal is the minimum number of bits required to represent the number.
 The default bit-width for hex/binary/octal is proportional to the number of digits provided.
+There are operators which can manipulate the bit width of their result (see below).
 
 ### String literals
 Integers and strings can always be used interchangeably; strings are just syntactic sugar for large integers.
@@ -147,47 +168,49 @@ Strings have the same syntax as zyxlang.
 
 ## Symbols
     [a-zA-Z_][a-zA-Z_0-9\.]*
-    .sym <expr>
-Symbols must be resolved to either a labelled address, or a named expression defined with the `.def` directive
+    .sym <string-literal>
+Symbols are names which represent values defined elsewhere in the program.  The `.sym` directive allows the usage of arbitrary names for symbols by using a string literal instead of a raw identifier.
+Symbol references are resolved from a number of potential sources:
+- Named expressions defined with 
+
+must be resolved to either a labelled address, or a named expression defined with the `.def` directive
 The .sym directive can be used with a string literal when you want to use a symbol name containing arbitrary special characters
 
 
 ## Operators
-(<x>)               // Grouping
-$                   // Implicit label at the beginning of the current line
-$$                  // Implicit label at the beginning of the section (excluding blank lines and directives that do not generate output)
-<x> + <y>           // add two values.  Types must be compatible.
-<x> - <y>           // subtract two values.  Types must be compatible.
-<x> * <y>           // multiply two values.  Types must be compatible.
-<x> >> <y>          // right shift
-<x> << <y>          // left shift
-<x> | <y>           // bitwise OR
-<x> & <y>           // bitwise AND
-<x> ^ <y>           // bitwise XOR
-~ <x>               // bitwise NOT
-<x> ++ <y>          // Concatenate two constants.  Little-endian (first parameter takes least significant bit).  If x's bit width is not a multiple of 8, then y will not start at the LSB of a byte.
-<x> ** <y>          // Concatenates a constant with itself, y times
-<x> .width <w>      // Change the bit-width of a constant to w (error on overflow)
-<x> .trunc <w>      // Drop MSB bits such that the result has bit-width w (ignore overflow; keep same signed/unsigned distinction)
-<x> .signed         // Convert a register reference or constant to be signed (e.g. R15 -> R15S)
-<x> .unsigned       // Convert a register reference or constant to be unsigned (e.g. R15 -> R15U)
-<x> .generic        // Remove the signed/unsigned distinction from a register reference or constant (e.g. R15U -> R15)
+`(x)`               // Grouping
+`$`                   // Implicit label at the beginning of the current line
+`x + y`           // add two values.  Types must be compatible. In the case of overflow, an extra bit is added to the width.
+`x - y`           // subtract two values.  Types must be compatible. In the case of overflow, an extra bit is added to the width.
+`x * y`           // multiply two values.  Types must be compatible.  The width may increase in the case of overflow
+`x >> y`          // right shift.
+`x << y`          // left shift.  In the case of overflow, extra bits may be added to the width.
+`x | y`           // bitwise OR
+`x & y`           // bitwise AND
+`x ^ y`           // bitwise XOR
+`~ x`               // bitwise NOT
+`- x`               // 2's complement negation.  In the case of overflow, an extra bit is added to the width.
+`x ++ y`          // Concatenate two constants.  Little-endian (first parameter takes least significant bit).  If x's bit width is not a multiple of 8, then y will not start at the LSB of a byte.
+`x ** y`          // Concatenates a constant with itself, y times
+`x ' w`           // Change the bit-width of a constant to w (error on overflow)
+`x .trunc w`      // Change the bit-width of a constant to w (ignore overflow, keep same signed/unsigned distinction)
+`x .signed`         // Convert a register reference or constant to be signed (e.g. R15 -> R15S)
+`x .unsigned`       // Convert a register reference or constant to be unsigned (e.g. R15 -> R15U)
+`x .generic`        // Remove the signed/unsigned distinction from a register reference or constant (e.g. R15U -> R15)
 
-<label>             // reference a named literal (type depends on literal definition) or labelled address (as either an IP-relative code address, IP-relative data address, or SP-relative stack address)
-@<label>            // reference a labelled address as either an absolute code address or absolute data pointer.  Not valid for stack section labels.
-#<label>            // dereference a labelled data declaration from a .const section.  Does not count as a reference for dead-code elimination.  The label must have a .db, .dw, or .dd directive on the same line, with exactly one constant expression.
+`label`             // reference a named literal (type depends on literal definition) or labelled address (as either an IP-relative code address, IP-relative data address, or SP-relative stack address)
+`@label`            // reference a labelled address as either an absolute code address or absolute data pointer.  Not valid for stack section labels.
+`#label`            // dereference a labelled data declaration from a .const section.  Does not count as a reference for dead-code elimination.  The label must have a .db, .dw, or .dd directive on the same line, with exactly one constant expression.
 
-.d <expr>               // Transmute constant or register reference to absolute data address
-.i <expr>               // Transmute constant or register reference to absolute code address
-.s <expr>               // Transmute constant or register reference to absolute stack address
-.d (<base> + <offset>)  // Transmute base + offset to data address
-.i (<base> + <offset>)  // Transmute base + offset to code address
-.s (<base> + <offset>)  // Transmute base + offset to stack address
+`.d expr`               // Transmute constant or register reference to absolute data address
+`.i expr`               // Transmute constant or register reference to absolute code address
+`.s expr`               // Transmute constant or register reference to absolute stack address
+`.raw x`       // Transmute absolute address to a constant
 
-.rb <expr>          // Convert a register index (0-15) to a byte register reference (B0-B15)
-.r <expr>           // Convert a register index (0-15) to a word register reference (R0-R15)
-.rx <expr>          // Convert a register index (0-15) to a double-word register reference (X0-X15)
-.idx <expr>         // Extract the index from a register reference. (e.g. `.r 1 ^ .idx X0` is equivalent to `R1`)
+`.rb expr`          // Convert a register index (0-15) to a byte register reference (B0-B15)
+`.r expr`           // Convert a register index (0-15) to a word register reference (R0-R15)
+`.rx expr`          // Convert a register index (0-15) to a double-word register reference (X0-X15)
+`.idx expr`         // Extract the index from a register reference. (e.g. `.r 1 ^ .idx X0` is equivalent to `R1`)
 
 ## Expression Types
 
@@ -201,6 +224,15 @@ A specific byte, word, or dword register, assumed to contain either a signed val
 The type of the special IP, SP, RP, BP, UXP, KXP, ASN, and STAT registers
 
 ### Address (Base + Offset)
-
+Must be associated with one of 3 address spaces: data, code/insn, or stack
 Represents a value relative to a base register, or nothing (for absolute addresses)
 Offset may be a constant or register reference.
+
+# Assembly Phases
+* Lexing
+* Parsing
+* Symbol Resolution and Typechecking
+* Dead Code Elimination
+* Instruction Selection, Length Analysis, and Section Reordering
+* Instruction Encoding 
+* Output Formatting

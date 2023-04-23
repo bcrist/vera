@@ -1,61 +1,28 @@
 const std = @import("std");
 const ie = @import("instruction_encoding");
 const ie_data = @import("instruction_encoding_data").data;
-const lex = @import("lex.zig");
-const parse = @import("parse.zig");
-const infer = @import("infer.zig");
-const encode = @import("encode.zig");
+const Assembler = @import("Assembler.zig");
+const typechecking = @import("typechecking.zig");
 
-const ParseError = parse.ParseError;
-
-const Result = struct {
-    tokens: lex.TokenList,
-    sections: std.StringHashMapUnmanaged(encode.SectionData),
-    errors: std.ArrayListUnmanaged(ParseError),
-};
-
-pub fn assemble(alloc: std.mem.Allocator, edb: ie.EncoderDatabase, source: []const u8, origin_address: u32) !Result {
-    const tokens = try lex.lex(alloc, source);
-    var parsed = try parse.parse(alloc, source, tokens);
-    try infer.inferTypes(&parsed);
-    try infer.inferEncodings(&parsed, alloc, edb, origin_address);
-    return .{
-        .tokens = tokens,
-        .errors = parsed.errors,
-        .sections = try encode.encode(alloc, parsed),
-    };
-}
-
-test {
+pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
+    var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
 
     var temp = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     const edb = try ie.EncoderDatabase.init(arena.allocator(), ie_data, temp.allocator());
-    const ddb = try ie.DecoderDatabase.init(arena.allocator(), ie_data, temp.allocator());
+
+    var a = Assembler.init(gpa.allocator(), arena.allocator(), edb);
+
+    var arg_iter = try std.process.ArgIterator.initWithAllocator(temp.allocator());
+    _ = arg_iter.next(); // ignore assemble command name
+    while (arg_iter.next()) |arg| {
+        const source = try std.fs.cwd().readFileAlloc(arena.allocator(), arg, 100_000_000);
+        _ = a.adoptSource(try arena.allocator().dupe(u8, arg), source);
+    }
     temp.deinit();
 
-    try parse.init();
-    defer parse.deinit();
+    a.assemble();
 
-    const src =
-        \\label:
-        \\   nop //comment
-        \\   sync
-        \\   fret
-        \\
-        \\asdf: WFI
-    ;
+    try a.dump(std.io.getStdOut().writer());
 
-    var stderr = std.io.getStdErr().writer();
-
-    var results = try assemble(arena.allocator(), edb, src, 0);
-    for (results.errors.items) |err| {
-        const token = results.tokens.get(err.token);
-        try token.printContext(src, stderr, 160);
-        try stderr.print("{s}\n", .{ err.desc });
-    }
-    try std.testing.expectEqual(@as(usize, 0), results.errors.items.len);
-
-    _ = ddb;
 }

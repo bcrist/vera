@@ -35,7 +35,7 @@
     (pkg bus_types)
     (pkg address_translator_types)
     (pkg physical_address)
-    (exe compile_arch (runStep uc))
+    (exe compile_arch (run_step uc))
 )
 (dir arch/microcode_roms
     (pkg microcode_roms (path roms))
@@ -43,7 +43,7 @@
 (dir microsim
     (pkg Simulator)
     (exe microsim
-        (runStep usim)
+        (run_step usim)
         (config "want_lto = false")
     )
 )
@@ -52,5 +52,5 @@
 (dir microsim/gui)
 (dir assembler
     (pkg assemble)
-    (exe main)
+    (exe assemble (safe_name assemble_exe))
 )

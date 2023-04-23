@@ -46,98 +46,6 @@ pub const Mnemonic = enum {
     NOP, NOPE, SLEEP, UNSLEEP,
 };
 
-pub fn mnemonicName(mnemonic: Mnemonic) []const u8 {
-    return switch (mnemonic) {
-        .ADD => "Add",
-        .ADDC => "Add with Carry",
-        .CMP => "Compare",
-        .CMPB => "Compare with Borrow",
-        .SUB => "Subtract",
-        .SUBB => "Subtract with Borrow",
-        .INC => "Increment",
-        .INCC => "Increment with Carry",
-        .DEC => "Decrement",
-        .DECB => "Decrement with Borrow",
-        .NEG => "Negate",
-        .NEGB => "Negate with Borrow",
-        .NOT => "Bitwise Complement",
-        .XOR => "Bitwise Exclusive OR",
-        .XNOR => "Bitwise Equivalence",
-        .OR => "Bitwise OR",
-        .NOR => "Bitwise NOR",
-        .AND => "Bitwise AND",
-        .NAND => "Bitwise NAND",
-        .ANDNOT => "Bitwise Half-complemented AND",
-        .TEST => "Test Bits",
-        .TESTZ => "Test Bits with Z",
-        .TESTB => "Test Indexed Bit",
-        .TESTBZ => "Test Indexed Bit with Z",
-        .CLRB => "Clear Indexed Bit",
-        .SETB => "Set Indexed Bit",
-        .TGLB => "Toggle Indexed Bit",
-        .SHR => "Shift Right",
-        .SHL => "Shift Left",
-        .SHR => "Shift Right with Carry",
-        .SHL => "Shift Left with Carry",
-        .MUL => "Multiply",
-        .MULH => "Multiply, High Half",
-        .CB => "Count Set Bits",
-        .CZ => "Count Zero Bits",
-        .CLB => "Count Leading Set Bits",
-        .CLZ => "Count Leading Zero Bits",
-        .CTB => "Count Trailing Set Bits",
-        .CTZ => "Count Trailing Zero Bits",
-        .NOP => "No Operation",
-        .NOPE => "No Operation",
-        .B => "Branch",
-        .BP => "Branch to Start of Page",
-        .BPN => "Branch to Next Page",
-        .BB => "Branch to Start of Block",
-        .BBN => "Branch to Next Block",
-        .EAB => "Enable Address Translation and Branch",
-        .DAB => "Disable Address Translation and Branch",
-        .CALL => "Call Subroutine",
-        .RET => "Return from Subroutine",
-        .IRET => "Return from Interrupt",
-        .FRET => "Return from Fault Handler",
-        .WFI => "Wait for Interrupt",
-        .LDRS => "Load Registerset",
-        .STRS => "Store Registerset",
-        .SRS => "Switch to Registerset",
-        .C => "Copy",
-        .DUP => "Duplicate",
-        .LD => "Load",
-        .LDI => "Load and Increment",
-        .ILD => "Increment and Load",
-        .ST => "Store",
-        .STI => "Store and Increment",
-        .IST => "Increment and Store",
-        .SAT => "Set Address Translation Entry",
-        .RAT => "Remove Address Translation(s)",
-        .FRAME => "Set Up Stack Frame",
-        .UNFRAME => "Tear Down Stack Frame",
-        .POP => "Pop from Stack",
-        .PUSH => "Push to Stack",
-        .SYNC => "Synchronize Next Instruction",
-        .ALD => "Atomic Load",
-        .AST => "Atomic Store",
-        .ASTZ => "Atomic Store if Zero",
-        .AADD => "Atomic Add",
-        .AINC => "Atomic Increment",
-        .ADECNZ => "Atomic Decrement if Not Zero",
-        .AX => "Atomic Exchange",
-        .AXE => "Atomic Exchange if Equal",
-        .MCR => "Memory Copy Reverse",
-        .MCRB => "Memory Copy Reverse, Bytewise",
-        .MCF => "Memory Copy Forward",
-        .MCFB => "Memory Copy Forward, Bytewise",
-        .SI => "Stream In",
-        .SIB => "Stream In Bytes",
-        .SO => "Stream Out",
-        .SOB => "Stream Out Bytes",
-    };
-}
-
 // Assembler should infer this if it is unambiguous
 pub const MnemonicSuffix = enum {
     none,
@@ -334,11 +242,11 @@ pub const InstructionEncoding = struct {
     opcode_base: Opcode,
     opcodes: OpcodeRange,
 
-    pub fn print(self: InstructionEncoding, writer: anytype) !void {
+    pub fn print(self: InstructionEncoding, writer: anytype, indent: []const u8) !void {
         if (self.opcodes.min == self.opcodes.max) {
-            try writer.print("{X:0>4} ", .{ self.opcodes.min });
+            try writer.print("{s}{X:0>4} ", .{ indent, self.opcodes.min });
         } else {
-            try writer.print("{X:0>4}-{X:0>4} ", .{ self.opcodes.min, self.opcodes.max });
+            try writer.print("{s}{X:0>4}-{X:0>4} ", .{ indent, self.opcodes.min, self.opcodes.max });
         }
 
         if (self.opcode_base != self.opcodes.min) {
@@ -351,7 +259,7 @@ pub const InstructionEncoding = struct {
         }
         try writer.writeAll(" {\n");
         for (self.params) |param| {
-            try writer.writeAll("   ");
+            try writer.print("{s}   ", .{ indent });
             try param.print(writer);
             try writer.writeAll("\n");
         }

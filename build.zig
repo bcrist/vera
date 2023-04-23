@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    //[[!! include 'build' !! 270 ]]
+    //[[!! include 'build' !! 267 ]]
     //[[ ################# !! GENERATED CODE -- DO NOT MODIFY !! ################# ]]
 
     const bits = b.createModule(.{
@@ -110,6 +110,8 @@ pub fn build(b: *std.Build) void {
     const assemble = b.createModule(.{
         .source_file = .{ .path = "assembler/assemble.zig" },
         .dependencies = &.{
+            .{ .name = "bus_types", .module = bus_types },
+            .{ .name = "deep_hash_map", .module = deep_hash_map },
             .{ .name = "instruction_encoding", .module = instruction_encoding },
             .{ .name = "instruction_encoding_data", .module = instruction_encoding_data },
         },
@@ -154,6 +156,19 @@ pub fn build(b: *std.Build) void {
         .source_file = .{ .path = "pkg/tempallocator/temp_allocator.zig" },
     });
 
+    const assemble_exe = b.addExecutable(.{
+        .name = "assemble",
+        .root_source_file = .{ .path = "assembler/assemble.zig" },
+        .target = target,
+        .optimize = mode,
+    });
+    assemble_exe.addModule("bus_types", bus_types);
+    assemble_exe.addModule("deep_hash_map", deep_hash_map);
+    assemble_exe.addModule("instruction_encoding", instruction_encoding);
+    assemble_exe.addModule("instruction_encoding_data", instruction_encoding_data);
+    assemble_exe.install();
+    _ = makeRunStep(b, assemble_exe, "assemble", "run assemble");
+
     const compile_arch = b.addExecutable(.{
         .name = "compile_arch",
         .root_source_file = .{ .path = "arch/compile_arch.zig" },
@@ -174,16 +189,6 @@ pub fn build(b: *std.Build) void {
     compile_arch.addModule("temp_allocator", temp_allocator);
     compile_arch.install();
     _ = makeRunStep(b, compile_arch, "uc", "run compile_arch");
-
-    const main = b.addExecutable(.{
-        .name = "main",
-        .root_source_file = .{ .path = "assembler/main.zig" },
-        .target = target,
-        .optimize = mode,
-    });
-    main.addModule("assemble", assemble);
-    main.install();
-    _ = makeRunStep(b, main, "main", "run main");
 
     const microsim = b.addExecutable(.{
         .name = "microsim",
@@ -245,12 +250,11 @@ pub fn build(b: *std.Build) void {
     tests3.addModule("misc", misc);
 
     const tests4 = b.addTest(.{
-        .root_source_file = .{ .path = "assembler/assemble.zig"},
+        .root_source_file = .{ .path = "assembler/Constant.zig"},
         .target = target,
         .optimize = mode,
     });
-    tests4.addModule("instruction_encoding", instruction_encoding);
-    tests4.addModule("instruction_encoding_data", instruction_encoding_data);
+    tests4.addModule("deep_hash_map", deep_hash_map);
 
     const tests5 = b.addTest(.{
         .root_source_file = .{ .path = "assembler/lex.zig"},
@@ -259,25 +263,18 @@ pub fn build(b: *std.Build) void {
     });
 
     const tests6 = b.addTest(.{
-        .root_source_file = .{ .path = "assembler/parse.zig"},
-        .target = target,
-        .optimize = mode,
-    });
-    tests6.addModule("instruction_encoding", instruction_encoding);
-
-    const tests7 = b.addTest(.{
         .root_source_file = .{ .path = "pkg/bits.zig"},
         .target = target,
         .optimize = mode,
     });
 
-    const tests8 = b.addTest(.{
+    const tests7 = b.addTest(.{
         .root_source_file = .{ .path = "pkg/rom_decompress.zig"},
         .target = target,
         .optimize = mode,
     });
-    tests8.addModule("bits", bits);
-    tests8.addModule("rom_compress", rom_compress);
+    tests7.addModule("bits", bits);
+    tests7.addModule("rom_compress", rom_compress);
 
     const test_step = b.step("test", "Run all tests");
     test_step.dependOn(&tests1.step);
@@ -287,8 +284,8 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&tests5.step);
     test_step.dependOn(&tests6.step);
     test_step.dependOn(&tests7.step);
-    test_step.dependOn(&tests8.step);
 
+    _ = assemble;
     //[[ ######################### END OF GENERATED CODE ######################### ]]
 }
 

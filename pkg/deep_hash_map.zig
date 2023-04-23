@@ -1,3 +1,27 @@
+pub fn ShallowAutoHashMap(comptime K: type, comptime V: type) type {
+    return std.HashMap(K, V, StrategyContext(K, .Shallow), std.hash_map.default_max_load_percentage);
+}
+
+pub fn ShallowAutoHashMapUnmanaged(comptime K: type, comptime V: type) type {
+    return std.HashMapUnmanaged(K, V, StrategyContext(K, .Shallow), std.hash_map.default_max_load_percentage);
+}
+
+pub fn DeepAutoHashMap(comptime K: type, comptime V: type) type {
+    return std.HashMap(K, V, StrategyContext(K, .Deep), std.hash_map.default_max_load_percentage);
+}
+
+pub fn DeepAutoHashMapUnmanaged(comptime K: type, comptime V: type) type {
+    return std.HashMapUnmanaged(K, V, StrategyContext(K, .Deep), std.hash_map.default_max_load_percentage);
+}
+
+pub fn DeepRecursiveAutoHashMap(comptime K: type, comptime V: type) type {
+    return std.HashMap(K, V, StrategyContext(K, .DeepRecursive), std.hash_map.default_max_load_percentage);
+}
+
+pub fn DeepRecursiveAutoHashMapUnmanaged(comptime K: type, comptime V: type) type {
+    return std.HashMapUnmanaged(K, V, StrategyContext(K, .DeepRecursive), std.hash_map.default_max_load_percentage);
+}
+
 const std = @import("std");
 
 pub fn getAutoHashFn(comptime K: type, comptime strat: std.hash.Strategy, comptime Context: type) (fn (Context, K) u64) {
@@ -117,28 +141,4 @@ pub fn StrategyContext(comptime K: type, comptime strat: std.hash.Strategy) type
         pub const hash = getAutoHashFn(K, strat, @This());
         pub const eql = getAutoEqlFn(K, strat, @This());
     };
-}
-
-pub fn ShallowAutoHashMap(comptime K: type, comptime V: type) type {
-    return std.HashMap(K, V, StrategyContext(K, .Shallow), std.hash_map.default_max_load_percentage);
-}
-
-pub fn ShallowAutoHashMapUnmanaged(comptime K: type, comptime V: type) type {
-    return std.HashMapUnmanaged(K, V, StrategyContext(K, .Shallow), std.hash_map.default_max_load_percentage);
-}
-
-pub fn DeepAutoHashMap(comptime K: type, comptime V: type) type {
-    return std.HashMap(K, V, StrategyContext(K, .Deep), std.hash_map.default_max_load_percentage);
-}
-
-pub fn DeepAutoHashMapUnmanaged(comptime K: type, comptime V: type) type {
-    return std.HashMapUnmanaged(K, V, StrategyContext(K, .Deep), std.hash_map.default_max_load_percentage);
-}
-
-pub fn DeepRecursiveAutoHashMap(comptime K: type, comptime V: type) type {
-    return std.HashMap(K, V, StrategyContext(K, .DeepRecursive), std.hash_map.default_max_load_percentage);
-}
-
-pub fn DeepRecursiveAutoHashMapUnmanaged(comptime K: type, comptime V: type) type {
-    return std.HashMapUnmanaged(K, V, StrategyContext(K, .DeepRecursive), std.hash_map.default_max_load_percentage);
 }

@@ -1,3 +1,13 @@
+## Assembler
+Automatically insert branch or nop instructions when control flow sees a forced address jump due to .org, .align, or an implicit .align on a page boundary.
+
+How do we deal with stack labels since Sections arent set up until encode phase?
+
+Multi-line string literals
+
+Error on multiple files with same name
+
+
 ## Microcode decompiler
 
 ## Validate that the same instruction encoding doesn't map to multiple opcodes/aliases
@@ -30,6 +40,8 @@ History of instructions executed, microcode cycles
 Error console
     Access to invalid memory
     Faults
+
+## SX library - automatic (de)serialization of structs
 
 ## Add bit to address translator entries? - allow pages to disallow kernel access - extra layer of protection to avoid kernel accidentally running user code with privilege.
 

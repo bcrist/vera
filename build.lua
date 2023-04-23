@@ -108,8 +108,8 @@ function pkg_visitor.safe_name (_, _, package)
     package.safe_name = safe_name
 end
 
-function exe_visitor.runStep (_, _, executable)
-    executable.runStep = parser:require_string()
+function exe_visitor.run_step (_, _, executable)
+    executable.run_step = parser:require_string()
     parser:require_close()
 end
 
@@ -183,8 +183,8 @@ for _, exe in pairs(exes) do
         exe.deps = {}
         collect_named_deps(exe.path, exe.deps, {})
     end
-    if exe.runStep == nil then
-        exe.runStep = exe.safe_name
+    if exe.run_step == nil then
+        exe.run_step = exe.name
     end
 end
 
@@ -281,7 +281,7 @@ for _, fun in ipairs(pass_exe_to) do
     writeln(nl, fun, '(', safe_name, ');')
 end`
 `safe_name`.install();
-_ = makeRunStep(b, `safe_name`, "`runStep`", "run `name`");
+_ = makeRunStep(b, `safe_name`, "`run_step`", "run `name`");
 ]]
 
 for _, exe in spairs(exes) do
