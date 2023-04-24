@@ -90,7 +90,7 @@ fn traceSymbol(a: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle,
                 traceReferencesInBlock(a, file, file_handle, begin, end);
             }
         },
-        .address => |insn_ref| {
+        .instruction => |insn_ref| {
             const sym_file = a.getSource(insn_ref.file);
             const block_handle = sym_file.findBlockByInstruction(insn_ref.instruction);
             var keep_flags = sym_file.blocks.items(.keep);

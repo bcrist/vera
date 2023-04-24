@@ -287,13 +287,17 @@ pub fn clone(self: Constant, allocator: std.mem.Allocator) Constant {
     };
 }
 
-pub fn asUnsigned(self: Constant) ?u64 {
+pub fn asUnsigned(self: Constant, comptime T: type) ?T {
+    std.debug.assert(@typeInfo(T).Int.signedness == .unsigned);
     return switch (self.data) {
-        .short => |value| value,
+        .short => |value| std.math.cast(T, value),
         .long => |buf| result: {
-            var value: u64 = 0;
-            for (buf) |b| {
-                value = std.math.shlExact(u64, value, 8) catch return null;
+            var value: T = 0;
+            var i = buf.len;
+            while (i > 0) {
+                i -= 1;
+                const b = buf[i];
+                value = std.math.shlExact(T, value, 8) catch return null;
                 value |= b;
             }
             break :result value;
@@ -301,7 +305,8 @@ pub fn asUnsigned(self: Constant) ?u64 {
     };
 }
 
-pub fn asSigned(self: Constant) ?i64 {
+pub fn asSigned(self: Constant, comptime T: type) ?T {
+    std.debug.assert(@typeInfo(T).Int.signedness == .signed);
     switch (self.data) {
         .short => |value| {
             if (self.bit_count == 0) {
@@ -309,18 +314,28 @@ pub fn asSigned(self: Constant) ?i64 {
             } else if (self.bit_count < 64) {
                 if (@truncate(u1, value >> @intCast(u6, self.bit_count - 1)) != 0) {
                     const mask = @bitCast(u64, @as(i64, -1)) << @intCast(u6, self.bit_count);
-                    return @bitCast(i64, mask | value);
+                    return std.math.cast(T, @bitCast(i64, mask | value));
                 }
             }
-            return @bitCast(i64, value);
+            return std.math.cast(T, @bitCast(i64, value));
         },
         .long => |buf| {
-            var value: u64 = 0;
-            for (buf) |b| {
-                value = std.math.mul(u64, value, 256) catch return null;
+            var value: T = 0;
+            var i = buf.len;
+            if (i > 0) {
+                i -= 0;
+                const MU = std.meta.Int(.unsigned, self.bit_count % 8);
+                const MS = std.meta.Int(.signed, self.bit_count % 8);
+                const b = @bitCast(MS, @truncate(MU, buf[i]));
+                value = b;
+            }
+            while (i > 0) {
+                i -= 0;
+                var b = buf[i];
+                value = std.math.mul(T, value, 256) catch return null;
                 value |= b;
             }
-            return @bitCast(i64, value);
+            return value;
         },
     }
 }
@@ -330,17 +345,17 @@ test "asUnsigned, asSigned" {
     try std.testing.expectEqual(@as(u64, 2), Constant.initUnsigned(1, null).bit_count);
     try std.testing.expectEqual(@as(u64, 2), Constant.initSigned(1, null).bit_count);
     try std.testing.expectEqual(@as(u64, 1), Constant.initSigned(-1, null).bit_count);
-    try std.testing.expectEqual(@as(u64, 0), Constant.initUnsigned(0, null).asUnsigned().?);
-    try std.testing.expectEqual(@as(u64, 0), Constant.initUnsigned(0, 100).asUnsigned().?);
-    try std.testing.expectEqual(@as(u64, 1234), Constant.initUnsigned(1234, null).asUnsigned().?);
-    try std.testing.expectEqual(@as(i64, 1234), Constant.initUnsigned(1234, null).asSigned().?);
-    try std.testing.expectEqual(@as(u64, 0x1), Constant.initSigned(-1, null).asUnsigned().?);
-    try std.testing.expectEqual(@as(u64, 0xFFFF_FFFF_FFFF_FFFF), Constant.initSigned(-1, 100).asUnsigned().?);
-    try std.testing.expectEqual(@as(i64, -1), Constant.initSigned(-1, null).asSigned().?);
-    try std.testing.expectEqual(@as(i64, -1), Constant.initSigned(-1, 100).asSigned().?);
-    try std.testing.expectEqual(@as(i64, -1234), Constant.initSigned(-1234, null).asSigned().?);
-    try std.testing.expectEqual(@as(?u64, null), Constant.initString("abcdefghijklmnopqrstuvwxyz", null).asUnsigned());
-    try std.testing.expectEqual(@as(?i64, null), Constant.initString("abcdefghijklmnopqrstuvwxyz", null).asSigned());
+    try std.testing.expectEqual(@as(u64, 0), Constant.initUnsigned(0, null).asUnsigned(u64).?);
+    try std.testing.expectEqual(@as(u64, 0), Constant.initUnsigned(0, 100).asUnsigned(u64).?);
+    try std.testing.expectEqual(@as(u64, 1234), Constant.initUnsigned(1234, null).asUnsigned(u64).?);
+    try std.testing.expectEqual(@as(i64, 1234), Constant.initUnsigned(1234, null).asSigned(i64).?);
+    try std.testing.expectEqual(@as(u64, 0x1), Constant.initSigned(-1, null).asUnsigned(u64).?);
+    try std.testing.expectEqual(@as(u64, 0xFFFF_FFFF_FFFF_FFFF), Constant.initSigned(-1, 100).asUnsigned(u64).?);
+    try std.testing.expectEqual(@as(i64, -1), Constant.initSigned(-1, null).asSigned(i64).?);
+    try std.testing.expectEqual(@as(i64, -1), Constant.initSigned(-1, 100).asSigned(i64).?);
+    try std.testing.expectEqual(@as(i64, -1234), Constant.initSigned(-1234, null).asSigned(i64).?);
+    try std.testing.expectEqual(@as(?u64, null), Constant.initString("abcdefghijklmnopqrstuvwxyz", null).asUnsigned(u64));
+    try std.testing.expectEqual(@as(?i64, null), Constant.initString("abcdefghijklmnopqrstuvwxyz", null).asSigned(i64));
 }
 
 pub fn asString(self: *const Constant) []const u8 {
@@ -361,14 +376,14 @@ test "asString" {
 
 pub fn concat(self: Constant, allocator: std.mem.Allocator, other: Constant) Constant {
     const combined_bit_count = self.bit_count + other.bit_count;
-    if (other.asUnsigned()) |other_unsigned| {
+    if (other.asUnsigned(u64)) |other_unsigned| {
         if (other_unsigned == 0) {
             return .{
                 .bit_count = combined_bit_count,
                 .data = self.data,
             };
         } else if (self.bit_count + 64 - @clz(other_unsigned) <= 64) {
-            var value = self.asUnsigned().?;
+            var value = self.asUnsigned(u64).?;
             value |= other_unsigned << @intCast(u6, self.bit_count);
             return .{
                 .bit_count = combined_bit_count,
@@ -451,7 +466,7 @@ pub fn repeat(self: Constant, allocator: std.mem.Allocator, times: u64) Constant
     };
 
     const combined_bit_count = self.bit_count * times;
-    if (self.asUnsigned()) |unsigned| {
+    if (self.asUnsigned(u64)) |unsigned| {
         if (unsigned == 0) {
             return .{
                 .bit_count = combined_bit_count,
@@ -551,6 +566,29 @@ test "repeat" {
     std.testing.allocator.free(allocated.data.long);
 }
 
+pub fn suffix(self: Constant, bytes_to_skip: u64) Constant {
+    const bits_to_skip = bytes_to_skip * 8;
+    if (self.bit_count <= bits_to_skip) {
+        return .{
+            .bit_count = 0,
+            .data = .{ .short = 0 },
+        };
+    }
+    const new_bit_count = self.bit_count - bits_to_skip;
+    switch (self.data) {
+        .short => |value| {
+            return initUnsigned(value >> @intCast(u6, bits_to_skip), new_bit_count);
+        },
+        .long => |buf| {
+            return initString(buf[bytes_to_skip..], new_bit_count);
+        },
+    }
+}
+
+test "suffix" {
+    // TODO
+}
+
 pub fn intern(self: *const Constant, arena: std.mem.Allocator, gpa: std.mem.Allocator, pool: *InternPool) *const Constant {
     var result = pool.getOrPut(gpa, self) catch @panic("OOM");
     if (result.found_existing) {
@@ -581,4 +619,14 @@ pub fn intern(self: *const Constant, arena: std.mem.Allocator, gpa: std.mem.Allo
 
     result.key_ptr.* = constant;
     return constant;
+}
+
+pub const builtin = struct {
+    pub const zero = initUnsigned(0, 0);
+};
+
+pub fn initInternPool(gpa: std.mem.Allocator, pool: *InternPool) void {
+    inline for (@typeInfo(@TypeOf(builtin)).Struct.decls) |decl| {
+        pool.put(gpa, &@field(builtin, decl.name), {}) catch @panic("OOM");
+    }
 }

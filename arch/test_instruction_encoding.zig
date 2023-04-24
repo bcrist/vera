@@ -485,8 +485,7 @@ test "Instruction encoding" {
         });
     }
 
-    // TODO .BB, .BBN
-    for ([_]ie.Mnemonic{ .NOP, .WFI, .BP, .BPN }) |mnemonic| {
+    for ([_]ie.Mnemonic{ .NOP, .PARK, .BP, .BPN, .BB, .BBN }) |mnemonic| {
         try ie.testIdempotence(&ddb, &edb, 1, .{
             .mnemonic = mnemonic,
             .suffix = .none,

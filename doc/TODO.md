@@ -7,12 +7,11 @@ Multi-line string literals
 
 Error on multiple files with same name
 
+Consider having stack sections use a different namespace from other section types, and make them local to the file they're defined in.
 
 ## Microcode decompiler
 
 ## Validate that the same instruction encoding doesn't map to multiple opcodes/aliases
-
-## InstructionEncoding should track whether or there's a possible straight-through flow control?  Or just make assumptions based on mnemonic?
 
 ## Add gui to simulator
 Single step control

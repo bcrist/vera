@@ -8,13 +8,14 @@ label: ?Expression.Handle,
 token: lex.Token.Handle,
 operation: Operation,
 params: ?Expression.Handle,
-address: ?u32,
+address: u32,
 
 pub const OperationType = std.meta.Tag(Operation);
 pub const Operation = union(enum) {
     none,
     insn: MnemonicAndSuffix,
     bound_insn: *const ie.InstructionEncoding,
+    // TODO bound_push, bound_pop?
 
     // Directives:
     org,

@@ -196,6 +196,7 @@ fn tryResolveExpressionType(
             }
         },
         .literal_reg => {
+            // SFR types are preassigned when parsed, so we can assume we're dealing with a GPR name.
             const token_handle = expr_tokens[expr_handle];
             const token = file.tokens.get(token_handle);
             const name = token.location(file.source);
@@ -252,7 +253,7 @@ fn tryResolveSymbolType(
         .expression => |expr_handle| {
             return expr_resolved_types[expr_handle];
         },
-        .address => |insn_ref| {
+        .instruction => |insn_ref| {
             const sym_file = a.getSource(insn_ref.file);
             const block_handle = sym_file.findBlockByInstruction(insn_ref.instruction);
             if (sym_file.blocks.items(.section)[block_handle]) |section_handle| {

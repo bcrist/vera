@@ -111,6 +111,7 @@ pub fn blockInstructions(self: *const SourceFile, block_handle: SectionBlock.Han
 }
 
 pub const Chunk = struct {
+    section: ?Section.Handle,
     file: SourceFile.Handle,
     instructions: Instruction.Iterator,
 };
@@ -123,7 +124,7 @@ pub fn collectChunks(
     auto_org: *std.ArrayListUnmanaged(Chunk),
 ) void {
     const operations = self.instructions.items(.operation);
-    for (self.blocks.items(.keep), self.blocks.items(.first_insn), self.blocks.items(.end_insn)) |keep, begin, end| {
+    for (self.blocks.items(.keep), self.blocks.items(.section), self.blocks.items(.first_insn), self.blocks.items(.end_insn)) |keep, section, begin, end| {
         if (!keep) continue;
 
         var block_iter = Instruction.Iterator{
@@ -133,19 +134,40 @@ pub fn collectChunks(
         var chunk_begin = begin;
         var dest = auto_org;
         while (block_iter.next()) |insn_handle| {
-            if (operations[insn_handle] == .org) {
-                const new_chunk_begin = backtrackOrgHeaders(operations, insn_handle);
-                if (chunk_begin < new_chunk_begin) {
-                    dest.append(gpa, .{
-                        .file = file_handle,
-                        .instructions = .{
-                            .begin = chunk_begin,
-                            .end = new_chunk_begin,
-                        },
-                    }) catch @panic("OOM");
-                }
-                chunk_begin = new_chunk_begin;
-                dest = fixed_org;
+            switch (operations[insn_handle]) {
+                .org => {
+                    const new_chunk_begin = backtrackOrgHeaders(operations, insn_handle);
+                    if (chunk_begin < new_chunk_begin) {
+                        dest.append(gpa, .{
+                            .file = file_handle,
+                            .instructions = .{
+                                .section = section,
+                                .begin = chunk_begin,
+                                .end = new_chunk_begin,
+                            },
+                        }) catch @panic("OOM");
+                    }
+                    chunk_begin = new_chunk_begin;
+                    dest = fixed_org;
+                },
+                .insn => |i| if (ie.getBranchKind(i.mnemonic, i.suffix) == .unconditional) {
+                    // Control will never flow past an unconditional branch, so we can treat anything after as a different chunk
+                    const new_chunk_begin = insn_handle + 1;
+                    if (chunk_begin < new_chunk_begin) {
+                        dest.append(gpa, .{
+                            .file = file_handle,
+                            .instructions = .{
+                                .section = section,
+                                .begin = chunk_begin,
+                                .end = new_chunk_begin,
+                            },
+                        }) catch @panic("OOM");
+                    }
+                    chunk_begin = new_chunk_begin;
+                    dest = auto_org;
+                },
+                .bound_insn => unreachable, // instructions should never be bound before we've collected chunks
+                else => {},
             }
         }
 
@@ -153,6 +175,7 @@ pub fn collectChunks(
             dest.append(gpa, .{
                 .file = file_handle,
                 .instructions = .{
+                    .section = section,
                     .begin = chunk_begin,
                     .end = end,
                 },
@@ -373,7 +396,7 @@ const Parser = struct {
                             .token = directive_token,
                             .operation = .{ .def = {} },
                             .params = params,
-                            .address = null,
+                            .address = 0,
                         }) catch @panic("OOM");
                     } else {
                         self.recordError("Expected expression for symbol definition");
@@ -391,7 +414,7 @@ const Parser = struct {
                             .token = directive_token,
                             .operation = @unionInit(Instruction.Operation, @tagName(d), {}),
                             .params = params,
-                            .address = null,
+                            .address = 0,
                         }) catch @panic("OOM");
                     },
                 }
@@ -410,7 +433,7 @@ const Parser = struct {
                     .suffix = suffix,
                 }},
                 .params = params,
-                .address = null,
+                .address = 0,
             }) catch @panic("OOM");
         } else if (label) |_| {
             self.out.instructions.append(self.gpa, .{
@@ -418,7 +441,7 @@ const Parser = struct {
                 .token = label_token,
                 .operation = .{ .none = {} },
                 .params = null,
-                .address = null,
+                .address = 0,
             }) catch @panic("OOM");
         }
         self.skipLinespace();
@@ -915,7 +938,7 @@ const Parser = struct {
             \\   sync
             \\   fret
             \\
-            \\asdf: WFI
+            \\asdf: PARK
         ;
         var token_list = lex.lex(std.testing.allocator, src);
         defer token_list.deinit(std.testing.allocator);
@@ -944,6 +967,6 @@ const Parser = struct {
         insn = results.instructions.items[4];
         try std.testing.expect(insn.label != null);
         try std.testing.expectEqualStrings("asdf", insn.label.?);
-        try std.testing.expectEqual(Mnemonic.WFI, insn.mnemonic);
+        try std.testing.expectEqual(Mnemonic.PARK, insn.mnemonic);
     }
 };

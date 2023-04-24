@@ -57,7 +57,7 @@ pub fn _0000() void {
 }
 
 pub fn _0001() void {
-    encoding(.WFI, .{});
+    encoding(.PARK, .{});
     desc("Does nothing on the current pipe until an interrupt is triggered, or the CPU is reset");
 
     if (!kernel()) {

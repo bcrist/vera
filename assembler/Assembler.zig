@@ -28,6 +28,7 @@ pages: std.MultiArrayList(PageData) = .{},
 page_lookup: std.AutoHashMapUnmanaged(bus.Page, PageData.Handle) = .{},
 invalid_layout: bool = false,
 constant_temp: std.ArrayListUnmanaged(u8) = .{},
+params_temp: std.ArrayListUnmanaged(ie.Parameter) = .{},
 constants: Constant.InternPool = .{},
 types: types.InternPool = .{},
 
@@ -45,11 +46,16 @@ pub fn init(gpa: std.mem.Allocator, arena: std.mem.Allocator, edb: ie.EncoderDat
     // Note also that the EncoderDatabase is not owned by the Assembler
     // but its lifetime must not be less than the Assembler lifetime.
 
-    return .{
+    var self = Assembler{
         .edb = edb,
         .gpa = gpa,
         .arena = arena,
     };
+
+    Constant.initInternPool(gpa, &self.constants);
+    types.initInternPool(gpa, &self.types);
+
+    return self;
 }
 
 pub fn deinit(self: *Assembler, deinit_arena: bool) void {
@@ -79,6 +85,7 @@ pub fn deinit(self: *Assembler, deinit_arena: bool) void {
     self.pages.deinit(self.gpa);
     self.page_lookup.deinit(self.gpa);
     self.constant_temp.deinit(self.gpa);
+    self.params_temp.deinit(self.gpa);
     self.constants.deinit(self.gpa);
     self.types.deinit(self.gpa);
 }
@@ -257,7 +264,7 @@ pub fn recordError(self: *Assembler, file_handle: SourceFile.Handle, token: lex.
 pub const SymbolTarget = union(enum) {
     not_found,
     expression: Expression.Handle, // always in the same file where it's being referenced
-    address: InstructionRef,
+    instruction: InstructionRef,
 };
 pub fn lookupSymbol(self: *Assembler, file: *const SourceFile, file_handle: SourceFile.Handle, symbol_token_handle: lex.Token.Handle, symbol: []const u8) ?SymbolTarget {
     var operations = file.instructions.items(.operation);
@@ -316,7 +323,7 @@ pub fn lookupSymbol(self: *Assembler, file: *const SourceFile, file_handle: Sour
             if (labels[insn_handle]) |label_expr| {
                 const label_constant = resolved_constants[label_expr] orelse unreachable;
                 if (std.mem.eql(u8, symbol, label_constant.asString())) {
-                    return .{ .address = .{
+                    return .{ .instruction = .{
                         .file = file_handle,
                         .instruction = insn_handle,
                     }};
@@ -330,7 +337,7 @@ pub fn lookupSymbol(self: *Assembler, file: *const SourceFile, file_handle: Sour
 
     // 4. global labels
     if (self.symbols.get(symbol)) |insn_ref| {
-        return .{ .address = insn_ref };
+        return .{ .instruction = insn_ref };
     }
 
     return .{ .not_found = {} };
@@ -361,10 +368,18 @@ pub fn assemble(self: *Assembler) void {
         file.collectChunks(@intCast(SourceFile.Handle, file_handle), self.gpa, &fixed_org_chunks, &auto_org_chunks);
     }
 
+    // TODO how to handle .org directives that reference addresses in auto org chunks?
+    // topo sort?
+    // let it work itself out via the iterative retry process?
+    // disallow references to labels in .org expressions?
+
     var try_again = true;
     while (try_again) {
         self.pages.len = 0;
         self.page_lookup.clearRetainingCapacity();
+
+        // TODO clear resolved_constants for expressions that depend on label addresses
+        // TODO clear bound_insns for instructions that have parameters that depend on label addresses
 
         try_again = layout.doFixedOrgLayout(self, fixed_org_chunks);
         try_again = layout.doAutoOrgLayout(self, auto_org_chunks) or try_again;
@@ -397,7 +412,7 @@ pub fn assemble(self: *Assembler) void {
 //         \\   sync
 //         \\   fret
 //         \\
-//         \\asdf: WFI
+//         \\asdf: PARK
 //     ;
 
 //     var stderr = std.io.getStdErr().writer();

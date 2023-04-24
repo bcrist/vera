@@ -41,7 +41,7 @@ pub const Mnemonic = enum {
     // Memcpy & streaming:
     MCR, MCRB, MCF, MCFB, SI, SIB, SO, SOB, BLD, BST,
     // Faults, interrupts, and context switching:
-    FRET, IRET, IFEX, LDRS, STRS, SRS, WFI,
+    FRET, IRET, IFEX, LDRS, STRS, SRS, PARK,
     // Misc:
     NOP, NOPE, SLEEP, UNSLEEP,
 };
@@ -83,8 +83,43 @@ pub const MnemonicSuffix = enum {
     D, // data
     W, // data-write
     R, // data-read
-
 };
+
+pub const BranchKind = enum {
+    nonbranching,
+    conditional,
+    unconditional,
+    call,
+};
+pub fn getBranchKind(mnemonic: Mnemonic, suffix: MnemonicSuffix) BranchKind {
+    // TODO ensure exec_next_insn() is only used in microcode of instructions where this returns nonbranching or conditional
+    return switch (mnemonic) {
+        ._reserved => unreachable,
+        .ADD, .ADDC, .CMP, .CMPB, .SUB, .SUBB, .INC, .INCC, .DEC, .DECB, .NEG, .NEGB,
+        .NOT, .XOR, .XNOR, .OR, .NOR, .AND, .NAND, .ANDNOT, .TEST, .TESTZ,
+        .TESTB, .TESTBZ, .CLRB, .SETB, .TGLB,
+        .SHR, .SHL, .SHRC, .SHLC,
+        .MUL, .MULH,
+        .CB, .CZ, .CLB, .CLZ, .CTB, .CTZ,
+        .C, .DUP, .LD, .LDI, .ILD, .ST, .STI, .IST,
+        .SAT, .RAT,
+        .FRAME, .UNFRAME, .POP, .PUSH,
+        .SYNC, .ALD, .AST, .ASTZ, .AADD, .AINC, .ADECNZ, .AX, .AXE,
+        .MCR, .MCRB, .MCF, .MCFB, .SI, .SIB, .SO, .SOB, .BLD, .BST,
+        .NOP, .NOPE, .SLEEP, .UNSLEEP,
+        .IFEX, .LDRS, .STRS, .SRS,
+        => .nonbranching,
+
+        .B, .BP, .BPN, .BB, .BBN, .EAB, .DAB,
+        .RET, .FRET, .IRET, .PARK,
+        => switch (suffix) {
+            .none, .I, .S, .D, .W, .R => .unconditional,
+            else => .conditional,
+        },
+
+        .CALL => .call,
+    };
+}
 
 pub const BaseExpressionType = enum {
     none,
@@ -188,7 +223,6 @@ pub const ParameterEncoding = struct {
     base_src: ParameterSource = .implicit,
     offset_src: ParameterSource = .implicit,
     arrow: bool = false,
-    default_to_param: i8 = -1, // TODO!!!
     min_reg: misc.RegisterIndex = 0,
     max_reg: misc.RegisterIndex = 15,
     constant_reverse: bool = false, // store constant as `N - value` instead of `value`
@@ -1546,6 +1580,16 @@ pub const InstructionEncodingIterator = struct {
             const n = self.remaining[0];
             self.remaining = self.remaining[1..];
             if (checkInstructionMatchesEncoding(self.insn, n)) {
+                return n;
+            }
+        }
+        return null;
+    }
+    pub fn nextPointer(self: *InstructionEncodingIterator) ?*const InstructionEncoding {
+        while (self.remaining.len > 0) {
+            const n = &self.remaining[0];
+            self.remaining = self.remaining[1..];
+            if (checkInstructionMatchesEncoding(self.insn, n.*)) {
                 return n;
             }
         }
