@@ -37,5 +37,5 @@ const Binary = struct {
 };
 
 pub const Flags = enum {
-    constant_depends_on_address,
+    constant_depends_on_layout,
 };

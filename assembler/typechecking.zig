@@ -25,6 +25,7 @@ pub fn processLabelsAndSections(a: *Assembler, file: *SourceFile, file_handle: S
     var expr_resolved_constants = file.expressions.items(.resolved_constant);
     var expr_infos = file.expressions.items(.info);
     var expr_tokens = file.expressions.items(.token);
+    var expr_flags = file.expressions.items(.flags);
 
     var block_sections = file.blocks.items(.section);
 
@@ -50,7 +51,7 @@ pub fn processLabelsAndSections(a: *Assembler, file: *SourceFile, file_handle: S
                     => unreachable,
                 };
 
-                const symbol_constant = resolveSymbolDefExpr(a, file, file_handle, section_name_expr, expr_tokens, expr_infos, expr_resolved_constants, expr_resolved_types);
+                const symbol_constant = resolveSymbolDefExpr(a, file, file_handle, section_name_expr, expr_tokens, expr_infos, expr_resolved_constants, expr_resolved_types, expr_flags);
                 const section_name = symbol_constant.asString();
                 const entry = a.sections.getOrPutValue(a.gpa, section_name, .{
                     .name = section_name,
@@ -68,7 +69,7 @@ pub fn processLabelsAndSections(a: *Assembler, file: *SourceFile, file_handle: S
         }
 
         if (maybe_label_expr) |label_expr| {
-            const symbol_constant = resolveSymbolDefExpr(a, file, file_handle, label_expr, expr_tokens, expr_infos, expr_resolved_constants, expr_resolved_types);
+            const symbol_constant = resolveSymbolDefExpr(a, file, file_handle, label_expr, expr_tokens, expr_infos, expr_resolved_constants, expr_resolved_types, expr_flags);
             const symbol = symbol_constant.asString();
             if (!in_stack_section and !std.mem.startsWith(u8, symbol, "_")) {
                 a.symbols.put(a.gpa, symbol, .{
@@ -89,6 +90,7 @@ fn resolveSymbolDefExpr(
     expr_infos: []const Expression.Info,
     expr_resolved_constants: []?*const Constant,
     expr_resolved_types: []ExpressionType,
+    expr_flags: []std.EnumSet(Expression.Flags),
 ) *const Constant {
     var token_handle = expr_tokens[symbol_def_expr];
     switch (expr_infos[symbol_def_expr]) {
@@ -105,7 +107,7 @@ fn resolveSymbolDefExpr(
                 expr_resolved_constants[symbol_def_expr] = interned_symbol_name;
                 expr_resolved_types[symbol_def_expr] = .{ .symbol_def = {} };
                 return interned_symbol_name;
-            } else if (tryResolveExpressionType(a, file, file_handle, inner_expr, expr_tokens, expr_infos, expr_resolved_constants, expr_resolved_types)) {
+            } else if (tryResolveExpressionType(a, file, file_handle, inner_expr, expr_tokens, expr_infos, expr_resolved_constants, expr_resolved_types, expr_flags)) {
                 const interned_symbol_name = expr_resolved_constants[inner_expr].?;
                 expr_resolved_constants[symbol_def_expr] = interned_symbol_name;
                 expr_resolved_types[symbol_def_expr] = .{ .symbol_def = {} };
@@ -128,13 +130,14 @@ pub fn resolveExpressionTypes(a: *Assembler) bool {
             var expr_resolved_constants = file.expressions.items(.resolved_constant);
             var expr_infos = file.expressions.items(.info);
             var expr_tokens = file.expressions.items(.token);
+            var expr_flags = file.expressions.items(.flags);
 
             for (expr_resolved_types, 0..) |expr_type, handle| {
                 if (expr_type == .unknown) {
                     if (tryResolveExpressionType(a, file,
                         @intCast(SourceFile.Handle, file_handle),
                         @intCast(Expression.Handle, handle),
-                        expr_tokens, expr_infos, expr_resolved_constants, expr_resolved_types,
+                        expr_tokens, expr_infos, expr_resolved_constants, expr_resolved_types, expr_flags,
                     )) {
                         made_progress = true;
                     } else {
@@ -171,6 +174,7 @@ fn tryResolveExpressionType(
     expr_infos: []const Expression.Info,
     expr_resolved_constants: []?*const Constant,
     expr_resolved_types: []ExpressionType,
+    expr_flags: []std.EnumSet(Expression.Flags),
 ) bool {
     std.debug.assert(expr_resolved_types[expr_handle] == .unknown);
 
@@ -224,19 +228,15 @@ fn tryResolveExpressionType(
             const token_handle = expr_tokens[expr_handle];
             const symbol_literal = file.tokens.get(token_handle).location(file.source);
             const symbol_constant = Constant.initSymbolLiteral(a.gpa, &a.constant_temp, symbol_literal);
-            const expr_type = tryResolveSymbolType(a, file, file_handle, token_handle, symbol_constant.asString(), expr_resolved_types);
-            if (expr_type == .unknown) return false;
-            expr_resolved_types[expr_handle] = expr_type;
+            return tryResolveSymbolType(a, file, file_handle, expr_handle, token_handle, symbol_constant.asString(), expr_resolved_types, expr_flags);
         },
         .directive_symbol_ref => |inner_expr| {
             if (expr_resolved_constants[inner_expr]) |symbol| {
-                const expr_type = tryResolveSymbolType(a, file, file_handle, expr_tokens[expr_handle], symbol.asString(), expr_resolved_types);
-                if (expr_type == .unknown) return false;
-                expr_resolved_types[expr_handle] = expr_type;
+                return tryResolveSymbolType(a, file, file_handle, expr_handle, expr_tokens[expr_handle], symbol.asString(), expr_resolved_types, expr_flags);
             } else return false;
         },
         .literal_symbol_def, .directive_symbol_def => {
-            _ = resolveSymbolDefExpr(a, file, file_handle, expr_handle, expr_tokens, expr_infos, expr_resolved_constants, expr_resolved_types);
+            _ = resolveSymbolDefExpr(a, file, file_handle, expr_handle, expr_tokens, expr_infos, expr_resolved_constants, expr_resolved_types, expr_flags);
         },
     }
     return true;
@@ -246,19 +246,28 @@ fn tryResolveSymbolType(
     a: *Assembler,
     file: *const SourceFile,
     file_handle: SourceFile.Handle,
+    expr_handle: Expression.Handle,
     token_handle: Token.Handle,
     symbol: []const u8,
-    expr_resolved_types: []const ExpressionType,
-) ExpressionType {
+    expr_resolved_types: []ExpressionType,
+    expr_flags: []std.EnumSet(Expression.Flags),
+) bool {
     if (a.lookupSymbol(file, file_handle, token_handle, symbol)) |target| switch (target) {
-        .expression => |expr_handle| {
-            return expr_resolved_types[expr_handle];
+        .expression => |target_expr_handle| {
+            const target_type = expr_resolved_types[target_expr_handle];
+            if (target_type != .unknown) {
+                expr_resolved_types[expr_handle] = target_type;
+                if (expr_flags[target_expr_handle].contains(.constant_depends_on_layout)) {
+                    expr_flags[expr_handle].insert(.constant_depends_on_layout);
+                }
+                return true;
+            }
         },
         .instruction => |insn_ref| {
             const sym_file = a.getSource(insn_ref.file);
             const block_handle = sym_file.findBlockByInstruction(insn_ref.instruction);
             if (sym_file.blocks.items(.section)[block_handle]) |section_handle| {
-                return switch (a.getSection(section_handle).kind) {
+                expr_resolved_types[expr_handle] = switch (a.getSection(section_handle).kind) {
                     .code_user, .code_kernel, .entry_user, .entry_kernel => ExpressionType.relativeAddress(.insn, .{ .sr = .ip }),
                     .data_user, .data_kernel, .constant_user, .constant_kernel => ExpressionType.relativeAddress(.data, .{ .sr = .ip }),
                     .stack => ExpressionType.relativeAddress(.stack, .{ .sr = .sp }),
@@ -266,14 +275,69 @@ fn tryResolveSymbolType(
                 } catch unreachable;
             } else {
                 // Block does not have a section handle, so it's an .info section by default
-                return ExpressionType.absoluteAddress(.data);
+                expr_resolved_types[expr_handle] = ExpressionType.absoluteAddress(.data);
             }
+            expr_flags[expr_handle].insert(.constant_depends_on_layout);
+            return true;
         },
         .not_found => {
             a.recordError(file_handle, token_handle, "Reference to undefined symbol");
-            return .{ .poison = {} };
+            expr_resolved_types[expr_handle] = .{ .poison = {} };
+            return true;
         },
     };
 
-    return .{ .unknown = {} };
+    return false;
+}
+
+pub fn checkInstructionsAndDirectives(a: *Assembler) void {
+    for (a.files.items, 0..) |*file, file_handle| {
+        _ = file_handle;
+
+        var operations = file.instructions.items(.operation);
+        var params = file.instructions.items(.params);
+        var insn_flags = file.instructions.items(.flags);
+
+        var expr_infos = file.expressions.items(.info);
+        var expr_flags = file.expressions.items(.flags);
+
+        for (operations, params, 0..) |op, maybe_params, insn_handle| {
+            switch (op) {
+                .none => std.debug.assert(maybe_params == null),
+                .bound_insn => unreachable,
+                .insn => {
+                    if (maybe_params) |params_handle| {
+                        if (instructionHasLayoutDependentParams(expr_flags, expr_infos, params_handle)) {
+                            insn_flags[insn_handle].insert(.encoding_depends_on_layout);
+                        }
+                    }
+                },
+                .org, .@"align", .keep, .def, .undef, .db, .dw, .dd,
+                .section, .code, .kcode, .entry, .kentry, .data, .kdata, .@"const", .kconst, .stack,
+                .push, .pop,
+                => {}
+            }
+
+            // TODO check that directives have the expected number and types of params
+            // TODO check that instructions do not appear in data or stack sections
+            // TODO check that data directives do not appear in code sections
+        }
+    }
+}
+
+fn instructionHasLayoutDependentParams(expr_flags: []const std.EnumSet(Expression.Flags), expr_infos: []const Expression.Info, params_handle: Expression.Handle) bool {
+    if (expr_flags[params_handle].contains(.constant_depends_on_layout)) return true;
+
+    switch (expr_infos[params_handle]) {
+        .list, .arrow_list => |bin| {
+            return instructionHasLayoutDependentParams(expr_flags, expr_infos, bin.left)
+                or instructionHasLayoutDependentParams(expr_flags, expr_infos, bin.right);
+        },
+
+        .literal_int, .literal_str, .literal_reg,
+        .literal_symbol_def, .directive_symbol_def,
+        .literal_symbol_ref, .directive_symbol_ref,
+        => {},
+    }
+    return false;
 }

@@ -396,6 +396,7 @@ const Parser = struct {
                             .token = directive_token,
                             .operation = .{ .def = {} },
                             .params = params,
+                            .flags = .{},
                             .address = 0,
                         }) catch @panic("OOM");
                     } else {
@@ -414,6 +415,7 @@ const Parser = struct {
                             .token = directive_token,
                             .operation = @unionInit(Instruction.Operation, @tagName(d), {}),
                             .params = params,
+                            .flags = .{},
                             .address = 0,
                         }) catch @panic("OOM");
                     },
@@ -433,6 +435,7 @@ const Parser = struct {
                     .suffix = suffix,
                 }},
                 .params = params,
+                .flags = .{},
                 .address = 0,
             }) catch @panic("OOM");
         } else if (label) |_| {
@@ -441,6 +444,7 @@ const Parser = struct {
                 .token = label_token,
                 .operation = .{ .none = {} },
                 .params = null,
+                .flags = .{},
                 .address = 0,
             }) catch @panic("OOM");
         }

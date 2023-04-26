@@ -8,12 +8,24 @@ const Constant = @import("Constant.zig");
 const Instruction = @import("Instruction.zig");
 const Expression = @import("Expression.zig");
 
+pub fn resetLayoutDependentExpressions(a: *Assembler) void {
+    for (a.files.items) |*file| {
+        var expr_resolved_constants = file.expressions.items(.resolved_constant);
+        for (file.expressions.items(.flags), 0..) |flags, expr_handle| {
+            if (flags.contains(.constant_depends_on_layout)) {
+                expr_resolved_constants[expr_handle] = null;
+            }
+        }
+    }
+}
+
 pub fn doFixedOrgLayout(a: *Assembler, chunks: std.ArrayListUnmanaged(SourceFile.Chunk)) bool {
     var layout_changed = false;
     for (chunks.items) |chunk| {
         var file = a.getSource(chunk.file);
         const operations = file.instructions.items(.operation);
         const params = file.instructions.items(.params);
+        const insn_flags = file.instructions.items(.flags);
         const insn_addresses = file.instructions.items(.address);
 
         // Find the .org directive (there will be exactly one, at or near the start)
@@ -43,10 +55,26 @@ pub fn doFixedOrgLayout(a: *Assembler, chunks: std.ArrayListUnmanaged(SourceFile
                     // TODO synthesize pop instruction
                 },
                 .insn => {
-                    address += resolveInstructionEncoding(a, file, chunk.file, old_insn_address, &operations[insn_handle], params[insn_handle]);
+                    address += resolveInstructionEncoding(a, file, chunk.file, address, &operations[insn_handle], params[insn_handle]);
+                    layout_changed = true;
                 },
                 .bound_insn => |encoding| {
-                    address += ie.getInstructionLength(encoding.*);
+                    if (insn_flags[insn_handle].contains(.encoding_depends_on_layout)) {
+                        const old_encoding = encoding;
+                        operations[insn_handle] = .{ .insn = .{
+                            .mnemonic = old_encoding.mnemonic,
+                            .suffix = old_encoding.suffix,
+                        }};
+                        address += resolveInstructionEncoding(a, file, chunk.file, address, &operations[insn_handle], params[insn_handle]);
+                        switch (operations[insn_handle]) {
+                            .bound_insn => |new_encoding| if (!ie.eql(old_encoding.*, new_encoding.*)) {
+                                layout_changed = true;
+                            },
+                            else => {},
+                        }
+                    } else {
+                        address += ie.getInstructionLength(encoding.*);
+                    }
                 },
                 .@"align" => {
                     // TODO handle alignment

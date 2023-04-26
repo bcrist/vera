@@ -8,6 +8,7 @@ label: ?Expression.Handle,
 token: lex.Token.Handle,
 operation: Operation,
 params: ?Expression.Handle,
+flags: std.EnumSet(Flags),
 address: u32,
 
 pub const OperationType = std.meta.Tag(Operation);
@@ -43,6 +44,10 @@ pub const Operation = union(enum) {
 pub const MnemonicAndSuffix = struct {
     mnemonic: ie.Mnemonic,
     suffix: ie.MnemonicSuffix,
+};
+
+pub const Flags = enum {
+    encoding_depends_on_layout,
 };
 
 pub const Handle = u31;

@@ -131,7 +131,8 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
             file.instructions.items(.operation),
             file.instructions.items(.params),
             file.instructions.items(.address),
-        ) |handle, label_handle, token_handle, operation, params_handle, address| {
+            file.instructions.items(.flags),
+        ) |handle, label_handle, token_handle, operation, params_handle, address, flags| {
             try writer.print("         #{}:", .{ handle });
             if (address != 0) {
                 try writer.print(" {X:0>8}", .{ address });
@@ -158,6 +159,12 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
             }
             const token = file.tokens.get(token_handle);
             try writer.print(" '{s}'", .{ token.location(file.source) });
+
+            var flags_iter = flags.iterator();
+            while (flags_iter.next()) |f| {
+                try writer.print(" .{s}", .{ @tagName(f) });
+            }
+
             try writer.writeAll("\n");
             switch (operation) {
                 .bound_insn => |encoding| {
@@ -172,7 +179,8 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
             file.expressions.items(.resolved_type),
             file.expressions.items(.resolved_constant),
             file.expressions.items(.info),
-        ) |handle, token_handle, expr_type, maybe_constant, info| {
+            file.expressions.items(.flags),
+        ) |handle, token_handle, expr_type, maybe_constant, info, flags| {
             try writer.print("         #{:0>5}:", .{ handle });
             if (maybe_constant) |constant| {
                 try writer.print(" {X:0>16}", .{ @ptrToInt(constant) });
@@ -193,6 +201,12 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
             }
             const token = file.tokens.get(token_handle);
             try writer.print(" '{s}'", .{ token.location(file.source) });
+
+            var flags_iter = flags.iterator();
+            while (flags_iter.next()) |f| {
+                try writer.print(" .{s}", .{ @tagName(f) });
+            }
+
             try writer.writeAll("\n");
         }
     }
@@ -366,9 +380,8 @@ pub fn assemble(self: *Assembler) void {
 
     if (!typechecking.resolveExpressionTypes(self)) return;
 
-    // TODO check that directives have the expected number and types of params
-    // TODO check that instructions do not appear in data or stack sections
-    // TODO check that data directives do not appear in code sections
+    typechecking.checkInstructionsAndDirectives(self);
+    
     // TODO check for duplicate labels
 
     for (self.files.items, 0..) |*file, file_handle| {
@@ -383,21 +396,18 @@ pub fn assemble(self: *Assembler) void {
         file.collectChunks(@intCast(SourceFile.Handle, file_handle), self.gpa, &fixed_org_chunks, &auto_org_chunks);
     }
 
-    // TODO how to handle .org directives that reference addresses in auto org chunks?
-    // topo sort?
-    // let it work itself out via the iterative retry process?
-    // disallow references to labels in .org expressions?
-
     var try_again = true;
     while (try_again) {
         self.pages.len = 0;
         self.page_lookup.clearRetainingCapacity();
 
-        // TODO clear resolved_constants for expressions that depend on label addresses
-        // TODO clear bound_insns for instructions that have parameters that depend on label addresses
+        layout.resetLayoutDependentExpressions(self);
 
         try_again = layout.doFixedOrgLayout(self, fixed_org_chunks);
         try_again = layout.doAutoOrgLayout(self, auto_org_chunks) or try_again;
+
+        // TODO handle degenerate/recursive cases where the layout never reaches an equilibrium
+
         if (self.invalid_layout) return;
     }
 
