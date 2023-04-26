@@ -1,6 +1,6 @@
 const std = @import("std");
 const lex = @import("lex.zig");
-const types = @import("types.zig");
+const ie = @import("instruction_encoding");
 const Assembler = @import("Assembler.zig");
 const SourceFile = @import("SourceFile.zig");
 const Instruction = @import("Instruction.zig");
@@ -8,7 +8,7 @@ const Expression = @import("Expression.zig");
 const Constant = @import("Constant.zig");
 const Section = @import("Section.zig");
 const Token = lex.Token;
-
+const ExpressionType = ie.ExpressionType;
 const SectionBlock = SourceFile.SectionBlock;
 
 // Set the resolved type for labels to .symbol_def.
@@ -88,7 +88,7 @@ fn resolveSymbolDefExpr(
     expr_tokens: []const lex.Token.Handle,
     expr_infos: []const Expression.Info,
     expr_resolved_constants: []?*const Constant,
-    expr_resolved_types: []?*const types.Type,
+    expr_resolved_types: []ExpressionType,
 ) *const Constant {
     var token_handle = expr_tokens[symbol_def_expr];
     switch (expr_infos[symbol_def_expr]) {
@@ -97,18 +97,18 @@ fn resolveSymbolDefExpr(
             const constant = Constant.initSymbolLiteral(a.gpa, &a.constant_temp, literal);
             const interned_symbol_name = constant.intern(a.arena, a.gpa, &a.constants);
             expr_resolved_constants[symbol_def_expr] = interned_symbol_name;
-            expr_resolved_types[symbol_def_expr] = &types.builtin.symbol_def;
+            expr_resolved_types[symbol_def_expr] = .{ .symbol_def = {} };
             return interned_symbol_name;
         },
         .directive_symbol_def => |inner_expr| {
             if (expr_resolved_constants[inner_expr]) |interned_symbol_name| {
                 expr_resolved_constants[symbol_def_expr] = interned_symbol_name;
-                expr_resolved_types[symbol_def_expr] = &types.builtin.symbol_def;
+                expr_resolved_types[symbol_def_expr] = .{ .symbol_def = {} };
                 return interned_symbol_name;
             } else if (tryResolveExpressionType(a, file, file_handle, inner_expr, expr_tokens, expr_infos, expr_resolved_constants, expr_resolved_types)) {
                 const interned_symbol_name = expr_resolved_constants[inner_expr].?;
                 expr_resolved_constants[symbol_def_expr] = interned_symbol_name;
-                expr_resolved_types[symbol_def_expr] = &types.builtin.symbol_def;
+                expr_resolved_types[symbol_def_expr] = .{ .symbol_def = {} };
                 return interned_symbol_name;
             } else unreachable;
         },
@@ -129,8 +129,8 @@ pub fn resolveExpressionTypes(a: *Assembler) bool {
             var expr_infos = file.expressions.items(.info);
             var expr_tokens = file.expressions.items(.token);
 
-            for (file.expressions.items(.resolved_type), 0..) |maybe_type, handle| {
-                if (maybe_type == null) {
+            for (expr_resolved_types, 0..) |expr_type, handle| {
+                if (expr_type == .unknown) {
                     if (tryResolveExpressionType(a, file,
                         @intCast(SourceFile.Handle, file_handle),
                         @intCast(Expression.Handle, handle),
@@ -149,9 +149,9 @@ pub fn resolveExpressionTypes(a: *Assembler) bool {
         for (a.files.items, 0..) |*file, file_handle| {
             const resolved_types = file.expressions.items(.resolved_type);
             const tokens = file.expressions.items(.token);
-            for (resolved_types, 0..) |t, handle| {
-                if (t == null) {
-                    resolved_types[handle] = &types.builtin.poison;
+            for (resolved_types, 0..) |expr_type, handle| {
+                if (expr_type == .unknown) {
+                    resolved_types[handle] = .{ .poison = {} };
                     a.recordError(@intCast(SourceFile.Handle, file_handle), tokens[handle], "Could not determine type for expression");
                 }
             }
@@ -170,27 +170,28 @@ fn tryResolveExpressionType(
     expr_tokens: []const lex.Token.Handle,
     expr_infos: []const Expression.Info,
     expr_resolved_constants: []?*const Constant,
-    expr_resolved_types: []?*const types.Type,
+    expr_resolved_types: []ExpressionType,
 ) bool {
-    
+    std.debug.assert(expr_resolved_types[expr_handle] == .unknown);
+
     switch (expr_infos[expr_handle]) {
         .list, .arrow_list => {
-            expr_resolved_types[expr_handle] = &types.builtin.poison;
+            expr_resolved_types[expr_handle] = .{ .poison = {} };
         },
         .literal_int, .literal_str => {
             const token_handle = expr_tokens[expr_handle];
             const token = file.tokens.get(token_handle);
             if (Constant.initLiteral(a.gpa, &a.constant_temp, token, file.source)) |constant| {
-                expr_resolved_types[expr_handle] = &types.builtin.constant;
+                expr_resolved_types[expr_handle] = .{ .constant = {} };
                 expr_resolved_constants[expr_handle] = constant.intern(a.arena, a.gpa, &a.constants);
             } else |err| switch (err) {
                 error.Overflow => {
                     a.recordError(file_handle, token_handle, "Integer literal too large");
-                    expr_resolved_types[expr_handle] = &types.builtin.poison;
+                    expr_resolved_types[expr_handle] = .{ .poison = {} };
                 },
                 error.InvalidCharacter => {
                     a.recordError(file_handle, token_handle, "Invalid character in literal");
-                    expr_resolved_types[expr_handle] = &types.builtin.poison;
+                    expr_resolved_types[expr_handle] = .{ .poison = {} };
                 },
                 error.InvalidToken => unreachable,
             }
@@ -201,7 +202,7 @@ fn tryResolveExpressionType(
             const token = file.tokens.get(token_handle);
             const name = token.location(file.source);
             const index = std.fmt.parseUnsigned(u4, name[1..], 10) catch unreachable;
-            const reg_type: types.Type = switch (name[0]) {
+            const reg_type: ExpressionType = switch (name[0]) {
                 'r', 'R' => .{ .reg16 = .{
                     .index = index,
                     .signedness = null,
@@ -217,21 +218,21 @@ fn tryResolveExpressionType(
                 else => unreachable,
             };
 
-            expr_resolved_types[expr_handle] = reg_type.intern(a.arena, a.gpa, &a.types);
+            expr_resolved_types[expr_handle] = reg_type;
         },
         .literal_symbol_ref => {
             const token_handle = expr_tokens[expr_handle];
             const symbol_literal = file.tokens.get(token_handle).location(file.source);
             const symbol_constant = Constant.initSymbolLiteral(a.gpa, &a.constant_temp, symbol_literal);
-            if (tryResolveSymbolType(a, file, file_handle, token_handle, symbol_constant.asString(), expr_resolved_types)) |result| {
-                expr_resolved_types[expr_handle] = result;
-            } else return false;
+            const expr_type = tryResolveSymbolType(a, file, file_handle, token_handle, symbol_constant.asString(), expr_resolved_types);
+            if (expr_type == .unknown) return false;
+            expr_resolved_types[expr_handle] = expr_type;
         },
         .directive_symbol_ref => |inner_expr| {
             if (expr_resolved_constants[inner_expr]) |symbol| {
-                if (tryResolveSymbolType(a, file, file_handle, expr_tokens[expr_handle], symbol.asString(), expr_resolved_types)) |result| {
-                    expr_resolved_types[expr_handle] = result;
-                } else return false;
+                const expr_type = tryResolveSymbolType(a, file, file_handle, expr_tokens[expr_handle], symbol.asString(), expr_resolved_types);
+                if (expr_type == .unknown) return false;
+                expr_resolved_types[expr_handle] = expr_type;
             } else return false;
         },
         .literal_symbol_def, .directive_symbol_def => {
@@ -247,8 +248,8 @@ fn tryResolveSymbolType(
     file_handle: SourceFile.Handle,
     token_handle: Token.Handle,
     symbol: []const u8,
-    expr_resolved_types: []?*const types.Type,
-) ?*const types.Type {
+    expr_resolved_types: []const ExpressionType,
+) ExpressionType {
     if (a.lookupSymbol(file, file_handle, token_handle, symbol)) |target| switch (target) {
         .expression => |expr_handle| {
             return expr_resolved_types[expr_handle];
@@ -257,22 +258,22 @@ fn tryResolveSymbolType(
             const sym_file = a.getSource(insn_ref.file);
             const block_handle = sym_file.findBlockByInstruction(insn_ref.instruction);
             if (sym_file.blocks.items(.section)[block_handle]) |section_handle| {
-                switch (a.getSection(section_handle).kind) {
-                    .code_user, .code_kernel, .entry_user, .entry_kernel => return &types.builtin.ip_relative_insn,
-                    .data_user, .data_kernel, .constant_user, .constant_kernel => return &types.builtin.ip_relative_data,
-                    .stack => return &types.builtin.sp_relative,
-                    .info => return &types.builtin.absolute_address_data,
-                }
+                return switch (a.getSection(section_handle).kind) {
+                    .code_user, .code_kernel, .entry_user, .entry_kernel => ExpressionType.relativeAddress(.insn, .{ .sr = .ip }),
+                    .data_user, .data_kernel, .constant_user, .constant_kernel => ExpressionType.relativeAddress(.data, .{ .sr = .ip }),
+                    .stack => ExpressionType.relativeAddress(.stack, .{ .sr = .sp }),
+                    .info => ExpressionType.absoluteAddress(.data),
+                } catch unreachable;
             } else {
                 // Block does not have a section handle, so it's an .info section by default
-                return &types.builtin.absolute_address_data;
+                return ExpressionType.absoluteAddress(.data);
             }
         },
         .not_found => {
             a.recordError(file_handle, token_handle, "Reference to undefined symbol");
-            return &types.builtin.poison;
+            return .{ .poison = {} };
         },
     };
 
-    return null;
+    return .{ .unknown = {} };
 }

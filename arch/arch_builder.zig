@@ -3,8 +3,9 @@ const allocators = @import("allocators.zig");
 const TempAllocator = @import("temp_allocator");
 const ControlSignals = @import("ControlSignals");
 const uc = @import("microcode");
-const sx = @import("sx");
 const bits = @import("bits");
+const sx = @import("sx");
+const ie_data = @import("instruction_encoding_data");
 const instruction_encoding = @import("instruction_encoding");
 const misc = @import("misc");
 const deep_hash_map = @import("deep_hash_map");
@@ -458,109 +459,21 @@ pub fn writeOpcodeTableLarge(writer: anytype) !void {
     try writer.writeAll("\n\n");
 }
 
-pub fn writeInstructionData(inner: anytype) !void {
-    var writer = sx.Writer(@TypeOf(inner)).init(allocators.temp_arena.allocator(), inner);
+pub fn writeInstructionEncodings(inner_writer: anytype) !void {
+    const InnerWriter = @TypeOf(inner_writer);
+    var writer = sx.Writer(InnerWriter).init(allocators.temp_arena.allocator(), inner_writer);
     try writer.openExpanded();
+
     for (instructions, descriptions, 0..) |maybe_insn, maybe_desc, opcode| {
         if (maybe_insn) |i| {
             if (i.opcodes.min == opcode) {
-                try writeInstructionEncoding(&writer, i.*, maybe_desc);
+                try ie_data.writeInstructionEncoding(InnerWriter, &writer, i.*, maybe_desc);
             }
         }
     }
     for (aliases.items) |alias| {
-        try writeInstructionEncoding(&writer, alias.encoding, alias.desc);
+        try ie_data.writeInstructionEncoding(InnerWriter, &writer, alias.encoding, alias.desc);
     }
+
     try writer.done();
-}
-
-fn writeInstructionEncoding(writer: anytype, i: InstructionEncoding, maybe_desc: ?[]const u8) !void {
-    try writer.open();
-    try writer.printValue("{X:0>4}", .{ i.opcodes.min });
-    try writer.printValue("{X:0>4}", .{ i.opcodes.max });
-    try writer.tag(i.mnemonic);
-    if (i.suffix != .none) {
-        try writer.tag(i.suffix);
-    }
-    writer.setCompact(false);
-    if (maybe_desc) |desc| {
-        try writer.expression("desc");
-        try writer.string(desc);
-        _ = try writer.close();
-    }
-
-    if (i.opcode_base != i.opcodes.min) {
-        var param_uses_opcode = false;
-        for (i.params) |param| {
-            if (param.base_src == .opcode or param.offset_src == .opcode) {
-                param_uses_opcode = true;
-                break;
-            }
-        }
-        if (param_uses_opcode) {
-            try writer.expression("opcode-base");
-            try writer.printValue("{X:0>4}", .{ i.opcode_base });
-            _ = try writer.close();
-        }
-    }
-
-    for (i.params) |param| {
-        try writer.expression("param");
-        if (param.arrow) {
-            try writer.string("->");
-        }
-        try writer.tag(param.type.base);
-
-        if (param.type.offset != .none) {
-            try writer.tag(param.type.offset);
-        }
-
-        if (param.base_src != .implicit) {
-            try writer.expression("base-src");
-            try writer.tag(param.base_src);
-            _ = try writer.close();
-        }
-
-        if (param.offset_src != .implicit) {
-            try writer.expression("offset-src");
-            try writer.tag(param.offset_src);
-            _ = try writer.close();
-        }
-
-        if (param.constant_reverse) {
-            try writer.expression("rev");
-            _ = try writer.close();
-        }
-
-        if (param.min_reg != 0 or param.max_reg != 15) {
-            try writer.expression("reg");
-            try writer.int(param.min_reg, 10);
-            try writer.int(param.max_reg, 10);
-            _ = try writer.close();
-        }
-
-        for (param.constant_ranges) |range| {
-            try writer.expression("range");
-            try writer.int(range.min, 10);
-            try writer.int(range.max, 10);
-            _ = try writer.close();
-        }
-
-        for (param.alt_constant_ranges) |range| {
-            try writer.expression("alt-range");
-            try writer.int(range.min, 10);
-            try writer.int(range.max, 10);
-            _ = try writer.close();
-        }
-
-        if (param.constant_align != 1) {
-            try writer.expression("align");
-            try writer.int(param.constant_align, 10);
-            _ = try writer.close();
-        }
-
-        _ = try writer.close();
-    }
-
-    _ = try writer.close();
 }

@@ -1,6 +1,5 @@
 const std = @import("std");
 const lex = @import("lex.zig");
-const types = @import("types.zig");
 const Assembler = @import("Assembler.zig");
 const SourceFile = @import("SourceFile.zig");
 const Instruction = @import("Instruction.zig");

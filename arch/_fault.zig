@@ -5,7 +5,7 @@ const ControlSignals = @import("ControlSignals");
 const misc = @import("misc");
 const uc = @import("microcode");
 
-const Xa_relative = ib.Xa_relative;
+const addr = ib.addr;
 const encoding = ib.encoding;
 const desc = ib.desc;
 const next_cycle = ib.next_cycle;
@@ -189,7 +189,7 @@ pub fn _018E() void {
 }
 
 pub fn _FD00_FDFF() void {
-    encoding(.LDRS, .{ Xa_relative(.D, .imm_0), .to, .Rb });
+    encoding(.LDRS, .{ addr(.data, .Xa), .to, .Rb });
     desc("Load registerset");
 
     if (!kernel()) {
@@ -257,7 +257,7 @@ pub fn _FD00_FDFF() void {
 }
 
 pub fn _FE00_FEFF() void {
-    encoding(.STRS, .{ .Rb, .to, Xa_relative(.D, .imm_0) });
+    encoding(.STRS, .{ .Rb, .to, addr(.data, .Xa) });
     desc("Store registerset");
 
     if (!kernel()) {

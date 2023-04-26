@@ -6,6 +6,7 @@ const SignedOffsetForLiteral = @import("misc").SignedOffsetForLiteral;
 const encoding = ib.encoding;
 const getParameterConstant = ib.getParameterConstant;
 const getParameterOffset = ib.getParameterOffset;
+const addr = ib.addr;
 const IP_relative = ib.IP_relative;
 const SP_relative = ib.SP_relative;
 const Xa_relative = ib.Xa_relative;
@@ -84,8 +85,8 @@ pub fn _4B00_4BFF() void {
 }
 
 pub fn _4C00_4CFF() void {
-    encoding(.C, .{ IP_relative(.RbS), .to, .Xa });
-    //syntax("C IP+SRb -> Xa");
+    // C IP + Rb .signed -> Xa
+    encoding(.C, .{ IP_relative(null, .RbS), .to, .Xa });
     desc("Copy IP-relative address to 32b register");
 
     SR_plus_op_reg_to_L(.ip, .OB, .sx, .fresh, .no_flags);
@@ -94,8 +95,8 @@ pub fn _4C00_4CFF() void {
 }
 
 pub fn _4D00_4DFF() void {
-    encoding(.C, .{ SP_relative(.RbS), .to, .Xa });
-    //syntax("C SP+SRb -> Xa");
+    // C SP + Rb .signed -> Xa
+    encoding(.C, .{ SP_relative(null, .RbS), .to, .Xa });
     desc("Copy SP-relative address to 32b register");
 
     SR_plus_op_reg_to_L(.sp, .OB, .sx, .fresh, .no_flags);
@@ -104,8 +105,8 @@ pub fn _4D00_4DFF() void {
 }
 
 pub fn _4E00_4EFF() void {
-    encoding(.C, .{ IP_relative(.immb4s), .to, .Xa });
-    //syntax("C IP+imm4[-8,7] -> Xa");
+    // C IP + imm4[-8,7] -> Xa
+    encoding(.C, .{ IP_relative(null, .immb4s), .to, .Xa });
     desc("Copy IP-relative (immediate offset) address to 32b register");
 
     const offset = getParameterOffset(0);
@@ -115,8 +116,8 @@ pub fn _4E00_4EFF() void {
 }
 
 pub fn _4F00_4FFF() void {
-    encoding(.C, .{ SP_relative(.immb4s), .to, .Xa });
-    //syntax("C SP+imm4[-8,7] -> Xa");
+    // C SP + imm4[-8,7] -> Xa
+    encoding(.C, .{ SP_relative(null, .immb4s), .to, .Xa });
     desc("Copy SP-relative (immediate offset) address to 32b register");
 
     const offset = getParameterOffset(0);
@@ -126,8 +127,8 @@ pub fn _4F00_4FFF() void {
 }
 
 pub fn _5800_580F() void {
-    encoding(.C, .{ IP_relative(.imm16u), .to, .Xa });
-    //syntax("C IP+imm[0,65535] -> Xa");
+    // C IP + imm[0,65535] -> Xa
+    encoding(.C, .{ IP_relative(null, .imm16u), .to, .Xa });
     desc("Copy IP-relative (immediate offset) address to 32b register");
 
     IP_read_to_D(2, .word);
@@ -140,8 +141,8 @@ pub fn _5800_580F() void {
     load_and_exec_next_insn(4);
 }
 pub fn _5810_581F() void {
-    encoding(.C, .{ IP_relative(.imm16n), .to, .Xa });
-    //syntax("C IP+imm[-65536,-1] -> Xa");
+    // C IP + imm[-65536,-1] -> Xa
+    encoding(.C, .{ IP_relative(null, .imm16n), .to, .Xa });
     desc("Copy IP-relative (immediate offset) address to 32b register");
 
     IP_read_to_D(2, .word);
@@ -155,7 +156,7 @@ pub fn _5810_581F() void {
 }
 
 pub fn _5820_582F() void {
-    encoding(.C, .{ SP_relative(.imm16u), .to, .Xa });
+    encoding(.C, .{ SP_relative(null, .imm16u), .to, .Xa });
     //syntax("C SP+imm[0,65535] -> Xa");
     desc("Copy SP-relative (immediate offset) address to 32b register");
 
@@ -169,7 +170,7 @@ pub fn _5820_582F() void {
     load_and_exec_next_insn(4);
 }
 pub fn _5830_583F() void {
-    encoding(.C, .{ SP_relative(.imm16n), .to, .Xa });
+    encoding(.C, .{ SP_relative(null, .imm16n), .to, .Xa });
     //syntax("C SP+imm[-65536,-1] -> Xa");
     desc("Copy SP-relative (immediate offset) address to 32b register");
 
@@ -400,7 +401,7 @@ pub fn _FBE0_FBEF() void {
 }
 
 pub fn _FAE0_FAEF() void {
-    encoding(.C, .{ .RP, .to, Xa_relative(.I, .imm_0) });
+    encoding(.C, .{ .RP, .to, .Xa });
     //syntax("C RP -> Xa");
     desc("Copy return pointer to 32b register");
 
@@ -410,7 +411,7 @@ pub fn _FAE0_FAEF() void {
 }
 
 pub fn _FAF0_FAFF() void {
-    encoding(.C, .{ Xa_relative(.I, .imm_0), .to, .RP });
+    encoding(.C, .{ .Xa, .to, .RP });
     //syntax("C Xa -> RP");
     desc("Copy 32b register to return pointer");
 
@@ -420,7 +421,7 @@ pub fn _FAF0_FAFF() void {
 }
 
 pub fn _FBF0_FBFF() void {
-    encoding(.C, .{ .BP, .to, Xa_relative(.D, .imm_0) });
+    encoding(.C, .{ .BP, .to, .Xa });
     //syntax("C BP -> Xa");
     desc("Copy base pointer to 32b register");
 
@@ -430,7 +431,7 @@ pub fn _FBF0_FBFF() void {
 }
 
 pub fn _E4F0_E4FF() void {
-    encoding(.C, .{ Xa_relative(.D, .imm_0), .to, .BP });
+    encoding(.C, .{ .Xa, .to, .BP });
     //syntax("C Xa -> BP");
     desc("Copy 32b register to base pointer");
 
@@ -472,7 +473,7 @@ pub fn _E470_E47F() void {
 }
 
 pub fn _93B0_93BF() void {
-    encoding(.C, .{ .KXP, .to, Xa_relative(.D, .imm_0) });
+    encoding(.C, .{ .KXP, .to, .Xa });
     //syntax("C KXP -> Xa");
     desc("Copy kernel context pointer to 32b register");
 
@@ -487,7 +488,7 @@ pub fn _93B0_93BF() void {
 }
 
 pub fn _93C0_93CF() void {
-    encoding(.C, .{ Xa_relative(.D, .imm_0), .to, .KXP });
+    encoding(.C, .{ .Xa, .to, .KXP });
     //syntax("C Xa -> KXP");
     desc("Copy 32b register to kernel context pointer");
 
@@ -504,7 +505,7 @@ pub fn _93C0_93CF() void {
 }
 
 pub fn _93D0_93DF() void {
-    encoding(.C, .{ .UXP, .to, Xa_relative(.D, .imm_0) });
+    encoding(.C, .{ .UXP, .to, .Xa });
     //syntax("C UXP -> Xa");
     desc("Copy user context pointer to 32b register");
 
@@ -514,7 +515,7 @@ pub fn _93D0_93DF() void {
 }
 
 pub fn _93E0_93EF() void {
-    encoding(.C, .{ Xa_relative(.D, .imm_0), .to, .UXP });
+    encoding(.C, .{ .Xa, .to, .UXP });
     //syntax("C Xa -> UXP");
     desc("Copy 32b register to user context pointer");
 
@@ -526,7 +527,7 @@ pub fn _93E0_93EF() void {
 }
 
 pub fn _9380_938F() void {
-    encoding(.C, .{ .SP, .to, Xa_relative(.S, .imm_0) });
+    encoding(.C, .{ .SP, .to, .Xa });
     //syntax("C SP -> Xa");
     desc("Copy stack pointer to 32b register");
 

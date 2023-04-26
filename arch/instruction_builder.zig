@@ -3,7 +3,7 @@ const allocators = @import("allocators.zig");
 const uc = @import("microcode");
 const ControlSignals = @import("ControlSignals");
 const misc = @import("misc");
-const instruction_encoding = @import("instruction_encoding");
+const ie = @import("instruction_encoding");
 const arch = @import("arch_builder.zig");
 const cycle_builder = @import("cycle_builder.zig");
 
@@ -11,13 +11,15 @@ const assert = std.debug.assert;
 
 const Opcode = misc.Opcode;
 const CycleData = cycle_builder.CycleData;
-const Mnemonic = instruction_encoding.Mnemonic;
-const MnemonicSuffix = instruction_encoding.MnemonicSuffix;
-const InstructionEncoding = instruction_encoding.InstructionEncoding;
-const ParameterEncoding = instruction_encoding.ParameterEncoding;
-const comptimeRelativeParameterEncoding = instruction_encoding.comptimeRelativeParameterEncoding;
-const comptimeParameterEncodings = instruction_encoding.comptimeParameterEncodings;
-const comptimeParameterEncoding = instruction_encoding.comptimeParameterEncoding;
+const Mnemonic = ie.Mnemonic;
+const MnemonicSuffix = ie.MnemonicSuffix;
+const AddressSpace = ie.AddressSpace;
+const InstructionEncoding = ie.InstructionEncoding;
+const ParameterEncoding = ie.ParameterEncoding;
+const comptimeAddressSpaceParameterEncoding = ie.comptimeAddressSpaceParameterEncoding;
+const comptimeRelativeParameterEncoding = ie.comptimeRelativeParameterEncoding;
+const comptimeParameterEncodings = ie.comptimeParameterEncodings;
+const comptimeParameterEncoding = ie.comptimeParameterEncoding;
 
 const temp_alloc = allocators.temp_arena.allocator();
 
@@ -30,7 +32,7 @@ pub const InstructionRegState = enum {
 };
 
 const InstructionData = struct {
-    original_opcode_range: ?instruction_encoding.OpcodeRange,
+    original_opcode_range: ?ie.OpcodeRange,
     initial_uc_address: ?uc.Address,
     allowed_flags: uc.FlagSet,
     flags: uc.FlagSet,
@@ -116,82 +118,98 @@ pub fn encodingWithSuffix(mnemonic: Mnemonic, suffix: MnemonicSuffix, comptime a
     }
 }
 
-pub fn X0_relative(comptime addr_type: MnemonicSuffix, comptime raw_encoding: anytype) type {
-    comptime {
-        const ptr_type = switch (addr_type) {
-            .S => .ptr32s,
-            .D => .ptr32d,
-            .I => .ptr32i,
-            .none => .reg32u,
-            else => unreachable,
-        };
-        const param = comptimeRelativeParameterEncoding(comptimeParameterEncoding(raw_encoding), ptr_type, .implicit);
-        return struct {
-            pub const param_encoding = param;
-        };
-    }
+pub fn addr(comptime addr_space: AddressSpace, comptime raw_encoding: anytype) type {
+    return struct {
+        pub const param_encoding = comptimeAddressSpaceParameterEncoding(
+            comptimeParameterEncoding(raw_encoding),
+            addr_space
+        );
+    };
 }
-pub fn Xa_relative(comptime addr_type: MnemonicSuffix, comptime raw_encoding: anytype) type {
-    comptime {
-        const ptr_type = switch (addr_type) {
-            .S => .ptr32s,
-            .D => .ptr32d,
-            .I => .ptr32i,
-            .none => .reg32u,
-            else => unreachable,
-        };
-        const param = comptimeRelativeParameterEncoding(comptimeParameterEncoding(raw_encoding), ptr_type, .OA);
-        return struct {
-            pub const param_encoding = param;
-        };
-    }
+
+pub fn X0_relative(comptime addr_space: ?AddressSpace, comptime raw_encoding: anytype) type {
+    return struct {
+        pub const param_encoding = comptimeAddressSpaceParameterEncoding(
+            comptimeRelativeParameterEncoding(
+                comptimeParameterEncoding(raw_encoding),
+                .{ .reg32 = .{ .min = 0, .max = 0 } },
+                .implicit,
+            ),
+            addr_space,
+        );
+    };
 }
-pub fn Xb_relative(comptime addr_type: MnemonicSuffix, comptime raw_encoding: anytype) type {
-    comptime {
-        const ptr_type = switch (addr_type) {
-            .S => .ptr32s,
-            .D => .ptr32d,
-            .I => .ptr32i,
-            .none => .reg32u,
-            else => unreachable,
-        };
-        const param = comptimeRelativeParameterEncoding(comptimeParameterEncoding(raw_encoding), ptr_type, .OB);
-        return struct {
-            pub const param_encoding = param;
-        };
-    }
+pub fn Xa_relative(comptime addr_space: ?AddressSpace, comptime raw_encoding: anytype) type {
+    return struct {
+        pub const param_encoding = comptimeAddressSpaceParameterEncoding(
+            comptimeRelativeParameterEncoding(
+                comptimeParameterEncoding(raw_encoding),
+                .{ .reg32 = .{} },
+                .OA,
+            ),
+            addr_space,
+        );
+    };
 }
-pub fn IP_relative(comptime raw_encoding: anytype) type {
-    comptime {
-        const param = comptimeRelativeParameterEncoding(comptimeParameterEncoding(raw_encoding), .IP, .implicit);
-        return struct {
-            pub const param_encoding = param;
-        };
-    }
+pub fn Xb_relative(comptime addr_space: ?AddressSpace, comptime raw_encoding: anytype) type {
+    return struct {
+        pub const param_encoding = comptimeAddressSpaceParameterEncoding(
+            comptimeRelativeParameterEncoding(
+                comptimeParameterEncoding(raw_encoding),
+                .{ .reg32 = .{} },
+                .OB,
+            ),
+            addr_space,
+        );
+    };
 }
-pub fn SP_relative(comptime raw_encoding: anytype) type {
-    comptime {
-        const param = comptimeRelativeParameterEncoding(comptimeParameterEncoding(raw_encoding), .SP, .implicit);
-        return struct {
-            pub const param_encoding = param;
-        };
-    }
+pub fn IP_relative(comptime addr_space: ?AddressSpace, comptime raw_encoding: anytype) type {
+    return struct {
+        pub const param_encoding = comptimeAddressSpaceParameterEncoding(
+            comptimeRelativeParameterEncoding(
+                comptimeParameterEncoding(raw_encoding),
+                .{ .sr = .ip },
+                .implicit,
+            ),
+            addr_space,
+        );
+    };
 }
-pub fn KXP_relative(comptime raw_encoding: anytype) type {
-    comptime {
-        const param = comptimeRelativeParameterEncoding(comptimeParameterEncoding(raw_encoding), .KXP, .implicit);
-        return struct {
-            pub const param_encoding = param;
-        };
-    }
+pub fn SP_relative(comptime addr_space: ?AddressSpace, comptime raw_encoding: anytype) type {
+    return struct {
+        pub const param_encoding = comptimeAddressSpaceParameterEncoding(
+            comptimeRelativeParameterEncoding(
+                comptimeParameterEncoding(raw_encoding),
+                .{ .sr = .sp },
+                .implicit,
+            ),
+            addr_space,
+        );
+    };
 }
-pub fn UXP_relative(comptime raw_encoding: anytype) type {
-    comptime {
-        const param = comptimeRelativeParameterEncoding(comptimeParameterEncoding(raw_encoding), .UXP, .implicit);
-        return struct {
-            pub const param_encoding = param;
-        };
-    }
+pub fn KXP_relative(comptime addr_space: ?AddressSpace, comptime raw_encoding: anytype) type {
+    return struct {
+        pub const param_encoding = comptimeAddressSpaceParameterEncoding(
+            comptimeRelativeParameterEncoding(
+                comptimeParameterEncoding(raw_encoding),
+                .{ .sr = .kxp },
+                .implicit,
+            ),
+            addr_space,
+        );
+    };
+}
+pub fn UXP_relative(comptime addr_space: ?AddressSpace, comptime raw_encoding: anytype) type {
+    return struct {
+        pub const param_encoding = comptimeAddressSpaceParameterEncoding(
+            comptimeRelativeParameterEncoding(
+                comptimeParameterEncoding(raw_encoding),
+                .{ .sr = .uxp },
+                .implicit,
+            ),
+            addr_space,
+        );
+    };
 }
 
 pub fn parameter(index: usize) ParameterEncoding {
@@ -205,7 +223,7 @@ pub fn parameter(index: usize) ParameterEncoding {
 pub fn getParameterOffset(param_index: usize) misc.SignedOffsetForLiteral {
     if (insn) |i| {
         if (i.encoding) |enc| {
-            return instruction_encoding.getParameterOffsetForOpcode(misc.SignedOffsetForLiteral, enc, enc.params[param_index], opcode());
+            return ie.getParameterOffsetForOpcode(misc.SignedOffsetForLiteral, enc, enc.params[param_index], opcode());
         } else panic("Encoding has not been specified yet for this instruction!", .{});
     } else panic("Not currently processing an instruction", .{});
 }
@@ -213,7 +231,7 @@ pub fn getParameterOffset(param_index: usize) misc.SignedOffsetForLiteral {
 pub fn getParameterConstant(comptime T: type, param_index: usize) T {
     if (insn) |i| {
         if (i.encoding) |enc| {
-            return instruction_encoding.getParameterConstantForOpcode(T, enc, enc.params[param_index], opcode());
+            return ie.getParameterConstantForOpcode(T, enc, enc.params[param_index], opcode());
         } else panic("Encoding has not been specified yet for this instruction!", .{});
     } else panic("Not currently processing an instruction", .{});
 }
@@ -544,38 +562,38 @@ pub fn processOpcodes(first_opcode: Opcode, last_opcode: Opcode, func: *const fn
     }, first_opcode, func, is_alias);
 
     if (!result.queried_opcode) {
-        var checked_flags = uc.getCheckedFlagsForOpcode(first_opcode);
-        {
-            var opIter = uc.opcodeIterator(first_opcode, last_opcode);
-            _ = opIter.next();
-            while (opIter.next()) |cur_opcode| {
-                if (!std.meta.eql(checked_flags, uc.getCheckedFlagsForOpcode(cur_opcode))) {
-                    panic("Opcode {X:0>4} has different flags than opcode {X:0>4}", .{ cur_opcode, first_opcode });
-                }
-            }
-        }
-        {
-            var flagIter = uc.flagPermutationIterator(checked_flags);
-            while (flagIter.next()) |flag_variant| {
-                const ua = uc.getAddressForOpcode(first_opcode, flag_variant);
-                const cycle = arch.getMicrocodeCycle(ua).?;
-                const used_signals = arch.getUsedSignalsForAddress(ua);
-
-                var opIter = uc.opcodeIterator(first_opcode, last_opcode);
-                _ = opIter.next();
-                while (opIter.next()) |cur_opcode| {
-                    const address = uc.getAddressForOpcode(cur_opcode, flag_variant);
-                    arch.putMicrocodeCycleNoDedup(address, cycle, used_signals);
-                }
-            }
-        }
-
         assert(result.encoding.opcodes.min == first_opcode);
         assert(result.encoding.opcodes.max == last_opcode);
 
         if (is_alias) {
             arch.recordAlias(result.encoding, result.description);
         } else {
+            var checked_flags = uc.getCheckedFlagsForOpcode(first_opcode);
+            {
+                var opIter = uc.opcodeIterator(first_opcode, last_opcode);
+                _ = opIter.next();
+                while (opIter.next()) |cur_opcode| {
+                    if (!std.meta.eql(checked_flags, uc.getCheckedFlagsForOpcode(cur_opcode))) {
+                        panic("Opcode {X:0>4} has different flags than opcode {X:0>4}", .{ cur_opcode, first_opcode });
+                    }
+                }
+            }
+            {
+                var flagIter = uc.flagPermutationIterator(checked_flags);
+                while (flagIter.next()) |flag_variant| {
+                    const ua = uc.getAddressForOpcode(first_opcode, flag_variant);
+                    const cycle = arch.getMicrocodeCycle(ua).?;
+                    const used_signals = arch.getUsedSignalsForAddress(ua);
+
+                    var opIter = uc.opcodeIterator(first_opcode, last_opcode);
+                    _ = opIter.next();
+                    while (opIter.next()) |cur_opcode| {
+                        const address = uc.getAddressForOpcode(cur_opcode, flag_variant);
+                        arch.putMicrocodeCycleNoDedup(address, cycle, used_signals);
+                    }
+                }
+            }
+
             arch.recordInstruction(result.encoding, result.description);
         }
     } else {
@@ -612,7 +630,7 @@ const ProcessOpcodeResult = struct {
     queried_opcode: bool,
 };
 
-fn processOpcode(original_range: instruction_encoding.OpcodeRange, the_opcode: Opcode, func: *const fn () void, is_alias: bool) ProcessOpcodeResult {
+fn processOpcode(original_range: ie.OpcodeRange, the_opcode: Opcode, func: *const fn () void, is_alias: bool) ProcessOpcodeResult {
     var config = ProcessConfig{
         .func = func,
         .original_opcode_range = original_range,
@@ -665,7 +683,7 @@ fn processOpcode(original_range: instruction_encoding.OpcodeRange, the_opcode: O
         }
 
         if (result.encoding) |result_enc| {
-            if (!instruction_encoding.eql(permutation_result.encoding.?, result_enc)) {
+            if (!ie.eql(permutation_result.encoding.?, result_enc)) {
                 printCyclePath(initial_uc_address, permutation_result.encoding);
                 panic("Expected all permutations to have the same encoding.", .{});
             }
@@ -684,9 +702,9 @@ fn processOpcode(original_range: instruction_encoding.OpcodeRange, the_opcode: O
         if (result.next_insn_offset != result.next_unread_insn_offset) {
             printCyclePath(uc.getAddressForOpcode(the_opcode, .{}), result.encoding);
             panic("Expected next instruction to be loaded from an offset of {} but it was actually from {}", .{ result.next_unread_insn_offset, result.next_insn_offset });
-        } else if (result.next_insn_offset != instruction_encoding.getInstructionLength(insn_encoding)) {
+        } else if (result.next_insn_offset != ie.getInstructionLength(insn_encoding)) {
             printCyclePath(uc.getAddressForOpcode(the_opcode, .{}), result.encoding);
-            panic("Expected instruction length of {} based on encoding, but next instruction was loaded from {}", .{ instruction_encoding.getInstructionLength(insn_encoding), result.next_insn_offset });
+            panic("Expected instruction length of {} based on encoding, but next instruction was loaded from {}", .{ ie.getInstructionLength(insn_encoding), result.next_insn_offset });
         }
     }
 
@@ -699,7 +717,7 @@ fn processOpcode(original_range: instruction_encoding.OpcodeRange, the_opcode: O
 
 const ProcessConfig = struct {
     func: *const fn () void,
-    original_opcode_range: ?instruction_encoding.OpcodeRange,
+    original_opcode_range: ?ie.OpcodeRange,
     initial_uc_address: ?uc.Address,
     allowed_flags: uc.FlagSet,
     flags: uc.FlagSet,

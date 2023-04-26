@@ -1,7 +1,6 @@
 const ib = @import("instruction_builder.zig");
 const cb = @import("cycle_builder.zig");
 
-const Xa_relative = ib.Xa_relative;
 const encoding = ib.encoding;
 const desc = ib.desc;
 const next_cycle = ib.next_cycle;
@@ -36,7 +35,7 @@ const exec_next_insn = cb.exec_next_insn;
 const load_and_exec_next_insn = cb.load_and_exec_next_insn;
 
 pub fn _FB80_FB8F() void {
-    encoding(.C, .{ Xa_relative(.S, .imm_0), .to, .SP });
+    encoding(.C, .{ .Xa, .to, .SP });
     //syntax("C Xa -> SP");
     desc("Copy 32b register to stack pointer");
 

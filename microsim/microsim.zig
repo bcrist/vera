@@ -2,6 +2,7 @@ const std = @import("std");
 const uc_roms = @import("microcode_rom_serialization");
 const misc = @import("misc");
 const ie = @import("instruction_encoding");
+const ie_data = @import("instruction_encoding_data");
 const zglfw = @import("zglfw");
 const ControlSignals = @import("ControlSignals");
 const Simulator = @import("Simulator");
@@ -27,8 +28,7 @@ pub fn main() !void {
         std.mem.set(u16, chip, 0xFFFF);
     }
 
-    const ie_data = @import("instruction_encoding_data").data;
-    const edb = try ie.EncoderDatabase.init(arena.allocator(), ie_data, arena.allocator());
+    const edb = try ie_data.EncoderDatabase.init(arena.allocator(), ie_data.data, arena.allocator());
 
     var program_data: [256]u8 = undefined;
     var encoder = ie.Encoder.init(&program_data);
@@ -37,23 +37,23 @@ pub fn main() !void {
             .mnemonic = .C,
             .suffix = .none,
             .params = &[_]ie.Parameter{
-                ie.parameter(.constant, 0),
-                ie.toParameter(.reg32, 12),
+                ie.parameter(.{ .constant = {}}, 0),
+                ie.toParameter(ie.ExpressionType.reg(32, 12, null), 0),
             },
         },
         .{
             .mnemonic = .ADD,
             .suffix = .none,
             .params = &[_]ie.Parameter{
-                ie.parameter(.reg32, 12),
-                ie.parameter(.constant, -128),
-                ie.toParameter(.reg32, 1),
+                ie.parameter(ie.ExpressionType.reg(32, 12, null), 0),
+                ie.parameter(.{ .constant = {}}, -128),
+                ie.toParameter(ie.ExpressionType.reg(32, 1, null), 0),
             },
         },
     };
     for (program) |insn| {
         var insn_iter = edb.getMatchingEncodings(insn);
-        try encoder.encode(insn, insn_iter.next().?);
+        encoder.encode(insn, insn_iter.next().?);
     }
     const vector_table = misc.ZeropageVectorTable{
         .double_fault = 0xFFFE,

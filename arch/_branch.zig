@@ -11,9 +11,8 @@ const constantRange = ie.constantRange;
 const getParameterOffset = ib.getParameterOffset;
 const encoding = ib.encoding;
 const encodingWithSuffix = ib.encodingWithSuffix;
+const addr = ib.addr;
 const IP_relative = ib.IP_relative;
-const Xa_relative = ib.Xa_relative;
-const X0_relative = ib.X0_relative;
 const parameter = ib.parameter;
 const desc = ib.desc;
 const next_cycle = ib.next_cycle;
@@ -79,19 +78,19 @@ pub fn _0100() void {
     load_and_exec_next_insn(3);
 }
 pub fn _alias_0100() void {
-    encoding(.B, .{ IP_relative(.imm_3_3) });
+    encoding(.B, .{ IP_relative(.insn, .imm_3_3) });
     //syntax("B IP+immba[3,3]");
     desc("IP-relative unconditional branch to IP+3; equivalent to NOPE");
 }
 pub fn _0101_013C() void {
-    encoding(.B, .{ IP_relative(.imm_4_63) });
+    encoding(.B, .{ IP_relative(.insn, .imm_4_63) });
     //syntax("B IP+immba[4,63]");
     desc("IP-relative unconditional branch");
 
     branch(.ip, getParameterOffset(0));
 }
 pub fn _013D_017B() void {
-    encoding(.B, .{ IP_relative(.imm_n64_n2) });
+    encoding(.B, .{ IP_relative(.insn, .imm_n64_n2) });
     //syntax("B IP+immba[-64,-2]");
     desc("IP-relative unconditional branch");
 
@@ -99,7 +98,7 @@ pub fn _013D_017B() void {
 }
 
 pub fn _017C() void {
-    encoding(.B, .{ IP_relative(.imm8_63_318) });
+    encoding(.B, .{ IP_relative(.insn, .imm8_63_318) });
     //syntax("B IP+imm8[63,318]");
     desc("IP-relative unconditional branch");
 
@@ -116,7 +115,7 @@ pub fn _017C() void {
 }
 
 pub fn _017D() void {
-    encoding(.B, .{ IP_relative(.imm8_n319_n64_rev) });
+    encoding(.B, .{ IP_relative(.insn, .imm8_n319_n64_rev) });
     //syntax("B IP+imm8[-319,-64]");
     desc("IP-relative unconditional branch");
 
@@ -133,7 +132,7 @@ pub fn _017D() void {
 }
 
 pub fn _017E() void {
-    encoding(.B, .{ IP_relative(.imm16u) });
+    encoding(.B, .{ IP_relative(.insn, .imm16u) });
     //syntax("B IP+imm16[0,65535]");
     desc("IP-relative unconditional branch");
 
@@ -150,7 +149,7 @@ pub fn _017E() void {
 }
 
 pub fn _017F() void {
-    encoding(.B, .{ IP_relative(.imm16n) });
+    encoding(.B, .{ IP_relative(.insn, .imm16n) });
     //syntax("B IP+imm16[-65536,-1]");
     desc("IP-relative unconditional branch");
 
@@ -167,7 +166,7 @@ pub fn _017F() void {
 }
 
 pub fn _0006() void {
-    encoding(.B, .{ IP_relative(.R0U) });
+    encoding(.B, .{ IP_relative(.insn, .R0U) });
     //syntax("B IP+UR0");
     desc("IP-relative unsigned register unconditional branch");
 
@@ -179,7 +178,7 @@ pub fn _0006() void {
 }
 
 pub fn _0007() void {
-    encoding(.B, .{ IP_relative(.R0S) });
+    encoding(.B, .{ IP_relative(.insn, .R0S) });
     //syntax("B IP+SR0");
     desc("IP-relative signed register unconditional branch");
 
@@ -191,7 +190,7 @@ pub fn _0007() void {
 }
 
 pub fn _FAB0_FABF() void {
-    encoding(.B, .{ Xa_relative(.I, .imm_0) });
+    encoding(.B, .{ addr(.insn, .Xa) });
     //syntax("B Xa");
     desc("Register unconditional branch");
 
@@ -222,7 +221,7 @@ pub fn _0180() void {
 }
 
 pub fn _0200_023C() void {
-    encodingWithSuffix(.B, .Z, .{ IP_relative(.imm_3_63) });
+    encodingWithSuffix(.B, .Z, .{ IP_relative(.insn, .imm_3_63) });
     //syntax("B.Z IP+immba[3,63]");
     desc("IP-relative branch if zero");
 
@@ -233,7 +232,7 @@ pub fn _0200_023C() void {
     }
 }
 pub fn _023D_027B() void {
-    encodingWithSuffix(.B, .Z, .{ IP_relative(.imm_n64_n2) });
+    encodingWithSuffix(.B, .Z, .{ IP_relative(.insn, .imm_n64_n2) });
     //syntax("B.Z IP+immba[-64,-2]");
     desc("IP-relative branch if zero");
 
@@ -245,7 +244,7 @@ pub fn _023D_027B() void {
 }
 
 pub fn _0300_033C() void {
-    encodingWithSuffix(.B, .NZ, .{ IP_relative(.imm_3_63) });
+    encodingWithSuffix(.B, .NZ, .{ IP_relative(.insn, .imm_3_63) });
     //syntax("B.NZ IP+immba[3,63]");
     desc("IP-relative branch if nonzero");
 
@@ -256,7 +255,7 @@ pub fn _0300_033C() void {
     }
 }
 pub fn _033D_037B() void {
-    encodingWithSuffix(.B, .NZ, .{ IP_relative(.imm_n64_n2) });
+    encodingWithSuffix(.B, .NZ, .{ IP_relative(.insn, .imm_n64_n2) });
     //syntax("B.NZ IP+immba[-64,-2]");
     desc("IP-relative branch if nonzero");
 
@@ -327,7 +326,7 @@ fn conditionIsInverse(comptime condition: MnemonicSuffix) bool {
 }
 
 const n6_14 = ParameterEncoding{
-    .type = .{ .base = .constant },
+    .base = .{ .constant = {} },
     .constant_ranges = &[_]ConstantRange{
         .{ .min = 4,  .max = 14 },
         .{ .min = -6, .max = -2 },
@@ -336,7 +335,7 @@ const n6_14 = ParameterEncoding{
 };
 
 fn conditional_n6_14(comptime condition: MnemonicSuffix) void {
-    encodingWithSuffix(.B, condition, .{ IP_relative(n6_14) });
+    encodingWithSuffix(.B, condition, .{ IP_relative(.insn, n6_14) });
     desc("IP-relative branch if " ++ comptime conditionName(condition));
 
     const conditionFunc = conditionFn(condition);
@@ -365,7 +364,7 @@ pub fn _0C40_0C4F() void { conditional_n6_14(.P); }
 pub fn _0C50_0C5F() void { conditional_n6_14(.NP); }
 
 fn conditional_15_270(comptime condition: MnemonicSuffix) void {
-    encodingWithSuffix(.B, condition, .{ IP_relative(.imm8_15_270) });
+    encodingWithSuffix(.B, condition, .{ IP_relative(.insn, .imm8_15_270) });
     desc("IP-relative branch if " ++ comptime conditionName(condition));
 
     const conditionFunc = conditionFn(condition);
@@ -388,7 +387,7 @@ fn conditional_15_270(comptime condition: MnemonicSuffix) void {
 }
 
 fn conditional_n262_n7(comptime condition: MnemonicSuffix) void {
-    encodingWithSuffix(.B, condition, .{ IP_relative(.imm8_n262_n7_rev) });
+    encodingWithSuffix(.B, condition, .{ IP_relative(.insn, .imm8_n262_n7_rev) });
     desc("IP-relative branch if " ++ comptime conditionName(condition));
 
     const conditionFunc = conditionFn(condition);
@@ -444,7 +443,7 @@ pub fn _0C8A() void { conditional_15_270(.NP); }
 pub fn _0C8B() void { conditional_n262_n7(.NP); }
 
 fn conditional_s16(comptime condition: MnemonicSuffix) void {
-    encodingWithSuffix(.B, condition, .{ IP_relative(.imm16s) });
+    encodingWithSuffix(.B, condition, .{ IP_relative(.insn, .imm16s) });
     desc("IP-relative branch if " ++ comptime conditionName(condition));
 
     const conditionFunc = conditionFn(condition);
@@ -536,7 +535,7 @@ pub fn _0187() void {
 }
 
 pub fn _0188() void {
-    encoding(.EAB, .{ X0_relative(.I, .imm_0) });
+    encoding(.EAB, .{ addr(.insn, .X0) });
     //syntax("EAB X0");
     desc("Enable address translation + register unconditional branch");
 
@@ -554,7 +553,7 @@ pub fn _0188() void {
 }
 
 pub fn _0189() void {
-    encoding(.DAB, .{ X0_relative(.I, .imm_0) });
+    encoding(.DAB, .{ addr(.insn, .X0) });
     //syntax("DAB X0");
     desc("Disable address translation + register unconditional branch");
 
@@ -598,7 +597,7 @@ fn secondCondition(comptime condition: MnemonicSuffix) MnemonicSuffix {
 }
 
 fn conditional_double_branch_s16(comptime condition: MnemonicSuffix) void {
-    encodingWithSuffix(.B, condition, .{ IP_relative(.imm16s), IP_relative(.@"imm16s@4") });
+    encodingWithSuffix(.B, condition, .{ IP_relative(.insn, .imm16s), IP_relative(.insn, .@"imm16s@4") });
     desc("IP-relative ternary branch if " ++ comptime conditionName(condition));
 
     const first = comptime firstCondition(condition);

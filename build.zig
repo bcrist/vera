@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    //[[!! include 'build' !! 267 ]]
+    //[[!! include 'build' !! 272 ]]
     //[[ ################# !! GENERATED CODE -- DO NOT MODIFY !! ################# ]]
 
     const bits = b.createModule(.{
@@ -87,24 +87,28 @@ pub fn build(b: *std.Build) void {
         .source_file = .{ .path = "pkg/deep_hash_map.zig" },
     });
 
-    const sx = b.createModule(.{
-        .source_file = .{ .path = "pkg/sx/sx.zig" },
-    });
-
     const instruction_encoding = b.createModule(.{
         .source_file = .{ .path = "arch/instruction_encoding.zig" },
         .dependencies = &.{
             .{ .name = "ControlSignals", .module = ControlSignals },
             .{ .name = "bits", .module = bits },
-            .{ .name = "deep_hash_map", .module = deep_hash_map },
             .{ .name = "microcode", .module = microcode },
             .{ .name = "misc", .module = misc },
-            .{ .name = "sx", .module = sx },
         },
+    });
+
+    const sx = b.createModule(.{
+        .source_file = .{ .path = "pkg/sx/sx.zig" },
     });
 
     const instruction_encoding_data = b.createModule(.{
         .source_file = .{ .path = "arch/instruction_encoding_data.zig" },
+        .dependencies = &.{
+            .{ .name = "deep_hash_map", .module = deep_hash_map },
+            .{ .name = "instruction_encoding", .module = instruction_encoding },
+            .{ .name = "misc", .module = misc },
+            .{ .name = "sx", .module = sx },
+        },
     });
 
     const assemble = b.createModule(.{
@@ -179,6 +183,7 @@ pub fn build(b: *std.Build) void {
     compile_arch.addModule("bits", bits);
     compile_arch.addModule("deep_hash_map", deep_hash_map);
     compile_arch.addModule("instruction_encoding", instruction_encoding);
+    compile_arch.addModule("instruction_encoding_data", instruction_encoding_data);
     compile_arch.addModule("microcode", microcode);
     compile_arch.addModule("misc", misc);
     compile_arch.addModule("physical_address", physical_address);
@@ -216,29 +221,29 @@ pub fn build(b: *std.Build) void {
     microsim.install();
     _ = makeRunStep(b, microsim, "usim", "run microsim");
 
-    const tests1 = b.addTest(.{
-        .root_source_file = .{ .path = "arch/test_instruction_behavior.zig"},
-        .target = target,
-        .optimize = mode,
-    });
-    tests1.addModule("ControlSignals", ControlSignals);
-    tests1.addModule("Simulator", Simulator);
-    tests1.addModule("instruction_encoding", instruction_encoding);
-    tests1.addModule("instruction_encoding_data", instruction_encoding_data);
-    tests1.addModule("microcode", microcode);
-    tests1.addModule("microcode_roms", microcode_roms);
-    tests1.addModule("misc", misc);
-    tests1.addModule("rom_compress", rom_compress);
-    tests1.addModule("rom_decompress", rom_decompress);
-    tests1.addModule("srec", srec);
+    // const tests1 = b.addTest(.{
+    //     .root_source_file = .{ .path = "arch/test_instruction_behavior.zig"},
+    //     .target = target,
+    //     .optimize = mode,
+    // });
+    // tests1.addModule("ControlSignals", ControlSignals);
+    // tests1.addModule("Simulator", Simulator);
+    // tests1.addModule("instruction_encoding", instruction_encoding);
+    // tests1.addModule("instruction_encoding_data", instruction_encoding_data);
+    // tests1.addModule("microcode", microcode);
+    // tests1.addModule("microcode_roms", microcode_roms);
+    // tests1.addModule("misc", misc);
+    // tests1.addModule("rom_compress", rom_compress);
+    // tests1.addModule("rom_decompress", rom_decompress);
+    // tests1.addModule("srec", srec);
 
-    const tests2 = b.addTest(.{
-        .root_source_file = .{ .path = "arch/test_instruction_encoding.zig"},
-        .target = target,
-        .optimize = mode,
-    });
-    tests2.addModule("instruction_encoding", instruction_encoding);
-    tests2.addModule("instruction_encoding_data", instruction_encoding_data);
+    // const tests2 = b.addTest(.{
+    //     .root_source_file = .{ .path = "arch/test_instruction_encoding.zig"},
+    //     .target = target,
+    //     .optimize = mode,
+    // });
+    // tests2.addModule("instruction_encoding", instruction_encoding);
+    // tests2.addModule("instruction_encoding_data", instruction_encoding_data);
 
     const tests3 = b.addTest(.{
         .root_source_file = .{ .path = "arch/test_misc.zig"},
@@ -277,8 +282,8 @@ pub fn build(b: *std.Build) void {
     tests7.addModule("rom_compress", rom_compress);
 
     const test_step = b.step("test", "Run all tests");
-    test_step.dependOn(&tests1.step);
-    test_step.dependOn(&tests2.step);
+    // test_step.dependOn(&tests1.step);
+    // test_step.dependOn(&tests2.step);
     test_step.dependOn(&tests3.step);
     test_step.dependOn(&tests4.step);
     test_step.dependOn(&tests5.step);

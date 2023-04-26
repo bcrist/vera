@@ -1,7 +1,7 @@
 const ib = @import("instruction_builder.zig");
 const cb = @import("cycle_builder.zig");
 
-const Xa_relative = ib.Xa_relative;
+const addr = ib.addr;
 const encoding = ib.encoding;
 const encodingWithSuffix = ib.encodingWithSuffix;
 const desc = ib.desc;
@@ -51,7 +51,7 @@ pub fn _0002() void {
 }
 
 pub fn _3000_30FF() void {
-    encodingWithSuffix(.ALD, .D, .{ Xa_relative(.D, .imm_0), .to, .Rb });
+    encoding(.ALD, .{ addr(.data, .Xa), .to, .Rb });
     //syntax("ALD.D Xa -> Rb");
     desc("Atomic load 16b register using pointer to data memory");
 
@@ -68,7 +68,7 @@ pub fn _3000_30FF() void {
 }
 
 pub fn _3100_31FF() void {
-    encodingWithSuffix(.ALD, .D, .{ Xa_relative(.D, .imm_0), .to, .Xb });
+    encoding(.ALD, .{ addr(.data, .Xa), .to, .Xb });
     //syntax("ALD.D Xa -> Xb");
     desc("Atomic load 32b register using pointer to data memory");
 
@@ -91,7 +91,7 @@ pub fn _3100_31FF() void {
 }
 
 pub fn _3200_32FF() void {
-    encodingWithSuffix(.AST, .D, .{ .Rb, .to, Xa_relative(.D, .imm_0) });
+    encoding(.AST, .{ .Rb, .to, addr(.data, .Xa) });
     //syntax("AST.D Rb -> Xa");
     desc("Atomic store 16b register using pointer to data memory");
 
@@ -107,7 +107,7 @@ pub fn _3200_32FF() void {
 }
 
 pub fn _3300_33FF() void {
-    encodingWithSuffix(.AST, .D, .{ .Xb, .to, Xa_relative(.D, .imm_0) });
+    encoding(.AST, .{ .Xb, .to, addr(.data, .Xa) });
     //syntax("AST.D Xb -> Xa");
     desc("Atomic store 32b register using pointer to data memory");
 
@@ -128,7 +128,7 @@ pub fn _3300_33FF() void {
 }
 
 pub fn _3400_34FF() void {
-    encodingWithSuffix(.ASTZ, .D, .{ .Rb, .to, Xa_relative(.D, .imm_0) });
+    encoding(.ASTZ, .{ .Rb, .to, addr(.data, .Xa) });
     //syntax("ASTZ.D Rb -> Xa");
     desc("Atomic store 16b register using pointer to data memory, if previous stored value is 0");
 
@@ -156,7 +156,7 @@ fn astz16_continuation() void {
 }
 
 pub fn _3500_35FF() void {
-    encodingWithSuffix(.ASTZ, .D, .{ .Xb, .to, Xa_relative(.D, .imm_0) });
+    encoding(.ASTZ, .{ .Xb, .to, addr(.data, .Xa) });
     //syntax("ASTZ.D Xb -> Xa");
     desc("Atomic store 32b register using pointer to data memory, if previous stored value is 0");
 
@@ -195,7 +195,7 @@ fn astz32_continuation() void {
 }
 
 pub fn _3600_36FF() void {
-    encodingWithSuffix(.AADD, .D, .{ Xa_relative(.D, .imm_0), .to, .R0, .Rb, .to, Xa_relative(.D, .imm_0) });
+    encoding(.AADD, .{ addr(.data, .Xa), .to, .R0, .Rb, .to, addr(.data, .Xa) });
     //syntax("AADD.D Xa -> R0, Rb -> Xa");
     desc("16b Atomic add using pointer to data memory");
 
@@ -220,7 +220,7 @@ pub fn _3600_36FF() void {
 }
 
 pub fn _3700_37FF() void {
-    encodingWithSuffix(.AADD, .D, .{ Xa_relative(.D, .imm_0), .to, .X0, .Xb, .to, Xa_relative(.D, .imm_0) });
+    encoding(.AADD, .{ addr(.data, .Xa), .to, .X0, .Xb, .to, addr(.data, .Xa) });
     //syntax("AADD.D Xa -> X0, Xb -> Xa");
     desc("32b Atomic add using pointer to data memory");
 
@@ -262,7 +262,7 @@ pub fn _3700_37FF() void {
 // Useful for implementing semaphores, mutexes, and latches
 
 pub fn _3800_380F() void {
-    encodingWithSuffix(.AINC, .D, .{ Xa_relative(.D, .imm_0), .to, .Ra });
+    encoding(.AINC, .{ addr(.data, .Xa), .to, .Ra });
     //syntax("AINC.D Xa -> Ra");
     desc("16b Atomic increment using pointer to data memory, overwriting pointer with new value");
 
@@ -285,7 +285,7 @@ pub fn _3800_380F() void {
 }
 
 pub fn _3900_39FF() void {
-    encodingWithSuffix(.AINC, .D, .{ Xa_relative(.D, .imm_0), .to, .Xa });
+    encoding(.AINC, .{ addr(.data, .Xa), .to, .Xa });
     //syntax("AINC.D Xa -> Xa");
     desc("32b Atomic increment using pointer to data memory, overwriting pointer with new value");
 
@@ -319,7 +319,7 @@ pub fn _3900_39FF() void {
 }
 
 pub fn _3A00_3A0F() void {
-    encodingWithSuffix(.ADECNZ, .D, .{ Xa_relative(.D, .imm_0), .to, .Ra });
+    encoding(.ADECNZ, .{ addr(.data, .Xa), .to, .Ra });
     //syntax("ADECNZ.D Xa -> Rb");
     desc("16b Atomic decrement using pointer to data memory, if stored value is not zero.  Overwrites address with final value.");
 
@@ -349,7 +349,7 @@ fn adecnz16_continuation() void {
 }
 
 pub fn _3B00_3B0F() void {
-    encodingWithSuffix(.ADECNZ, .D, .{ Xa_relative(.D, .imm_0), .to, .Xa });
+    encoding(.ADECNZ, .{ addr(.data, .Xa), .to, .Xa });
     //syntax("ADECNZ.D Xa -> Xa");
     desc("32b Atomic decrement using pointer to data memory, if stored value is not zero.  Overwrites address with final value.");
 
@@ -391,7 +391,7 @@ fn adecnz32_continuation() void {
 }
 
 pub fn _3C00_3C0F() void {
-    encodingWithSuffix(.AX, .D, .{ Xa_relative(.D, .imm_0), .to, .Rb1, .Ra1, .to, Xa_relative(.D, .imm_0) });
+    encoding(.AX, .{ addr(.data, .Xa), .to, .Rb1, .Ra1, .to, addr(.data, .Xa) });
     //syntax("AX.D Xa -> Rb1, Ra1 -> Xa");
     desc("16b Atomic exchange using pointer to data memory");
 
@@ -417,7 +417,7 @@ pub fn _3C00_3C0F() void {
 }
 
 pub fn _3C10_3C1F() void {
-    encodingWithSuffix(.AX, .D, .{ Xa_relative(.D, .imm_0), .to, .Xb1, .Xa1, .to, Xa_relative(.D, .imm_0) });
+    encoding(.AX, .{ addr(.data, .Xa), .to, .Xb1, .Xa1, .to, addr(.data, .Xa) });
     //syntax("AX.D Xa -> Xb1, Xa1 -> Xa");
     desc("32b Atomic exchange using pointer to data memory");
 
@@ -454,7 +454,7 @@ pub fn _3C10_3C1F() void {
 }
 
 pub fn _3C20_3C2F() void {
-    encodingWithSuffix(.AXE, .D, .{ Xa_relative(.D, .imm_0), .to, .R0, .Rb1, .Ra1, .to, Xa_relative(.D, .imm_0) });
+    encoding(.AXE, .{ addr(.data, .Xa), .to, .R0, .Rb1, .Ra1, .to, addr(.data, .Xa) });
     //syntax("AXE.D Xa -> R0, Rb1, Ra1 -> Xa");
     desc("16b Atomic exchange using pointer to data memory, if stored value equals probe value");
 
@@ -492,7 +492,7 @@ fn axe16_continuation() void {
 }
 
 pub fn _3C30_3C3F() void {
-    encodingWithSuffix(.AXE, .D, .{ Xa_relative(.D, .imm_0), .to, .X0, .Xb1, .Xa1, .to, Xa_relative(.D, .imm_0) });
+    encoding(.AXE, .{ addr(.data, .Xa), .to, .X0, .Xb1, .Xa1, .to, addr(.data, .Xa) });
     //syntax("AXE.D Xa -> X0, Xb1, Xa1 -> Xa");
     desc("32b Atomic exchange using pointer to data memory, if stored value equals probe value");
 

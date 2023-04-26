@@ -1,15 +1,17 @@
 const std = @import("std");
 const lex = @import("lex.zig");
-const types = @import("types.zig");
+const ie = @import("instruction_encoding");
 const Constant = @import("Constant.zig");
 const SourceFile = @import("SourceFile.zig");
 const Instruction = @import("Instruction.zig");
 
 const Expression = @This();
 
+const ExpressionType = ie.ExpressionType;
+
 token: lex.Token.Handle,
 info: Info,
-resolved_type: ?*const types.Type,
+resolved_type: ExpressionType,
 resolved_constant: ?*const Constant,
 flags: std.EnumSet(Flags),
 

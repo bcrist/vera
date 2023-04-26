@@ -1,12 +1,12 @@
 const std = @import("std");
 const bits = @import("bits");
-const deep_hash_map = @import("deep_hash_map");
-const sx = @import("sx");
 const uc = @import("microcode");
 const misc = @import("misc");
 const ControlSignals = @import("ControlSignals");
 
 const assert = std.debug.assert;
+
+// TODO maybe some of this could be moved to a separate file?  isa_types.zig?
 
 // Conceptually, Opcode should probably publicly live here,
 // but a lot of stuff only needs Opcode and nothing else in this file,
@@ -121,72 +121,125 @@ pub fn getBranchKind(mnemonic: Mnemonic, suffix: MnemonicSuffix) BranchKind {
     };
 }
 
-pub const BaseExpressionType = enum {
-    none,
-    constant, // a literal or implicit number
-    reg8, // a reference to the low 8 bits of a GPR, unknown signedness
-    reg8u, // a reference to the low 8 bits of a GPR, unsigned
-    reg8s, // a reference to the low 8 bits of a GPR, signed
-    reg16, // a reference to a GPR, unknown signedness
-    reg16u, // a reference to a GPR, unsigned
-    reg16s, // a reference to a GPR, signed
-    reg32, // a reference to a pair of GPRs, unknown signedness
-    reg32u, // a reference to a pair of GPRs, unsigned
-    reg32s, // a reference to a pair of GPRs, signed
-    ptr32i, // a reference to a pair of GPRs, pointer to code memory
-    ptr32s, // a reference to a pair of GPRs, pointer to stack memory
-    ptr32d, // a reference to a pair of GPRs, pointer to data memory
-    IP, // the instruction pointer register
-    SP, // the stack pointer register
-    STAT, // the status register
-    RP, // the return pointer register
-    BP, // the stack base pointer register
-    ASN, // the address space number register
-    KXP, // the kernel context pointer register
-    UXP, // the user context pointer register
+pub const ExpressionType = union(enum) {
+    unknown,    // Used internally by the assembler; never part of any instruction encodings
+    poison,     // Used internally by the assembler; never part of any instruction encodings
+    symbol_def, // Used internally by the assembler; never part of any instruction encodings
 
-    pub fn isGPR(self: BaseExpressionType) bool {
-        return switch (self) {
-            .none, .constant, .IP, .SP, .STAT, .RP, .BP, .ASN, .KXP, .UXP => false,
+    constant,
+    reg8: IndexedRegister,
+    reg16: IndexedRegister,
+    reg32: IndexedRegister,
+    sr: SpecialRegister,
+    raw_base_offset: BaseOffsetType,
+    data_address: BaseOffsetType,
+    insn_address: BaseOffsetType,
+    stack_address: BaseOffsetType,
 
-            .reg8, .reg8u, .reg8s,
-            .reg16, .reg16u, .reg16s,
-            .reg32, .reg32u, .reg32s,
-            .ptr32i, .ptr32s, .ptr32d => true,
+    pub fn reg(comptime width: u6, index: u4, signedness: ?std.builtin.Signedness) ExpressionType {
+        const field = comptime switch (width) {
+            8 => "reg8",
+            16 => "reg16",
+            32 => "reg32",
+            else => @compileError("Width must be 8, 16, or 32"),
         };
+        return @unionInit(ExpressionType, field, .{
+            .index = index,
+            .signedness = signedness,
+        });
     }
 
-    pub fn isImplicitlyConvertibleTo(self: BaseExpressionType, to: BaseExpressionType) bool {
-        if (self == to) return true;
+    pub fn rawBaseOffset(base: ExpressionType, offset: ExpressionType) !ExpressionType {
+        return .{ .raw_base_offset = .{
+            .base = try BaseOffsetType.InnerType.fromExpressionType(base),
+            .offset = try BaseOffsetType.InnerType.fromExpressionType(offset),
+        }};
+    }
 
-        switch (to) {
-            .none, .reg8u, .reg8s, .reg16u, .reg16s, .reg32s, .IP, .SP, .STAT, .RP, .BP, .ASN, .KXP, .UXP => return false,
+    pub fn address(comptime space: AddressSpace, base: ExpressionType, offset: ExpressionType) !ExpressionType {
+        return @unionInit(ExpressionType, @tagName(space) ++ "_address", .{
+            .base = try BaseOffsetType.InnerType.fromExpressionType(base),
+            .offset = try BaseOffsetType.InnerType.fromExpressionType(offset),
+        });
+    }
 
-            .constant => return self == .none,
-            .reg8 => return self == .reg8u or self == .reg8s,
-            .reg16 => return self == .reg16u or self == .reg16s,
-            .reg32 => return self == .reg32u or self == .reg32s or self == .ptr32i or self == .ptr32s or self == .ptr32d,
-            .reg32u => return self == .ptr32i or self == .ptr32s or self == .ptr32d,
-            .ptr32i, .ptr32s, .ptr32d => return self == .reg32 or self == .reg32u,
-        }
+    pub fn absoluteAddress(comptime space: AddressSpace) ExpressionType {
+        return @unionInit(ExpressionType, @tagName(space) ++ "_address", .{
+            .base = .{ .constant = {} },
+            .offset = .{ .constant = {} }, // offset is ignored when both base and offset are constant
+        });
+    }
+
+    pub fn relativeAddress(comptime space: AddressSpace, base: ExpressionType) !ExpressionType {
+        return @unionInit(ExpressionType, @tagName(space) ++ "_address", .{
+            .base = try BaseOffsetType.InnerType.fromExpressionType(base),
+            .offset = .{ .constant = {} },
+        });
     }
 };
 
-pub const ExpressionType = struct {
-    base: BaseExpressionType,
-    offset: BaseExpressionType = .none,
+pub const IndexedRegister = struct {
+    index: misc.RegisterIndex,
+    signedness: ?std.builtin.Signedness,
+};
 
-    pub fn isImplicitlyConvertibleTo(self: ExpressionType, to: ExpressionType) bool {
-        return self.base.isImplicitlyConvertibleTo(to.base) and self.offset.isImplicitlyConvertibleTo(to.offset);
-    }
+pub const IndexedRegisterRange = struct {
+    min: misc.RegisterIndex = 0,
+    max: misc.RegisterIndex = 15,
+    signedness: ?std.builtin.Signedness = null,
 
-    pub fn hasConstant(self: ExpressionType) bool {
-        return self.base == .constant or self.offset == .constant;
+    pub fn contains(self: IndexedRegisterRange, reg: IndexedRegister) bool {
+        if (self.min > reg.index or reg.index > self.max) return false;
+        if (self.signedness) |s| {
+            return if (reg.signedness) |rs| s == rs else false;
+        } else return true;
     }
+};
+
+pub const SpecialRegister = enum {
+    ip,
+    sp,
+    rp,
+    bp,
+    uxp,
+    kxp,
+    asn,
+    stat,
+};
+
+pub const AddressSpace = enum {
+    data,
+    insn,
+    stack,
+};
+
+pub const BaseOffsetType = struct {
+    base: InnerType,
+    offset: InnerType,
+
+    pub const InnerType = union(enum) {
+        constant,
+        reg8: IndexedRegister,
+        reg16: IndexedRegister,
+        reg32: IndexedRegister,
+        sr: SpecialRegister,
+
+        pub fn fromExpressionType(t: ExpressionType) !InnerType {
+            return switch (t) {
+                .constant => .{ .constant = {} },
+                .reg8 => |r| .{ .reg8 = r },
+                .reg16 => |r| .{ .reg16 = r },
+                .reg32 => |r| .{ .reg32 = r },
+                .sr => |r| .{ .sr = r },
+                else => return error.InvalidType,
+            };
+        }
+    };
 };
 
 pub const ParameterSource = enum {
     implicit, // Parameter is not directly represented in the instruction
+    opcode, // Like implicit, but used when there are multiple opcodes in the encoding, and the parameter value is linearly related to the opcode
     OA, // The initial operand A
     OB, // The initial operand B
     OB_OA, // The combination of initial operands A and B (OB is MSB, OA is LSB)
@@ -196,7 +249,6 @@ pub const ParameterSource = enum {
     IP_plus_2_16, // the word at IP+2
     IP_plus_2_32, // the 2 words at IP+2 and IP+4
     IP_plus_4_16, // the word at IP+4
-    opcode, // Like implicit, but used when there are multiple opcodes in the encoding, and the parameter value is linearly related to the opcode
 };
 
 fn getMinLengthForParamSource(src: ParameterSource) u7 {
@@ -218,13 +270,52 @@ pub const OpcodeRange = struct {
     max: Opcode,
 };
 
+pub const ParameterEncodingBaseType = union(enum) {
+    none,
+    constant,
+    reg8: IndexedRegisterRange,
+    reg16: IndexedRegisterRange,
+    reg32: IndexedRegisterRange,
+    sr: SpecialRegister,
+
+    pub fn print(self: ParameterEncodingBaseType, writer: anytype) !void {
+        switch (self) {
+            .none, .constant => {
+                try writer.writeAll(@tagName(self));
+            },
+            .reg8, .reg16, .reg32 => |irr| {
+                try writer.writeAll(switch (self) {
+                    .reg8 => "B",
+                    .reg16 => "R",
+                    .reg32 => "X",
+                    else => unreachable,
+                });
+                if (irr.min == irr.max) {
+                    try writer.print("{}", .{ irr.min });
+                } else {
+                    try writer.print("{}-{}", .{ irr.min, irr.max });
+                }
+                if (irr.signedness) |s| {
+                    try writer.writeAll(switch (s) {
+                        .unsigned => "U",
+                        .signed => "S",
+                    });
+                }
+            },
+            .sr => |sr| {
+                try writer.writeAll(@tagName(sr));
+            },
+        }
+    }
+};
+
 pub const ParameterEncoding = struct {
-    type: ExpressionType,
+    address_space: ?AddressSpace = null,
+    base: ParameterEncodingBaseType = .{ .none = {} },
+    offset: ParameterEncodingBaseType = .{ .none = {} },
     base_src: ParameterSource = .implicit,
     offset_src: ParameterSource = .implicit,
     arrow: bool = false,
-    min_reg: misc.RegisterIndex = 0,
-    max_reg: misc.RegisterIndex = 15,
     constant_reverse: bool = false, // store constant as `N - value` instead of `value`
     constant_align: u3 = 1,
     constant_ranges: []const ConstantRange = &.{},
@@ -234,15 +325,22 @@ pub const ParameterEncoding = struct {
         if (self.arrow) {
             try writer.writeAll("-> ");
         }
-        try writer.print("{s} ({s})", .{ @tagName(self.type.base), @tagName(self.base_src) });
-        if (self.type.offset != .none or self.offset_src != .implicit) {
-            try writer.print(" + {s} ({s})", .{ @tagName(self.type.offset), @tagName(self.offset_src) });
+
+        if (self.address_space) |as| {
+            try writer.print("[{s}] ", .{ @tagName(as) });
         }
 
-        if (self.min_reg == self.max_reg) {
-            try writer.print(" reg {}", .{ self.min_reg });
-        } else if (self.min_reg != 0 or self.max_reg != 15) {
-            try writer.print(" reg {}-{}", .{ self.min_reg, self.max_reg });
+        try self.base.print(writer);
+        if (self.base_src != .implicit) {
+            try writer.print(" ({s})", .{ @tagName(self.base_src) });
+        }
+
+        if (self.offset != .none or self.offset_src != .implicit) {
+            try writer.writeAll(" + ");
+            try self.offset.print(writer);
+            if (self.offset_src != .implicit) {
+                try writer.print(" ({s})", .{ @tagName(self.offset_src) });
+            }
         }
 
         if (self.constant_reverse) {
@@ -267,6 +365,192 @@ pub const ParameterEncoding = struct {
             }
         }
     }
+
+    pub fn read(self: ParameterEncoding, buf: []const u8, base_opcode: Opcode) Parameter {
+        var param = Parameter{
+            .arrow = self.arrow,
+            .expr_type = undefined,
+            .constant = 0,
+        };
+        const base = readParamRaw(buf, self.base_src, base_opcode);
+        const offset = readParamRaw(buf, self.offset_src, base_opcode);
+
+        if (self.address_space != null or self.offset != .none) {
+            var bo: BaseOffsetType = .{
+                .base = switch (self.base) {
+                    .none => .{ .constant = {} },
+                    .sr => |sr| .{ .sr = sr },
+                    .constant => blk: {
+                        param.constant = self.decodeConstant(base) orelse base;
+                        break :blk .{ .constant = {} };
+                    },
+                    .reg8 => |re| .{ .reg8 = .{
+                        .index = if (self.base_src == .implicit) re.min else base,
+                        .signedness = re.signedness,
+                    }},
+                    .reg16 => |re| .{ .reg16 = .{
+                        .index = if (self.base_src == .implicit) re.min else base,
+                        .signedness = re.signedness,
+                    }},
+                    .reg32 => |re| .{ .reg32 = .{
+                        .index = if (self.base_src == .implicit) re.min else base,
+                        .signedness = re.signedness,
+                    }},
+                },
+                .offset = switch (self.offset) {
+                    .none => .{ .constant = {} },
+                    .sr => |sr| .{ .sr = sr },
+                    .constant => blk: {
+                        param.constant = self.decodeConstant(offset) orelse offset;
+                        break :blk .{ .constant = {} };
+                    },
+                    .reg8 => |re| .{ .reg8 = .{
+                        .index = if (self.offset_src == .implicit) re.min else offset,
+                        .signedness = re.signedness,
+                    }},
+                    .reg16 => |re| .{ .reg16 = .{
+                        .index = if (self.offset_src == .implicit) re.min else offset,
+                        .signedness = re.signedness,
+                    }},
+                    .reg32 => |re| .{ .reg32 = .{
+                        .index = if (self.offset_src == .implicit) re.min else offset,
+                        .signedness = re.signedness,
+                    }},
+                },
+            };
+            param.expr_type = if (self.address_space) |as| switch (as) {
+                .data => .{ .data_address = bo },
+                .insn => .{ .insn_address = bo },
+                .stack => .{ .stack_address = bo },
+            } else .{ .raw_base_offset = bo };
+        } else switch (self.base) {
+            .none => {
+                param.expr_type = .{ .constant = {} };
+            },
+            .constant => {
+                param.constant = self.decodeConstant(base) orelse base;
+                param.expr_type = .{ .constant = {} };
+            },
+            .reg8 => |re| {
+                param.expr_type = .{ .reg8 = .{
+                    .index = if (self.base_src == .implicit) re.min else base,
+                    .signedness = re.signedness,
+                }};
+            },
+            .reg16 => |re| {
+                param.expr_type = .{ .reg16 = .{
+                    .index = if (self.base_src == .implicit) re.min else base,
+                    .signedness = re.signedness,
+                }};
+            },
+            .reg32 => |re| {
+                param.expr_type = .{ .reg32 = .{
+                    .index = if (self.base_src == .implicit) re.min else base,
+                    .signedness = re.signedness,
+                }};
+            },
+            .sr => |sr| {
+                param.expr_type = .{ .sr = sr };
+            },
+        }
+
+        return param;
+    }
+
+    pub fn getBaseValue(self: ParameterEncoding, param: Parameter) i64 {
+        return switch (self.base) {
+            .none, .sr => 0,
+            .constant => self.encodeConstant(param.constant),
+            .reg8, .reg16, .reg32 => switch (param.expr_type) {
+                .unknown, .poison, .symbol_def, .constant, .sr => unreachable,
+                .reg8, .reg16, .reg32 => |reg| reg.index,
+                .raw_base_offset, .data_address, .insn_address, .stack_address => |info| switch (info.base) {
+                    .constant, .sr => unreachable,
+                    .reg8, .reg16, .reg32 => |reg| reg.index,
+                },
+            },
+        };
+    }
+
+    pub fn getOffsetValue(self: ParameterEncoding, param: Parameter) i64 {
+        return switch (self.offset) {
+            .none, .sr => 0,
+            .constant => self.encodeConstant(param.constant),
+            .reg8, .reg16, .reg32 => switch (param.expr_type) {
+                .unknown, .poison, .symbol_def, .constant, .sr, .reg8, .reg16, .reg32 => unreachable,
+                .raw_base_offset, .data_address, .insn_address, .stack_address => |info| switch (info.offset) {
+                    .constant, .sr => unreachable,
+                    .reg8, .reg16, .reg32 => |reg| reg.index,
+                },
+            },
+        };
+    }
+
+    // Transforms a constant value to get the raw number that's embedded in the instruction bytes
+    // to represent it (but the exact location depends on base_src/offset_src)
+    fn encodeConstant(self: ParameterEncoding, constant: i64) i64 {
+        if (self.constant_ranges.len == 0 and constant == 0) {
+            return 0;
+        }
+
+        var total_values: i64 = 0;
+        var raw: i64 = 0;
+
+        var i: usize = 0;
+        while (i < self.alt_constant_ranges.len) : (i += 1) {
+            const alt = self.alt_constant_ranges[i];
+            if (constant >= alt.min and constant <= alt.max) {
+                raw = total_values + @divTrunc((constant - alt.min), self.constant_align);
+            }
+            total_values += @divTrunc((alt.max - alt.min + self.constant_align), self.constant_align);
+        }
+
+        total_values = 0;
+
+        i = 0;
+        while (i < self.constant_ranges.len) : (i += 1) {
+            const range = self.constant_ranges[i];
+            if (constant >= range.min and constant <= range.max) {
+                raw = total_values + @divTrunc((constant - range.min), self.constant_align);
+            }
+            total_values += @divTrunc((range.max - range.min + self.constant_align), self.constant_align);
+        }
+
+        if (self.constant_reverse) {
+            raw = total_values - raw - 1;
+        }
+
+        return raw;
+    }
+
+    // The inverse of encodeConstant
+    fn decodeConstant(self: ParameterEncoding, raw_value: i64) ?i64 {
+        var aligned = raw_value * self.constant_align;
+
+        var total_values: i64 = 0;
+        for (self.constant_ranges) |range| {
+            total_values += range.max - range.min + 1;
+        }
+
+        if (self.constant_reverse) {
+            aligned = total_values - aligned - 1;
+        }
+
+        for (self.constant_ranges) |range| {
+            const values = range.max - range.min + 1;
+            if (aligned < values) {
+                return range.min + aligned;
+            }
+            aligned -= values;
+        }
+
+        if (self.constant_ranges.len == 0 and aligned == 0) {
+            return 0;
+        }
+
+        return null;
+    }
+
 };
 
 pub const InstructionEncoding = struct {
@@ -291,13 +575,12 @@ pub const InstructionEncoding = struct {
         if (self.suffix != .none) {
             try writer.print(".{s}", .{ @tagName(self.suffix) });
         }
-        try writer.writeAll(" {\n");
+        try writer.writeAll("\n");
         for (self.params) |param| {
             try writer.print("{s}   ", .{ indent });
             try param.print(writer);
             try writer.writeAll("\n");
         }
-        try writer.writeAll("}");
     }
 };
 pub const InstructionEncodingAndDescription = struct {
@@ -318,52 +601,52 @@ fn tryComptimeRegisterParameterEncoding(comptime name: []const u8) ?ParameterEnc
     comptime {
         if (name.len < 2) return null;
 
-        var encoding = ParameterEncoding{ .type = .{ .base = undefined } };
+        var encoding = ParameterEncoding{};
 
         switch (name[0]) {
             'B' => {
                 if (std.mem.eql(u8, name, "BP")) {
-                    encoding.type.base = .BP;
+                    encoding.base = .{ .sr = .bp };
                     return encoding;
                 } else {
-                    encoding.type.base = .reg8;
+                    encoding.base = .{ .reg8 = .{} };
                 }
             },
             'R' => {
                 if (std.mem.eql(u8, name, "RP")) {
-                    encoding.type.base = .RP;
+                    encoding.base = .{ .sr = .rp };
                     return encoding;
                 } else {
-                    encoding.type.base = .reg16;
+                    encoding.base = .{ .reg16 = .{} };
                 }
             },
             'X' => {
-                encoding.type.base = .reg32;
+                encoding.base = .{ .reg32 = .{} };
             },
             'I' => {
                 if (std.mem.eql(u8, name, "IP")) {
-                    encoding.type.base = .IP;
+                    encoding.base = .{ .sr = .ip };
                     return encoding;
                 } else return null;
             },
             'S' => {
                 if (std.mem.eql(u8, name, "SP")) {
-                    encoding.type.base = .SP;
+                    encoding.base = .{ .sr = .sp };
                     return encoding;
                 } else if (std.mem.eql(u8, name, "STAT")) {
-                    encoding.type.base = .STAT;
+                    encoding.base = .{ .sr = .stat };
                     return encoding;
                 } else return null;
             },
             else => {
                 if (std.mem.eql(u8, name, "ASN")) {
-                    encoding.type.base = .ASN;
+                    encoding.base = .{ .sr = .asn };
                     return encoding;
                 } else if (std.mem.eql(u8, name, "KXP")) {
-                    encoding.type.base = .KXP;
+                    encoding.base = .{ .sr = .kxp };
                     return encoding;
                 } else if (std.mem.eql(u8, name, "UXP")) {
-                    encoding.type.base = .UXP;
+                    encoding.base = .{ .sr = .uxp };
                     return encoding;
                 } else return null;
             },
@@ -393,8 +676,13 @@ fn tryComptimeRegisterParameterEncoding(comptime name: []const u8) ?ParameterEnc
                     next = 3;
                 }
                 encoding.base_src = .implicit;
-                encoding.min_reg = reg;
-                encoding.max_reg = reg;
+                switch (encoding.base) {
+                    .reg8, .reg16, .reg32 => |*irr| {
+                        irr.min = reg;
+                        irr.max = reg;
+                    },
+                    else => unreachable,
+                }
             },
             else => return null,
         }
@@ -406,16 +694,12 @@ fn tryComptimeRegisterParameterEncoding(comptime name: []const u8) ?ParameterEnc
         }
 
         switch (name[next]) {
-            'U' => encoding.type.base = switch (encoding.type.base) {
-                .reg8 => .reg8u,
-                .reg16 => .reg16u,
-                .reg32 => .reg32u,
+            'U' => switch (encoding.base) {
+                .reg8, .reg16, .reg32 => |*irr| irr.signedness = .unsigned,
                 else => unreachable,
             },
-            'S' => encoding.type.base = switch (encoding.type.base) {
-                .reg8 => .reg8s,
-                .reg16 => .reg16s,
-                .reg32 => .reg32s,
+            'S' => switch (encoding.base) {
+                .reg8, .reg16, .reg32 => |*irr| irr.signedness = .signed,
                 else => unreachable,
             },
             else => return,
@@ -440,6 +724,18 @@ pub fn signedConstantRange(comptime min: i64, comptime max: i64) []const Constan
     }
 }
 
+fn checkConstantInRange(constant: i64, ranges: []const ConstantRange, alignment: i64) bool {
+    for (ranges) |range| {
+        if (constant >= range.min and constant <= range.max) {
+            var dc = constant - range.min;
+            if (@rem(dc, alignment) == 0) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 fn parseImmediateLiteral(str: []const u8) !i64 {
     var num_str = str;
     var mult: i64 = 1;
@@ -457,7 +753,9 @@ fn tryComptimeImmediateParameterEncoding(comptime name: []const u8) ?ParameterEn
             return null;
         }
 
-        var encoding = ParameterEncoding{ .type = .{ .base = .constant } };
+        var encoding = ParameterEncoding{
+            .base = .{ .constant = {} },
+        };
 
         var parts_iter = std.mem.split(u8, name[3..], "_");
         var part = parts_iter.next() orelse return null;
@@ -631,47 +929,21 @@ fn getParameterValueForOpcode(comptime T: type, insn: InstructionEncoding, encod
             raw = 0;
         },
         .IP_plus_2_OA, .IP_plus_2_OB, .IP_plus_2_8, .IP_plus_2_16, .IP_plus_2_32, .IP_plus_4_16 => {
-            std.debug.panic("Constant value varies based on immediate stored outside of opcode", .{});
+            @panic("Constant value varies based on immediate stored outside of opcode");
         },
     }
 
-    return @intCast(T, getParameterValue(raw, encoding) orelse
+    return @intCast(T, encoding.decodeConstant(raw) orelse
         std.debug.panic("Opcode {X:0>4} results in a constant outside the configured range(s) for this parameter", .{ opcode }));
 }
 
-fn getParameterValue(raw_value: i64, encoding: ParameterEncoding) ?i64 {
-    var aligned = raw_value * encoding.constant_align;
-
-    var total_values: i64 = 0;
-    for (encoding.constant_ranges) |range| {
-        total_values += range.max - range.min + 1;
-    }
-
-    if (encoding.constant_reverse) {
-        aligned = total_values - aligned - 1;
-    }
-
-    for (encoding.constant_ranges) |range| {
-        const values = range.max - range.min + 1;
-        if (aligned < values) {
-            return range.min + aligned;
-        }
-        aligned -= values;
-    }
-
-    if (encoding.constant_ranges.len == 0 and aligned == 0) {
-        return 0;
-    }
-
-    return null;
-}
-
 pub fn getParameterConstantForOpcode(comptime T: type, insn: InstructionEncoding, encoding: ParameterEncoding, opcode: Opcode) T {
-    assert(encoding.type.base == .constant);
+    assert(encoding.base == .constant);
     return getParameterValueForOpcode(T, insn, encoding, opcode, encoding.base_src);
 }
 
 pub fn getParameterOffsetForOpcode(comptime T: type, insn: InstructionEncoding, encoding: ParameterEncoding, opcode: Opcode) T {
+    assert(encoding.offset == .constant);
     return getParameterValueForOpcode(T, insn, encoding, opcode, encoding.offset_src);
 }
 
@@ -683,7 +955,6 @@ fn comptimeNamedParameterEncoding(comptime name: []const u8) ParameterEncoding {
             return param;
         } else if (std.mem.eql(u8, name, "to")) {
             return ParameterEncoding{
-                .type = .{ .base = .none },
                 .arrow = true,
             };
         }
@@ -706,23 +977,27 @@ pub fn comptimeParameterEncoding(comptime arg: anytype) ParameterEncoding {
     }
 }
 
-pub fn comptimeRelativeParameterEncoding(comptime param: ParameterEncoding, comptime base: BaseExpressionType, comptime base_src: ParameterSource) ParameterEncoding {
+pub fn comptimeAddressSpaceParameterEncoding(comptime param: ParameterEncoding, comptime address_space: ?AddressSpace) ParameterEncoding {
+    comptime {
+        var new_param = param;
+        new_param.address_space = address_space;
+        return new_param;
+    }
+}
+
+pub fn comptimeRelativeParameterEncoding(comptime param: ParameterEncoding, comptime base: ParameterEncodingBaseType, comptime base_src: ParameterSource) ParameterEncoding {
     comptime {
         var new_param = param;
 
-        new_param.type.base = base;
+        new_param.base = base;
         new_param.base_src = base_src;
 
-        if (base_src == .implicit and base.isGPR()) {
-            new_param.min_reg = 0;
-            new_param.max_reg = 0;
-        }
-
-        if (param.type.base == .constant and param.base_src == .implicit and param.constant_ranges.len == 0) {
-            new_param.type.offset = .none;
+        if (param.base == .constant and param.base_src == .implicit and param.constant_ranges.len == 0) {
+            // `base + 0` is always the same as just `base`
+            new_param.offset = .none;
             new_param.offset_src = .implicit;
         } else {
-            new_param.type.offset = param.type.base;
+            new_param.offset = param.base;
             new_param.offset_src = param.base_src;
         }
 
@@ -783,17 +1058,17 @@ fn validateParameterEncodingConstants(comptime param: ParameterEncoding, src: Pa
 
 fn validateParameterEncoding(comptime param: ParameterEncoding) void {
     comptime {
-        if (param.type.base == .constant) {
-            if (param.type.offset == .constant) {
+        if (param.base == .none and param.offset == .none) {
+            @compileError("Base and offset type cannot both be none!");
+        } else if (param.base == .constant) {
+            if (param.offset == .constant) {
                 @compileError("Base and offset type cannot both be constant!");
             }
             validateParameterEncodingConstants(param, param.base_src);
-        } else if (param.type.offset == .constant) {
+        } else if (param.offset == .constant) {
             validateParameterEncodingConstants(param, param.offset_src);
-        } else {
-            if (param.constant_ranges.len > 0 or param.constant_align > 1) {
-                @compileError("This parameter does not involve a constant value");
-            }
+        } else if (param.constant_ranges.len > 0 or param.constant_align > 1) {
+            @compileError("This parameter does not involve a constant value");
         }
     }
 }
@@ -820,7 +1095,7 @@ pub fn comptimeParameterEncodings(comptime args: anytype) []const ParameterEncod
                 else => @compileError("I don't know what to do with argument of type " ++ @typeName(field.type)),
             }
 
-            if (param.type.base == .none and param.arrow) {
+            if (param.base == .none and param.arrow) {
                 if (arrow_on_next_param) @compileError("Expected a parameter after .to");
                 arrow_on_next_param = true;
             } else {
@@ -863,27 +1138,185 @@ pub fn getInstructionLength(encoding: InstructionEncoding) u7 {
 
 pub const Parameter = struct {
     arrow: bool = false,
-    type: ExpressionType,
-    base: i64,
-    offset: i64 = 0,
+    expr_type: ExpressionType,
+    constant: i64,
 
     pub fn print(self: Parameter, writer: anytype) !void {
         if (self.arrow) {
             try writer.writeAll("-> ");
         }
-        try writer.print("{s}({})", .{ @tagName(self.type.base), self.base });
-        if (self.type.offset != .none or self.offset != 0) {
-            try writer.print(" + {s}({})", .{ @tagName(self.type.offset), self.offset });
+        switch (self.expr_type) {
+            .unknown, .poison, .symbol_def => {
+                try writer.writeAll(@tagName(self.expr_type));
+            },
+            .constant => {
+                try writer.print("{}", .{ self.constant });
+            },
+            .reg8, .reg16, .reg32 => |reg| {
+                try writer.writeAll(switch (self.expr_type) {
+                    .reg8 => "B",
+                    .reg16 => "R",
+                    .reg32 => "X",
+                });
+                try writer.print("{}", .{ reg.index });
+                if (reg.signedness) |s| {
+                    try writer.writeAll(switch (s) {
+                        .unsigned => " .unsigned",
+                        .signed => " .signed",
+                    });
+                }
+            },
+            .sr => |reg| {
+                var buf: [4]u8 = .{ 0 } ** 4;
+                try writer.writeAll(std.ascii.upperString(&buf, @tagName(reg)));
+            },
+            .data_address, .insn_address, .stack_address => |info| {
+                try writer.writeAll(switch (self.expr_type) {
+                    .data_address => ".d ",
+                    .insn_address => ".i ",
+                    .stack_address => ".s ",
+                });
+                switch (info.base) {
+                    .constant => {
+                        try writer.print("{s}", .{ self.constant });
+                    },
+                    .reg8, .reg16, .reg32 => {
+                        try writer.writeAll(switch (info.base) {
+                            .reg8 => "B",
+                            .reg16 => "R",
+                            .reg32 => "X",
+                        });
+                        try writer.print("{}", .{ info.base.index });
+                        if (info.base.signedness) |s| {
+                            try writer.writeAll(switch (s) {
+                                .unsigned => " .unsigned",
+                                .signed => " .signed",
+                            });
+                        }
+                    },
+                    .sr => |reg| {
+                        var buf: [4]u8 = .{ 0 } ** 4;
+                        try writer.writeAll(std.ascii.upperString(&buf, @tagName(reg)));
+                    },
+                }
+                switch (info.offset) {
+                    .constant => if (info.base != .constant and self.constant != 0) {
+                        try writer.print(" + {s}", .{ self.constant });
+                    },
+                    .reg8, .reg16, .reg32 => {
+                        try writer.writeAll(switch (info.offset) {
+                            .reg8 => " + B",
+                            .reg16 => " + R",
+                            .reg32 => " + X",
+                        });
+                        try writer.print("{}", .{ info.offset.index });
+                        if (info.offset.signedness) |s| {
+                            try writer.writeAll(switch (s) {
+                                .unsigned => " .unsigned",
+                                .signed => " .signed",
+                            });
+                        }
+                    },
+                    .sr => |reg| {
+                        try writer.writeAll(" + ");
+                        var buf: [4]u8 = .{ 0 } ** 4;
+                        try writer.writeAll(std.ascii.upperString(&buf, @tagName(reg)));
+                    },
+                }
+            },
         }
     }
 
     pub fn eql(self: Parameter, other: Parameter) bool {
         return self.arrow == other.arrow
-            and self.type.base == other.type.base
-            and self.type.offset == other.type.offset
-            and self.base == other.base
-            and self.offset == other.offset
+            and std.meta.eql(self.expr_type.base, other.expr_type.base)
+            and self.constant == other.constant
             ;
+    }
+
+    pub fn matches(self: Parameter, encoding: ParameterEncoding) bool {
+        if (self.arrow != encoding.arrow) return false;
+
+        switch (self.expr_type) {
+            .unknown, .poison, .symbol_def => return false,
+            .constant => {
+                if (encoding.address_space) |_| return false;
+                if (encoding.base != .constant or encoding.offset != .none) return false;
+            },
+            .reg8 => |reg| {
+                if (encoding.address_space) |_| return false;
+                if (encoding.offset != .none) return false;
+                return switch (encoding.base) {
+                    .reg8 => |re| re.contains(reg),
+                    else => false,
+                };
+            },
+            .reg16 => |reg| {
+                if (encoding.address_space) |_| return false;
+                if (encoding.offset != .none) return false;
+                return switch (encoding.base) {
+                    .reg16 => |re| re.contains(reg),
+                    else => false,
+                };
+            },
+            .reg32 => |reg| {
+                if (encoding.address_space) |_| return false;
+                if (encoding.offset != .none) return false;
+                return switch (encoding.base) {
+                    .reg32 => |re| re.contains(reg),
+                    else => false,
+                };
+            },
+            .sr => |reg| {
+                if (encoding.address_space) |_| return false;
+                if (encoding.offset != .none) return false;
+                return switch (encoding.base) {
+                    .sr => |re| reg == re,
+                    else => false,
+                };
+            },
+            .raw_base_offset, .data_address, .insn_address, .stack_address => |info| {
+                switch (self.expr_type) {
+                    .raw_base_offset => if (encoding.address_space) |_| return false,
+                    .data_address => if (.data != encoding.address_space orelse return false) return false,
+                    .insn_address => if (.insn != encoding.address_space orelse return false) return false,
+                    .stack_address => if (.stack != encoding.address_space orelse return false) return false,
+                    else => unreachable,
+                }
+                if (!innerTypeMatches(info.base, encoding.base)) return false;
+                if (info.base == .constant and info.offset == .constant) {
+                    if (encoding.offset != .none) return false;
+                } else {
+                    if (info.offset == .constant and self.constant == 0 and encoding.offset == .none) return true;
+                    if (!innerTypeMatches(info.offset, encoding.offset)) return false;
+                }
+            }
+        }
+
+        return checkConstantInRange(self.constant, encoding.constant_ranges, encoding.constant_align)
+            or checkConstantInRange(self.constant, encoding.alt_constant_ranges, encoding.constant_align);
+    }
+
+    fn innerTypeMatches(inner: BaseOffsetType.InnerType, encoding: ParameterEncodingBaseType) bool {
+        switch (inner) {
+            .constant => return encoding == .constant,
+            .reg8 => |reg| return switch (encoding) {
+                .reg8 => |re| re.contains(reg),
+                else => false,
+            },
+            .reg16 => |reg| return switch (encoding) {
+                .reg16 => |re| re.contains(reg),
+                else => false,
+            },
+            .reg32 => |reg| return switch (encoding) {
+                .reg32 => |re| re.contains(reg),
+                else => false,
+            },
+            .sr => |reg| return switch (encoding) {
+                .sr => |re| reg == re,
+                else => false,
+            },
+        }
     }
 };
 
@@ -897,13 +1330,17 @@ pub const Instruction = struct {
         if (self.suffix != .none) {
             try writer.print(".{s}", .{ @tagName(self.suffix) });
         }
-        try writer.writeAll(" {\n");
+        var first = true;
         for (self.params) |param| {
-            try writer.writeAll("   ");
+            if (first) {
+                first = false;
+            } else if (!param.arrow) {
+                try writer.writeByte(',');
+            }
+            try writer.writeByte(' ');
             try param.print(writer);
-            try writer.writeAll("\n");
         }
-        try writer.writeAll("}");
+        try writer.writeByte('\n');
     }
 
     pub fn eql(self: Instruction, other: Instruction) bool {
@@ -912,9 +1349,66 @@ pub const Instruction = struct {
             or self.params.len != other.params.len
         ) return false;
 
+        for (self.params, other.params) |s, o| {
+            if (!s.eql(o)) return false;
+        }
+
+        return true;
+    }
+
+    pub fn matches(self: Instruction, encoding: InstructionEncoding) bool {
+        if (self.mnemonic != encoding.mnemonic) return false;
+        if (self.suffix != encoding.suffix) return false;
+        if (self.params.len != encoding.params.len) return false;
+
+        var encoded: [6]u8 = [_]u8{0} ** 6;
+        var encoded_sources = std.EnumSet(ParameterSource){};
+
         var i: usize = 0;
-        while (i < self.params.len) : (i += 1) {
-            if (!self.params[i].eql(other.params[i])) return false;
+        while (i < encoding.params.len) : (i += 1) {
+            const param = self.params[i];
+            const param_encoding = encoding.params[i];
+            if (!param.matches(param_encoding)) return false;
+
+            // The rest of this makes sure that if the encoding has multiple parameters stored in the same
+            // place, it only matches if the actual parameters are compatible with each other.
+            // e.g. The instruction
+            //          ADD X0, R4S -> X2
+            //      should not match the encoding
+            //          ADD Xa, RbS -> Xa
+            //      because OA can't encode X0 and X2 at the same time.
+            const base = param_encoding.getBaseValue(param);
+            const offset = param_encoding.getOffsetValue(param);
+
+            switch (param_encoding.base_src) {
+                .implicit, .opcode => {},
+                else => |src| {
+                    if (encoded_sources.contains(src)) {
+                        var required = readParamRaw(&encoded, src, encoding.opcode_base);
+                        if (required != base) {
+                            return false;
+                        }
+                    } else {
+                        writeParamRaw(&encoded, base, src, encoding.opcode_base);
+                        encoded_sources.insert(src);
+                    }
+                },
+            }
+
+            switch (param_encoding.offset_src) {
+                .implicit, .opcode => {},
+                else => |src| {
+                    if (encoded_sources.contains(src)) {
+                        var required = readParamRaw(&encoded, src, encoding.opcode_base);
+                        if (required != offset) {
+                            return false;
+                        }
+                    } else {
+                        writeParamRaw(&encoded, offset, src, encoding.opcode_base);
+                        encoded_sources.insert(src);
+                    }
+                },
+            }
         }
 
         return true;
@@ -983,7 +1477,7 @@ fn writeImm32(buf: []u8, val: u32) void {
     buf[5] = @intCast(u8, val >> 24);
 }
 
-fn writeParamConstant(buf: []u8, val: i64, src: ParameterSource, opcode_base: Opcode) void {
+fn writeParamRaw(buf: []u8, val: i64, src: ParameterSource, opcode_base: Opcode) void {
     const uval = @bitCast(u64, val);
     switch (src) {
         .implicit => {}, // nothing to store
@@ -1000,39 +1494,9 @@ fn writeParamConstant(buf: []u8, val: i64, src: ParameterSource, opcode_base: Op
     }
 }
 
-fn encodeConstant(constant: i64, encoding: ParameterEncoding) i64 {
-    if (encoding.constant_ranges.len == 0 and constant == 0) {
-        return 0;
-    }
-
-    var total_values: i64 = 0;
-    var raw: i64 = 0;
-
-    var i: usize = 0;
-    while (i < encoding.alt_constant_ranges.len) : (i += 1) {
-        const alt = encoding.alt_constant_ranges[i];
-        if (constant >= alt.min and constant <= alt.max) {
-            raw = total_values + @divTrunc((constant - alt.min), encoding.constant_align);
-        }
-    }
-
-    i = 0;
-    while (i < encoding.constant_ranges.len) : (i += 1) {
-        const range = encoding.constant_ranges[i];
-        if (constant >= range.min and constant <= range.max) {
-            raw = total_values + @divTrunc((constant - range.min), encoding.constant_align);
-        }
-        total_values += @divTrunc((range.max - range.min + encoding.constant_align), encoding.constant_align);
-    }
-
-    if (encoding.constant_reverse) {
-        raw = total_values - raw - 1;
-    }
-
-    return raw;
-}
-
-pub fn encodeInstruction(insn: Instruction, encoding: InstructionEncoding, buf: []u8) ![]u8 {
+pub fn encodeInstruction(insn: Instruction, encoding: InstructionEncoding, buf: []u8) []u8 {
+    assert(insn.mnemonic == encoding.mnemonic);
+    assert(insn.suffix == encoding.suffix);
     assert(insn.params.len == encoding.params.len);
 
     writeOpcode(buf, encoding.opcodes.min);
@@ -1041,21 +1505,12 @@ pub fn encodeInstruction(insn: Instruction, encoding: InstructionEncoding, buf: 
         writeImm8(buf, 0);
     }
 
-    var i: usize = 0;
-    while (i < encoding.params.len) : (i += 1) {
-        const param = insn.params[i];
-        const param_encoding = encoding.params[i];
-        var base = param.base;
-        var offset = param.offset;
-        assert(param.type.base.isImplicitlyConvertibleTo(param_encoding.type.base));
-        assert(param.type.offset.isImplicitlyConvertibleTo(param_encoding.type.offset));
-        if (param.type.base == .constant) {
-            base = encodeConstant(base, param_encoding);
-        } else if (param.type.offset == .constant) {
-            offset = encodeConstant(offset, param_encoding);
-        }
-        writeParamConstant(buf, base, param_encoding.base_src, encoding.opcode_base);
-        writeParamConstant(buf, offset, param_encoding.offset_src, encoding.opcode_base);
+    for (insn.params, encoding.params) |param, param_encoding| {
+        assert(param.matches(param_encoding));
+        const base = param_encoding.getBaseValue(param);
+        const offset = param_encoding.getOffsetValue(param);
+        writeParamRaw(buf, base, param_encoding.base_src, encoding.opcode_base);
+        writeParamRaw(buf, offset, param_encoding.offset_src, encoding.opcode_base);
     }
 
     return buf[0..getInstructionLength(encoding)];
@@ -1079,8 +1534,8 @@ pub const Encoder = struct {
         self.last_instruction_encoded = "";
     }
 
-    pub fn encode(self: *Encoder, insn: Instruction, encoding: InstructionEncoding) !void {
-        self.last_instruction_encoded = try encodeInstruction(insn, encoding, self.remaining);
+    pub fn encode(self: *Encoder, insn: Instruction, encoding: InstructionEncoding) void {
+        self.last_instruction_encoded = encodeInstruction(insn, encoding, self.remaining);
         self.remaining = self.remaining[self.last_instruction_encoded.len..];
     }
 
@@ -1109,111 +1564,6 @@ pub const Encoder = struct {
     }
 };
 
-fn checkConstantInRange(constant: i64, ranges: []const ConstantRange, alignment: i64) bool {
-    for (ranges) |range| {
-        if (constant >= range.min and constant <= range.max) {
-            var dc = constant - range.min;
-            if (@rem(dc, alignment) == 0) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-fn checkBaseExpressionTypeMatchesEncoding(constant: i64, @"type": BaseExpressionType, encoding: ParameterEncoding) bool {
-    if (@"type" == .constant) {
-        if (!checkConstantInRange(constant, encoding.constant_ranges, encoding.constant_align) and
-            !checkConstantInRange(constant, encoding.alt_constant_ranges, encoding.constant_align))
-        {
-            return false;
-        }
-    } else if (@"type".isGPR() and (constant < encoding.min_reg or constant > encoding.max_reg)) {
-        return false;
-    }
-
-    return true;
-}
-
-fn checkParamMatchesEncoding(param: Parameter, encoding: ParameterEncoding) bool {
-    return param.arrow == encoding.arrow
-        and param.type.base.isImplicitlyConvertibleTo(encoding.type.base)
-        and param.type.offset.isImplicitlyConvertibleTo(encoding.type.offset)
-        and checkBaseExpressionTypeMatchesEncoding(param.base, param.type.base, encoding)
-        and checkBaseExpressionTypeMatchesEncoding(param.offset, param.type.offset, encoding);
-}
-
-pub fn checkInstructionMatchesEncoding(insn: Instruction, encoding: InstructionEncoding) bool {
-    if (insn.mnemonic != encoding.mnemonic) {
-        return false;
-    }
-
-    if (insn.suffix != encoding.suffix and insn.suffix != .none) {
-        return false;
-    }
-
-    if (insn.params.len != encoding.params.len) {
-        return false;
-    }
-
-    var encoded: [6]u8 = [_]u8{0} ** 6;
-    var encoded_sources = std.EnumSet(ParameterSource){};
-
-    var i: usize = 0;
-    while (i < encoding.params.len) : (i += 1) {
-        const param = insn.params[i];
-        const param_encoding = encoding.params[i];
-        if (!checkParamMatchesEncoding(param, param_encoding)) return false;
-
-        // The rest of this makes sure that if the encoding has multiple parameters stored in the same
-        // place, it only matches if the actual parameters are compatible with each other.
-        // e.g. The instruction
-        //          ADD X0, R4S -> X2
-        //      should not match the encoding
-        //          ADD Xa, RbS -> Xa
-        //      because OA can't encode X0 and X2 at the same time.
-        var base = param.base;
-        var offset = param.offset;
-        if (param.type.base == .constant) {
-            base = encodeConstant(base, param_encoding);
-        } else if (param.type.offset == .constant) {
-            offset = encodeConstant(offset, param_encoding);
-        }
-
-        switch (param_encoding.base_src) {
-            .implicit, .opcode => {},
-            else => |src| {
-                if (encoded_sources.contains(src)) {
-                    var required = readParamRaw(&encoded, src, encoding.opcode_base);
-                    if (required != base) {
-                        return false;
-                    }
-                } else {
-                    writeParamConstant(&encoded, base, src, encoding.opcode_base);
-                    encoded_sources.insert(src);
-                }
-            },
-        }
-
-        switch (param_encoding.offset_src) {
-            .implicit, .opcode => {},
-            else => |src| {
-                if (encoded_sources.contains(src)) {
-                    var required = readParamRaw(&encoded, src, encoding.opcode_base);
-                    if (required != offset) {
-                        return false;
-                    }
-                } else {
-                    writeParamConstant(&encoded, offset, src, encoding.opcode_base);
-                    encoded_sources.insert(src);
-                }
-            },
-        }
-    }
-
-    return true;
-}
-
 fn readOB(buf: []const u8) misc.OperandB {
     assert(buf.len >= 1);
     return @intCast(misc.OperandB, buf[0] >> 4);
@@ -1239,7 +1589,7 @@ fn readImmOA(buf: []const u8) misc.OperandA {
     return @truncate(misc.OperandA, buf[2]);
 }
 
-fn readOpcode(buf: []const u8) Opcode {
+pub fn readOpcode(buf: []const u8) Opcode {
     assert(buf.len >= 2);
     return bits.concat(.{
         buf[0],
@@ -1286,536 +1636,17 @@ fn readParamRaw(buf: []const u8, src: ParameterSource, base_opcode: Opcode) i64 
     };
 }
 
-fn readParamValue(buf: []const u8, expr_type: BaseExpressionType, src: ParameterSource, param: ParameterEncoding, base_opcode: Opcode) i64 {
-    if (expr_type == .none and src == .implicit) {
-        return 0;
-    }
-    var raw = readParamRaw(buf, src, base_opcode);
-    if (expr_type == .constant) {
-        raw = getParameterValue(raw, param) orelse raw;
-    }
-    return raw;
-}
-
-fn readParam(buf: []const u8, param: ParameterEncoding, base_opcode: Opcode) Parameter {
-    return Parameter{
-        .arrow = param.arrow,
-        .type = param.type,
-        .base = readParamValue(buf, param.type.base, param.base_src, param, base_opcode),
-        .offset = readParamValue(buf, param.type.offset, param.offset_src, param, base_opcode),
-    };
-}
-
-pub fn parameter(base_type: BaseExpressionType, base: i64) Parameter {
+pub fn parameter(expr_type: ExpressionType, constant: i64) Parameter {
     return .{
-        .type = .{ .base = base_type, .offset = .none },
-        .base = base,
+        .expr_type = expr_type,
+        .constant = constant,
     };
 }
 
-pub fn parameterWithOffset(base_type: BaseExpressionType, base: i64, offset_type: BaseExpressionType, offset: i64) Parameter {
-    return .{
-        .type = .{ .base = base_type, .offset = offset_type },
-        .base = base,
-        .offset = offset,
-    };
-}
-
-pub fn toParameter(base_type: BaseExpressionType, base: i64) Parameter {
+pub fn toParameter(expr_type: ExpressionType, constant: i64) Parameter {
     return .{
         .arrow = true,
-        .type = .{ .base = base_type, .offset = .none },
-        .base = base,
-    };
-}
-
-pub fn toParameterWithOffset(base_type: BaseExpressionType, base: i64, offset_type: BaseExpressionType, offset: i64) Parameter {
-    return .{
-        .arrow = true,
-        .type = .{ .base = base_type, .offset = offset_type },
-        .base = base,
-        .offset = offset,
-    };
-}
-
-pub const InstructionEncodingParser = struct {
-    reader: sx.Reader(std.io.FixedBufferStream([]const u8).Reader),
-    temp_allocator: std.mem.Allocator,
-    data_allocator: std.mem.Allocator,
-    parse_descriptions: bool,
-    first: bool = true,
-    descriptions: std.StringHashMapUnmanaged(void) = .{},
-    constant_ranges: deep_hash_map.DeepAutoHashMapUnmanaged([]const ConstantRange, void) = .{},
-    parameter_encodings: deep_hash_map.DeepAutoHashMapUnmanaged([]const ParameterEncoding, void) = .{},
-    temp_constant_ranges: std.ArrayListUnmanaged(ConstantRange) = .{},
-    temp_alt_constant_ranges: std.ArrayListUnmanaged(ConstantRange) = .{},
-    temp_parameter_encodings: std.ArrayListUnmanaged(ParameterEncoding) = .{},
-
-    pub fn deinitData(self: *InstructionEncodingParser) void {
-        var descriptions_iter = self.descriptions.keyIterator();
-        while (descriptions_iter.next()) |k| {
-            self.data_allocator.free(k.*);
-        }
-
-        var constant_ranges_iter = self.constant_ranges.keyIterator();
-        while (constant_ranges_iter.next()) |k| {
-            self.data_allocator.free(k.*);
-        }
-
-        var parameter_encodings_iter = self.parameter_encodings.keyIterator();
-        while (parameter_encodings_iter.next()) |k| {
-            self.data_allocator.free(k.*);
-        }
-    }
-
-    pub fn deinit(self: *InstructionEncodingParser) void {
-        self.descriptions.deinit(self.temp_allocator);
-        self.constant_ranges.deinit(self.temp_allocator);
-        self.parameter_encodings.deinit(self.temp_allocator);
-        self.temp_constant_ranges.deinit(self.temp_allocator);
-        self.temp_alt_constant_ranges.deinit(self.temp_allocator);
-        self.temp_parameter_encodings.deinit(self.temp_allocator);
-    }
-
-    pub fn next(self: *InstructionEncodingParser) !?InstructionEncodingAndDescription {
-        if (self.first) {
-            try self.reader.requireOpen();
-            self.first = false;
-        }
-        if (!try self.reader.open()) {
-            try self.reader.requireClose();
-            try self.reader.requireDone();
-            return null;
-        }
-
-        const min_opcode = try self.reader.requireAnyUnsigned(Opcode, 16);
-        const max_opcode = try self.reader.requireAnyUnsigned(Opcode, 16);
-        const mnemonic = try self.reader.requireAnyEnum(Mnemonic);
-        const suffix = try self.reader.anyEnum(MnemonicSuffix) orelse .none;
-        var opcode_base = min_opcode;
-        var description: []const u8 = "";
-
-        while (true) {
-            if (try self.reader.expression("desc")) {
-                const temp_desc = try self.reader.requireAnyString();
-                try self.reader.requireClose();
-                if (self.parse_descriptions) {
-                    description = try self.dedupDescription(temp_desc);
-                }
-            } else if (try self.reader.expression("param")) {
-                const arrow = try self.reader.string("->");
-                const base_type = try self.reader.requireAnyEnum(BaseExpressionType);
-                const offset_type = try self.reader.anyEnum(BaseExpressionType) orelse .none;
-
-                var param = ParameterEncoding{
-                    .type = .{
-                        .base = base_type,
-                        .offset = offset_type,
-                    },
-                    .arrow = arrow,
-                };
-
-                while (true) {
-                    if (try self.reader.expression("base-src")) {
-                        param.base_src = try self.reader.requireAnyEnum(ParameterSource);
-                    } else if (try self.reader.expression("offset-src")) {
-                        param.offset_src = try self.reader.requireAnyEnum(ParameterSource);
-                    } else if (try self.reader.expression("rev")) {
-                        param.constant_reverse = true;
-                    } else if (try self.reader.expression("reg")) {
-                        param.min_reg = try self.reader.requireAnyInt(misc.RegisterIndex, 10);
-                        param.max_reg = try self.reader.requireAnyInt(misc.RegisterIndex, 10);
-                    } else if (try self.reader.expression("range")) {
-                        try self.temp_constant_ranges.append(self.temp_allocator, .{
-                            .min = try self.reader.requireAnyInt(i64, 10),
-                            .max = try self.reader.requireAnyInt(i64, 10),
-                        });
-                    } else if (try self.reader.expression("alt-range")) {
-                        try self.temp_alt_constant_ranges.append(self.temp_allocator, .{
-                            .min = try self.reader.requireAnyInt(i64, 10),
-                            .max = try self.reader.requireAnyInt(i64, 10),
-                        });
-                    } else if (try self.reader.expression("align")) {
-                        param.constant_align = try self.reader.requireAnyInt(u3, 10);
-                    } else break;
-
-                    try self.reader.requireClose();
-                }
-
-                try self.reader.requireClose();
-
-                if (self.temp_constant_ranges.items.len > 0) {
-                    param.constant_ranges = try self.dedupConstantRanges(self.temp_constant_ranges.items);
-                }
-
-                if (self.temp_alt_constant_ranges.items.len > 0) {
-                    param.alt_constant_ranges = try self.dedupConstantRanges(self.temp_alt_constant_ranges.items);
-                }
-
-                self.temp_constant_ranges.clearRetainingCapacity();
-                self.temp_alt_constant_ranges.clearRetainingCapacity();
-
-                try self.temp_parameter_encodings.append(self.temp_allocator, param);
-            } else if (try self.reader.expression("opcode-base")) {
-                opcode_base = try self.reader.requireAnyUnsigned(Opcode, 16);
-                try self.reader.requireClose();
-            } else break;
-        }
-        try self.reader.requireClose();
-
-        const params = try self.dedupParameterEncodings(self.temp_parameter_encodings.items);
-        self.temp_parameter_encodings.clearRetainingCapacity();
-
-        return InstructionEncodingAndDescription{
-            .encoding = .{
-                .mnemonic = mnemonic,
-                .suffix = suffix,
-                .params = params,
-                .opcode_base = opcode_base,
-                .opcodes = .{
-                    .min = min_opcode,
-                    .max = max_opcode,
-                },
-            },
-            .desc = description,
-        };
-    }
-
-    fn dedupDescription(self: *InstructionEncodingParser, desc: []const u8) ![]const u8 {
-        if (self.descriptions.getKey(desc)) |deduped| return deduped;
-        try self.descriptions.ensureUnusedCapacity(self.temp_allocator, 1);
-        const to_insert = try self.data_allocator.dupe(u8, desc);
-        self.descriptions.putAssumeCapacity(to_insert, {});
-        return to_insert;
-    }
-
-    fn dedupConstantRanges(self: *InstructionEncodingParser, ranges: []const ConstantRange) ![]const ConstantRange {
-        if (self.constant_ranges.getKey(ranges)) |deduped| return deduped;
-        try self.constant_ranges.ensureUnusedCapacity(self.temp_allocator, 1);
-        const to_insert = try self.data_allocator.dupe(ConstantRange, ranges);
-        self.constant_ranges.putAssumeCapacity(to_insert, {});
-        return to_insert;
-    }
-
-    fn dedupParameterEncodings(self: *InstructionEncodingParser, params: []const ParameterEncoding) ![]const ParameterEncoding {
-        if (self.parameter_encodings.getKey(params)) |deduped| return deduped;
-        try self.parameter_encodings.ensureUnusedCapacity(self.temp_allocator, 1);
-        const to_insert = try self.data_allocator.dupe(ParameterEncoding, params);
-        self.parameter_encodings.putAssumeCapacity(to_insert, {});
-        return to_insert;
-    }
-};
-
-pub const EncoderDatabase = struct {
-    mnemonic_to_encoding: std.EnumMap(Mnemonic, []InstructionEncoding) = .{},
-
-    pub fn init(arena: std.mem.Allocator, data: []const u8, temp: std.mem.Allocator) !EncoderDatabase {
-        var stream = std.io.fixedBufferStream(data);
-        var parser = InstructionEncodingParser{
-            .reader = sx.reader(temp, stream.reader()),
-            .temp_allocator = temp,
-            .data_allocator = arena,
-            .parse_descriptions = false,
-        };
-        defer parser.deinit();
-        defer parser.reader.deinit();
-        errdefer parser.deinitData();
-
-        var temp_map = std.EnumMap(Mnemonic, std.ArrayListUnmanaged(InstructionEncoding)) {};
-        defer {
-            var iter = temp_map.iterator();
-            while (iter.next()) |entry| {
-                entry.value.deinit(temp);
-            }
-        }
-
-        while (parser.next() catch |err| {
-            if (err == error.SExpressionSyntaxError) {
-                var stderr = std.io.getStdErr().writer();
-                const context = parser.reader.getNextTokenContext() catch return err;
-                stderr.writeAll("Syntax error in instruction encoding data:\n") catch return err;
-                context.printForString(data, stderr, 150) catch return err;
-            }
-            return err;
-        }) |encoding_and_desc| {
-            const ie = encoding_and_desc.encoding;
-
-            var list = temp_map.getPtr(ie.mnemonic) orelse ptr: {
-                temp_map.put(ie.mnemonic, .{});
-                break :ptr temp_map.getPtrAssertContains(ie.mnemonic);
-            };
-
-            try list.append(temp, ie);
-        }
-
-        var self = EncoderDatabase{};
-        var iter = temp_map.iterator();
-        while (iter.next()) |entry| {
-            const encodings = try arena.dupe(InstructionEncoding, entry.value.items);
-            self.mnemonic_to_encoding.put(entry.key, encodings);
-        }
-
-        return self;
-    }
-
-    pub fn getMatchingEncodings(self: EncoderDatabase, insn: Instruction) InstructionEncodingIterator {
-        const encodings = self.mnemonic_to_encoding.get(insn.mnemonic) orelse &[_]InstructionEncoding{};
-        return InstructionEncodingIterator.init(insn, encodings);
-    }
-};
-
-pub const InstructionEncodingIterator = struct {
-    insn: Instruction,
-    remaining: []const InstructionEncoding,
-
-    pub fn init(insn: Instruction, possible_encodings: []const InstructionEncoding) InstructionEncodingIterator {
-        return .{
-            .insn = insn,
-            .remaining = possible_encodings,
-        };
-    }
-
-    pub fn next(self: *InstructionEncodingIterator) ?InstructionEncoding {
-        while (self.remaining.len > 0) {
-            const n = self.remaining[0];
-            self.remaining = self.remaining[1..];
-            if (checkInstructionMatchesEncoding(self.insn, n)) {
-                return n;
-            }
-        }
-        return null;
-    }
-    pub fn nextPointer(self: *InstructionEncodingIterator) ?*const InstructionEncoding {
-        while (self.remaining.len > 0) {
-            const n = &self.remaining[0];
-            self.remaining = self.remaining[1..];
-            if (checkInstructionMatchesEncoding(self.insn, n.*)) {
-                return n;
-            }
-        }
-        return null;
-    }
-};
-
-pub const DecoderDatabase = struct {
-    opcode_to_desc_8b: std.AutoHashMapUnmanaged(u8, []const u8),
-    opcode_to_desc_12b: std.AutoHashMapUnmanaged(u12, []const u8),
-    opcode_to_desc_16b: std.AutoHashMapUnmanaged(u16, []const u8),
-
-    opcode_to_encoding_8b: std.AutoHashMapUnmanaged(u8, InstructionEncoding),
-    opcode_to_encoding_12b: std.AutoHashMapUnmanaged(u12, InstructionEncoding),
-    opcode_to_encoding_16b: std.AutoHashMapUnmanaged(u16, InstructionEncoding),
-
-    pub fn init(arena: std.mem.Allocator, data: []const u8, temp: std.mem.Allocator) !DecoderDatabase {
-        var stream = std.io.fixedBufferStream(data);
-        var parser = InstructionEncodingParser{
-            .reader = sx.reader(temp, stream.reader()),
-            .temp_allocator = temp,
-            .data_allocator = arena,
-            .parse_descriptions = true,
-        };
-        defer parser.deinit();
-        defer parser.reader.deinit();
-        errdefer parser.deinitData();
-
-        var temp_desc_8b = std.AutoHashMap(u8, []const u8).init(temp);
-        var temp_desc_12b = std.AutoHashMap(u12, []const u8).init(temp);
-        var temp_desc_16b = std.AutoHashMap(u16, []const u8).init(temp);
-        defer temp_desc_8b.deinit();
-        defer temp_desc_12b.deinit();
-        defer temp_desc_16b.deinit();
-
-        var temp_enc_8b = std.AutoHashMap(u8, InstructionEncoding).init(temp);
-        var temp_enc_12b = std.AutoHashMap(u12, InstructionEncoding).init(temp);
-        var temp_enc_16b = std.AutoHashMap(u16, InstructionEncoding).init(temp);
-        defer temp_enc_8b.deinit();
-        defer temp_enc_12b.deinit();
-        defer temp_enc_16b.deinit();
-
-        while (parser.next() catch |err| {
-            if (err == error.SExpressionSyntaxError) {
-                var stderr = std.io.getStdErr().writer();
-                const context = parser.reader.getNextTokenContext() catch return err;
-                stderr.writeAll("Syntax error in instruction encoding data:\n") catch return err;
-                context.printForString(data, stderr, 150) catch return err;
-            }
-            return err;
-        }) |encoding_and_desc| {
-            const min_opcode = encoding_and_desc.encoding.opcodes.min;
-            const max_opcode = encoding_and_desc.encoding.opcodes.max;
-
-            // We ignore any duplicate encodings for the same opcode;
-            // In other words we never decode aliases, since they always
-            // appear at the end of instruction_encoding.sx
-
-            if (encoding_and_desc.desc.len > 0) {
-                const desc = encoding_and_desc.desc;
-                var opcode: u32 = min_opcode;
-                while (opcode <= max_opcode and (opcode & 0xF) != 0) : (opcode += 1) {
-                    _ = try temp_desc_16b.getOrPutValue(@intCast(u16, opcode), desc);
-                }
-                while (opcode + 0xF <= max_opcode and (opcode & 0xFF) != 0) : (opcode += 0x10) {
-                    _ = try temp_desc_12b.getOrPutValue(@intCast(u12, opcode >> 4), desc);
-                }
-                while (opcode + 0xFF <= max_opcode) : (opcode += 0x100) {
-                    _ = try temp_desc_8b.getOrPutValue(@intCast(u8, opcode >> 8), desc);
-                }
-                while (opcode + 0xF <= max_opcode) : (opcode += 0x10) {
-                    _ = try temp_desc_12b.getOrPutValue(@intCast(u12, opcode >> 4), desc);
-                }
-                while (opcode <= max_opcode) : (opcode += 1) {
-                    _ = try temp_desc_16b.getOrPutValue(@intCast(u16, opcode), desc);
-                }
-            }
-
-            var opcode: u32 = min_opcode;
-            while (opcode <= max_opcode and (opcode & 0xF) != 0) : (opcode += 1) {
-                _ = try temp_enc_16b.getOrPutValue(@intCast(u16, opcode), encoding_and_desc.encoding);
-            }
-            while (opcode + 0xF <= max_opcode and (opcode & 0xFF) != 0) : (opcode += 0x10) {
-                _ = try temp_enc_12b.getOrPutValue(@intCast(u12, opcode >> 4), encoding_and_desc.encoding);
-            }
-            while (opcode + 0xFF <= max_opcode) : (opcode += 0x100) {
-                _ = try temp_enc_8b.getOrPutValue(@intCast(u8, opcode >> 8), encoding_and_desc.encoding);
-            }
-            while (opcode + 0xF <= max_opcode) : (opcode += 0x10) {
-                _ = try temp_enc_12b.getOrPutValue(@intCast(u12, opcode >> 4), encoding_and_desc.encoding);
-            }
-            while (opcode <= max_opcode) : (opcode += 1) {
-                _ = try temp_enc_16b.getOrPutValue(@intCast(u16, opcode), encoding_and_desc.encoding);
-            }
-        }
-
-        return DecoderDatabase{
-            .opcode_to_desc_8b = try temp_desc_8b.unmanaged.clone(arena),
-            .opcode_to_desc_12b = try temp_desc_12b.unmanaged.clone(arena),
-            .opcode_to_desc_16b = try temp_desc_16b.unmanaged.clone(arena),
-            .opcode_to_encoding_8b = try temp_enc_8b.unmanaged.clone(arena),
-            .opcode_to_encoding_12b = try temp_enc_12b.unmanaged.clone(arena),
-            .opcode_to_encoding_16b = try temp_enc_16b.unmanaged.clone(arena),
-        };
-    }
-
-    pub fn getDescriptionForOpcode(self: DecoderDatabase, opcode: Opcode) ?[]const u8 {
-        const op8 = @intCast(u8, opcode >> 8);
-        if (self.opcode_to_desc_8b.get(op8)) |encoding| return encoding;
-
-        const op12 = @intCast(u12, opcode >> 4);
-        if (self.opcode_to_desc_12b.get(op12)) |encoding| return encoding;
-
-        return self.opcode_to_desc_16b.get(opcode);
-    }
-
-    pub fn getEncodingForOpcode(self: DecoderDatabase, opcode: Opcode) ?InstructionEncoding {
-        const op8 = @intCast(u8, opcode >> 8);
-        if (self.opcode_to_encoding_8b.get(op8)) |encoding| return encoding;
-
-        const op12 = @intCast(u12, opcode >> 4);
-        if (self.opcode_to_encoding_12b.get(op12)) |encoding| return encoding;
-
-        return self.opcode_to_encoding_16b.get(opcode);
-    }
-
-    pub fn extractEncoding(self: DecoderDatabase, encoded_instruction: []const u8) ?InstructionEncoding {
-        return self.getEncodingForOpcode(readOpcode(encoded_instruction));
-    }
-
-};
-
-pub const Decoder = struct {
-    db: *const DecoderDatabase,
-    alloc: std.mem.Allocator,
-    remaining: []const u8,
-    last_instruction: []const u8,
-
-    pub fn init(db: *const DecoderDatabase, alloc: std.mem.Allocator, program_memory: []const u8) Decoder {
-        return .{
-            .db = db,
-            .alloc = alloc,
-            .remaining = program_memory,
-            .last_instruction = &.{},
-        };
-    }
-
-    pub fn decode(self: *Decoder) !Instruction {
-        const encoding = self.db.extractEncoding(self.remaining) orelse return error.InvalidInstruction;
-        const params = try self.alloc.alloc(Parameter, encoding.params.len);
-        errdefer self.alloc.free(params);
-
-        var i: usize = 0;
-        while (i < encoding.params.len) : (i += 1) {
-            params[i] = readParam(self.remaining, encoding.params[i], encoding.opcode_base);
-        }
-
-        const insn = Instruction{
-            .mnemonic = encoding.mnemonic,
-            .suffix = encoding.suffix,
-            .params = params,
-        };
-
-        const length = getInstructionLength(encoding);
-
-        self.last_instruction = self.remaining[0..length];
-        self.remaining = self.remaining[length..];
-
-        return insn;
-    }
-};
-
-// Decodes a single instruction; use Decoder directly to decode multiple instructions
-pub fn decodeInstruction(db: *const DecoderDatabase, alloc: std.mem.Allocator, program_memory: []const u8) !Instruction {
-    var decoder = Decoder.init(db, alloc, program_memory);
-    return try decoder.decode();
-}
-
-pub fn testIdempotence(ddb: *const DecoderDatabase, edb: *const EncoderDatabase, expected_encodings: usize, insn: Instruction) !void {
-    var encoding_count: usize = 0;
-    var iter = edb.getMatchingEncodings(insn);
-    while (iter.next()) |encoding| {
-        if (encoding.suffix != insn.suffix) {
-            continue;
-        }
-
-        var buf: [6]u8 = [_]u8{0} ** 6;
-        var encoded = try encodeInstruction(insn, encoding, &buf);
-
-        var temp: [10 * @sizeOf(Parameter)]u8 = undefined;
-        var alloc = std.heap.FixedBufferAllocator.init(&temp);
-        var decoder = Decoder.init(ddb, alloc.allocator(), encoded);
-        const decoded = try decoder.decode();
-
-        var decoded_encoding = ddb.extractEncoding(decoder.last_instruction) orelse return error.InvalidInstruction;
-
-        if (!insn.eql(decoded)) {
-            const stderr = std.io.getStdErr().writer();
-            try stderr.writeAll("Roundtrip testing of instruction: ");
-            try insn.print(stderr);
-            try stderr.writeAll("\nWith encoding: ");
-            try encoding.print(stderr);
-            try stderr.writeAll("\nDecoded instruction: ");
-            try decoded.print(stderr);
-            try stderr.writeAll("\nFrom encoding: ");
-            try decoded_encoding.print(stderr);
-            try stderr.writeAll("\n");
-            return error.TestExpectedError;
-        }
-        encoding_count += 1;
-    }
-
-    std.testing.expectEqual(expected_encodings, encoding_count) catch {
-        const stderr = std.io.getStdErr().writer();
-        try stderr.writeAll("Encodings for instruction: ");
-        try insn.print(stderr);
-        try stderr.writeAll("\n");
-        iter = edb.getMatchingEncodings(insn);
-        while (iter.next()) |encoding| {
-            if (encoding.suffix != insn.suffix) {
-                continue;
-            }
-
-            try encoding.print(stderr);
-            try stderr.writeAll("\n");
-        }
-        return error.TestExpectedError;
+        .expr_type = expr_type,
+        .constant = constant,
     };
 }

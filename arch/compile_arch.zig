@@ -53,7 +53,7 @@ pub fn main() !void {
     {
         var f = try std.fs.cwd().createFile("arch/instruction_encoding.sx", .{});
         defer f.close();
-        try arch.writeInstructionData(f.writer());
+        try arch.writeInstructionEncodings(f.writer());
     }
 
     var rom_data = try uc_serialization.writeCompressedRoms(allocators.temp_arena.allocator(), allocators.temp_arena.allocator(), &arch.microcode);

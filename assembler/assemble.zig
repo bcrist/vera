@@ -1,6 +1,6 @@
 const std = @import("std");
 const ie = @import("instruction_encoding");
-const ie_data = @import("instruction_encoding_data").data;
+const ie_data = @import("instruction_encoding_data");
 const Assembler = @import("Assembler.zig");
 const typechecking = @import("typechecking.zig");
 
@@ -9,7 +9,7 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
 
     var temp = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    const edb = try ie.EncoderDatabase.init(arena.allocator(), ie_data, temp.allocator());
+    const edb = try ie_data.EncoderDatabase.init(arena.allocator(), ie_data.data, temp.allocator());
 
     var a = Assembler.init(gpa.allocator(), arena.allocator(), edb);
 

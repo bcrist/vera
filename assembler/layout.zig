@@ -1,6 +1,5 @@
 const std = @import("std");
 const ie = @import("instruction_encoding");
-const types = @import("types.zig");
 const lex = @import("lex.zig");
 const Assembler = @import("Assembler.zig");
 const SourceFile = @import("SourceFile.zig");
@@ -23,7 +22,7 @@ pub fn doFixedOrgLayout(a: *Assembler, chunks: std.ArrayListUnmanaged(SourceFile
         var iter = chunk.instructions;
         while (iter.next()) |insn_handle| {
             if (operations[insn_handle] == .org) {
-                initial_address = resolveOrgAddress(a, file, chunk.file, params[insn_handle]);
+                initial_address = resolveOrgAddress(a, file, chunk.file, insn_addresses[insn_handle], params[insn_handle]);
                 break;
             }
         }
@@ -44,7 +43,7 @@ pub fn doFixedOrgLayout(a: *Assembler, chunks: std.ArrayListUnmanaged(SourceFile
                     // TODO synthesize pop instruction
                 },
                 .insn => {
-                    address += resolveInstructionEncoding(a, &operations[insn_handle], params[insn_handle]);
+                    address += resolveInstructionEncoding(a, file, chunk.file, old_insn_address, &operations[insn_handle], params[insn_handle]);
                 },
                 .bound_insn => |encoding| {
                     address += ie.getInstructionLength(encoding.*);
@@ -82,14 +81,17 @@ pub fn doAutoOrgLayout(a: *Assembler, chunks: std.ArrayListUnmanaged(SourceFile.
     return layout_changed;
 }
 
-fn resolveOrgAddress(a: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle, params: Expression.Handle) u32 {
-    return resolveExpressionConstant(a, file, file_handle, params).asUnsigned(u32) orelse 0;
+fn resolveOrgAddress(a: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle, ip: u32, params: ?Expression.Handle) u32 {
+    if (params) |expr_handle| {
+        return std.math.cast(u32, resolveExpressionConstant(a, file, file_handle, ip, expr_handle).asInt() catch 0) orelse 0;
+    } else return 0;
 }
 
-fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle, expr_handle: Expression.Handle) *const Constant {
+fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle, ip: u32, expr_handle: Expression.Handle) *const Constant {
     var expr_infos = file.expressions.items(.info);
     var expr_tokens = file.expressions.items(.token);
     var expr_resolved_constants = file.expressions.items(.resolved_constant);
+    var expr_resolved_types = file.expressions.items(.resolved_type);
 
     if (expr_resolved_constants[expr_handle]) |constant| {
         return constant;
@@ -111,12 +113,12 @@ fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, file_handle: Sour
             const token_handle = expr_tokens[expr_handle];
             const raw_symbol = file.tokens.get(token_handle).location(file.source);
             const symbol_constant = Constant.initSymbolLiteral(a.gpa, &a.constant_temp, raw_symbol);
-            resolveSymbolRefExprConstant(a, file, file_handle, expr_handle, token_handle, symbol_constant, expr_resolved_constants);
+            resolveSymbolRefExprConstant(a, file, file_handle, ip, expr_handle, token_handle, symbol_constant, expr_resolved_types, expr_resolved_constants);
         },
         .directive_symbol_ref => |inner_expr| {
             const token_handle = expr_tokens[inner_expr];
             const symbol_constant = expr_resolved_constants[inner_expr].?;
-            resolveSymbolRefExprConstant(a, file, file_handle, expr_handle, token_handle, symbol_constant, expr_resolved_constants);
+            resolveSymbolRefExprConstant(a, file, file_handle, ip, expr_handle, token_handle, symbol_constant.*, expr_resolved_types, expr_resolved_constants);
         },
     }
 
@@ -127,20 +129,35 @@ fn resolveSymbolRefExprConstant(
     a: *Assembler,
     file: *SourceFile,
     file_handle: SourceFile.Handle,
+    ip: u32,
     expr_handle: Expression.Handle,
     symbol_token_handle: lex.Token.Handle,
     symbol_constant: Constant,
+    expr_resolved_types: []const ie.ExpressionType,
     expr_resolved_constants: []?*const Constant,
 ) void {
     if (a.lookupSymbol(file, file_handle, symbol_token_handle, symbol_constant.asString())) |target| {
         switch (target) {
             .expression => |target_expr_handle| {
-                expr_resolved_constants[expr_handle] = resolveExpressionConstant(a, file, file_handle, target_expr_handle);
+                // .def expressions are evaluated based on the context of the definition, so we need to look up the address
+                // of the actual .def instruction
+                const expr_token = file.expressions.items(.token)[target_expr_handle];
+                const expr_insn = file.findInstructionByToken(expr_token);
+                const expr_ip = file.instructions.items(.address)[expr_insn];
+                expr_resolved_constants[expr_handle] = resolveExpressionConstant(a, file, file_handle, expr_ip, target_expr_handle);
             },
             .instruction => |target_insn_ref| {
                 const target_file = a.getSource(target_insn_ref.file);
-                const address = target_file.instructions.items(.address)[target_insn_ref.instruction];
-                const constant = Constant.initUnsigned(address, 32);
+                var value: i64 = target_file.instructions.items(.address)[target_insn_ref.instruction];
+                switch (expr_resolved_types[expr_handle]) {
+                    .raw_base_offset, .data_address, .insn_address, .stack_address => |info| {
+                        if (std.meta.eql(info.base, .{ .sr = .ip })) {
+                            value -= ip;
+                        }
+                    },
+                    else => {},
+                }
+                const constant = Constant.initInt(value, null);
                 expr_resolved_constants[expr_handle] = constant.intern(a.arena, a.gpa, &a.constants);
             },
             .not_found => {
@@ -150,9 +167,14 @@ fn resolveSymbolRefExprConstant(
     } else unreachable;
 }
 
-fn resolveInstructionEncoding(a: *Assembler, op: *Instruction.Operation, params: Expression.Handle) u7 {
+fn resolveInstructionEncoding(a: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle, ip: u32, op: *Instruction.Operation, params: ?Expression.Handle) u7 {
+    const expr_infos = file.expressions.items(.info);
+    const expr_resolved_types = file.expressions.items(.resolved_type);
+
     a.params_temp.clearRetainingCapacity();
-    buildInstructionParameters(a, params);
+    if (params) |expr_handle| {
+        buildInstructionParameters(a, file, file_handle, ip, expr_handle, false, expr_infos, expr_resolved_types);
+    }
 
     const what = op.insn;
     var encoding_iter = a.edb.getMatchingEncodings(.{
@@ -163,10 +185,7 @@ fn resolveInstructionEncoding(a: *Assembler, op: *Instruction.Operation, params:
 
     a.params_temp.clearRetainingCapacity();
 
-    // TODO Any encoding without a suffix should automatically be better than an encoding with a suffix, if the operation does not specify a suffix.
-    // TODO If multiple different suffixes match an unsuffixed operation, but no unsuffixed encoding is found, it is ambiguous and should not be selected.
-
-    var best_length: ?u32 = null;
+    var best_length: ?u7 = null;
     var best_encoding: ?*const ie.InstructionEncoding = null;
     while (encoding_iter.nextPointer()) |enc| {
         const length = ie.getInstructionLength(enc.*);
@@ -187,84 +206,36 @@ fn resolveInstructionEncoding(a: *Assembler, op: *Instruction.Operation, params:
     return 0;
 }
 
-fn buildInstructionParameters(a: *Assembler, params: Expression.Handle, is_arrow: bool) void {
-
+fn buildInstructionParameters(
+    a: *Assembler,
+    file: *SourceFile,
+    file_handle: SourceFile.Handle,
+    ip: u32,
+    params: Expression.Handle,
+    is_arrow: bool,
+    expr_infos: []const Expression.Info,
+    expr_resolved_types: []const ie.ExpressionType,
+) void {
+    // TODO want a way to have is_arrow on the first parameter?
     switch (expr_infos[params]) {
         .list => |bin| {
-            buildInstructionParameters(a, bin.left, is_arrow);
-            buildInstructionParameters(a, bin.right, false);
+            buildInstructionParameters(a, file, file_handle, ip, bin.left, is_arrow, expr_infos, expr_resolved_types);
+            buildInstructionParameters(a, file, file_handle, ip, bin.right, false, expr_infos, expr_resolved_types);
             return;
         },
         .arrow_list => |bin| {
-            buildInstructionParameters(a, bin.left, is_arrow);
-            buildInstructionParameters(a, bin.right, true);
+            buildInstructionParameters(a, file, file_handle, ip, bin.left, is_arrow, expr_infos, expr_resolved_types);
+            buildInstructionParameters(a, file, file_handle, ip, bin.right, true, expr_infos, expr_resolved_types);
             return;
         },
         else => {}
     }
 
-    var param = ie.Parameter{
+    const constant = resolveExpressionConstant(a, file, file_handle, ip, params);
+
+    a.params_temp.append(a.gpa, .{
         .arrow = is_arrow,
-        .type = .{
-            .base = .none,
-            .offset = .none,
-        },
-        .base = 0,
-        .offset = 0,
-    };
-
-    switch (expr_resolved_types[params]) {
-        .absolute_address_base, .poison, .symbol_def => {},
-        .constant => |info| {
-            param.type.base = .constant;
-            const constant = resolveExpressionConstant(a, file, file_handle, params);
-            param.base = switch (info.signedness) {
-                .signed => constant.asSigned(i64),
-                .unsigned => constant.asUnsigned(u63),
-            };
-        },
-        .reg8 => |reg| {
-            param.base = reg.index;
-            param.type.base = if (reg.signedness) |s| switch (s) {
-                .signed => .reg8s,
-                .unsigned => .reg8u,
-            } else .reg8;
-        },
-        .reg16 => |reg| {
-            param.base = reg.index;
-            param.type.base = if (reg.signedness) |s| switch (s) {
-                .signed => .reg16s,
-                .unsigned => .reg16u,
-            } else .reg16;
-        },
-        .reg32 => |reg| {
-            param.base = reg.index;
-            param.type.base = if (reg.signedness) |s| switch (s) {
-                .signed => .reg32s,
-                .unsigned => .reg32u,
-            } else .reg32;
-        },
-        .sr => |reg| {
-            param.type.base = switch (reg) {
-                .ip => .IP,
-                .sp => .SP,
-                .rp => .RP,
-                .bp => .BP,
-                .uxp => .UXP,
-                .kxp => .KXP,
-                .asn => .ASN,
-                .stat => .STAT,
-            };
-        },
-        .data_address => |info| {
-            switch (info.base.*) {
-                .absolute_address_base, .poison, .symbol_def => {},
-
-            }
-        },
-        .insn_address => {},
-        .stack_address => {},
-    }
-
-    a.params_temp.append(a.gpa, param) catch @panic("OOM");
+        .expr_type = expr_resolved_types[params],
+        .constant = constant.asInt() catch 0,
+    }) catch @panic("OOM");
 }

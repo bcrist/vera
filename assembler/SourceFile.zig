@@ -1,13 +1,13 @@
 const std = @import("std");
 const lex = @import("lex.zig");
 const ie = @import("instruction_encoding");
-const types = @import("types.zig");
 const Assembler = @import("Assembler.zig");
 const Instruction = @import("Instruction.zig");
 const Expression = @import("Expression.zig");
 const Section = @import("Section.zig");
 const Error = @import("Error.zig");
 const ErrorList = std.ArrayListUnmanaged(Error);
+const ExpressionType = ie.ExpressionType;
 
 const SourceFile = @This();
 
@@ -139,9 +139,9 @@ pub fn collectChunks(
                     const new_chunk_begin = backtrackOrgHeaders(operations, insn_handle);
                     if (chunk_begin < new_chunk_begin) {
                         dest.append(gpa, .{
+                            .section = section,
                             .file = file_handle,
                             .instructions = .{
-                                .section = section,
                                 .begin = chunk_begin,
                                 .end = new_chunk_begin,
                             },
@@ -155,9 +155,9 @@ pub fn collectChunks(
                     const new_chunk_begin = insn_handle + 1;
                     if (chunk_begin < new_chunk_begin) {
                         dest.append(gpa, .{
+                            .section = section,
                             .file = file_handle,
                             .instructions = .{
-                                .section = section,
                                 .begin = chunk_begin,
                                 .end = new_chunk_begin,
                             },
@@ -173,9 +173,9 @@ pub fn collectChunks(
 
         if (chunk_begin < end) {
             dest.append(gpa, .{
+                .section = section,
                 .file = file_handle,
                 .instructions = .{
-                    .section = section,
                     .begin = chunk_begin,
                     .end = end,
                 },
@@ -705,22 +705,22 @@ const Parser = struct {
                 const lower = std.ascii.lowerString(&buf, id);
                 if (lower[1] == 'p') {
                     if (std.mem.eql(u8, lower, "ip")) {
-                        return self.addTypedTerminalExpression(.literal_reg, token, &types.builtin.ip);
+                        return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .ip });
                     } else if (std.mem.eql(u8, lower, "sp")) {
-                        return self.addTypedTerminalExpression(.literal_reg, token, &types.builtin.sp);
+                        return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .sp });
                     } else if (std.mem.eql(u8, lower, "rp")) {
-                        return self.addTypedTerminalExpression(.literal_reg, token, &types.builtin.rp);
+                        return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .rp });
                     } else if (std.mem.eql(u8, lower, "bp")) {
-                        return self.addTypedTerminalExpression(.literal_reg, token, &types.builtin.bp);
+                        return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .bp });
                     }
                 } else if (std.mem.eql(u8, lower, "uxp")) {
-                    return self.addTypedTerminalExpression(.literal_reg, token, &types.builtin.uxp);
+                    return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .uxp });
                 } else if (std.mem.eql(u8, lower, "kxp")) {
-                    return self.addTypedTerminalExpression(.literal_reg, token, &types.builtin.kxp);
+                    return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .kxp });
                 } else if (std.mem.eql(u8, lower, "stat")) {
-                    return self.addTypedTerminalExpression(.literal_reg, token, &types.builtin.stat);
+                    return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .stat });
                 } else if (std.mem.eql(u8, lower, "asn")) {
-                    return self.addTypedTerminalExpression(.literal_reg, token, &types.builtin.asn);
+                    return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .asn });
                 }
             }
         }
@@ -804,12 +804,12 @@ const Parser = struct {
         return false;
     }
 
-    fn addTypedTerminalExpression(self: *Parser, comptime kind: Expression.Kind, token: Token.Handle, @"type": *const types.Type) Expression.Handle {
+    fn addTypedTerminalExpression(self: *Parser, comptime kind: Expression.Kind, token: Token.Handle, expr_type: ExpressionType) Expression.Handle {
         const handle = @intCast(Expression.Handle, self.out.expressions.len);
         self.out.expressions.append(self.gpa, .{
             .token = token,
             .info = @unionInit(Expression.Info, @tagName(kind), {}),
-            .resolved_type = @"type",
+            .resolved_type = expr_type,
             .resolved_constant = null,
             .flags = .{},
         }) catch @panic("OOM");
@@ -821,7 +821,7 @@ const Parser = struct {
         self.out.expressions.append(self.gpa, .{
             .token = token,
             .info = @unionInit(Expression.Info, @tagName(kind), {}),
-            .resolved_type = null,
+            .resolved_type = .{ .unknown = {} },
             .resolved_constant = null,
             .flags = .{},
         }) catch @panic("OOM");
@@ -833,7 +833,7 @@ const Parser = struct {
         self.out.expressions.append(self.gpa, .{
             .token = token,
             .info = @unionInit(Expression.Info, @tagName(kind), inner),
-            .resolved_type = null,
+            .resolved_type = .{ .unknown = {} },
             .resolved_constant = null,
             .flags = .{},
         }) catch @panic("OOM");
@@ -848,7 +848,7 @@ const Parser = struct {
                 .left = lhs,
                 .right = rhs,
             }),
-            .resolved_type = null,
+            .resolved_type = .{ .unknown = {} },
             .resolved_constant = null,
             .flags = .{},
         }) catch @panic("OOM");

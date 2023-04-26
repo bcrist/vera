@@ -1,8 +1,7 @@
 const std = @import("std");
 const ie = @import("instruction_encoding");
-const ie_data = @import("instruction_encoding_data").data;
+const ie_data = @import("instruction_encoding_data");
 const bus = @import("bus_types");
-const types = @import("types.zig");
 const lex = @import("lex.zig");
 const typechecking = @import("typechecking.zig");
 const dead_code = @import("dead_code.zig"); // TODO maybe consider merging with layout.zig
@@ -17,7 +16,7 @@ const PageData = @import("PageData.zig");
 
 const Assembler = @This();
 
-edb: ie.EncoderDatabase,
+edb: ie_data.EncoderDatabase,
 gpa: std.mem.Allocator,
 arena: std.mem.Allocator,
 files: std.ArrayListUnmanaged(SourceFile) = .{},
@@ -30,14 +29,13 @@ invalid_layout: bool = false,
 constant_temp: std.ArrayListUnmanaged(u8) = .{},
 params_temp: std.ArrayListUnmanaged(ie.Parameter) = .{},
 constants: Constant.InternPool = .{},
-types: types.InternPool = .{},
 
 pub const InstructionRef = struct {
     file: SourceFile.Handle,
     instruction: Instruction.Handle,
 };
 
-pub fn init(gpa: std.mem.Allocator, arena: std.mem.Allocator, edb: ie.EncoderDatabase) Assembler {
+pub fn init(gpa: std.mem.Allocator, arena: std.mem.Allocator, edb: ie_data.EncoderDatabase) Assembler {
     // It's possible to use the same allocator for gpa and arena,
     // but nothing allocated in the arena allocator will be freed
     // until Assembler.deinit() is called, so it's a good candidate
@@ -53,7 +51,6 @@ pub fn init(gpa: std.mem.Allocator, arena: std.mem.Allocator, edb: ie.EncoderDat
     };
 
     Constant.initInternPool(gpa, &self.constants);
-    types.initInternPool(gpa, &self.types);
 
     return self;
 }
@@ -66,11 +63,6 @@ pub fn deinit(self: *Assembler, deinit_arena: bool) void {
         while (constant_iter.next()) |constant| {
             constant.deinit(self.arena);
             self.arena.destroy(constant);
-        }
-
-        var type_iter = self.types.keyIterator();
-        while (type_iter.next()) |t| {
-            self.arena.destroy(t);
         }
     }
 
@@ -87,7 +79,6 @@ pub fn deinit(self: *Assembler, deinit_arena: bool) void {
     self.constant_temp.deinit(self.gpa);
     self.params_temp.deinit(self.gpa);
     self.constants.deinit(self.gpa);
-    self.types.deinit(self.gpa);
 }
 
 pub fn addSource(self: *Assembler, name: []const u8, source: []const u8) SourceFile.Handle {
@@ -140,9 +131,9 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
             file.instructions.items(.operation),
             file.instructions.items(.params),
             file.instructions.items(.address),
-        ) |handle, label_handle, token_handle, operation, params_handle, maybe_address| {
+        ) |handle, label_handle, token_handle, operation, params_handle, address| {
             try writer.print("         #{}:", .{ handle });
-            if (maybe_address) |address| {
+            if (address != 0) {
                 try writer.print(" {X:0>8}", .{ address });
             }
             if (label_handle) |label| {
@@ -181,8 +172,16 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
             file.expressions.items(.resolved_type),
             file.expressions.items(.resolved_constant),
             file.expressions.items(.info),
-        ) |handle, token_handle, maybe_type, maybe_constant, info| {
-            try writer.print("         #{}: {s}", .{ handle, @tagName(info) });
+        ) |handle, token_handle, expr_type, maybe_constant, info| {
+            try writer.print("         #{:0>5}:", .{ handle });
+            if (maybe_constant) |constant| {
+                try writer.print(" {X:0>16}", .{ @ptrToInt(constant) });
+            }
+            if (expr_type != .unknown) {
+                try dumpType(writer, expr_type, " ");
+            }
+
+            try writer.print("   {s}", .{ @tagName(info) });
              switch (info) {
                 .list, .arrow_list => |binary| {
                     try writer.print(" #{}, #{}", .{ binary.left, binary.right });
@@ -194,12 +193,6 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
             }
             const token = file.tokens.get(token_handle);
             try writer.print(" '{s}'", .{ token.location(file.source) });
-            if (maybe_type) |expr_type| {
-                try dumpType(writer, expr_type.*, "  Type: ");
-            }
-            if (maybe_constant) |constant| {
-                try writer.print("  Constant: {X} - {}b", .{ @ptrToInt(constant), constant.bit_count });
-            }
             try writer.writeAll("\n");
         }
     }
@@ -219,6 +212,17 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
         try writer.print("   #{}: {s} : {s}\n", .{ section_handle, section.name, @tagName(section.kind) });
     }
 
+    try writer.writeAll("Constants:\n");
+    var constant_iter = self.constants.keyIterator();
+    while (constant_iter.next()) |k| {
+        const ptr = k.*;
+        try writer.print("   {X:0>16}:{:>4}b: ", .{ @ptrToInt(ptr), ptr.bit_count });
+        if (ptr.asInt()) |int_value| {
+            try writer.print("0x{X} {} ", .{ int_value, int_value });
+        } else |_| {}
+        try writer.print("'{s}'\n", .{ std.fmt.fmtSliceEscapeUpper(ptr.asString()) });
+    }
+
     // TODO pages
     // TODO invalid_layout
 
@@ -228,28 +232,39 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
     }
 }
 
-fn dumpType(writer: anytype, expr_type: types.Type, prefix: []const u8) !void {
+fn dumpType(writer: anytype, expr_type: ie.ExpressionType, prefix: []const u8) !void {
     try writer.print("{s}{s}", .{ prefix, @tagName(expr_type) });
     switch (expr_type) {
-        .constant => |constant| {
-            if (constant.signedness) |sign| {
-                try writer.print(" {s}", .{ @tagName(sign) });
-            }
-        },
+        .unknown, .poison, .symbol_def, .constant => {},
         .reg8, .reg16, .reg32 => |reg| {
             try writer.print(" #{}", .{ reg.index });
             if (reg.signedness) |sign| {
-                try writer.print(" {s}\n", .{ @tagName(sign) });
+                try writer.print(" .{s}", .{ @tagName(sign) });
             }
         },
         .sr => |sr| {
             try writer.print(" {s}", .{ @tagName(sr) });
         },
-        .data_address, .insn_address, .stack_address => |addr| {
-            try dumpType(writer, addr.base.*, " ");
-            try dumpType(writer, addr.offset.*, " + ");
+        .raw_base_offset, .data_address, .insn_address, .stack_address => |info| {
+            try dumpInnerType(writer, info.base, " ");
+            try dumpInnerType(writer, info.offset, " + ");
         },
-        else => {},
+    }
+}
+
+fn dumpInnerType(writer: anytype, inner_type: ie.BaseOffsetType.InnerType, prefix: []const u8) !void {
+try writer.print("{s}{s}", .{ prefix, @tagName(inner_type) });
+    switch (inner_type) {
+        .constant => {},
+        .reg8, .reg16, .reg32 => |reg| {
+            try writer.print(" #{}", .{ reg.index });
+            if (reg.signedness) |sign| {
+                try writer.print(" .{s}", .{ @tagName(sign) });
+            }
+        },
+        .sr => |sr| {
+            try writer.print(" {s}", .{ @tagName(sr) });
+        },
     }
 }
 

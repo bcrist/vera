@@ -2,8 +2,8 @@ const ib = @import("instruction_builder.zig");
 const cb = @import("cycle_builder.zig");
 
 const encoding = ib.encoding;
+const addr = ib.addr;
 const IP_relative = ib.IP_relative;
-const Xa_relative = ib.Xa_relative;
 const desc = ib.desc;
 const next_cycle = ib.next_cycle;
 
@@ -20,7 +20,7 @@ const op_reg32_to_L = cb.op_reg32_to_L;
 const zero_to_L = cb.zero_to_L;
 
 pub fn _0181() void {
-    encoding(.CALL, .{ IP_relative(.imm16u) });
+    encoding(.CALL, .{ IP_relative(.insn, .imm16u) });
     //syntax("CALL IP+imm16[-65536,65535]");
     desc("Call IP-relative subroutine");
 
@@ -39,7 +39,7 @@ pub fn _0181() void {
 }
 
 pub fn _0182() void {
-    encoding(.CALL, .{ IP_relative(.imm16n) });
+    encoding(.CALL, .{ IP_relative(.insn, .imm16n) });
     //syntax("CALL IP+imm16[-65536,65535]");
     desc("Call IP-relative subroutine");
 
@@ -58,7 +58,7 @@ pub fn _0182() void {
 }
 
 pub fn _0183() void {
-    encoding(.CALL, .{ .imm32u });
+    encoding(.CALL, .{ addr(.insn, .imm32u) });
     //syntax("CALL imm32[0,4294967295]");
     desc("Call absolute-addressed subroutine");
 
@@ -79,7 +79,7 @@ pub fn _0183() void {
 }
 
 pub fn _FA80_FA8F() void {
-    encoding(.CALL, .{ Xa_relative(.I, .imm_0) });
+    encoding(.CALL, .{ addr(.insn, .Xa) });
     //syntax("CALL Xa");
     desc("Call register-addressed subroutine");
 
