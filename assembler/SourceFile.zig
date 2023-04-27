@@ -396,8 +396,6 @@ const Parser = struct {
                             .token = directive_token,
                             .operation = .{ .def = {} },
                             .params = params,
-                            .flags = .{},
-                            .address = 0,
                         }) catch @panic("OOM");
                     } else {
                         self.recordError("Expected expression for symbol definition");
@@ -415,8 +413,6 @@ const Parser = struct {
                             .token = directive_token,
                             .operation = @unionInit(Instruction.Operation, @tagName(d), {}),
                             .params = params,
-                            .flags = .{},
-                            .address = 0,
                         }) catch @panic("OOM");
                     },
                 }
@@ -435,8 +431,6 @@ const Parser = struct {
                     .suffix = suffix,
                 }},
                 .params = params,
-                .flags = .{},
-                .address = 0,
             }) catch @panic("OOM");
         } else if (label) |_| {
             self.out.instructions.append(self.gpa, .{
@@ -444,8 +438,6 @@ const Parser = struct {
                 .token = label_token,
                 .operation = .{ .none = {} },
                 .params = null,
-                .flags = .{},
-                .address = 0,
             }) catch @panic("OOM");
         }
         self.skipLinespace();

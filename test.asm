@@ -1,5 +1,5 @@
-fib: .entry text
-    .org 1000
+fib: .entry etext
+    .org 0x2000
     c   1 -> r0
     dup r0 -> x0
 _loop:
@@ -7,3 +7,16 @@ _loop:
     add r0, r1  -> r0
     c   r2      -> r1
     b   _loop
+
+.code text
+    .keep
+x: c 12345 -> x0
+    b x
+
+.entry etext
+    c r0 -> r15
+    .db "text"
+
+.entry etext32
+    c r15 -> r0
+    .db "asdf"

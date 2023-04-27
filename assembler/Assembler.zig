@@ -25,7 +25,7 @@ symbols: std.StringHashMapUnmanaged(InstructionRef) = .{},
 sections: std.StringArrayHashMapUnmanaged(Section) = .{},
 pages: std.MultiArrayList(PageData) = .{},
 page_lookup: std.AutoHashMapUnmanaged(bus.Page, PageData.Handle) = .{},
-invalid_layout: bool = false,
+invalid_program: bool = false,
 constant_temp: std.ArrayListUnmanaged(u8) = .{},
 params_temp: std.ArrayListUnmanaged(ie.Parameter) = .{},
 constants: Constant.InternPool = .{},
@@ -102,6 +102,17 @@ pub fn getSource(self: *Assembler, handle: SourceFile.Handle) *SourceFile {
 
 pub fn getSection(self: *Assembler, handle: Section.Handle) Section {
     return self.sections.entries.items(.value)[handle];
+}
+
+pub fn findOrCreatePage(self: *Assembler, page: bus.Page, section: Section.Handle) PageData.Handle {
+    if (self.page_lookup.get(page)) |handle| return handle;
+
+    const handle = @intCast(PageData.Handle, self.pages.len);
+    self.page_lookup.ensureUnusedCapacity(self.gpa, 1) catch @panic("OOM");
+    self.pages.append(self.gpa, PageData.init(page, section)) catch @panic("OOM");
+    self.page_lookup.putAssumeCapacity(page, handle);
+    std.debug.print("{X:0>13}: Created page for section {}\n", .{ page, section });
+    return handle;
 }
 
 pub fn dump(self: *Assembler, writer: anytype) !void {
@@ -238,11 +249,14 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
     }
 
     // TODO pages
-    // TODO invalid_layout
 
     try writer.writeAll("Errors:\n");
     for (self.errors.items) |err| {
         try err.print(self.*, writer);
+    }
+
+    if (self.invalid_program) {
+        try writer.writeAll("Program is invalid!\n");
     }
 }
 
@@ -396,59 +410,29 @@ pub fn assemble(self: *Assembler) void {
         file.collectChunks(@intCast(SourceFile.Handle, file_handle), self.gpa, &fixed_org_chunks, &auto_org_chunks);
     }
 
-    var try_again = true;
-    while (try_again) {
+    var attempts: usize = 0;
+    const max_attempts = 100;
+    while (attempts < max_attempts) : (attempts += 1) {
         self.pages.len = 0;
         self.page_lookup.clearRetainingCapacity();
 
         layout.resetLayoutDependentExpressions(self);
 
-        try_again = layout.doFixedOrgLayout(self, fixed_org_chunks);
-        try_again = layout.doAutoOrgLayout(self, auto_org_chunks) or try_again;
+        var try_again = layout.doFixedOrgLayout(self, fixed_org_chunks.items);
+        try_again = layout.doAutoOrgLayout(self, auto_org_chunks.items) or try_again;
 
-        // TODO handle degenerate/recursive cases where the layout never reaches an equilibrium
-
-        if (self.invalid_layout) return;
+        // TODO better handling of degenerate/recursive cases where the layout never reaches an equilibrium?
+        if (self.invalid_program or !try_again) break;
     }
+
+    if (attempts == max_attempts) {
+        std.debug.print("Failed to find a stable layout after {} iterations!\n", .{ attempts });
+        self.invalid_program = true;
+    }
+
+    // TODO validate that there are no overlapping chunks, instructions that would cause a page align fault, etc.
 
     // TODO encode instructions into PageData
 }
 
 // TODO functions for outputting assembled data to file or in-memory buffer
-
-
-
-
-// test {
-//     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-//     defer arena.deinit();
-
-//     var temp = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-//     const edb = try ie.EncoderDatabase.init(arena.allocator(), ie_data, temp.allocator());
-//     const ddb = try ie.DecoderDatabase.init(arena.allocator(), ie_data, temp.allocator());
-//     temp.deinit();
-
-//     try parse.init();
-//     defer parse.deinit();
-
-//     const src =
-//         \\label:
-//         \\   nop //comment
-//         \\   sync
-//         \\   fret
-//         \\
-//         \\asdf: PARK
-//     ;
-
-//     var stderr = std.io.getStdErr().writer();
-
-//     var results = try assemble(arena.allocator(), edb, src, 0);
-//     for (results.errors.items) |err| {
-//         const token = results.tokens.get(err.token);
-//         try token.printContext(src, stderr, 160);
-//         try stderr.print("{s}\n", .{ err.desc });
-//     }
-//     try std.testing.expectEqual(@as(usize, 0), results.errors.items.len);
-
-//     _ = ddb;
-// }
