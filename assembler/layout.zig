@@ -364,7 +364,7 @@ fn resolveInstructionEncoding(a: *Assembler, file: *SourceFile, file_handle: Sou
 
     a.params_temp.clearRetainingCapacity();
     if (params) |expr_handle| {
-        buildInstructionParameters(a, file, file_handle, ip, expr_handle, false, expr_infos, expr_resolved_types);
+        buildInstructionParameters(a, file, file_handle, ip, expr_handle, false, expr_infos, expr_resolved_types) catch return 0;
     }
 
     const what = op.insn;
@@ -411,27 +411,32 @@ fn buildInstructionParameters(
     is_arrow: bool,
     expr_infos: []const Expression.Info,
     expr_resolved_types: []const ie.ExpressionType,
-) void {
+) !void {
     // TODO want a way to have is_arrow on the first parameter?
     switch (expr_infos[params]) {
         .list => |bin| {
-            buildInstructionParameters(a, file, file_handle, ip, bin.left, is_arrow, expr_infos, expr_resolved_types);
-            buildInstructionParameters(a, file, file_handle, ip, bin.right, false, expr_infos, expr_resolved_types);
+            try buildInstructionParameters(a, file, file_handle, ip, bin.left, is_arrow, expr_infos, expr_resolved_types);
+            try buildInstructionParameters(a, file, file_handle, ip, bin.right, false, expr_infos, expr_resolved_types);
             return;
         },
         .arrow_list => |bin| {
-            buildInstructionParameters(a, file, file_handle, ip, bin.left, is_arrow, expr_infos, expr_resolved_types);
-            buildInstructionParameters(a, file, file_handle, ip, bin.right, true, expr_infos, expr_resolved_types);
+            try buildInstructionParameters(a, file, file_handle, ip, bin.left, is_arrow, expr_infos, expr_resolved_types);
+            try buildInstructionParameters(a, file, file_handle, ip, bin.right, true, expr_infos, expr_resolved_types);
             return;
         },
         else => {}
+    }
+
+    const expr_type = expr_resolved_types[params];
+    if (expr_type == .poison) {
+        return error.Poisoned;
     }
 
     const constant = resolveExpressionConstant(a, file, file_handle, ip, params);
 
     a.params_temp.append(a.gpa, .{
         .arrow = is_arrow,
-        .expr_type = expr_resolved_types[params],
+        .expr_type = expr_type,
         .constant = constant.asInt() catch 0,
     }) catch @panic("OOM");
 }
