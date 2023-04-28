@@ -47,7 +47,7 @@ fn traceReferencesInBlock(a: *Assembler, file: *SourceFile, file_handle: SourceF
 
 fn traceReferencesInExpr(a: *Assembler, file_handle: SourceFile.Handle, expr_infos: []const Expression.Info, expr_handle: Expression.Handle) void {
     switch (expr_infos[expr_handle]) {
-        .list, .arrow_list, .plus, .minus => |binary| {
+        .list, .arrow_list, .plus, .minus, .multiply => |binary| {
             traceReferencesInExpr(a, file_handle, expr_infos, binary.left);
             traceReferencesInExpr(a, file_handle, expr_infos, binary.right);
         },

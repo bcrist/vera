@@ -652,6 +652,7 @@ const Parser = struct {
         const info: OperatorInfo = switch (self.token_kinds[t]) {
             .plus  => .{ .token = t, .left_bp = 1, .right_bp = 2, .expr = .plus },
             .minus => .{ .token = t, .left_bp = 1, .right_bp = 2, .expr = .minus },
+            .star  => .{ .token = t, .left_bp = 3, .right_bp = 4, .expr = .multiply },
             else => {
                 self.next_token = begin;
                 return null;
@@ -905,6 +906,7 @@ const Parser = struct {
             .plus,
             .minus,
             .negate,
+            .multiply,
             => unreachable,
         });
     }
@@ -924,6 +926,7 @@ const Parser = struct {
             .arrow_list,
             .plus,
             .minus,
+            .multiply,
             => unreachable,
         });
     }
@@ -938,6 +941,7 @@ const Parser = struct {
             .arrow_list => .{ .arrow_list = bin },
             .plus => .{ .plus = bin },
             .minus => .{ .minus = bin },
+            .multiply => .{ .multiply = bin },
 
             .directive_symbol_def,
             .directive_symbol_ref,

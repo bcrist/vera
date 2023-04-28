@@ -90,7 +90,7 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
             try writer.print("   {s}", .{ @tagName(info) });
              switch (info) {
                 .list, .arrow_list,
-                .plus, .minus,
+                .plus, .minus, .multiply,
                  => |binary| {
                     try writer.print(" #{}, #{}", .{ binary.left, binary.right });
                 },

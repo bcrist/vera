@@ -313,6 +313,13 @@ fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, file_handle: Sour
             const new_constant = Constant.initInt(value, null);
             expr_resolved_constants[expr_handle] = new_constant.intern(a.arena, a.gpa, &a.constants);
         },
+        .multiply => |bin| {
+            const left = resolveExpressionConstant(a, file, file_handle, ip, bin.left);
+            const right = resolveExpressionConstant(a, file, file_handle, ip, bin.right);
+            const value = (left.asInt() catch 0) *% (right.asInt() catch 0);
+            const new_constant = Constant.initInt(value, null);
+            expr_resolved_constants[expr_handle] = new_constant.intern(a.arena, a.gpa, &a.constants);
+        },
     }
 
     return expr_resolved_constants[expr_handle].?;

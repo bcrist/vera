@@ -275,6 +275,18 @@ fn tryResolveExpressionType(
             };
             resolveConstantDependsOnLayout(expr_flags, expr_handle, inner_expr);
         },
+        .multiply => |bin| {
+            const left = expr_resolved_types[bin.left];
+            const right = expr_resolved_types[bin.right];
+            expr_resolved_types[expr_handle] = t: {
+                if (left == .poison or right == .poison) break :t .{ .poison = {} };
+                if (left == .unknown or right == .unknown) return false;
+                if (left == .constant and right == .constant) break :t .{ .constant = {} };
+                a.recordError(file_handle, expr_tokens[expr_handle], "Both operands must be constant expressions");
+                break :t .{ .poison = {} };
+            };
+            resolveConstantDependsOnLayoutBinary(expr_flags, expr_handle, bin);
+        },
     }
     return true;
 }
@@ -378,14 +390,12 @@ fn instructionHasLayoutDependentParams(expr_flags: []const Expression.FlagSet, e
     if (expr_flags[params_handle].contains(.constant_depends_on_layout)) return true;
 
     switch (expr_infos[params_handle]) {
-        .list, .arrow_list, .plus, .minus => |bin| {
+        .list, .arrow_list => |bin| {
             return instructionHasLayoutDependentParams(expr_flags, expr_infos, bin.left)
                 or instructionHasLayoutDependentParams(expr_flags, expr_infos, bin.right);
         },
-        .negate => |inner_expr| {
-            return instructionHasLayoutDependentParams(expr_flags, expr_infos, inner_expr);
-        },
 
+        .plus, .minus, .negate, .multiply,
         .literal_int, .literal_str, .literal_reg,
         .literal_symbol_def, .directive_symbol_def,
         .literal_symbol_ref, .directive_symbol_ref,
