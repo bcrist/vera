@@ -111,7 +111,7 @@ pub fn findOrCreatePage(self: *Assembler, page: bus.Page, section: Section.Handl
     self.page_lookup.ensureUnusedCapacity(self.gpa, 1) catch @panic("OOM");
     self.pages.append(self.gpa, PageData.init(page, section)) catch @panic("OOM");
     self.page_lookup.putAssumeCapacity(page, handle);
-    std.debug.print("{X:0>13}: Created page for section {}\n", .{ page, section });
+    // std.debug.print("{X:0>13}: Created page for section {}\n", .{ page, section });
     return handle;
 }
 
@@ -202,13 +202,20 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
 
             try writer.print("   {s}", .{ @tagName(info) });
              switch (info) {
-                .list, .arrow_list => |binary| {
+                .list, .arrow_list,
+                .plus, .minus,
+                 => |binary| {
                     try writer.print(" #{}, #{}", .{ binary.left, binary.right });
                 },
-                .directive_symbol_def, .directive_symbol_ref => |unary| {
+
+                .directive_symbol_def, .directive_symbol_ref,
+                .negate,
+                => |unary| {
                     try writer.print(" #{}", .{ unary });
                 },
-                .literal_int, .literal_str, .literal_reg, .literal_symbol_def, .literal_symbol_ref => {},
+
+                .literal_int, .literal_str, .literal_reg, .literal_symbol_def, .literal_symbol_ref
+                => {},
             }
             const token = file.tokens.get(token_handle);
             try writer.print(" '{s}'", .{ token.location(file.source) });
@@ -283,6 +290,7 @@ fn dumpType(writer: anytype, expr_type: ie.ExpressionType, prefix: []const u8) !
 fn dumpInnerType(writer: anytype, inner_type: ie.BaseOffsetType.InnerType, prefix: []const u8) !void {
 try writer.print("{s}{s}", .{ prefix, @tagName(inner_type) });
     switch (inner_type) {
+        .none => {},
         .constant => {},
         .reg8, .reg16, .reg32 => |reg| {
             try writer.print(" #{}", .{ reg.index });

@@ -617,29 +617,95 @@ const Parser = struct {
     }
 
     fn parseExpr(self: *Parser) ?Expression.Handle {
+        return self.parseExprPratt(0);
+    }
+
+    const OperatorInfo = struct {
+        token: Token.Handle,
+        left_bp: u8,
+        right_bp: ?u8, // null for postfix operators
+        expr: Expression.Kind,
+    };
+    const PrefixOperatorInfo = struct {
+        token: Token.Handle,
+        right_bp: u8,
+        expr: Expression.Kind,
+    };
+    fn parsePrefixOperator(self: *Parser) ?PrefixOperatorInfo {
+        const begin = self.next_token;
+        self.skipLinespace();
+        const t = self.next_token;
+        const info: PrefixOperatorInfo = switch (self.token_kinds[t]) {
+            .minus => .{ .token = t, .right_bp = 10, .expr = .negate },
+            else => {
+                self.next_token = begin;
+                return null;
+            },
+        };
+        self.next_token += 1;
+        return info;
+    }
+    fn parseOperator(self: *Parser) ?OperatorInfo {
+        const begin = self.next_token;
+        self.skipLinespace();
+        const t = self.next_token;
+        const info: OperatorInfo = switch (self.token_kinds[t]) {
+            .plus  => .{ .token = t, .left_bp = 1, .right_bp = 2, .expr = .plus },
+            .minus => .{ .token = t, .left_bp = 1, .right_bp = 2, .expr = .minus },
+            else => {
+                self.next_token = begin;
+                return null;
+            },
+        };
+        self.next_token += 1;
+        return info;
+    }
+
+    fn parseExprPratt(self: *Parser, min_binding_power: u8) ?Expression.Handle {
         if (self.sync_to_end_of_line) return null;
 
-        if (self.parseParenExpr()
+        var expr = if (self.parsePrefixOperator()) |operator| e: {
+            if (self.parseExprPratt(operator.right_bp)) |right| {
+                break :e self.addUnaryExpression(operator.expr, operator.token, right);
+            } else if (!self.sync_to_end_of_line) {
+                self.recordError("Expected expression");
+                self.sync_to_end_of_line = true;
+            }
+            return null;
+        } else self.parseAtom() orelse return null;
+
+        while (true) {
+            if (self.sync_to_end_of_line) return null;
+            const before_operator = self.next_token;
+            if (self.parseOperator()) |operator| {
+                if (operator.left_bp < min_binding_power) {
+                    self.next_token = before_operator;
+                    break;
+                }
+                if (operator.right_bp) |binding_power| {
+                    if (self.parseExprPratt(binding_power)) |right| {
+                        expr = self.addBinaryExpression(operator.expr, operator.token, expr, right);
+                    } else if (!self.sync_to_end_of_line) {
+                        self.recordError("Expected expression");
+                        self.sync_to_end_of_line = true;
+                        return null;
+                    }
+                } else {
+                    expr = self.addUnaryExpression(operator.expr, operator.token, expr);
+                }
+            } else break;
+        }
+
+        return expr;
+    }
+
+    fn parseAtom(self: *Parser) ?Expression.Handle {
+        return self.parseParenExpr()
             orelse self.parseIntLiteral()
             orelse self.parseStringLiteral()
             orelse self.parseRegisterLiteral()
             orelse self.parseSymbolRef()
-        ) |base| {
-            var expr = base;
-            while (self.parseOperator(expr)) |op_expr| {
-                expr = op_expr;
-            }
-            return expr;
-        }
-
-        return null;
-    }
-
-    fn parseOperator(self: *Parser, inner: Expression.Handle) ?Expression.Handle {
-        _ = self;
-        _ = inner;
-        // TODO
-        return null;
+            ;
     }
 
     fn parseParenExpr(self: *Parser) ?Expression.Handle {
@@ -812,11 +878,11 @@ const Parser = struct {
         return handle;
     }
 
-    fn addTerminalExpression(self: *Parser, comptime kind: Expression.Kind, token: Token.Handle) Expression.Handle {
+    fn addExpressionInfo(self: *Parser, token: Token.Handle, info: Expression.Info) Expression.Handle {
         const handle = @intCast(Expression.Handle, self.out.expressions.len);
         self.out.expressions.append(self.gpa, .{
             .token = token,
-            .info = @unionInit(Expression.Info, @tagName(kind), {}),
+            .info = info,
             .resolved_type = .{ .unknown = {} },
             .resolved_constant = null,
             .flags = .{},
@@ -824,31 +890,65 @@ const Parser = struct {
         return handle;
     }
 
-    fn addUnaryExpression(self: *Parser, comptime kind: Expression.Kind, token: Token.Handle, inner: Expression.Handle) Expression.Handle {
-        const handle = @intCast(Expression.Handle, self.out.expressions.len);
-        self.out.expressions.append(self.gpa, .{
-            .token = token,
-            .info = @unionInit(Expression.Info, @tagName(kind), inner),
-            .resolved_type = .{ .unknown = {} },
-            .resolved_constant = null,
-            .flags = .{},
-        }) catch @panic("OOM");
-        return handle;
+    fn addTerminalExpression(self: *Parser, kind: Expression.Kind, token: Token.Handle) Expression.Handle {
+        return self.addExpressionInfo(token, switch (kind) {
+            .literal_int => .{ .literal_int = {} },
+            .literal_str => .{ .literal_str = {} },
+            .literal_reg => .{ .literal_reg = {} },
+            .literal_symbol_def => .{ .literal_symbol_def = {} },
+            .literal_symbol_ref => .{ .literal_symbol_ref = {} },
+
+            .list,
+            .arrow_list,
+            .directive_symbol_def,
+            .directive_symbol_ref,
+            .plus,
+            .minus,
+            .negate,
+            => unreachable,
+        });
     }
 
-    fn addBinaryExpression(self: *Parser, comptime kind: Expression.Kind, token: Token.Handle, lhs: Expression.Handle, rhs: Expression.Handle) Expression.Handle {
-        const handle = @intCast(Expression.Handle, self.out.expressions.len);
-        self.out.expressions.append(self.gpa, .{
-            .token = token,
-            .info = @unionInit(Expression.Info, @tagName(kind), .{
-                .left = lhs,
-                .right = rhs,
-            }),
-            .resolved_type = .{ .unknown = {} },
-            .resolved_constant = null,
-            .flags = .{},
-        }) catch @panic("OOM");
-        return handle;
+    fn addUnaryExpression(self: *Parser,  kind: Expression.Kind, token: Token.Handle, inner: Expression.Handle) Expression.Handle {
+        return self.addExpressionInfo(token, switch (kind) {
+            .directive_symbol_def => .{ .directive_symbol_def = inner },
+            .directive_symbol_ref => .{ .directive_symbol_ref = inner },
+            .negate => .{ .negate = inner },
+
+            .literal_int,
+            .literal_str,
+            .literal_reg,
+            .literal_symbol_def,
+            .literal_symbol_ref,
+            .list,
+            .arrow_list,
+            .plus,
+            .minus,
+            => unreachable,
+        });
+    }
+
+    fn addBinaryExpression(self: *Parser, kind: Expression.Kind, token: Token.Handle, lhs: Expression.Handle, rhs: Expression.Handle) Expression.Handle {
+        const bin = Expression.Binary{
+            .left = lhs,
+            .right = rhs,
+        };
+        return self.addExpressionInfo(token, switch (kind) {
+            .list => .{ .list = bin },
+            .arrow_list => .{ .arrow_list = bin },
+            .plus => .{ .plus = bin },
+            .minus => .{ .minus = bin },
+
+            .directive_symbol_def,
+            .directive_symbol_ref,
+            .negate,
+            .literal_int,
+            .literal_str,
+            .literal_reg,
+            .literal_symbol_def,
+            .literal_symbol_ref,
+            => unreachable,
+        });
     }
 
     fn parseMnemonic(self: *Parser) ?Mnemonic {

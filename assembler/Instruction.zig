@@ -8,9 +8,11 @@ label: ?Expression.Handle,
 token: lex.Token.Handle,
 operation: Operation,
 params: ?Expression.Handle,
-flags: std.EnumSet(Flags) = .{},
+flags: FlagSet = .{},
 address: u32 = 0,
 length: u32 = 0,
+
+pub const FlagSet = std.EnumSet(Flags);
 
 pub const OperationType = std.meta.Tag(Operation);
 pub const Operation = union(enum) {

@@ -178,6 +178,195 @@ pub const ExpressionType = union(enum) {
     }
 };
 
+pub const ExpressionTypeBuilder = struct {
+    invalid: bool = false,
+    unknown: bool = false,
+    poison: bool = false,
+    address_space: ?AddressSpace = null,
+    a: InnerType = .{ .none = {} },
+    b: InnerType = .{ .none = {} },
+
+    const InnerType = BaseOffsetType.InnerType;
+
+    pub fn add(self: *ExpressionTypeBuilder, t: ExpressionType) void {
+        switch (t) {
+            .unknown => self.unknown = true,
+            .poison => self.poison = true,
+            .symbol_def => self.invalid = true,
+            .raw_base_offset, .data_address, .insn_address, .stack_address => |bo| {
+                self.tryAddInnerType(bo.base);
+                self.tryAddInnerType(bo.offset);
+            },
+            else => self.tryAddType(t),
+        }
+
+        if (getAddressSpace(t)) |as| {
+            if (self.address_space) |eas| {
+                if (eas != as) self.invalid = true;
+            }
+            self.address_space = as;
+        }
+    }
+
+    pub fn subtract(self: *ExpressionTypeBuilder, t: ExpressionType) void {
+        switch (t) {
+            .unknown => self.unknown = true,
+            .poison => self.poison = true,
+            .symbol_def => self.invalid = true,
+            .raw_base_offset, .data_address, .insn_address, .stack_address => |bo| {
+                self.trySubtractInnerType(bo.base);
+                self.trySubtractInnerType(bo.offset);
+            },
+            else => self.trySubtractType(t),
+        }
+
+        if (getAddressSpace(t)) |as| {
+            if (self.address_space) |eas| {
+                if (eas != as) self.invalid = true;
+            }
+            self.address_space = as;
+        }
+    }
+
+    fn tryAddType(self: *ExpressionTypeBuilder, t: ExpressionType) void {
+        self.tryAddInnerType(InnerType.fromExpressionType(t) catch return);
+    }
+    fn tryAddInnerType(self: *ExpressionTypeBuilder, inner: InnerType) void {
+        if (getInnerTypeSum(self.a, inner)) |sum| {
+            self.a = sum;
+        } else if (getInnerTypeSum(self.b, inner)) |sum| {
+            self.b = sum;
+        } else {
+            self.invalid = true;
+        }
+    }
+
+    fn trySubtractType(self: *ExpressionTypeBuilder, t: ExpressionType) void {
+        self.trySubtractInnerType(InnerType.fromExpressionType(t) catch return);
+    }
+    fn trySubtractInnerType(self: *ExpressionTypeBuilder, inner: InnerType) void {
+        if (getInnerTypeDifference(self.a, inner)) |diff| {
+            self.a = diff;
+        } else if (getInnerTypeDifference(self.b, inner)) |diff| {
+            self.b = diff;
+        } else {
+            self.invalid = true;
+        }
+    }
+
+    fn getInnerTypeSum(a: InnerType, b: InnerType) ?InnerType {
+        if (a == .none) return b;
+        if (b == .none) return a;
+        if (a == .constant and b == .constant) return a;
+        return null;
+    }
+
+    fn getInnerTypeDifference(a: InnerType, b: InnerType) ?InnerType {
+        // constants can always be subtracted, which is still a constant (we don't know if they're the same value)
+        if (a == .constant and b == .constant) return a;
+
+        // registers can "cancel out"
+        if (std.meta.eql(a, b)) return .{ .none = {} };
+
+        // anything else is unrepresentable (e.g. negative registers)
+        return null;
+    }
+
+    fn getAddressSpace(tag: std.meta.Tag(ExpressionType)) ?AddressSpace {
+        return switch (tag) {
+            .data_address => .data,
+            .insn_address => .insn,
+            .stack_address => .stack,
+            else => null,
+        };
+    }
+
+    fn getPriority(t: InnerType) u8 {
+        // higher priority will be placed in the base slot, lower in offset
+        return switch (t) {
+            .none => 0,
+            .constant => 1,
+            .reg8 => |r| 0x10 + @as(u8, r.index),
+            .reg16 => |r| 0x20 + @as(u8, r.index),
+            .reg32 => |r| 0x30 + @as(u8, r.index),
+            .sr => |r| @intCast(u8, 0x40) + @enumToInt(r),
+        };
+    }
+
+    pub fn build(self: *ExpressionTypeBuilder) !ExpressionType {
+        if (self.invalid) return error.InvalidType;
+        if (self.poison) return .{ .poison = {} };
+        if (self.unknown) return .{ .unknown = {} };
+
+        if (getPriority(self.a) < getPriority(self.b)) {
+            const temp = self.a;
+            self.a = self.b;
+            self.b = temp;
+        }
+
+        const bo = BaseOffsetType{
+            .base = self.a,
+            .offset = self.b,
+        };
+
+        if (self.address_space) |as| {
+            return switch (as) {
+                .data => .{ .data_address = bo },
+                .insn => .{ .insn_address = bo },
+                .stack => .{ .stack_address = bo },
+            };
+        }
+
+        if (bo.offset != .none or bo.base == .none) {
+            return .{ .raw_base_offset = bo };
+        }
+
+        return InnerType.toExpressionType(bo.base);
+    }
+};
+
+pub const BaseOffsetType = struct {
+    base: InnerType,
+    offset: InnerType,
+
+    pub fn init(left: ExpressionType, right: ExpressionType) !BaseOffsetType {
+        return BaseOffsetType{
+            .base = try InnerType.fromExpressionType(left),
+            .offset = try InnerType.fromExpressionType(right),
+        };
+    }
+
+    pub const InnerType = union(enum) {
+        none,
+        constant,
+        reg8: IndexedRegister,
+        reg16: IndexedRegister,
+        reg32: IndexedRegister,
+        sr: SpecialRegister,
+
+        pub fn fromExpressionType(t: ExpressionType) !InnerType {
+            return switch (t) {
+                .constant => .{ .constant = {} },
+                .reg8 => |r| .{ .reg8 = r },
+                .reg16 => |r| .{ .reg16 = r },
+                .reg32 => |r| .{ .reg32 = r },
+                .sr => |r| .{ .sr = r },
+                else => return error.InvalidType,
+            };
+        }
+
+        pub fn toExpressionType(self: InnerType) ExpressionType {
+            return switch (self) {
+                .none, .constant => .{ .constant = {} },
+                .reg8 => |r| .{ .reg8 = r },
+                .reg16 => |r| .{ .reg16 = r },
+                .reg32 => |r| .{ .reg32 = r },
+                .sr => |r| .{ .sr = r },
+            };
+        }
+    };
+};
+
 pub const IndexedRegister = struct {
     index: misc.RegisterIndex,
     signedness: ?std.builtin.Signedness,
@@ -211,30 +400,6 @@ pub const AddressSpace = enum {
     data,
     insn,
     stack,
-};
-
-pub const BaseOffsetType = struct {
-    base: InnerType,
-    offset: InnerType,
-
-    pub const InnerType = union(enum) {
-        constant,
-        reg8: IndexedRegister,
-        reg16: IndexedRegister,
-        reg32: IndexedRegister,
-        sr: SpecialRegister,
-
-        pub fn fromExpressionType(t: ExpressionType) !InnerType {
-            return switch (t) {
-                .constant => .{ .constant = {} },
-                .reg8 => |r| .{ .reg8 = r },
-                .reg16 => |r| .{ .reg16 = r },
-                .reg32 => |r| .{ .reg32 = r },
-                .sr => |r| .{ .sr = r },
-                else => return error.InvalidType,
-            };
-        }
-    };
 };
 
 pub const ParameterSource = enum {
@@ -465,7 +630,7 @@ pub const ParameterEncoding = struct {
                 .unknown, .poison, .symbol_def, .constant, .sr => unreachable,
                 .reg8, .reg16, .reg32 => |reg| reg.index,
                 .raw_base_offset, .data_address, .insn_address, .stack_address => |info| switch (info.base) {
-                    .constant, .sr => unreachable,
+                    .none, .constant, .sr => unreachable,
                     .reg8, .reg16, .reg32 => |reg| reg.index,
                 },
             },
@@ -479,7 +644,7 @@ pub const ParameterEncoding = struct {
             .reg8, .reg16, .reg32 => switch (param.expr_type) {
                 .unknown, .poison, .symbol_def, .constant, .sr, .reg8, .reg16, .reg32 => unreachable,
                 .raw_base_offset, .data_address, .insn_address, .stack_address => |info| switch (info.offset) {
-                    .constant, .sr => unreachable,
+                    .none, .constant, .sr => unreachable,
                     .reg8, .reg16, .reg32 => |reg| reg.index,
                 },
             },
@@ -1299,6 +1464,7 @@ pub const Parameter = struct {
 
     fn innerTypeMatches(inner: BaseOffsetType.InnerType, encoding: ParameterEncodingBaseType) bool {
         switch (inner) {
+            .none => return encoding == .none,
             .constant => return encoding == .constant,
             .reg8 => |reg| return switch (encoding) {
                 .reg8 => |re| re.contains(reg),

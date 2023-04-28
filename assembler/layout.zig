@@ -11,7 +11,7 @@ const Expression = @import("Expression.zig");
 const PageData = @import("PageData.zig");
 
 pub fn resetLayoutDependentExpressions(a: *Assembler) void {
-    std.debug.print("Resetting Layout\n", .{});
+    // std.debug.print("Resetting Layout\n", .{});
     for (a.files.items) |*file| {
         var expr_resolved_constants = file.expressions.items(.resolved_constant);
         for (file.expressions.items(.flags), 0..) |flags, expr_handle| {
@@ -26,7 +26,7 @@ pub fn doFixedOrgLayout(a: *Assembler, chunks: []SourceFile.Chunk) bool {
     var layout_changed = false;
     for (chunks) |chunk| {
         const initial_address = resolveFixedOrgAddress(a, chunk);
-        std.debug.print("{X:0>16}: Placing fixed chunk\n", .{ initial_address });
+        // std.debug.print("{X:0>16}: Placing fixed chunk\n", .{ initial_address });
         if (doChunkLayout(a, chunk, initial_address)) {
             layout_changed = true;
         }
@@ -59,7 +59,7 @@ pub fn doAutoOrgLayout(a: *Assembler, chunks: []SourceFile.Chunk) bool {
     var layout_changed = false;
     for (chunks) |chunk| {
         const initial_address = resolveAutoOrgAddress(a, chunk);
-        std.debug.print("{X:0>16}: Placing auto chunk\n", .{ initial_address });
+        // std.debug.print("{X:0>16}: Placing auto chunk\n", .{ initial_address });
         if (doChunkLayout(a, chunk, initial_address)) {
             layout_changed = true;
         }
@@ -96,7 +96,7 @@ fn resolveAutoOrgAddress(a: *Assembler, chunk: SourceFile.Chunk) u32 {
         //      But need to ensure that the upkeep cost doesn't exceed the gains here.
         for (0.., page_sections) |page_data_handle, section_handle| {
             if (section_handle == chunk_section_handle) {
-                std.debug.print("Checking page data handle {}\n", .{ page_data_handle });
+                // std.debug.print("Checking page data handle {}\n", .{ page_data_handle });
                 var used = page_usages[page_data_handle];
                 var unused = used;
                 unused.toggleAll();
@@ -112,7 +112,7 @@ fn resolveAutoOrgAddress(a: *Assembler, chunk: SourceFile.Chunk) u32 {
                     const range_size = unused_range_end - unused_range_begin;
                     if (range_size >= chunk_size) {
                         const page = pages[page_data_handle];
-                        std.debug.print("Using existing page\n", .{ });
+                        // std.debug.print("Using existing page\n", .{ });
                         return (@as(u32, page) << @bitSizeOf(bus.PageOffset)) | @intCast(bus.PageOffset, unused_range_begin);
                     }
 
@@ -130,7 +130,7 @@ fn resolveAutoOrgAddress(a: *Assembler, chunk: SourceFile.Chunk) u32 {
     const full_pages_needed = chunk_size / PageData.page_size;
     const final_page_bytes_needed = chunk_size - (full_pages_needed * PageData.page_size);
 
-    std.debug.print("Need {} full pages and {} extra bytes\n", .{ full_pages_needed, final_page_bytes_needed });
+    // std.debug.print("Need {} full pages and {} extra bytes\n", .{ full_pages_needed, final_page_bytes_needed });
 
     // TODO allow defining this range per named section using a directive (also use the first page there for fixed org chunks that can't resolve their .org address)
     const search_range_begin: usize = 1;
@@ -248,9 +248,9 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
                     .end = if (page == final_page) @truncate(bus.PageOffset, address) else PageData.page_size,
                 };
                 page_usage[page_data_handle].setRangeValue(range, true);
-                std.debug.print("{X:0>13}: ({}) Marking page used: {} - {}\n", .{ page, page_data_handle, range.start, range.end });
+                // std.debug.print("{X:0>13}: ({}) Marking page used: {} - {}\n", .{ page, page_data_handle, range.start, range.end });
             } else {
-                std.debug.print("{X:0>13}: ({}) Marking page fully used\n", .{ page, page_data_handle });
+                // std.debug.print("{X:0>13}: ({}) Marking page fully used\n", .{ page, page_data_handle });
                 page_usage[page_data_handle] = PageData.UsageBitmap.initFull();
             }
         }
@@ -292,6 +292,27 @@ fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, file_handle: Sour
             const symbol_constant = expr_resolved_constants[inner_expr].?;
             resolveSymbolRefExprConstant(a, file, file_handle, ip, expr_handle, token_handle, symbol_constant.*, expr_resolved_types, expr_resolved_constants);
         },
+
+        .plus => |bin| {
+            const left = resolveExpressionConstant(a, file, file_handle, ip, bin.left);
+            const right = resolveExpressionConstant(a, file, file_handle, ip, bin.right);
+            const value = (left.asInt() catch 0) +% (right.asInt() catch 0);
+            const new_constant = Constant.initInt(value, null);
+            expr_resolved_constants[expr_handle] = new_constant.intern(a.arena, a.gpa, &a.constants);
+        },
+        .minus => |bin| {
+            const left = resolveExpressionConstant(a, file, file_handle, ip, bin.left);
+            const right = resolveExpressionConstant(a, file, file_handle, ip, bin.right);
+            const value = (left.asInt() catch 0) -% (right.asInt() catch 0);
+            const new_constant = Constant.initInt(value, null);
+            expr_resolved_constants[expr_handle] = new_constant.intern(a.arena, a.gpa, &a.constants);
+        },
+        .negate => |inner_expr| {
+            const inner_constant = resolveExpressionConstant(a, file, file_handle, ip, inner_expr);
+            const value = std.math.negateCast(inner_constant.asInt() catch 0) catch 0;
+            const new_constant = Constant.initInt(value, null);
+            expr_resolved_constants[expr_handle] = new_constant.intern(a.arena, a.gpa, &a.constants);
+        },
     }
 
     return expr_resolved_constants[expr_handle].?;
@@ -311,12 +332,7 @@ fn resolveSymbolRefExprConstant(
     if (a.lookupSymbol(file, file_handle, symbol_token_handle, symbol_constant.asString())) |target| {
         switch (target) {
             .expression => |target_expr_handle| {
-                // .def expressions are evaluated based on the context of the definition, so we need to look up the address
-                // of the actual .def instruction
-                const expr_token = file.expressions.items(.token)[target_expr_handle];
-                const expr_insn = file.findInstructionByToken(expr_token);
-                const expr_ip = file.instructions.items(.address)[expr_insn];
-                expr_resolved_constants[expr_handle] = resolveExpressionConstant(a, file, file_handle, expr_ip, target_expr_handle);
+                expr_resolved_constants[expr_handle] = resolveExpressionConstant(a, file, file_handle, ip, target_expr_handle);
             },
             .instruction => |target_insn_ref| {
                 const target_file = a.getSource(target_insn_ref.file);

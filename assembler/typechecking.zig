@@ -90,7 +90,7 @@ fn resolveSymbolDefExpr(
     expr_infos: []const Expression.Info,
     expr_resolved_constants: []?*const Constant,
     expr_resolved_types: []ExpressionType,
-    expr_flags: []std.EnumSet(Expression.Flags),
+    expr_flags: []Expression.FlagSet,
 ) *const Constant {
     var token_handle = expr_tokens[symbol_def_expr];
     switch (expr_infos[symbol_def_expr]) {
@@ -174,7 +174,7 @@ fn tryResolveExpressionType(
     expr_infos: []const Expression.Info,
     expr_resolved_constants: []?*const Constant,
     expr_resolved_types: []ExpressionType,
-    expr_flags: []std.EnumSet(Expression.Flags),
+    expr_flags: []Expression.FlagSet,
 ) bool {
     std.debug.assert(expr_resolved_types[expr_handle] == .unknown);
 
@@ -238,8 +238,57 @@ fn tryResolveExpressionType(
         .literal_symbol_def, .directive_symbol_def => {
             _ = resolveSymbolDefExpr(a, file, file_handle, expr_handle, expr_tokens, expr_infos, expr_resolved_constants, expr_resolved_types, expr_flags);
         },
+        .plus => |bin| {
+            var builder = ie.ExpressionTypeBuilder{};
+            builder.add(expr_resolved_types[bin.left]);
+            builder.add(expr_resolved_types[bin.right]);
+            const result_type: ExpressionType = builder.build() catch t: {
+                a.recordError(file_handle, expr_tokens[expr_handle], "Cannot represent result of symbolic addition");
+                break :t .{ .poison = {} };
+            };
+            if (result_type == .unknown) return false;
+            expr_resolved_types[expr_handle] = result_type;
+            resolveConstantDependsOnLayoutBinary(expr_flags, expr_handle, bin);
+        },
+        .minus => |bin| {
+            var builder = ie.ExpressionTypeBuilder{};
+            builder.add(expr_resolved_types[bin.left]);
+            builder.subtract(expr_resolved_types[bin.right]);
+            const result_type: ExpressionType = builder.build() catch t: {
+                a.recordError(file_handle, expr_tokens[expr_handle], "Cannot represent result of symbolic subtraction");
+                break :t .{ .poison = {} };
+            };
+            if (result_type == .unknown) return false;
+            expr_resolved_types[expr_handle] = result_type;
+            resolveConstantDependsOnLayoutBinary(expr_flags, expr_handle, bin);
+        },
+        .negate => |inner_expr| {
+            expr_resolved_types[expr_handle] = switch (expr_resolved_types[inner_expr]) {
+                .unknown => return false,
+                .poison => .{ .poison = {} },
+                .constant => .{ .constant = {} },
+                .raw_base_offset, .data_address, .insn_address, .stack_address,
+                .symbol_def, .reg8, .reg16, .reg32, .sr => t: {
+                    a.recordError(file_handle, expr_tokens[inner_expr], "Expected constant expression");
+                    break :t .{ .poison = {} };
+                },
+            };
+            resolveConstantDependsOnLayout(expr_flags, expr_handle, inner_expr);
+        },
     }
     return true;
+}
+
+fn resolveConstantDependsOnLayout(expr_flags: []Expression.FlagSet, expr_handle: Expression.Handle, dependent_expr: Expression.Handle) void {
+    if (expr_flags[dependent_expr].contains(.constant_depends_on_layout)) {
+        expr_flags[expr_handle].insert(.constant_depends_on_layout);
+    }
+}
+
+fn resolveConstantDependsOnLayoutBinary(expr_flags: []Expression.FlagSet, expr_handle: Expression.Handle, bin: Expression.Binary) void {
+    if (expr_flags[bin.left].contains(.constant_depends_on_layout) or expr_flags[bin.right].contains(.constant_depends_on_layout)) {
+        expr_flags[expr_handle].insert(.constant_depends_on_layout);
+    }
 }
 
 fn tryResolveSymbolType(
@@ -250,7 +299,7 @@ fn tryResolveSymbolType(
     token_handle: Token.Handle,
     symbol: []const u8,
     expr_resolved_types: []ExpressionType,
-    expr_flags: []std.EnumSet(Expression.Flags),
+    expr_flags: []Expression.FlagSet,
 ) bool {
     if (a.lookupSymbol(file, file_handle, token_handle, symbol)) |target| switch (target) {
         .expression => |target_expr_handle| {
@@ -325,13 +374,16 @@ pub fn checkInstructionsAndDirectives(a: *Assembler) void {
     }
 }
 
-fn instructionHasLayoutDependentParams(expr_flags: []const std.EnumSet(Expression.Flags), expr_infos: []const Expression.Info, params_handle: Expression.Handle) bool {
+fn instructionHasLayoutDependentParams(expr_flags: []const Expression.FlagSet, expr_infos: []const Expression.Info, params_handle: Expression.Handle) bool {
     if (expr_flags[params_handle].contains(.constant_depends_on_layout)) return true;
 
     switch (expr_infos[params_handle]) {
-        .list, .arrow_list => |bin| {
+        .list, .arrow_list, .plus, .minus => |bin| {
             return instructionHasLayoutDependentParams(expr_flags, expr_infos, bin.left)
                 or instructionHasLayoutDependentParams(expr_flags, expr_infos, bin.right);
+        },
+        .negate => |inner_expr| {
+            return instructionHasLayoutDependentParams(expr_flags, expr_infos, inner_expr);
         },
 
         .literal_int, .literal_str, .literal_reg,

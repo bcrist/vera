@@ -42,7 +42,7 @@ The scope of the symbol defined begins on the next line and ends at the first of
     * The symbol is redefined with another `.def` using the same name
     * The end of the file is reached
 
-Note that the expression is evaluated immediately; it does not work like a macro.  In particular, `$` evaluates to the address of the line containing the `.def` directive, not the line where the named expression eventually gets referenced.
+Note that the expression is evaluated in the context where the symbol is used, not where it is defined.  In particular, `$` does not evaluate to the line containing the `.def` directive.
 
 If a named expression is created with the same name as a label, the named expression shadows the label during symbol resolution.
 
@@ -166,20 +166,23 @@ There are operators which can manipulate the bit width of their result (see belo
 Integers and strings can always be used interchangeably; strings are just syntactic sugar for large integers.
 Strings have the same syntax as zyxlang.
 
+
+### Current address literal
+`$` resolves to the address of the current line's label (or if there is none, the address it would have if it existed).  In code sections, it is equivalent to `.i IP`.  In data and stack sections, the `IP` register would normally not be used, but `$` can still be used to compute distances from the current line
+
 ## Symbols
     [a-zA-Z_][a-zA-Z_0-9\.]*
     .sym <string-literal>
 Symbols are names which represent values defined elsewhere in the program.  The `.sym` directive allows the usage of arbitrary names for symbols by using a string literal instead of a raw identifier.
-Symbol references are resolved from a number of potential sources:
-- Named expressions defined with 
-
-must be resolved to either a labelled address, or a named expression defined with the `.def` directive
-The .sym directive can be used with a string literal when you want to use a symbol name containing arbitrary special characters
-
+Symbol references are resolved from a number of potential sources (in order of decreasing priority):
+- Named expressions defined with `.def`
+- Private labels from the current section-block
+- Labels from stack blocks that have been pushed in the current section-block
+- File-scope named expressions defined with `.local`
+- Public labels defined in any file
 
 ## Operators
 `(x)`               // Grouping
-`$`                   // Implicit label at the beginning of the current line
 `x + y`           // add two values.  Types must be compatible. In the case of overflow, an extra bit is added to the width.
 `x - y`           // subtract two values.  Types must be compatible. In the case of overflow, an extra bit is added to the width.
 `x * y`           // multiply two values.  Types must be compatible.  The width may increase in the case of overflow
