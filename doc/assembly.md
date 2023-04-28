@@ -182,38 +182,96 @@ Symbol references are resolved from a number of potential sources (in order of d
 - Public labels defined in any file
 
 ## Operators
-`(x)`               // Grouping
-`x + y`           // add two values.  Types must be compatible. In the case of overflow, an extra bit is added to the width.
-`x - y`           // subtract two values.  Types must be compatible. In the case of overflow, an extra bit is added to the width.
-`x * y`           // multiply two values.  Types must be compatible.  The width may increase in the case of overflow
-`x >> y`          // right shift.
-`x << y`          // left shift.  In the case of overflow, extra bits may be added to the width.
-`x | y`           // bitwise OR
-`x & y`           // bitwise AND
-`x ^ y`           // bitwise XOR
-`~ x`               // bitwise NOT
-`- x`               // 2's complement negation.  In the case of overflow, an extra bit is added to the width.
-`x ++ y`          // Concatenate two constants.  Little-endian (first parameter takes least significant bit).  If x's bit width is not a multiple of 8, then y will not start at the LSB of a byte.
-`x ** y`          // Concatenates a constant with itself, y times
-`x ' w`           // Change the bit-width of a constant to w (error on overflow)
-`x .trunc w`      // Change the bit-width of a constant to w (ignore overflow, keep same signed/unsigned distinction)
-`x .signed`         // Convert a register reference or constant to be signed (e.g. R15 -> R15S)
-`x .unsigned`       // Convert a register reference or constant to be unsigned (e.g. R15 -> R15U)
-`x .generic`        // Remove the signed/unsigned distinction from a register reference or constant (e.g. R15U -> R15)
+    (x)
+Grouping
 
-`label`             // reference a named literal (type depends on literal definition) or labelled address (as either an IP-relative code address, IP-relative data address, or SP-relative stack address)
-`@label`            // reference a labelled address as either an absolute code address or absolute data pointer.  Not valid for stack section labels.
-`#label`            // dereference a labelled data declaration from a .const section.  Does not count as a reference for dead-code elimination.  The label must have a .db, .dw, or .dd directive on the same line, with exactly one constant expression.
+    x + y
+    x - y
+Add or subtract two constants or registers.
+Constants larger than 64b are not supported.  The result will have the minimum number of bits required to represent the number in 2's complement.
+The symbolic sum of two registers or a register and constant may be represented, but not more than two registers, or more than one register with a constant offset.
+Subtracting a register is only valid if the same register exists in the type of the left side.  This can be used to, e.g. subtract two addresses to get the distance between them as a raw constant.
 
-`.d expr`               // Transmute constant or register reference to absolute data address
-`.i expr`               // Transmute constant or register reference to absolute code address
-`.s expr`               // Transmute constant or register reference to absolute stack address
-`.raw x`       // Transmute absolute address to a constant
+    -x
+2's complement negation on constants.
+Constants larger than 64b are not supported.  The result will have the minimum number of bits required to represent the number in 2's complement.
 
-`.rb expr`          // Convert a register index (0-15) to a byte register reference (B0-B15)
-`.r expr`           // Convert a register index (0-15) to a word register reference (R0-R15)
-`.rx expr`          // Convert a register index (0-15) to a double-word register reference (X0-X15)
-`.idx expr`         // Extract the index from a register reference. (e.g. `.r 1 ^ .idx X0` is equivalent to `R1`)
+    x * y
+Multiply two constants.
+Constants larger than 64b are not supported.  The result will have the minimum number of bits required to represent the number in 2's complement.
+
+    x << y
+    x >> y
+Left and Right arithmetic shift on constants.
+Constants larger than 64b are not supported.  The result will have the minimum number of bits required to represent the number in 2's complement.
+
+    x | y
+    x & y
+    x ^ y
+    ~x
+Bitwise operations on constants.
+There is no limit on the width of constants.  The result will have the same width as the largest operand.  Any smaller operand constants will be sign extended.
+
+    x ++ y
+Concatenate constants.
+Little-endian (first parameter takes least significant bit).  If the width of `x` is not a multiple of 8, then `y` will not start at the LSB of a byte.
+
+    x ** y
+Concatenates a constant with itself, `y` times.
+
+    x ' w
+Change the bit-width of a constant to `w`
+If the constant overflows the new size, it is an error.
+If the new size is larger than the old, sign extension is used.
+
+    x .sx w
+    x .zx w
+Sign or zero-extend a constant to `w` bits.
+If the constant is already larger than `w` bits, it is an error.
+
+    x .trunc w
+Change the bit-width of a constant to `w`
+Overflowing bits are ignored.
+If the new size is larger than the old, sign extension is used.
+
+    x .signed
+    x .unsigned
+    x .generic
+Change the signedness of a GPR expression.
+Generic means unspecified signedness, equivalent to a register literal's signedness.
+
+    symbol
+Symbolic reference.
+
+	@x
+Convert an IP-relative address into an absolute address.
+The address space (data/code) is preserved.
+Not valid for references to stack labels.
+
+    #address
+Dereference a labelled data declaration from a `.const`/`.kconst` section.
+Does not count as a reference for dead-code elimination.
+The label must have a `.db`, `.dw`, or `.dd` directive on the same line, with exactly one constant expression.
+
+    .d expr
+    .i expr
+    .s expr
+Create a data, instruction, or stack address from a non-address expression.
+If the expression is already another type of address, an error is generated.
+
+    .raw x
+Remove the data/instruction/stack address marker from an expressionransmute absolute address to a constant.  Note if the address is relative, the base register is _not_ removed from the expression.
+
+	.rb expr
+    .r expr
+    .rx expr
+Create a GPR expression from a register index (0-15).
+`.rb` creates a byte register (B0-B15)
+`.r` creates a word register (R0-R15)
+`.rx` creates a double-word register (X0-X15)
+
+    .idx expr
+Extract the index from a register reference.
 
 ## Expression Types
 
@@ -234,8 +292,8 @@ Offset may be a constant or register reference.
 # Assembly Phases
 * Lexing
 * Parsing
-* Symbol Resolution and Typechecking
-* Dead Code Elimination
-* Instruction Selection, Length Analysis, and Section Reordering
-* Instruction Encoding 
-* Output Formatting
+* Typechecking
+* Dead code elimination
+* Iterative page allocation, memory layout, and instruction selection
+* Layout error checking and instruction encoding
+* Output and reporting

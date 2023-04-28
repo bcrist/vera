@@ -222,9 +222,14 @@ pub const ExpressionTypeBuilder = struct {
 
         if (getAddressSpace(t)) |as| {
             if (self.address_space) |eas| {
-                if (eas != as) self.invalid = true;
+                if (eas != as) {
+                    self.invalid = true;
+                } else {
+                    self.address_space = null;
+                }
+            } else {
+                self.invalid = true;
             }
-            self.address_space = as;
         }
     }
 
