@@ -18,6 +18,8 @@ pub const TokenKind = enum(u8) {
     plus,
     minus,
     star,
+    shl,
+    shr,
 };
 
 pub const Token = struct {
@@ -165,7 +167,10 @@ pub const Token = struct {
             .star,
             => 1,
 
-            .arrow => 2,
+            .arrow,
+            .shl,
+            .shr,
+            => 2,
 
             .id => blk: {
                 var consume_linespace = false;
@@ -287,6 +292,14 @@ pub fn lex(allocator: std.mem.Allocator, source: []const u8) TokenList {
             },
             '/' => if (source.len <= i + 1) .reserved else switch (source[i + 1]) {
                 '/' => .comment,
+                else => .reserved,
+            },
+            '<' => if (source.len <= i + 1) .reserved else switch (source[i + 1]) {
+                '<' => .shl,
+                else => .reserved,
+            },
+            '>' => if (source.len <= i + 1) .reserved else switch (source[i + 1]) {
+                '>' => .shr,
                 else => .reserved,
             },
             0...9, 11...' ', '\\', 127 => .linespace,

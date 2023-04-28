@@ -6,7 +6,7 @@ _loop:
     c   r0      -> r2
     add r0, r1  -> r0
     c   r2      -> r1
-    c 4 * 300 -> r0
+    c 4 << ip -> r0
     b   (_loop) - 1
 
 .code text

@@ -269,7 +269,8 @@ fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, file_handle: Sour
         return constant;
     }
 
-    switch (expr_infos[expr_handle]) {
+    const info = expr_infos[expr_handle];
+    switch (info) {
         .literal_symbol_def, .directive_symbol_def,
         .literal_int, .literal_str,
         => unreachable, // These should be guaranteed to already have resolved_constant set
@@ -293,30 +294,25 @@ fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, file_handle: Sour
             resolveSymbolRefExprConstant(a, file, file_handle, ip, expr_handle, token_handle, symbol_constant.*, expr_resolved_types, expr_resolved_constants);
         },
 
-        .plus => |bin| {
-            const left = resolveExpressionConstant(a, file, file_handle, ip, bin.left);
-            const right = resolveExpressionConstant(a, file, file_handle, ip, bin.right);
-            const value = (left.asInt() catch 0) +% (right.asInt() catch 0);
-            const new_constant = Constant.initInt(value, null);
-            expr_resolved_constants[expr_handle] = new_constant.intern(a.arena, a.gpa, &a.constants);
-        },
-        .minus => |bin| {
-            const left = resolveExpressionConstant(a, file, file_handle, ip, bin.left);
-            const right = resolveExpressionConstant(a, file, file_handle, ip, bin.right);
-            const value = (left.asInt() catch 0) -% (right.asInt() catch 0);
-            const new_constant = Constant.initInt(value, null);
-            expr_resolved_constants[expr_handle] = new_constant.intern(a.arena, a.gpa, &a.constants);
-        },
         .negate => |inner_expr| {
             const inner_constant = resolveExpressionConstant(a, file, file_handle, ip, inner_expr);
             const value = std.math.negateCast(inner_constant.asInt() catch 0) catch 0;
             const new_constant = Constant.initInt(value, null);
             expr_resolved_constants[expr_handle] = new_constant.intern(a.arena, a.gpa, &a.constants);
         },
-        .multiply => |bin| {
+        .plus, .minus, .multiply, .shl, .shr => |bin| {
             const left = resolveExpressionConstant(a, file, file_handle, ip, bin.left);
             const right = resolveExpressionConstant(a, file, file_handle, ip, bin.right);
-            const value = (left.asInt() catch 0) *% (right.asInt() catch 0);
+            const lv = left.asInt() catch 0;
+            const rv = right.asInt() catch 0;
+            const value = switch (info) {
+                .plus => lv +% rv,
+                .minus => lv -% rv,
+                .multiply => lv *% rv,
+                .shl => lv << @truncate(u6, @bitCast(u64, rv)),
+                .shr => lv >> @truncate(u6, @bitCast(u64, rv)),
+                else => unreachable,
+            };
             const new_constant = Constant.initInt(value, null);
             expr_resolved_constants[expr_handle] = new_constant.intern(a.arena, a.gpa, &a.constants);
         },

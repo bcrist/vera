@@ -653,6 +653,8 @@ const Parser = struct {
             .plus  => .{ .token = t, .left_bp = 1, .right_bp = 2, .expr = .plus },
             .minus => .{ .token = t, .left_bp = 1, .right_bp = 2, .expr = .minus },
             .star  => .{ .token = t, .left_bp = 3, .right_bp = 4, .expr = .multiply },
+            .shl   => .{ .token = t, .left_bp = 5, .right_bp = 6, .expr = .shl },
+            .shr   => .{ .token = t, .left_bp = 5, .right_bp = 6, .expr = .shr },
             else => {
                 self.next_token = begin;
                 return null;
@@ -907,6 +909,8 @@ const Parser = struct {
             .minus,
             .negate,
             .multiply,
+            .shl,
+            .shr,
             => unreachable,
         });
     }
@@ -927,6 +931,8 @@ const Parser = struct {
             .plus,
             .minus,
             .multiply,
+            .shl,
+            .shr,
             => unreachable,
         });
     }
@@ -942,6 +948,8 @@ const Parser = struct {
             .plus => .{ .plus = bin },
             .minus => .{ .minus = bin },
             .multiply => .{ .multiply = bin },
+            .shl => .{ .shl = bin },
+            .shr => .{ .shr = bin },
 
             .directive_symbol_def,
             .directive_symbol_ref,

@@ -275,7 +275,7 @@ fn tryResolveExpressionType(
             };
             resolveConstantDependsOnLayout(expr_flags, expr_handle, inner_expr);
         },
-        .multiply => |bin| {
+        .multiply, .shl, .shr => |bin| {
             const left = expr_resolved_types[bin.left];
             const right = expr_resolved_types[bin.right];
             expr_resolved_types[expr_handle] = t: {
@@ -395,7 +395,7 @@ fn instructionHasLayoutDependentParams(expr_flags: []const Expression.FlagSet, e
                 or instructionHasLayoutDependentParams(expr_flags, expr_infos, bin.right);
         },
 
-        .plus, .minus, .negate, .multiply,
+        .plus, .minus, .negate, .multiply, .shl, .shr,
         .literal_int, .literal_str, .literal_reg,
         .literal_symbol_def, .directive_symbol_def,
         .literal_symbol_ref, .directive_symbol_ref,

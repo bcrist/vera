@@ -39,6 +39,8 @@ pub const Info = union(enum) {
     minus: Binary,
     negate: Unary,
     multiply: Binary,
+    shl: Binary,
+    shr: Binary,
 };
 
 pub const Unary = Expression.Handle;
