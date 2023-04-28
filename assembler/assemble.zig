@@ -2,7 +2,7 @@ const std = @import("std");
 const ie = @import("instruction_encoding");
 const ie_data = @import("instruction_encoding_data");
 const Assembler = @import("Assembler.zig");
-const typechecking = @import("typechecking.zig");
+const dump = @import("dump.zig");
 
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -23,6 +23,6 @@ pub fn main() !void {
 
     a.assemble();
 
-    try a.dump(std.io.getStdOut().writer());
+    try dump.dump(&a, std.io.getStdOut().writer());
 
 }
