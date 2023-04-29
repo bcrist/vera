@@ -31,16 +31,24 @@ pub const Info = union(enum) {
     literal_reg,
     literal_symbol_def,
     directive_symbol_def: Unary,
-
     literal_symbol_ref,
     directive_symbol_ref: Unary,
-
+    negate: Unary,
+    complement: Unary,
     plus: Binary,
     minus: Binary,
-    negate: Unary,
     multiply: Binary,
     shl: Binary,
     shr: Binary,
+    concat: Binary,
+    concat_repeat: Binary,
+    bitwise_or: Binary,
+    bitwise_xor: Binary,
+    bitwise_and: Binary,
+    length_cast: Binary,
+    truncate: Binary,
+    sign_extend: Binary,
+    zero_extend: Binary,
 };
 
 pub const Unary = Expression.Handle;

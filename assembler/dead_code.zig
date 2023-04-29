@@ -47,12 +47,14 @@ fn traceReferencesInBlock(a: *Assembler, file: *SourceFile, file_handle: SourceF
 
 fn traceReferencesInExpr(a: *Assembler, file_handle: SourceFile.Handle, expr_infos: []const Expression.Info, expr_handle: Expression.Handle) void {
     switch (expr_infos[expr_handle]) {
-        .list, .arrow_list, .plus, .minus, .multiply, .shl, .shr => |binary| {
+        .list, .arrow_list, .plus, .minus, .multiply, .shl, .shr,
+        .concat, .concat_repeat, .bitwise_or, .bitwise_xor, .bitwise_and,
+        .length_cast, .truncate, .sign_extend, .zero_extend => |binary| {
             traceReferencesInExpr(a, file_handle, expr_infos, binary.left);
             traceReferencesInExpr(a, file_handle, expr_infos, binary.right);
         },
 
-        .negate => |inner_expr| {
+        .negate, .complement => |inner_expr| {
             traceReferencesInExpr(a, file_handle, expr_infos, inner_expr);
         },
 

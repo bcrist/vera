@@ -6,5 +6,5 @@ _loop:
     c   r0      -> r2
     add r0, r1  -> r0
     c   r2      -> r1
-    c -4 -> r0
     b   _loop
+    c ("asdf" ++"A"**16) .trunc (16*8) -> r0

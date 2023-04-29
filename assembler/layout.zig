@@ -300,7 +300,12 @@ fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, file_handle: Sour
             const new_constant = Constant.initInt(value, null);
             expr_resolved_constants[expr_handle] = new_constant.intern(a.arena, a.gpa, &a.constants);
         },
-        .plus, .minus, .multiply, .shl, .shr => |bin| {
+        .complement => |inner_expr| {
+            const inner = resolveExpressionConstant(a, file, file_handle, ip, inner_expr);
+            const result = inner.complement(a.gpa, &a.constant_temp);
+            expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
+        },
+        .plus, .minus, .multiply, .shl, .shr, => |bin| {
             const left = resolveExpressionConstant(a, file, file_handle, ip, bin.left);
             const right = resolveExpressionConstant(a, file, file_handle, ip, bin.right);
             const lv = left.asInt() catch 0;
@@ -315,6 +320,39 @@ fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, file_handle: Sour
             };
             const new_constant = Constant.initInt(value, null);
             expr_resolved_constants[expr_handle] = new_constant.intern(a.arena, a.gpa, &a.constants);
+        },
+        .concat, .bitwise_or, .bitwise_xor, .bitwise_and => |bin| {
+            const left = resolveExpressionConstant(a, file, file_handle, ip, bin.left);
+            const right = resolveExpressionConstant(a, file, file_handle, ip, bin.right);
+            const result = switch (info) {
+                .concat => left.concat(a.gpa, &a.constant_temp, right.*),
+                .bitwise_or => left.bitwiseOr(a.gpa, &a.constant_temp, right.*),
+                .bitwise_xor => left.bitwiseXor(a.gpa, &a.constant_temp, right.*),
+                .bitwise_and => left.bitwiseAnd(a.gpa, &a.constant_temp, right.*),
+                else => unreachable,
+            };
+            expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
+        },
+        .concat_repeat => |bin| {
+            const left = resolveExpressionConstant(a, file, file_handle, ip, bin.left);
+            const right = resolveExpressionConstant(a, file, file_handle, ip, bin.right);
+            const times = right.asInt() catch 0;
+            const result = left.repeat(a.gpa, &a.constant_temp, times);
+            expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
+        },
+        .length_cast, .truncate, .sign_extend => |bin| {
+            const left = resolveExpressionConstant(a, file, file_handle, ip, bin.left);
+            const right = resolveExpressionConstant(a, file, file_handle, ip, bin.right);
+            const rv = @intCast(u64, @max(0, right.asInt() catch 0));
+            const result = left.cloneWithLength(a.gpa, &a.constant_temp, rv, .signed);
+            expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
+        },
+        .zero_extend => |bin| {
+            const left = resolveExpressionConstant(a, file, file_handle, ip, bin.left);
+            const right = resolveExpressionConstant(a, file, file_handle, ip, bin.right);
+            const rv = @intCast(u64, @max(0, right.asInt() catch 0));
+            const result = left.cloneWithLength(a.gpa, &a.constant_temp, rv, .unsigned);
+            expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
         },
     }
 

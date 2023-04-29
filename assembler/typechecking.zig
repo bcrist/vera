@@ -262,7 +262,7 @@ fn tryResolveExpressionType(
             expr_resolved_types[expr_handle] = result_type;
             resolveConstantDependsOnLayoutBinary(expr_flags, expr_handle, bin);
         },
-        .negate => |inner_expr| {
+        .negate, .complement => |inner_expr| {
             expr_resolved_types[expr_handle] = switch (expr_resolved_types[inner_expr]) {
                 .unknown => return false,
                 .poison => .{ .poison = {} },
@@ -275,7 +275,8 @@ fn tryResolveExpressionType(
             };
             resolveConstantDependsOnLayout(expr_flags, expr_handle, inner_expr);
         },
-        .multiply, .shl, .shr => |bin| {
+        .multiply, .shl, .shr, .concat, .concat_repeat, .bitwise_or, .bitwise_xor, .bitwise_and,
+        .length_cast, .truncate, .sign_extend, .zero_extend => |bin| {
             const left = expr_resolved_types[bin.left];
             const right = expr_resolved_types[bin.right];
             expr_resolved_types[expr_handle] = t: {
@@ -394,12 +395,7 @@ fn instructionHasLayoutDependentParams(expr_flags: []const Expression.FlagSet, e
             return instructionHasLayoutDependentParams(expr_flags, expr_infos, bin.left)
                 or instructionHasLayoutDependentParams(expr_flags, expr_infos, bin.right);
         },
-
-        .plus, .minus, .negate, .multiply, .shl, .shr,
-        .literal_int, .literal_str, .literal_reg,
-        .literal_symbol_def, .directive_symbol_def,
-        .literal_symbol_ref, .directive_symbol_ref,
-        => {},
+        else => {},
     }
     return false;
 }

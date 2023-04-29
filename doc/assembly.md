@@ -215,9 +215,11 @@ There is no limit on the width of constants.  The result will have the same widt
     x ++ y
 Concatenate constants.
 Little-endian (first parameter takes least significant bit).  If the width of `x` is not a multiple of 8, then `y` will not start at the LSB of a byte.
+There is no limit on the width of the constants.
 
     x ** y
 Concatenates a constant with itself, `y` times.
+The `y` constant supports up to 63 bits (though practically speaking much lower due to memory use)
 
     x ' w
 Change the bit-width of a constant to `w`
@@ -240,10 +242,7 @@ If the new size is larger than the old, sign extension is used.
 Change the signedness of a GPR expression.
 Generic means unspecified signedness, equivalent to a register literal's signedness.
 
-    symbol
-Symbolic reference.
-
-	@x
+    @x
 Convert an IP-relative address into an absolute address.
 The address space (data/code) is preserved.
 Not valid for references to stack labels.

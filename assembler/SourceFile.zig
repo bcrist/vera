@@ -636,7 +636,8 @@ const Parser = struct {
         self.skipLinespace();
         const t = self.next_token;
         const info: PrefixOperatorInfo = switch (self.token_kinds[t]) {
-            .minus => .{ .token = t, .right_bp = 10, .expr = .negate },
+            .minus => .{ .token = t, .right_bp = 0xFF, .expr = .negate },
+            .tilde => .{ .token = t, .right_bp = 0xFF, .expr = .complement },
             else => {
                 self.next_token = begin;
                 return null;
@@ -648,13 +649,39 @@ const Parser = struct {
     fn parseOperator(self: *Parser) ?OperatorInfo {
         const begin = self.next_token;
         self.skipLinespace();
-        const t = self.next_token;
+        var t = self.next_token;
         const info: OperatorInfo = switch (self.token_kinds[t]) {
-            .plus  => .{ .token = t, .left_bp = 1, .right_bp = 2, .expr = .plus },
-            .minus => .{ .token = t, .left_bp = 1, .right_bp = 2, .expr = .minus },
-            .star  => .{ .token = t, .left_bp = 3, .right_bp = 4, .expr = .multiply },
-            .shl   => .{ .token = t, .left_bp = 5, .right_bp = 6, .expr = .shl },
-            .shr   => .{ .token = t, .left_bp = 5, .right_bp = 6, .expr = .shr },
+            .bar        => .{ .token = t, .left_bp = 0, .right_bp = 1, .expr = .bitwise_or },
+            .caret      => .{ .token = t, .left_bp = 2, .right_bp = 3, .expr = .bitwise_xor },
+            .amp        => .{ .token = t, .left_bp = 4, .right_bp = 5, .expr = .bitwise_and },
+
+            .plus       => .{ .token = t, .left_bp = 10, .right_bp = 11, .expr = .plus },
+            .minus      => .{ .token = t, .left_bp = 10, .right_bp = 11, .expr = .minus },
+            .star       => .{ .token = t, .left_bp = 12, .right_bp = 13, .expr = .multiply },
+
+            .shl        => .{ .token = t, .left_bp = 20, .right_bp = 21, .expr = .shl },
+            .shr        => .{ .token = t, .left_bp = 20, .right_bp = 21, .expr = .shr },
+
+            .plus_plus  => .{ .token = t, .left_bp = 30, .right_bp = 31, .expr = .concat },
+            .star_star  => .{ .token = t, .left_bp = 32, .right_bp = 33, .expr = .concat_repeat },
+
+            .apostrophe => .{ .token = t, .left_bp = 42, .right_bp = 43, .expr = .length_cast },
+
+            .dot => info: {
+                t += 1;
+                self.next_token = t;
+                if (self.tryKeyword("zx")) {
+                    break :info .{ .token = t, .left_bp = 40, .right_bp = 41, .expr = .zero_extend };
+                } else if (self.tryKeyword("sx")) {
+                    break :info .{ .token = t, .left_bp = 40, .right_bp = 41, .expr = .sign_extend };
+                } else if (self.tryKeyword("trunc")) {
+                    break :info .{ .token = t, .left_bp = 40, .right_bp = 41, .expr = .truncate };
+                } else {
+                    self.next_token = begin;
+                    return null;
+                }
+            },
+
             else => {
                 self.next_token = begin;
                 return null;
@@ -911,6 +938,16 @@ const Parser = struct {
             .multiply,
             .shl,
             .shr,
+            .concat,
+            .concat_repeat,
+            .bitwise_or,
+            .bitwise_xor,
+            .bitwise_and,
+            .complement,
+            .length_cast,
+            .sign_extend,
+            .zero_extend,
+            .truncate,
             => unreachable,
         });
     }
@@ -920,6 +957,7 @@ const Parser = struct {
             .directive_symbol_def => .{ .directive_symbol_def = inner },
             .directive_symbol_ref => .{ .directive_symbol_ref = inner },
             .negate => .{ .negate = inner },
+            .complement => .{ .complement = inner },
 
             .literal_int,
             .literal_str,
@@ -933,6 +971,15 @@ const Parser = struct {
             .multiply,
             .shl,
             .shr,
+            .concat,
+            .concat_repeat,
+            .bitwise_or,
+            .bitwise_xor,
+            .bitwise_and,
+            .length_cast,
+            .sign_extend,
+            .zero_extend,
+            .truncate,
             => unreachable,
         });
     }
@@ -950,10 +997,20 @@ const Parser = struct {
             .multiply => .{ .multiply = bin },
             .shl => .{ .shl = bin },
             .shr => .{ .shr = bin },
+            .concat => .{ .concat = bin },
+            .concat_repeat => .{ .concat_repeat = bin },
+            .bitwise_or => .{ .bitwise_or = bin },
+            .bitwise_xor => .{ .bitwise_xor = bin },
+            .bitwise_and => .{ .bitwise_and = bin },
+            .length_cast => .{ .length_cast = bin },
+            .sign_extend => .{ .sign_extend = bin },
+            .zero_extend => .{ .zero_extend = bin },
+            .truncate => .{ .truncate = bin },
 
             .directive_symbol_def,
             .directive_symbol_ref,
             .negate,
+            .complement,
             .literal_int,
             .literal_str,
             .literal_reg,

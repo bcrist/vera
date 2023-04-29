@@ -90,13 +90,15 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
             try writer.print("   {s}", .{ @tagName(info) });
              switch (info) {
                 .list, .arrow_list,
-                .plus, .minus, .multiply, .shl, .shr,
+                .plus, .minus, .multiply, .shl, .shr, .concat, .concat_repeat,
+                .bitwise_or, .bitwise_xor, .bitwise_and, .length_cast,
+                .truncate, .sign_extend, .zero_extend,
                  => |binary| {
                     try writer.print(" #{}, #{}", .{ binary.left, binary.right });
                 },
 
                 .directive_symbol_def, .directive_symbol_ref,
-                .negate,
+                .negate, .complement,
                 => |unary| {
                     try writer.print(" #{}", .{ unary });
                 },
@@ -137,7 +139,11 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
         const ptr = k.*;
         try writer.print("   {X:0>16}:{:>4}b: ", .{ @ptrToInt(ptr), ptr.bit_count });
         if (ptr.asInt()) |int_value| {
-            try writer.print("0x{X} {} ", .{ int_value, int_value });
+            var uint_value = @bitCast(u64, int_value);
+            if (ptr.bit_count < 64) {
+                uint_value &= (@as(u64, 1) << @intCast(u6, ptr.bit_count)) - 1;
+            }
+            try writer.print("0x{X} {} ", .{ uint_value, int_value });
         } else |_| {}
         try writer.print("'{s}'\n", .{ std.fmt.fmtSliceEscapeUpper(ptr.asString()) });
     }

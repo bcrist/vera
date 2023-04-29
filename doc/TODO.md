@@ -1,4 +1,6 @@
 ## Assembler
+.db/dw/dd directives
+
 Warn when .org, .align, or an implied .align causes a hole in code that is reachable through control flow
 
 How do we deal with stack labels since Sections arent set up until encode phase?

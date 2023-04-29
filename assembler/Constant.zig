@@ -304,6 +304,90 @@ pub fn clone(self: Constant, allocator: std.mem.Allocator) Constant {
     } else return self;
 }
 
+pub fn cloneWithLength(self: Constant, allocator: std.mem.Allocator, storage: *std.ArrayListUnmanaged(u8), bit_count: u64, signedness: std.builtin.Signedness) Constant {
+    if (bit_count <= self.bit_count) {
+        return init(self.asString().ptr, bit_count);
+    }
+
+    storage.resize(allocator, (bit_count + 7) / 8) catch @panic("OOM");
+    switch (signedness) {
+        .signed => {
+            var iter = SxIterator.init(&self);
+            for (storage.items) |*b| {
+                b.* = iter.next();
+            }
+        },
+        .unsigned => {
+            var iter = ZxIterator.init(&self);
+            for (storage.items) |*b| {
+                b.* = iter.next();
+            }
+        },
+    }
+    truncateFinalByte(storage.items, bit_count);
+    return init(storage.items.ptr, bit_count);
+}
+
+const ZxIterator = struct {
+    remaining: []const u8,
+
+    pub fn init(constant: *const Constant) ZxIterator {
+        return .{ .remaining = constant.asString(), };
+    }
+
+    pub fn next(self: *ZxIterator) u8 {
+        const remaining_bytes = self.remaining.len;
+        if (remaining_bytes > 0) {
+            const b = self.remaining[0];
+            self.remaining = self.remaining[1..];
+            return b;
+        } else {
+            return 0;
+        }
+    }
+};
+
+const SxIterator = struct {
+    remaining: []const u8,
+    final_byte: u8,
+    ext_byte: u8,
+
+    pub fn init(constant: *const Constant) SxIterator {
+        var str = constant.asString();
+        var self = SxIterator{
+            .remaining = str,
+            .final_byte = str[str.len - 1],
+            .ext_byte = 0,
+        };
+        const final_byte_bits = @intCast(u3, constant.bit_count & 0x7);
+        if (final_byte_bits == 0) {
+            if (0 != @truncate(u1, self.final_byte >> 7)) {
+                self.ext_byte = 0xFF;
+            }
+        } else if (0 != @truncate(u1, self.final_byte >> (final_byte_bits - 1))) {
+            var mask = ~@as(u8, 0);
+            mask <<= final_byte_bits;
+            self.final_byte |= mask;
+            self.ext_byte = 0xFF;
+        }
+        return self;
+    }
+
+    pub fn next(self: *SxIterator) u8 {
+        const remaining_bytes = self.remaining.len;
+        if (remaining_bytes > 0) {
+            const b = self.remaining[0];
+            self.remaining = self.remaining[1..];
+            return b;
+        } else if (remaining_bytes == 1) {
+            self.remaining.len = 0;
+            return self.final_byte;
+        } else {
+            return self.ext_byte;
+        }
+    }
+};
+
 pub fn asString(self: *const Constant) []const u8 {
     var slice: []const u8 = undefined;
     slice.ptr = if (self.bit_count <= 64) &self.data.short else self.data.long;
@@ -424,17 +508,19 @@ test "concat" {
     try std.testing.expectEqualSlices(u8, "\xFF\xFF\xFF\xB0\x9D\x39\x36\xB2\x35\x33\x35\x90\xB0\x9D\x39\x36\xB2\x35\x33\x35", bits23.concat(alloc, &temp, long).asString());
 }
 
-pub fn repeat(self: Constant, allocator: std.mem.Allocator, storage: *std.ArrayListUnmanaged(u8), times: u63) Constant {
+pub fn repeat(self: Constant, allocator: std.mem.Allocator, storage: *std.ArrayListUnmanaged(u8), times: i64) Constant {
+    if (times <= 0) return init("", 0);
     if (times == 1) return self;
-    if (times == 0) return init("", 0);
 
-    const combined_bit_count = self.bit_count * times;
+    const times_u64 = @intCast(u64, times);
+
+    const combined_bit_count = self.bit_count * times_u64;
     if (combined_bit_count <= 64) {
         var self_value: u64 = undefined;
         std.mem.copy(u8, std.mem.asBytes(&self_value), &self.data.short);
 
         const shift = @intCast(u6, self.bit_count);
-        var remaining = times - 1;
+        var remaining = times_u64 - 1;
         var value = self_value;
         while (remaining > 0) : (remaining -= 1) {
             value <<= shift;
@@ -455,11 +541,11 @@ pub fn repeat(self: Constant, allocator: std.mem.Allocator, storage: *std.ArrayL
 
     var leftover_bits = self_leftover_bits;
     if (leftover_bits == 0) {
-        for (1..times) |_| {
+        for (1..times_u64) |_| {
             storage.appendSliceAssumeCapacity(self_data);
         }
     } else {
-        for (1 .. times - 1) |_| {
+        for (1 .. times_u64 - 1) |_| {
             if (leftover_bits == 0) {
                 storage.appendSliceAssumeCapacity(self_data);
             } else {
@@ -510,6 +596,112 @@ test "repeat" {
     try std.testing.expectEqualSlices(u8, "\xFF\xFF\xFF", hexFFF.repeat(alloc, &temp, 2).asString());
     try std.testing.expectEqualSlices(u8, "\xFF\xFF\xFF\xFF\x0F", hexFFF.repeat(alloc, &temp, 3).asString());
     try std.testing.expectEqualSlices(u8, "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF", bits1.repeat(alloc, &temp, 72).asString());
+}
+
+fn sxShort(self: Constant) u64 {
+    var result: u64 = undefined;
+    std.mem.copy(u8, std.mem.asBytes(&result), &self.data.short);
+    if (0 != @truncate(u1, result >> @intCast(u6, self.bit_count - 1))) {
+        var mask = ~@as(u64, 0);
+        mask <<= @intCast(u6, self.bit_count);
+        result |= mask;
+    }
+    return result;
+}
+
+fn truncate(short: u64, bits: u64) u64 {
+    return if (bits < 64) short & ((@as(u64, 1) << @intCast(u6, bits)) - 1) else short;
+}
+
+fn truncateFinalByte(storage: []u8, bit_count: u64) void {
+    var final_byte_bits = @intCast(u3, bit_count & 0x7);
+    if (final_byte_bits != 0) {
+        storage[storage.len - 1] &= ~(@as(u8, 0xFF) << final_byte_bits);
+    }
+}
+
+pub fn bitwiseOr(self: Constant, allocator: std.mem.Allocator, storage: *std.ArrayListUnmanaged(u8), other: Constant) Constant {
+    const result_bit_count = @max(self.bit_count, other.bit_count);
+
+    if (result_bit_count <= 64) {
+        const result = truncate(sxShort(self) | sxShort(other), result_bit_count);
+        return init(std.mem.asBytes(&result), result_bit_count);
+    }
+
+    storage.resize(allocator, (result_bit_count + 7) / 8) catch @panic("OOM");
+
+    var self_iter = SxIterator.init(&self);
+    var other_iter = SxIterator.init(&other);
+    for (storage.items) |*b| {
+        b.* = self_iter.next() | other_iter.next();
+    }
+
+    truncateFinalByte(storage.items, result_bit_count);
+
+    return init(storage.items.ptr, result_bit_count);
+}
+
+pub fn bitwiseXor(self: Constant, allocator: std.mem.Allocator, storage: *std.ArrayListUnmanaged(u8), other: Constant) Constant {
+    const result_bit_count = @max(self.bit_count, other.bit_count);
+
+    if (result_bit_count <= 64) {
+        const result = truncate(sxShort(self) ^ sxShort(other), result_bit_count);
+        return init(std.mem.asBytes(&result), result_bit_count);
+    }
+
+    storage.resize(allocator, (result_bit_count + 7) / 8) catch @panic("OOM");
+
+    var self_iter = SxIterator.init(&self);
+    var other_iter = SxIterator.init(&other);
+    for (storage.items) |*b| {
+        b.* = self_iter.next() ^ other_iter.next();
+    }
+
+    truncateFinalByte(storage.items, result_bit_count);
+
+    return init(storage.items.ptr, result_bit_count);
+}
+
+pub fn bitwiseAnd(self: Constant, allocator: std.mem.Allocator, storage: *std.ArrayListUnmanaged(u8), other: Constant) Constant {
+    const result_bit_count = @max(self.bit_count, other.bit_count);
+
+    if (result_bit_count <= 64) {
+        const result = truncate(sxShort(self) & sxShort(other), result_bit_count);
+        return init(std.mem.asBytes(&result), result_bit_count);
+    }
+
+    storage.resize(allocator, (result_bit_count + 7) / 8) catch @panic("OOM");
+
+    var self_iter = SxIterator.init(&self);
+    var other_iter = SxIterator.init(&other);
+    for (storage.items) |*b| {
+        b.* = self_iter.next() & other_iter.next();
+    }
+
+    truncateFinalByte(storage.items, result_bit_count);
+
+    return init(storage.items.ptr, result_bit_count);
+}
+
+pub fn complement(self: Constant, allocator: std.mem.Allocator, storage: *std.ArrayListUnmanaged(u8)) Constant {
+    const bit_count = self.bit_count;
+
+    if (bit_count <= 64) {
+        const result = truncate(~sxShort(self), bit_count);
+        return init(std.mem.asBytes(&result), bit_count);
+    }
+
+    const data = self.asString();
+
+    storage.resize(allocator, data.len) catch @panic("OOM");
+
+    for (storage.items, data) |*s, d| {
+        s.* = ~d;
+    }
+
+    truncateFinalByte(storage.items, bit_count);
+
+    return init(storage.items.ptr, bit_count);
 }
 
 pub fn suffix(self: Constant, bytes_to_skip: u64) Constant {

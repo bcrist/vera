@@ -16,10 +16,17 @@ pub const TokenKind = enum(u8) {
     paren_open,
     paren_close,
     plus,
+    plus_plus,
     minus,
     star,
+    star_star,
     shl,
     shr,
+    amp,
+    bar,
+    caret,
+    tilde,
+    apostrophe,
 };
 
 pub const Token = struct {
@@ -165,11 +172,18 @@ pub const Token = struct {
             .plus,
             .minus,
             .star,
+            .amp,
+            .bar,
+            .caret,
+            .tilde,
+            .apostrophe
             => 1,
 
             .arrow,
             .shl,
             .shr,
+            .plus_plus,
+            .star_star,
             => 2,
 
             .id => blk: {
@@ -283,10 +297,21 @@ pub fn lex(allocator: std.mem.Allocator, source: []const u8) TokenList {
             ':' => .colon,
             '(' => .paren_open,
             ')' => .paren_close,
-            '+' => .plus,
-            '*' => .star,
             '"' => .str_literal,
-            '-' => if (source.len <= i + 1) .reserved else switch (source[i + 1]) {
+            '&' => .amp,
+            '|' => .bar,
+            '^' => .caret,
+            '~' => .tilde,
+            '\'' => .apostrophe,
+            '+' => if (source.len <= i + 1) .plus else switch (source[i + 1]) {
+                '+' => .plus_plus,
+                else => .plus,
+            },
+            '*' => if (source.len <= i + 1) .star else switch (source[i + 1]) {
+                '*' => .star_star,
+                else => .star,
+            },
+            '-' => if (source.len <= i + 1) .minus else switch (source[i + 1]) {
                 '>' => .arrow,
                 else => .minus,
             },
