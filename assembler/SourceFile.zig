@@ -638,6 +638,7 @@ const Parser = struct {
         const info: PrefixOperatorInfo = switch (self.token_kinds[t]) {
             .minus => .{ .token = t, .right_bp = 0xFF, .expr = .negate },
             .tilde => .{ .token = t, .right_bp = 0xFF, .expr = .complement },
+            .at    => .{ .token = t, .right_bp = 0xFF, .expr = .absolute_address_cast },
             else => {
                 self.next_token = begin;
                 return null;
@@ -958,6 +959,7 @@ const Parser = struct {
             .signed_cast,
             .unsigned_cast,
             .maybe_signed_cast,
+            .absolute_address_cast,
             => unreachable,
         });
     }
@@ -971,6 +973,7 @@ const Parser = struct {
             .signed_cast => .{ .signed_cast = inner },
             .unsigned_cast => .{ .unsigned_cast = inner },
             .maybe_signed_cast => .{ .maybe_signed_cast = inner },
+            .absolute_address_cast => .{ .absolute_address_cast = inner },
 
             .literal_int,
             .literal_str,
@@ -1032,6 +1035,7 @@ const Parser = struct {
             .literal_reg,
             .literal_symbol_def,
             .literal_symbol_ref,
+            .absolute_address_cast,
             => unreachable,
         });
     }

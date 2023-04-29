@@ -357,6 +357,12 @@ fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, file_handle: Sour
         .signed_cast, .unsigned_cast, .maybe_signed_cast => |inner_expr| {
             expr_resolved_constants[expr_handle] = resolveExpressionConstant(a, file, file_handle, ip, inner_expr);
         },
+        .absolute_address_cast => |inner_expr| {
+            const inner = resolveExpressionConstant(a, file, file_handle, ip, inner_expr);
+            const value = inner.asInt() catch 0;
+            const result = Constant.initInt(value +% ip, null);
+            expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
+        },
     }
 
     return expr_resolved_constants[expr_handle].?;

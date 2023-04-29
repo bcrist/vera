@@ -27,6 +27,7 @@ pub const TokenKind = enum(u8) {
     caret,
     tilde,
     apostrophe,
+    at,
 };
 
 pub const Token = struct {
@@ -176,7 +177,8 @@ pub const Token = struct {
             .bar,
             .caret,
             .tilde,
-            .apostrophe
+            .apostrophe,
+            .at,
             => 1,
 
             .arrow,
@@ -303,6 +305,7 @@ pub fn lex(allocator: std.mem.Allocator, source: []const u8) TokenList {
             '^' => .caret,
             '~' => .tilde,
             '\'' => .apostrophe,
+            '@' => .at,
             '+' => if (source.len <= i + 1) .plus else switch (source[i + 1]) {
                 '+' => .plus_plus,
                 else => .plus,

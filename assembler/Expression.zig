@@ -38,6 +38,7 @@ pub const Info = union(enum) {
     signed_cast: Unary,
     unsigned_cast: Unary,
     maybe_signed_cast: Unary,
+    absolute_address_cast: Unary,
     plus: Binary,
     minus: Binary,
     multiply: Binary,

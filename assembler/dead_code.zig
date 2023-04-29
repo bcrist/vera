@@ -54,7 +54,8 @@ fn traceReferencesInExpr(a: *Assembler, file_handle: SourceFile.Handle, expr_inf
             traceReferencesInExpr(a, file_handle, expr_infos, binary.right);
         },
 
-        .negate, .complement, .signed_cast, .unsigned_cast, .maybe_signed_cast => |inner_expr| {
+        .negate, .complement, .signed_cast, .unsigned_cast, .maybe_signed_cast,
+        .absolute_address_cast => |inner_expr| {
             traceReferencesInExpr(a, file_handle, expr_infos, inner_expr);
         },
 

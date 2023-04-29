@@ -270,7 +270,7 @@ fn tryResolveExpressionType(
                 .constant => .{ .constant = {} },
                 .raw_base_offset, .data_address, .insn_address, .stack_address,
                 .symbol_def, .reg8, .reg16, .reg32, .sr => t: {
-                    a.recordError(file_handle, expr_tokens[inner_expr], "Expected constant expression");
+                    a.recordError(file_handle, expr_tokens[expr_handle], "Operand must be a constant expression");
                     break :t .{ .poison = {} };
                 },
             };
@@ -312,7 +312,29 @@ fn tryResolveExpressionType(
                 },
                 .raw_base_offset, .data_address, .insn_address, .stack_address,
                 .constant, .symbol_def, .sr => t: {
-                    a.recordError(file_handle, expr_tokens[inner_expr], "Expected GPR expression");
+                    a.recordError(file_handle, expr_tokens[expr_handle], "Operand must be a GPR expression");
+                    break :t .{ .poison = {} };
+                },
+            };
+            resolveConstantDependsOnLayout(expr_flags, expr_handle, inner_expr);
+        },
+        .absolute_address_cast => |inner_expr| {
+            const inner_type = expr_resolved_types[inner_expr];
+            expr_resolved_types[expr_handle] = switch (inner_type) {
+                .unknown => return false,
+                .poison => .{ .poison = {} },
+                .raw_base_offset, .data_address, .insn_address, .stack_address => |bo| t: {
+                    if (!std.meta.eql(bo.base, .{ .sr = .ip })) {
+                        a.recordError(file_handle, expr_tokens[expr_handle], "Operand must be an IP-relative expression");
+                        break :t .{ .poison = {} };
+                    }
+                    var builder = ie.ExpressionTypeBuilder{};
+                    builder.add(inner_type);
+                    builder.subtract(.{ .sr = .ip });
+                    break :t builder.build() catch unreachable;
+                },
+                .reg8, .reg16, .reg32, .constant, .symbol_def, .sr => t: {
+                    a.recordError(file_handle, expr_tokens[expr_handle], "Operand must be an IP-relative expression");
                     break :t .{ .poison = {} };
                 },
             };

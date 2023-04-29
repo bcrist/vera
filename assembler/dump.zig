@@ -99,7 +99,7 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
 
                 .directive_symbol_def, .directive_symbol_ref,
                 .signed_cast, .unsigned_cast, .maybe_signed_cast,
-                .negate, .complement,
+                .negate, .complement, .absolute_address_cast,
                 => |unary| {
                     try writer.print(" #{}", .{ unary });
                 },
