@@ -106,7 +106,7 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
                     try writer.print(" #{}", .{ unary });
                 },
 
-                .literal_int, .literal_str, .literal_reg, .literal_symbol_def, .literal_symbol_ref
+                .literal_int, .literal_str, .literal_reg, .literal_symbol_def, .literal_symbol_ref, .literal_current_address,
                 => {},
             }
             const token = file.tokens.get(token_handle);

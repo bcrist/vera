@@ -130,7 +130,7 @@ pub fn initStringLiteral(allocator: std.mem.Allocator, storage: *std.ArrayListUn
             else => switch (ch) {
                 ')' => escape = 0,
                 else => {
-                    // TODO
+                    // TODO parenthesized escape sequences
                 },
             },
         }

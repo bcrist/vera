@@ -29,6 +29,7 @@ pub const Info = union(enum) {
     literal_int,
     literal_str,
     literal_reg,
+    literal_current_address,
     literal_symbol_def,
     directive_symbol_def: Unary,
     literal_symbol_ref,

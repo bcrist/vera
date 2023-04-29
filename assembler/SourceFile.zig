@@ -761,6 +761,7 @@ const Parser = struct {
             orelse self.parseIntLiteral()
             orelse self.parseStringLiteral()
             orelse self.parseRegisterLiteral()
+            orelse self.parseSpecialLiteral()
             orelse self.parseSymbolRef()
             ;
     }
@@ -842,6 +843,17 @@ const Parser = struct {
                     return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .asn });
                 }
             }
+        }
+        self.next_token = begin;
+        return null;
+    }
+
+    fn parseSpecialLiteral(self: *Parser) ?Expression.Handle {
+         const begin = self.next_token;
+        self.skipLinespace();
+        const token = self.next_token;
+        if (self.tryToken(.money)) {
+            return self.addTerminalExpression(.literal_current_address, token);
         }
         self.next_token = begin;
         return null;
@@ -954,6 +966,7 @@ const Parser = struct {
             .literal_reg => .{ .literal_reg = {} },
             .literal_symbol_def => .{ .literal_symbol_def = {} },
             .literal_symbol_ref => .{ .literal_symbol_ref = {} },
+            .literal_current_address => .{ .literal_current_address = {} },
 
             .list,
             .arrow_list,
@@ -1015,6 +1028,7 @@ const Parser = struct {
             .literal_reg,
             .literal_symbol_def,
             .literal_symbol_ref,
+            .literal_current_address,
             .list,
             .arrow_list,
             .plus,
@@ -1070,6 +1084,7 @@ const Parser = struct {
             .literal_reg,
             .literal_symbol_def,
             .literal_symbol_ref,
+            .literal_current_address,
             .absolute_address_cast,
             .data_address_cast,
             .insn_address_cast,

@@ -166,7 +166,6 @@ There are operators which can manipulate the bit width of their result (see belo
 Integers and strings can always be used interchangeably; strings are just syntactic sugar for large integers.
 Strings have the same syntax as zyxlang.
 
-
 ### Current address literal
 `$` resolves to the address of the current line's label (or if there is none, the address it would have if it existed).  In code sections, it is equivalent to `.i IP`.  In data and stack sections, the `IP` register would normally not be used, but `$` can still be used to compute distances from the current line
 
@@ -247,11 +246,6 @@ Convert an IP-relative address into an absolute address.
 The address space (data/code) is preserved.
 Not valid for references to stack labels.
 
-    #address
-Dereference a labelled data declaration from a `.const`/`.kconst` section.
-Does not count as a reference for dead-code elimination.
-The label must have a `.db`, `.dw`, or `.dd` directive on the same line, with exactly one constant expression.
-
     .d expr
     .i expr
     .s expr
@@ -296,3 +290,9 @@ Offset may be a constant or register reference.
 * Iterative page allocation, memory layout, and instruction selection
 * Layout error checking and instruction encoding
 * Output and reporting
+
+# Ouput Formats
+* Intel hex/Motorola srec
+* Simulator-loadable S-expressions
+* (future) OS-loadable binary
+* Disassembly/listing - source ordering or by final address

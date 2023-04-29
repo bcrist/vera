@@ -1,6 +1,8 @@
 ## Assembler
 .db/dw/dd directives
 
+.local defs
+
 Usage of a label that's fixed by an .org directive should not cause the expression to be marked .constant_depends_on_layout
 
 Warn when .org, .align, or an implied .align causes a hole in code that is reachable through control flow
@@ -9,9 +11,12 @@ How do we deal with stack labels since Sections arent set up until encode phase?
 
 Multi-line string literals
 
-Error on multiple files with same name
+Warn on multiple files with same name
 
 Consider having stack sections use a different namespace from other section types, and make them local to the file they're defined in.
+
+Use assembler for test_instruction_behavior
+Use assembler and disassembler for test_instruction_encoding
 
 ## Microcode decompiler
 

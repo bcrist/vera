@@ -279,6 +279,20 @@ pub fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, file_handle: 
         .index_to_reg8, .index_to_reg16, .index_to_reg32, .reg_to_index,
         => expr_resolved_constants[expr_handle] = &Constant.builtin.zero,
 
+        .literal_current_address => {
+            var value = ip;
+            switch (expr_resolved_types[expr_handle]) {
+                .raw_base_offset, .data_address, .insn_address, .stack_address => |bo| {
+                    if (std.meta.eql(bo.base, .{ .sr = .ip })) {
+                        value = 0;
+                    }
+                },
+                else => {},
+            }
+            const constant = Constant.initInt(value, null);
+            expr_resolved_constants[expr_handle] = constant.intern(a.arena, a.gpa, &a.constants);
+        },
+
         .literal_symbol_ref => {
             const token_handle = expr_tokens[expr_handle];
             const raw_symbol = file.tokens.get(token_handle).location(file.source);

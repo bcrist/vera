@@ -80,6 +80,7 @@ fn traceReferencesInExpr(a: *Assembler, file_handle: SourceFile.Handle, expr_inf
         .literal_reg,
         .literal_symbol_def,
         .directive_symbol_def,
+        .literal_current_address,
         => {},
     }
 }

@@ -226,6 +226,22 @@ fn tryResolveExpressionType(
 
             expr_resolved_types[expr_handle] = reg_type;
         },
+        .literal_current_address => {
+            const block_handle = file.findBlockByToken(expr_tokens[expr_handle]);
+            if (file.blocks.items(.section)[block_handle]) |section_handle| {
+                expr_resolved_types[expr_handle] = switch (a.getSection(section_handle).kind) {
+                    .code_user, .code_kernel, .entry_user, .entry_kernel => ExpressionType.relativeAddress(.insn, .{ .sr = .ip }),
+                    .data_user, .data_kernel, .constant_user, .constant_kernel => ExpressionType.relativeAddress(.data, .{ .sr = .ip }),
+                    .stack => ExpressionType.relativeAddress(.stack, .{ .sr = .sp }),
+                    .info => ExpressionType.absoluteAddress(.data),
+                } catch unreachable;
+            } else {
+                // Block does not have a section handle, so it's an .info section by default
+                expr_resolved_types[expr_handle] = ExpressionType.absoluteAddress(.data);
+            }
+            expr_flags[expr_handle].insert(.constant_depends_on_layout);
+            return true;
+        },
         .literal_symbol_ref => {
             const token_handle = expr_tokens[expr_handle];
             const symbol_literal = file.tokens.get(token_handle).location(file.source);
