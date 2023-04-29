@@ -289,7 +289,7 @@ fn tryResolveExpressionType(
             };
             resolveConstantDependsOnLayoutBinary(expr_flags, expr_handle, bin);
         },
-        .signed_cast, .unsigned_cast, .nil_signedness_cast => |inner_expr| {
+        .signed_cast, .unsigned_cast, .maybe_signed_cast => |inner_expr| {
             const inner_type = expr_resolved_types[inner_expr];
             expr_resolved_types[expr_handle] = switch (inner_type) {
                 .unknown => return false,
@@ -299,7 +299,7 @@ fn tryResolveExpressionType(
                     new_reg.signedness = switch (info) {
                         .signed_cast => .signed,
                         .unsigned_cast => .unsigned,
-                        .nil_signedness_cast => null,
+                        .maybe_signed_cast => null,
                         else => unreachable,
                     };
 

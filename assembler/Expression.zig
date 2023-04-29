@@ -37,7 +37,7 @@ pub const Info = union(enum) {
     complement: Unary,
     signed_cast: Unary,
     unsigned_cast: Unary,
-    nil_signedness_cast: Unary,
+    maybe_signed_cast: Unary,
     plus: Binary,
     minus: Binary,
     multiply: Binary,
