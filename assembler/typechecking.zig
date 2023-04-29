@@ -178,7 +178,8 @@ fn tryResolveExpressionType(
 ) bool {
     std.debug.assert(expr_resolved_types[expr_handle] == .unknown);
 
-    switch (expr_infos[expr_handle]) {
+    const info = expr_infos[expr_handle];
+    switch (info) {
         .list, .arrow_list => {
             expr_resolved_types[expr_handle] = .{ .poison = {} };
         },
@@ -287,6 +288,35 @@ fn tryResolveExpressionType(
                 break :t .{ .poison = {} };
             };
             resolveConstantDependsOnLayoutBinary(expr_flags, expr_handle, bin);
+        },
+        .signed_cast, .unsigned_cast, .nil_signedness_cast => |inner_expr| {
+            const inner_type = expr_resolved_types[inner_expr];
+            expr_resolved_types[expr_handle] = switch (inner_type) {
+                .unknown => return false,
+                .poison => .{ .poison = {} },
+                .reg8, .reg16, .reg32 => |reg| t: {
+                    var new_reg = reg;
+                    new_reg.signedness = switch (info) {
+                        .signed_cast => .signed,
+                        .unsigned_cast => .unsigned,
+                        .nil_signedness_cast => null,
+                        else => unreachable,
+                    };
+
+                    break :t switch (inner_type) {
+                        .reg8 => .{ .reg8 = new_reg },
+                        .reg16 => .{ .reg16 = new_reg },
+                        .reg32 => .{ .reg32 = new_reg },
+                        else => unreachable,
+                    };
+                },
+                .raw_base_offset, .data_address, .insn_address, .stack_address,
+                .constant, .symbol_def, .sr => t: {
+                    a.recordError(file_handle, expr_tokens[inner_expr], "Expected GPR expression");
+                    break :t .{ .poison = {} };
+                },
+            };
+            resolveConstantDependsOnLayout(expr_flags, expr_handle, inner_expr);
         },
     }
     return true;

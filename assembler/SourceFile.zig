@@ -676,6 +676,12 @@ const Parser = struct {
                     break :info .{ .token = t, .left_bp = 40, .right_bp = 41, .expr = .sign_extend };
                 } else if (self.tryKeyword("trunc")) {
                     break :info .{ .token = t, .left_bp = 40, .right_bp = 41, .expr = .truncate };
+                } else if (self.tryKeyword("signed")) {
+                    break :info .{ .token = t, .left_bp = 40, .right_bp = null, .expr = .signed_cast };
+                } else if (self.tryKeyword("unsigned")) {
+                    break :info .{ .token = t, .left_bp = 40, .right_bp = null, .expr = .unsigned_cast };
+                } else if (self.tryKeyword("generic")) {
+                    break :info .{ .token = t, .left_bp = 40, .right_bp = null, .expr = .nil_signedness_cast };
                 } else {
                     self.next_token = begin;
                     return null;
@@ -948,6 +954,9 @@ const Parser = struct {
             .sign_extend,
             .zero_extend,
             .truncate,
+            .signed_cast,
+            .unsigned_cast,
+            .nil_signedness_cast,
             => unreachable,
         });
     }
@@ -958,6 +967,9 @@ const Parser = struct {
             .directive_symbol_ref => .{ .directive_symbol_ref = inner },
             .negate => .{ .negate = inner },
             .complement => .{ .complement = inner },
+            .signed_cast => .{ .signed_cast = inner },
+            .unsigned_cast => .{ .unsigned_cast = inner },
+            .nil_signedness_cast => .{ .nil_signedness_cast = inner },
 
             .literal_int,
             .literal_str,
@@ -1011,6 +1023,9 @@ const Parser = struct {
             .directive_symbol_ref,
             .negate,
             .complement,
+            .signed_cast,
+            .unsigned_cast,
+            .nil_signedness_cast,
             .literal_int,
             .literal_str,
             .literal_reg,
