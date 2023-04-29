@@ -670,6 +670,7 @@ const Parser = struct {
             .dot => info: {
                 t += 1;
                 self.next_token = t;
+                defer self.next_token = t;
                 if (self.tryKeyword("zx")) {
                     break :info .{ .token = t, .left_bp = 40, .right_bp = 41, .expr = .zero_extend };
                 } else if (self.tryKeyword("sx")) {
@@ -683,11 +684,11 @@ const Parser = struct {
                 } else if (self.tryKeyword("generic")) {
                     break :info .{ .token = t, .left_bp = 40, .right_bp = null, .expr = .nil_signedness_cast };
                 } else {
-                    self.next_token = begin;
+                    t = begin;
                     return null;
                 }
             },
-
+            
             else => {
                 self.next_token = begin;
                 return null;
