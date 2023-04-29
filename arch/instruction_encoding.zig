@@ -1472,14 +1472,14 @@ pub const Parameter = struct {
                     else => unreachable,
                 }
                 if (!innerTypeMatches(info.base, encoding.base)) return false;
-                if (info.base == .constant and info.offset == .constant) {
-                    if (encoding.offset != .none) return false;
-                } else {
-                    if (info.offset == .constant and self.constant == 0 and encoding.offset == .none) return true;
-                    if (!innerTypeMatches(info.offset, encoding.offset)) return false;
+                if (info.offset == .constant and self.constant == 0 and encoding.offset == .none) return true;
+                if (!innerTypeMatches(info.offset, encoding.offset)) {
+                    if (info.base == .constant or info.offset != .none or encoding.offset != .constant) return false;
                 }
             }
         }
+
+        if (encoding.base != .constant and encoding.offset != .constant) return true;
 
         return checkConstantInRange(self.constant, encoding.constant_ranges, encoding.constant_align)
             or checkConstantInRange(self.constant, encoding.alt_constant_ranges, encoding.constant_align);
