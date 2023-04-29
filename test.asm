@@ -16,3 +16,4 @@ _loop:
 _end:
     c   last -> r0
     ret
+    c .s .raw _loop - ip + sp -> x0

@@ -340,6 +340,70 @@ fn tryResolveExpressionType(
             };
             resolveConstantDependsOnLayout(expr_flags, expr_handle, inner_expr);
         },
+        .data_address_cast => |inner_expr| {
+            const inner_type = expr_resolved_types[inner_expr];
+            expr_resolved_types[expr_handle] = switch (inner_type) {
+                .unknown => return false,
+                .poison => .{ .poison = {} },
+                .data_address => inner_type,
+                .raw_base_offset => |bo| .{ .data_address = bo },
+                .reg8, .reg16, .reg32, .constant, .sr => .{ .data_address = ie.BaseOffsetType.init(inner_type, null) catch unreachable },
+                .insn_address, .stack_address => t: {
+                    a.recordError(file_handle, expr_tokens[expr_handle], "Casting between address spaces is not allowed.  Use `.d .raw` if you really want this.");
+                    break :t .{ .poison = {} };
+                },
+                .symbol_def => unreachable,
+            };
+            resolveConstantDependsOnLayout(expr_flags, expr_handle, inner_expr);
+        },
+        .insn_address_cast => |inner_expr| {
+            const inner_type = expr_resolved_types[inner_expr];
+            expr_resolved_types[expr_handle] = switch (inner_type) {
+                .unknown => return false,
+                .poison => .{ .poison = {} },
+                .insn_address => inner_type,
+                .raw_base_offset => |bo| .{ .insn_address = bo },
+                .reg8, .reg16, .reg32, .constant, .sr => .{ .insn_address = ie.BaseOffsetType.init(inner_type, null) catch unreachable },
+                .data_address, .stack_address => t: {
+                    a.recordError(file_handle, expr_tokens[expr_handle], "Casting directly between address spaces is not allowed.  Use `.i .raw` if you really want this.");
+                    break :t .{ .poison = {} };
+                },
+                .symbol_def => unreachable,
+            };
+            resolveConstantDependsOnLayout(expr_flags, expr_handle, inner_expr);
+        },
+        .stack_address_cast => |inner_expr| {
+            const inner_type = expr_resolved_types[inner_expr];
+            expr_resolved_types[expr_handle] = switch (inner_type) {
+                .unknown => return false,
+                .poison => .{ .poison = {} },
+                .stack_address => inner_type,
+                .raw_base_offset => |bo| .{ .stack_address = bo },
+                .reg8, .reg16, .reg32, .constant, .sr => .{ .stack_address = ie.BaseOffsetType.init(inner_type, null) catch unreachable },
+                .data_address, .insn_address => t: {
+                    a.recordError(file_handle, expr_tokens[expr_handle], "Casting directly between address spaces is not allowed.  Use `.s .raw` if you really want this.");
+                    break :t .{ .poison = {} };
+                },
+                .symbol_def => unreachable,
+            };
+            resolveConstantDependsOnLayout(expr_flags, expr_handle, inner_expr);
+        },
+        .remove_address_cast => |inner_expr| {
+            const inner_type = expr_resolved_types[inner_expr];
+            expr_resolved_types[expr_handle] = switch (inner_type) {
+                .unknown => return false,
+                .poison => .{ .poison = {} },
+                .raw_base_offset, .reg8, .reg16, .reg32, .constant, .symbol_def, .sr => inner_type,
+                .data_address, .insn_address, .stack_address => |bo| t: {
+                    if (bo.offset == .none) {
+                        break :t bo.base.toExpressionType();
+                    } else {
+                        break :t .{ .raw_base_offset = bo };
+                    }
+                },
+            };
+            resolveConstantDependsOnLayout(expr_flags, expr_handle, inner_expr);
+        },
     }
     return true;
 }

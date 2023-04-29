@@ -634,11 +634,28 @@ const Parser = struct {
     fn parsePrefixOperator(self: *Parser) ?PrefixOperatorInfo {
         const begin = self.next_token;
         self.skipLinespace();
-        const t = self.next_token;
+        var t = self.next_token;
         const info: PrefixOperatorInfo = switch (self.token_kinds[t]) {
             .minus => .{ .token = t, .right_bp = 0xFF, .expr = .negate },
             .tilde => .{ .token = t, .right_bp = 0xFF, .expr = .complement },
             .at    => .{ .token = t, .right_bp = 0xFF, .expr = .absolute_address_cast },
+            .dot => info: {
+                t += 1;
+                self.next_token = t;
+                defer self.next_token = t;
+                if (self.tryKeyword("d")) {
+                    break :info .{ .token = t, .right_bp = 0, .expr = .data_address_cast };
+                } else if (self.tryKeyword("i")) {
+                    break :info .{ .token = t, .right_bp = 0, .expr = .insn_address_cast };
+                } else if (self.tryKeyword("s")) {
+                    break :info .{ .token = t, .right_bp = 0, .expr = .stack_address_cast };
+                } else if (self.tryKeyword("raw")) {
+                    break :info .{ .token = t, .right_bp = 0, .expr = .remove_address_cast };
+                } else {
+                    t = begin;
+                    return null;
+                }
+            },
             else => {
                 self.next_token = begin;
                 return null;
@@ -652,44 +669,38 @@ const Parser = struct {
         self.skipLinespace();
         var t = self.next_token;
         const info: OperatorInfo = switch (self.token_kinds[t]) {
-            .bar        => .{ .token = t, .left_bp = 0, .right_bp = 1, .expr = .bitwise_or },
-            .caret      => .{ .token = t, .left_bp = 2, .right_bp = 3, .expr = .bitwise_xor },
-            .amp        => .{ .token = t, .left_bp = 4, .right_bp = 5, .expr = .bitwise_and },
-
-            .plus       => .{ .token = t, .left_bp = 10, .right_bp = 11, .expr = .plus },
-            .minus      => .{ .token = t, .left_bp = 10, .right_bp = 11, .expr = .minus },
-            .star       => .{ .token = t, .left_bp = 12, .right_bp = 13, .expr = .multiply },
-
-            .shl        => .{ .token = t, .left_bp = 20, .right_bp = 21, .expr = .shl },
-            .shr        => .{ .token = t, .left_bp = 20, .right_bp = 21, .expr = .shr },
-
-            .plus_plus  => .{ .token = t, .left_bp = 30, .right_bp = 31, .expr = .concat },
-            .star_star  => .{ .token = t, .left_bp = 32, .right_bp = 33, .expr = .concat_repeat },
-
-            .apostrophe => .{ .token = t, .left_bp = 42, .right_bp = 43, .expr = .length_cast },
-
+            .bar        => .{ .token = t, .left_bp = 10, .right_bp = 11, .expr = .bitwise_or },
+            .caret      => .{ .token = t, .left_bp = 12, .right_bp = 13, .expr = .bitwise_xor },
+            .amp        => .{ .token = t, .left_bp = 14, .right_bp = 15, .expr = .bitwise_and },
+            .plus       => .{ .token = t, .left_bp = 20, .right_bp = 21, .expr = .plus },
+            .minus      => .{ .token = t, .left_bp = 20, .right_bp = 21, .expr = .minus },
+            .star       => .{ .token = t, .left_bp = 22, .right_bp = 23, .expr = .multiply },
+            .shl        => .{ .token = t, .left_bp = 30, .right_bp = 31, .expr = .shl },
+            .shr        => .{ .token = t, .left_bp = 30, .right_bp = 31, .expr = .shr },
+            .plus_plus  => .{ .token = t, .left_bp = 40, .right_bp = 41, .expr = .concat },
+            .star_star  => .{ .token = t, .left_bp = 42, .right_bp = 43, .expr = .concat_repeat },
+            .apostrophe => .{ .token = t, .left_bp = 52, .right_bp = 53, .expr = .length_cast },
             .dot => info: {
                 t += 1;
                 self.next_token = t;
                 defer self.next_token = t;
                 if (self.tryKeyword("zx")) {
-                    break :info .{ .token = t, .left_bp = 40, .right_bp = 41, .expr = .zero_extend };
+                    break :info .{ .token = t, .left_bp = 50, .right_bp = 51, .expr = .zero_extend };
                 } else if (self.tryKeyword("sx")) {
-                    break :info .{ .token = t, .left_bp = 40, .right_bp = 41, .expr = .sign_extend };
+                    break :info .{ .token = t, .left_bp = 50, .right_bp = 51, .expr = .sign_extend };
                 } else if (self.tryKeyword("trunc")) {
-                    break :info .{ .token = t, .left_bp = 40, .right_bp = 41, .expr = .truncate };
+                    break :info .{ .token = t, .left_bp = 50, .right_bp = 51, .expr = .truncate };
                 } else if (self.tryKeyword("signed")) {
-                    break :info .{ .token = t, .left_bp = 40, .right_bp = null, .expr = .signed_cast };
+                    break :info .{ .token = t, .left_bp = 50, .right_bp = null, .expr = .signed_cast };
                 } else if (self.tryKeyword("unsigned")) {
-                    break :info .{ .token = t, .left_bp = 40, .right_bp = null, .expr = .unsigned_cast };
+                    break :info .{ .token = t, .left_bp = 50, .right_bp = null, .expr = .unsigned_cast };
                 } else if (self.tryKeyword("maybe_signed")) {
-                    break :info .{ .token = t, .left_bp = 40, .right_bp = null, .expr = .maybe_signed_cast };
+                    break :info .{ .token = t, .left_bp = 50, .right_bp = null, .expr = .maybe_signed_cast };
                 } else {
                     t = begin;
                     return null;
                 }
             },
-
             else => {
                 self.next_token = begin;
                 return null;
@@ -960,6 +971,10 @@ const Parser = struct {
             .unsigned_cast,
             .maybe_signed_cast,
             .absolute_address_cast,
+            .data_address_cast,
+            .insn_address_cast,
+            .stack_address_cast,
+            .remove_address_cast,
             => unreachable,
         });
     }
@@ -974,6 +989,10 @@ const Parser = struct {
             .unsigned_cast => .{ .unsigned_cast = inner },
             .maybe_signed_cast => .{ .maybe_signed_cast = inner },
             .absolute_address_cast => .{ .absolute_address_cast = inner },
+            .data_address_cast => .{ .data_address_cast = inner },
+            .insn_address_cast => .{ .insn_address_cast = inner },
+            .stack_address_cast => .{ .stack_address_cast = inner },
+            .remove_address_cast => .{ .remove_address_cast = inner },
 
             .literal_int,
             .literal_str,
@@ -1036,6 +1055,10 @@ const Parser = struct {
             .literal_symbol_def,
             .literal_symbol_ref,
             .absolute_address_cast,
+            .data_address_cast,
+            .insn_address_cast,
+            .stack_address_cast,
+            .remove_address_cast,
             => unreachable,
         });
     }

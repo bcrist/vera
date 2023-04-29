@@ -334,7 +334,7 @@ pub const BaseOffsetType = struct {
     base: InnerType,
     offset: InnerType,
 
-    pub fn init(left: ExpressionType, right: ExpressionType) !BaseOffsetType {
+    pub fn init(left: ?ExpressionType, right: ?ExpressionType) !BaseOffsetType {
         return BaseOffsetType{
             .base = try InnerType.fromExpressionType(left),
             .offset = try InnerType.fromExpressionType(right),
@@ -349,15 +349,15 @@ pub const BaseOffsetType = struct {
         reg32: IndexedRegister,
         sr: SpecialRegister,
 
-        pub fn fromExpressionType(t: ExpressionType) !InnerType {
-            return switch (t) {
+        pub fn fromExpressionType(maybe_expr_type: ?ExpressionType) !InnerType {
+            return if (maybe_expr_type) |t| switch (t) {
                 .constant => .{ .constant = {} },
                 .reg8 => |r| .{ .reg8 = r },
                 .reg16 => |r| .{ .reg16 = r },
                 .reg32 => |r| .{ .reg32 = r },
                 .sr => |r| .{ .sr = r },
                 else => return error.InvalidType,
-            };
+            } else .{ .none = {} };
         }
 
         pub fn toExpressionType(self: InnerType) ExpressionType {

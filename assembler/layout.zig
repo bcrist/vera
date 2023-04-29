@@ -354,7 +354,9 @@ fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, file_handle: Sour
             const result = left.cloneWithLength(a.gpa, &a.constant_temp, rv, .unsigned);
             expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
         },
-        .signed_cast, .unsigned_cast, .maybe_signed_cast => |inner_expr| {
+        .signed_cast, .unsigned_cast, .maybe_signed_cast,
+        .data_address_cast, .insn_address_cast, .stack_address_cast, .remove_address_cast,
+         => |inner_expr| {
             expr_resolved_constants[expr_handle] = resolveExpressionConstant(a, file, file_handle, ip, inner_expr);
         },
         .absolute_address_cast => |inner_expr| {
