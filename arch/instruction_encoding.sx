@@ -18,19 +18,19 @@
    )
    (0006 0006 B
       (desc "IP-relative unsigned register unconditional branch")
-      (param (address insn) (base sr ip) (offset reg8 (index 0 0) (unsigned)))
+      (param (address insn) (base sr ip) (offset reg16 (index 0 0) (unsigned)))
    )
    (0007 0007 B
       (desc "IP-relative signed register unconditional branch")
-      (param (address insn) (base sr ip) (offset reg8 (index 0 0) (signed)))
+      (param (address insn) (base sr ip) (offset reg16 (index 0 0) (signed)))
    )
    (0008 0008 UNFRAME
       (desc "Add 16b register to stack pointer")
-      (param (base reg8 (index 0 0) (unsigned)))
+      (param (base reg16 (index 0 0) (unsigned)))
    )
    (0009 0009 FRAME
       (desc "Subtract 16b register from stack pointer")
-      (param (base reg8 (index 0 0) (unsigned)))
+      (param (base reg16 (index 0 0) (unsigned)))
    )
    (0100 0100 NOPE
       (desc "No operation; equivalent to B IP+3")
@@ -89,11 +89,11 @@
    )
    (0188 0188 EAB
       (desc "Enable address translation + register unconditional branch")
-      (param (address insn) (base reg8 (index 0 0)))
+      (param (address insn) (base reg32 (index 0 0)))
    )
    (0189 0189 DAB
       (desc "Disable address translation + register unconditional branch")
-      (param (address insn) (base reg8 (index 0 0)))
+      (param (address insn) (base reg32 (index 0 0)))
    )
    (018A 018A UNSLEEP
       (desc "Disable sleep mode")
@@ -332,13 +332,13 @@
    )
    (0C60 0C6F MCR
       (desc "Copy a block of memory.  BP points to the first byte of the source block and RP points to the first byte of the destination block.  If blocks overlap, BP must be larger than RP.  If a block crosses a page boundary, it must be word aligned.  Takes approximately block_bytes + 2 cycles to complete.")
-      (param (base reg8 (signed)) (base-src OA))
+      (param (base reg32 (signed)) (base-src OA))
       (param (address data) (base sr bp))
       (param -> (address data) (base sr rp))
    )
    (0C70 0C7F MCRB
       (desc "Copy a block of memory with byte transfers only.  BP points to the first byte of the source block and RP points to the first byte of the destination block.  If blocks overlap, BP must be larger than RP.  Takes approximately block_bytes * 2 + 2 cycles to complete, but is not susceptible to any of the alignment constraints of MCR.")
-      (param (base reg8 (signed)) (base-src OA))
+      (param (base reg32 (signed)) (base-src OA))
       (param (address data) (base sr bp))
       (param -> (address data) (base sr rp))
    )
@@ -446,37 +446,37 @@
    )
    (0CA0 0CAF MCF
       (desc "Copy a block of memory.  BP points to the byte following the source block and RP points to the byte following the destination block.  If blocks overlap, BP must be smaller than RP.  If a block crosses a page boundary, it must be word aligned.  Takes approximately block_bytes + 2 cycles to complete.")
-      (param (base reg8 (signed)) (base-src OA))
+      (param (base reg32 (signed)) (base-src OA))
       (param (address data) (base sr bp))
       (param -> (address data) (base sr rp))
    )
    (0CB0 0CBF MCFB
       (desc "Copy a block of memory with byte transfers only.  BP points to the byte following the source block and RP points to the byte following the destination block.  If blocks overlap, BP must be smaller than RP.  Takes approximately block_bytes * 2 + 2 cycles to complete, but is not susceptible to any of the alignment constraints of MCF.")
-      (param (base reg8 (signed)) (base-src OA))
+      (param (base reg32 (signed)) (base-src OA))
       (param (address data) (base sr bp))
       (param -> (address data) (base sr rp))
    )
    (0CC0 0CCF SI
       (desc "Stream from a fixed address to a block of memory.  BP points to the fixed address and RP points to the first byte of the destination block.  If the block crosses a page boundary, it must be word aligned.  Takes approximately block_bytes + 2 cycles to complete.")
-      (param (base reg8 (signed)) (base-src OA))
+      (param (base reg32 (signed)) (base-src OA))
       (param (address data) (base sr bp))
       (param -> (address data) (base sr rp))
    )
    (0CD0 0CDF SIB
       (desc "Stream from a fixed address to a block of memory, with byte transfers only.  BP points to the fixed address and RP points to the first byte of the destination block.  Takes approximately block_bytes * 2 + 2 cycles to complete, but is not susceptible to any of the alignment constraints of SI.")
-      (param (base reg8 (signed)) (base-src OA))
+      (param (base reg32 (signed)) (base-src OA))
       (param (address data) (base sr bp))
       (param -> (address data) (base sr rp))
    )
    (0CE0 0CEF SO
       (desc "Stream a block of memory to a fixed address.  BP points to the first byte of the source block and RP points to the fixed destination address.  If the block crosses a page boundary, it must be word aligned.  Takes approximately block_bytes + 2 cycles to complete.")
-      (param (base reg8 (signed)) (base-src OA))
+      (param (base reg32 (signed)) (base-src OA))
       (param (address data) (base sr bp))
       (param -> (address data) (base sr rp))
    )
    (0CF0 0CFF SOB
       (desc "Stream a block of memory to a fixed address, with byte transfers only.  BP points to the first byte of the source block and RP points to the fixed destination address.  Takes approximately block_bytes * 2 + 2 cycles to complete, but is not susceptible to any of the alignment constraints of SO.")
-      (param (base reg8 (signed)) (base-src OA))
+      (param (base reg32 (signed)) (base-src OA))
       (param (address data) (base sr bp))
       (param -> (address data) (base sr rp))
    )
@@ -486,7 +486,7 @@
    )
    (0D10 0D1F BLD
       (desc "Load from FLASH or PSRAM to RAM.  Xa indicates the number of bytes remaining to be copied (will be decremented by 8 each cycle; operation ends when zero or negative).  BP points to just before the first byte of RAM to write to (will be incremented by 8 before each cycle).  Block source must be configured beforehand by writing to the configuration port.  Only one pipe may perform a block operation at a time.")
-      (param (base reg8 (signed)) (base-src OA))
+      (param (base reg32 (signed)) (base-src OA))
       (param -> (address data) (base sr bp))
    )
    (0D20 0D2F BST
@@ -495,7 +495,7 @@
    )
    (0D30 0D3F BST
       (desc "Store from RAM into FLASH or PSRAM.  Xa indicates the number of bytes remaining to be copied (will be decremented by 8 each cycle; operation ends when zero or negative).  BP points to just before the first byte of RAM to read (will be incremented by 8 before each cycle).  Block destination must be configured beforehand by writing to the configuration port.  Only one pipe may perform a block operation at a time.")
-      (param (base reg8 (signed)) (base-src OA))
+      (param (base reg32 (signed)) (base-src OA))
       (param (address data) (base sr bp))
    )
    (1000 10FF ST
@@ -531,17 +531,17 @@
    (1600 16FF ST
       (desc "Store byte using pointer to data memory with 16b register offset")
       (param (base reg8 (index 0 0)))
-      (param -> (address data) (base reg32) (offset reg8 (unsigned)) (base-src OA) (offset-src OB))
+      (param -> (address data) (base reg32) (offset reg16 (unsigned)) (base-src OA) (offset-src OB))
    )
    (1700 17FF ST
       (desc "Store 16b register using pointer to data memory with 16b register offset")
-      (param (base reg8 (index 0 0)))
-      (param -> (address data) (base reg32) (offset reg8 (unsigned)) (base-src OA) (offset-src OB))
+      (param (base reg16 (index 0 0)))
+      (param -> (address data) (base reg32) (offset reg16 (unsigned)) (base-src OA) (offset-src OB))
    )
    (1800 18FF ST
       (desc "Store 32b register using pointer to data memory with 16b register offset")
-      (param (base reg8 (index 0 0)))
-      (param -> (address data) (base reg32) (offset reg8 (unsigned)) (base-src OA) (offset-src OB))
+      (param (base reg32 (index 0 0)))
+      (param -> (address data) (base reg32) (offset reg16 (unsigned)) (base-src OA) (offset-src OB))
    )
    (1900 19FF ST
       (desc "Store byte using pointer to data memory with immediate offset")
@@ -550,12 +550,12 @@
    )
    (1A00 1AFF ST
       (desc "Store 16b register using pointer to data memory with immediate offset (align 2)")
-      (param (base reg8 (index 0 0)))
+      (param (base reg16 (index 0 0)))
       (param -> (address data) (base reg32) (offset constant) (base-src OA) (offset-src OB) (range 0 30) (align 2))
    )
    (1B00 1BFF ST
       (desc "Store 32b register using pointer to data memory with immediate offset (align 4)")
-      (param (base reg8 (index 0 0)))
+      (param (base reg32 (index 0 0)))
       (param -> (address data) (base reg32) (offset constant) (base-src OA) (offset-src OB) (range 0 60) (align 4))
    )
    (1C00 1CFF ST
@@ -576,22 +576,22 @@
    (1F00 1F0F SAT W
       (desc "Set address translation entry corresponding to X0 with data in Xa; discard secondary entry if necessary")
       (param (base reg32) (base-src OA))
-      (param -> (address data) (base reg8 (index 0 0)))
+      (param -> (address data) (base reg32 (index 0 0)))
    )
    (1F10 1F1F SAT R
       (desc "Set address translation entry corresponding to X0 with data in Xa; discard secondary entry if necessary")
       (param (base reg32) (base-src OA))
-      (param -> (address data) (base reg8 (index 0 0)))
+      (param -> (address data) (base reg32 (index 0 0)))
    )
    (1F20 1F2F SAT S
       (desc "Set address translation entry corresponding to X0 with data in Xa; discard secondary entry if necessary")
       (param (base reg32) (base-src OA))
-      (param -> (address stack) (base reg8 (index 0 0)))
+      (param -> (address stack) (base reg32 (index 0 0)))
    )
    (1F30 1F3F SAT I
       (desc "Set address translation entry corresponding to X0 with data in Xa; discard secondary entry if necessary")
       (param (base reg32) (base-src OA))
-      (param -> (address insn) (base reg8 (index 0 0)))
+      (param -> (address insn) (base reg32 (index 0 0)))
    )
    (1F40 1F4F RAT W
       (desc "Remove address translation entry or entries corresponding to X0 with tag mask Ra")
@@ -612,17 +612,17 @@
    (2000 20FF ST
       (desc "Store byte to stack with 16b register offset")
       (param (base reg8) (base-src OA))
-      (param -> (address stack) (base sr sp) (offset reg8 (signed)) (offset-src OB))
+      (param -> (address stack) (base sr sp) (offset reg16 (signed)) (offset-src OB))
    )
    (2100 21FF ST
       (desc "Store 16b register to stack with 16b register offset")
       (param (base reg16) (base-src OA))
-      (param -> (address stack) (base sr sp) (offset reg8 (signed)) (offset-src OB))
+      (param -> (address stack) (base sr sp) (offset reg16 (signed)) (offset-src OB))
    )
    (2200 22FF ST
       (desc "Store 32b register to stack with 16b register offset")
       (param (base reg32) (base-src OA))
-      (param -> (address stack) (base sr sp) (offset reg8 (signed)) (offset-src OB))
+      (param -> (address stack) (base sr sp) (offset reg16 (signed)) (offset-src OB))
    )
    (2300 23FF STI
       (desc "Store byte using pointer to data memory; postincrement")
@@ -687,14 +687,14 @@
    (3600 36FF AADD
       (desc "16b Atomic add using pointer to data memory")
       (param (address data) (base reg32) (base-src OA))
-      (param -> (base reg8 (index 0 0)))
+      (param -> (base reg16 (index 0 0)))
       (param (base reg16) (base-src OB))
       (param -> (address data) (base reg32) (base-src OA))
    )
    (3700 37FF AADD
       (desc "32b Atomic add using pointer to data memory")
       (param (address data) (base reg32) (base-src OA))
-      (param -> (base reg8 (index 0 0)))
+      (param -> (base reg32 (index 0 0)))
       (param (base reg32) (base-src OB))
       (param -> (address data) (base reg32) (base-src OA))
    )
@@ -735,7 +735,7 @@
    (3C20 3C2F AXE
       (desc "16b Atomic exchange using pointer to data memory, if stored value equals probe value")
       (param (address data) (base reg32) (base-src OA))
-      (param -> (base reg8 (index 0 0)))
+      (param -> (base reg16 (index 0 0)))
       (param (base reg16) (base-src IP_plus_2_OB))
       (param (base reg16) (base-src IP_plus_2_OA))
       (param -> (address data) (base reg32) (base-src OA))
@@ -743,7 +743,7 @@
    (3C30 3C3F AXE
       (desc "32b Atomic exchange using pointer to data memory, if stored value equals probe value")
       (param (address data) (base reg32) (base-src OA))
-      (param -> (base reg8 (index 0 0)))
+      (param -> (base reg32 (index 0 0)))
       (param (base reg32) (base-src IP_plus_2_OB))
       (param (base reg32) (base-src IP_plus_2_OA))
       (param -> (address data) (base reg32) (base-src OA))
@@ -755,12 +755,12 @@
    )
    (4900 49FF C
       (desc "Copy unsigned value from 16b register to 32b register")
-      (param (base reg8 (unsigned)) (base-src OA))
+      (param (base reg16 (unsigned)) (base-src OA))
       (param -> (base reg32) (base-src OB))
    )
    (4A00 4AFF C
       (desc "Copy signed value from 16b register to 32b register")
-      (param (base reg8 (signed)) (base-src OA))
+      (param (base reg16 (signed)) (base-src OA))
       (param -> (base reg32) (base-src OB))
    )
    (4B00 4BFF C
@@ -770,12 +770,12 @@
    )
    (4C00 4CFF C
       (desc "Copy IP-relative address to 32b register")
-      (param (base sr ip) (offset reg8 (signed)) (offset-src OB))
+      (param (base sr ip) (offset reg16 (signed)) (offset-src OB))
       (param -> (base reg32) (base-src OA))
    )
    (4D00 4DFF C
       (desc "Copy SP-relative address to 32b register")
-      (param (base sr sp) (offset reg8 (signed)) (offset-src OB))
+      (param (base sr sp) (offset reg16 (signed)) (offset-src OB))
       (param -> (base reg32) (base-src OA))
    )
    (4E00 4EFF C
@@ -922,13 +922,13 @@
    (7300 73FF ADD
       (desc "Add unsigned 16b register to 32b register")
       (param (base reg32) (base-src OA))
-      (param (base reg8 (unsigned)) (base-src OB))
+      (param (base reg16 (unsigned)) (base-src OB))
       (param -> (base reg32) (base-src OA))
    )
    (7400 74FF ADD
       (desc "Add signed 16b register to 32b register")
       (param (base reg32) (base-src OA))
-      (param (base reg8 (signed)) (base-src OB))
+      (param (base reg16 (signed)) (base-src OB))
       (param -> (base reg32) (base-src OA))
    )
    (7500 75FF ADD
@@ -980,13 +980,13 @@
    (8300 83FF SUB
       (desc "Subtract unsigned 16b register from 32b register")
       (param (base reg32) (base-src OA))
-      (param (base reg8 (unsigned)) (base-src OB))
+      (param (base reg16 (unsigned)) (base-src OB))
       (param -> (base reg32) (base-src OA))
    )
    (8400 84FF SUB
       (desc "Subtract signed 16b register from 32b register")
       (param (base reg32) (base-src OA))
-      (param (base reg8 (signed)) (base-src OB))
+      (param (base reg16 (signed)) (base-src OB))
       (param -> (base reg32) (base-src OA))
    )
    (8500 85FF SUB
@@ -1028,12 +1028,12 @@
    (8B00 8BFF CMP
       (desc "Compare 32b register to 16b register, unsigned")
       (param (base reg32) (base-src OA))
-      (param (base reg8 (unsigned)) (base-src OB))
+      (param (base reg16 (unsigned)) (base-src OB))
    )
    (8C00 8CFF CMP
       (desc "Compare 32b register to 16b register, signed")
       (param (base reg32) (base-src OA))
-      (param (base reg8 (signed)) (base-src OB))
+      (param (base reg16 (signed)) (base-src OB))
    )
    (9100 91FF TESTB
       (desc "Set Z and N flags according to single bit from 16b register")
@@ -1247,22 +1247,22 @@
    )
    (BC00 BCFF LD
       (desc "Load unsigned byte from stack with 16b register offset")
-      (param (address stack) (base sr sp) (offset reg8 (signed)) (offset-src OB))
+      (param (address stack) (base sr sp) (offset reg16 (signed)) (offset-src OB))
       (param -> (base reg8 (unsigned)) (base-src OA))
    )
    (BD00 BDFF LD
       (desc "Load signed byte from stack with 16b register offset")
-      (param (address stack) (base sr sp) (offset reg8 (signed)) (offset-src OB))
+      (param (address stack) (base sr sp) (offset reg16 (signed)) (offset-src OB))
       (param -> (base reg8 (signed)) (base-src OA))
    )
    (BE00 BEFF LD
       (desc "Load 16b register from stack with 16b register offset")
-      (param (address stack) (base sr sp) (offset reg8 (signed)) (offset-src OB))
+      (param (address stack) (base sr sp) (offset reg16 (signed)) (offset-src OB))
       (param -> (base reg16) (base-src OA))
    )
    (BF00 BFFF LD
       (desc "Load 32b register from stack with 16b register offset")
-      (param (address stack) (base sr sp) (offset reg8 (signed)) (offset-src OB))
+      (param (address stack) (base sr sp) (offset reg16 (signed)) (offset-src OB))
       (param -> (base reg32) (base-src OA))
    )
    (C000 C00F LD
@@ -1382,9 +1382,9 @@
    )
    (D000 D0FF SHR
       (desc "Right shift 32b register 0-31 bits, zero extending")
-      (param (base reg8 (unsigned)) (base-src OA))
+      (param (base reg32 (unsigned)) (base-src OA))
       (param (base reg16) (base-src OB))
-      (param -> (base reg8 (unsigned)) (base-src OA))
+      (param -> (base reg32 (unsigned)) (base-src OA))
    )
    (D100 D1FF SHL
       (desc "Left shift 32b register 0-31 bits")
@@ -1394,15 +1394,15 @@
    )
    (D200 D2FF SHR
       (desc "Shift right 16b register 0-15 bits, unsigned")
-      (param (base reg8 (unsigned)) (base-src OA))
+      (param (base reg16 (unsigned)) (base-src OA))
       (param (base reg16) (base-src OB))
-      (param -> (base reg8 (unsigned)) (base-src OA))
+      (param -> (base reg16 (unsigned)) (base-src OA))
    )
    (D300 D3FF SHR
       (desc "Shift right 16b register 0-15 bits, signed")
-      (param (base reg8 (signed)) (base-src OA))
+      (param (base reg16 (signed)) (base-src OA))
       (param (base reg16) (base-src OB))
-      (param -> (base reg8 (signed)) (base-src OA))
+      (param -> (base reg16 (signed)) (base-src OA))
    )
    (D400 D4FF SHL
       (desc "Shift left 16b register 0-15 bits")
@@ -1412,15 +1412,15 @@
    )
    (D500 D5FF SHR
       (desc "Shift right 16b register 0-15 bits, unsigned")
-      (param (base reg8 (unsigned)) (base-src OA))
+      (param (base reg16 (unsigned)) (base-src OA))
       (param (base constant) (base-src OB) (range 0 15))
-      (param -> (base reg8 (unsigned)) (base-src OA))
+      (param -> (base reg16 (unsigned)) (base-src OA))
    )
    (D600 D6FF SHR
       (desc "Shift right 16b register 0-15 bits, signed")
-      (param (base reg8 (signed)) (base-src OA))
+      (param (base reg16 (signed)) (base-src OA))
       (param (base constant) (base-src OB) (range 0 15))
-      (param -> (base reg8 (signed)) (base-src OA))
+      (param -> (base reg16 (signed)) (base-src OA))
    )
    (D700 D7FF SHL
       (desc "Shift left 16b register 0-15 bits")
@@ -1461,24 +1461,24 @@
    (DE00 DEFF LD
       (desc "Load 16b register using pointer to data memory with immediate offset (align 2)")
       (param (address data) (base reg32) (offset constant) (base-src OA) (offset-src OB) (range 0 30) (align 2))
-      (param -> (base reg8 (index 0 0)))
+      (param -> (base reg16 (index 0 0)))
    )
    (DF00 DFFF LD
       (desc "Load 32b register using pointer to data memory with immediate offset (align 4)")
       (param (address data) (base reg32) (offset constant) (base-src OA) (offset-src OB) (range 0 60) (align 4))
-      (param -> (base reg8 (index 0 0)))
+      (param -> (base reg32 (index 0 0)))
    )
    (E000 E0FF SHR
       (desc "Right shift 32b register 0-31 bits, zero extending")
-      (param (base reg8 (unsigned)) (base-src OA))
+      (param (base reg32 (unsigned)) (base-src OA))
       (param (base constant) (base-src OB) (range 0 15))
-      (param -> (base reg8 (unsigned)) (base-src OA))
+      (param -> (base reg32 (unsigned)) (base-src OA))
    )
    (E100 E1FF SHR
       (desc "Right shift 32b register 0-31 bits, zero extending")
-      (param (base reg8 (unsigned)) (base-src OA))
+      (param (base reg32 (unsigned)) (base-src OA))
       (param (base constant) (base-src OB) (range 16 31))
-      (param -> (base reg8 (unsigned)) (base-src OA))
+      (param -> (base reg32 (unsigned)) (base-src OA))
    )
    (E200 E2FF SHL
       (desc "Left shift 32b register 0-31 bits")
@@ -1587,23 +1587,23 @@
    )
    (EC00 ECFF LD
       (desc "Load unsigned byte using pointer to data memory with 16b register offset")
-      (param (address data) (base reg32) (offset reg8 (unsigned)) (base-src OA) (offset-src OB))
+      (param (address data) (base reg32) (offset reg16 (unsigned)) (base-src OA) (offset-src OB))
       (param -> (base reg8 (index 0 0) (unsigned)))
    )
    (ED00 EDFF LD
       (desc "Load signed byte using pointer to data memory with 16b register offset")
-      (param (address data) (base reg32) (offset reg8 (unsigned)) (base-src OA) (offset-src OB))
+      (param (address data) (base reg32) (offset reg16 (unsigned)) (base-src OA) (offset-src OB))
       (param -> (base reg8 (index 0 0) (signed)))
    )
    (EE00 EEFF LD
       (desc "Load 16b register using pointer to data memory with 16b register offset")
-      (param (address data) (base reg32) (offset reg8 (unsigned)) (base-src OA) (offset-src OB))
-      (param -> (base reg8 (index 0 0)))
+      (param (address data) (base reg32) (offset reg16 (unsigned)) (base-src OA) (offset-src OB))
+      (param -> (base reg16 (index 0 0)))
    )
    (EF00 EFFF LD
       (desc "Load 32b register using pointer to data memory with 16b register offset")
-      (param (address data) (base reg32) (offset reg8 (unsigned)) (base-src OA) (offset-src OB))
-      (param -> (base reg8 (index 0 0)))
+      (param (address data) (base reg32) (offset reg16 (unsigned)) (base-src OA) (offset-src OB))
+      (param -> (base reg32 (index 0 0)))
    )
    (F000 F0FF MUL
       (desc "Multiply 16b register by immediate, truncate result to 16b and store in another register")
@@ -1619,45 +1619,45 @@
    )
    (F200 F2FF MULH
       (desc "Multiply 16b unsigned registers, store high 16b of result")
-      (param (base reg8 (unsigned)) (base-src OA))
-      (param (base reg8 (unsigned)) (base-src OB))
-      (param -> (base reg8 (unsigned)) (base-src OA))
+      (param (base reg16 (unsigned)) (base-src OA))
+      (param (base reg16 (unsigned)) (base-src OB))
+      (param -> (base reg16 (unsigned)) (base-src OA))
    )
    (F300 F3FF MULH
       (desc "Multiply 16b unsigned registers, store high 16b of result")
-      (param (base reg8 (unsigned)) (base-src OA))
-      (param (base reg8 (signed)) (base-src OB))
-      (param -> (base reg8 (signed)) (base-src OA))
+      (param (base reg16 (unsigned)) (base-src OA))
+      (param (base reg16 (signed)) (base-src OB))
+      (param -> (base reg16 (signed)) (base-src OA))
    )
    (F400 F4FF MULH
       (desc "Multiply 16b unsigned registers, store high 16b of result")
-      (param (base reg8 (signed)) (base-src OA))
-      (param (base reg8 (unsigned)) (base-src OB))
-      (param -> (base reg8 (signed)) (base-src OA))
+      (param (base reg16 (signed)) (base-src OA))
+      (param (base reg16 (unsigned)) (base-src OB))
+      (param -> (base reg16 (signed)) (base-src OA))
    )
    (F500 F5FF MULH
       (desc "Multiply 16b unsigned registers, store high 16b of result")
-      (param (base reg8 (signed)) (base-src OA))
-      (param (base reg8 (signed)) (base-src OB))
-      (param -> (base reg8 (signed)) (base-src OA))
+      (param (base reg16 (signed)) (base-src OA))
+      (param (base reg16 (signed)) (base-src OB))
+      (param -> (base reg16 (signed)) (base-src OA))
    )
    (F600 F6FF MUL
       (desc "Multiply 16b unsigned registers, store 32b result")
-      (param (base reg8 (unsigned)) (base-src OA))
-      (param (base reg8 (unsigned)) (base-src OB))
-      (param -> (base reg8 (index 0 0) (unsigned)))
+      (param (base reg16 (unsigned)) (base-src OA))
+      (param (base reg16 (unsigned)) (base-src OB))
+      (param -> (base reg32 (index 0 0) (unsigned)))
    )
    (F700 F7FF MUL
       (desc "Multiply 16b signed registers, store 32b result")
-      (param (base reg8 (signed)) (base-src OA))
-      (param (base reg8 (signed)) (base-src OB))
-      (param -> (base reg8 (index 0 0) (signed)))
+      (param (base reg16 (signed)) (base-src OA))
+      (param (base reg16 (signed)) (base-src OB))
+      (param -> (base reg32 (index 0 0) (signed)))
    )
    (F800 F8FF MUL
       (desc "Multiply 16b unsigned and signed registers, store 32b result")
-      (param (base reg8 (unsigned)) (base-src OA))
-      (param (base reg8 (signed)) (base-src OB))
-      (param -> (base reg8 (index 0 0) (signed)))
+      (param (base reg16 (unsigned)) (base-src OA))
+      (param (base reg16 (signed)) (base-src OB))
+      (param -> (base reg32 (index 0 0) (signed)))
    )
    (FA00 FA0F SRS
       (desc "Switch to registerset")

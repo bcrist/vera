@@ -300,29 +300,25 @@ fn conditionName(comptime condition: MnemonicSuffix) []const u8 {
 }
 
 fn conditionFn(comptime condition: MnemonicSuffix) fn () bool {
-    comptime {
-        return switch (condition) {
-            .Z, .NZ => zero,
-            .LU, .NLU => unsigned_less_than,
-            .GU, .NGU => unsigned_greater_than,
-            .N, .NN => negative,
-            .C, .NC => carry_borrow,
-            .LS, .NLS => signed_less_than,
-            .GS, .NGS => signed_greater_than,
-            .P, .NP => positive,
-            else => unreachable,
-        };
-    }
+    return switch (condition) {
+        .Z, .NZ => zero,
+        .LU, .NLU => unsigned_less_than,
+        .GU, .NGU => unsigned_greater_than,
+        .N, .NN => negative,
+        .C, .NC => carry_borrow,
+        .LS, .NLS => signed_less_than,
+        .GS, .NGS => signed_greater_than,
+        .P, .NP => positive,
+        else => unreachable,
+    };
 }
 
-fn conditionIsInverse(comptime condition: MnemonicSuffix) bool {
-    comptime {
-        return switch (condition) {
-            .Z, .LU, .GU, .N, .C, .LS, .GS, .P => false,
-            .NZ, .NLU, .NGU, .NN, .NC, .NLS, .NGS, .NP => true,
-            else => unreachable,
-        };
-    }
+fn conditionIsInverse(condition: MnemonicSuffix) bool {
+    return switch (condition) {
+        .Z, .LU, .GU, .N, .C, .LS, .GS, .P => false,
+        .NZ, .NLU, .NGU, .NN, .NC, .NLS, .NGS, .NP => true,
+        else => unreachable,
+    };
 }
 
 const n6_14 = ParameterEncoding{
@@ -338,7 +334,7 @@ fn conditional_n6_14(comptime condition: MnemonicSuffix) void {
     encodingWithSuffix(.B, condition, .{ IP_relative(.insn, n6_14) });
     desc("IP-relative branch if " ++ comptime conditionName(condition));
 
-    const conditionFunc = conditionFn(condition);
+    const conditionFunc = comptime conditionFn(condition);
     var should_branch = conditionFunc();
     if (comptime conditionIsInverse(condition)) should_branch = !should_branch;
     if (should_branch) {
@@ -570,30 +566,26 @@ pub fn _0189() void {
     branch(.next_ip, 0);
 }
 
-fn firstCondition(comptime condition: MnemonicSuffix) MnemonicSuffix {
-    comptime {
-        return switch (condition) {
-            .LU_GU, .LU_Z => return .LU,
-            .GU_Z => return .GU,
-            .LS_GS, .LS_Z => return .LS,
-            .GS_Z => return .GS,
-            .N_Z, .N_P => return .N,
-            .P_Z => return .P,
-            else => unreachable,
-        };
-    }
+fn firstCondition(condition: MnemonicSuffix) MnemonicSuffix {
+    return switch (condition) {
+        .LU_GU, .LU_Z => return .LU,
+        .GU_Z => return .GU,
+        .LS_GS, .LS_Z => return .LS,
+        .GS_Z => return .GS,
+        .N_Z, .N_P => return .N,
+        .P_Z => return .P,
+        else => unreachable,
+    };
 }
 
-fn secondCondition(comptime condition: MnemonicSuffix) MnemonicSuffix {
-    comptime {
-        return switch (condition) {
-            .LU_Z, .GU_Z, .LS_Z, .GS_Z, .N_Z, .P_Z => return .Z,
-            .LU_GU => return .GU,
-            .LS_GS => return .GS,
-            .N_P => return .P,
-            else => unreachable,
-        };
-    }
+fn secondCondition(condition: MnemonicSuffix) MnemonicSuffix {
+    return switch (condition) {
+        .LU_Z, .GU_Z, .LS_Z, .GS_Z, .N_Z, .P_Z => return .Z,
+        .LU_GU => return .GU,
+        .LS_GS => return .GS,
+        .N_P => return .P,
+        else => unreachable,
+    };
 }
 
 fn conditional_double_branch_s16(comptime condition: MnemonicSuffix) void {

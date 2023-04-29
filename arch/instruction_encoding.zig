@@ -847,7 +847,17 @@ fn tryComptimeRegisterParameterEncoding(comptime name: []const u8) ?ParameterEnc
                 }
                 encoding.base_src = .implicit;
                 switch (encoding.base) {
-                    .reg8, .reg16, .reg32 => |*irr| {
+                    // These can be combined when this is fixed:
+                    // https://github.com/ziglang/zig/issues/15504
+                    .reg8 => |*irr| {
+                        irr.min = reg;
+                        irr.max = reg;
+                    },
+                    .reg16 => |*irr| {
+                        irr.min = reg;
+                        irr.max = reg;
+                    },
+                    .reg32 => |*irr| {
                         irr.min = reg;
                         irr.max = reg;
                     },
@@ -865,11 +875,19 @@ fn tryComptimeRegisterParameterEncoding(comptime name: []const u8) ?ParameterEnc
 
         switch (name[next]) {
             'U' => switch (encoding.base) {
-                .reg8, .reg16, .reg32 => |*irr| irr.signedness = .unsigned,
+                // These can be combined when this is fixed:
+                // https://github.com/ziglang/zig/issues/15504
+                .reg8  => |*irr| irr.signedness = .unsigned,
+                .reg16 => |*irr| irr.signedness = .unsigned,
+                .reg32 => |*irr| irr.signedness = .unsigned,
                 else => unreachable,
             },
             'S' => switch (encoding.base) {
-                .reg8, .reg16, .reg32 => |*irr| irr.signedness = .signed,
+                // These can be combined when this is fixed:
+                // https://github.com/ziglang/zig/issues/15504
+                .reg8  => |*irr| irr.signedness = .signed,
+                .reg16 => |*irr| irr.signedness = .signed,
+                .reg32 => |*irr| irr.signedness = .signed,
                 else => unreachable,
             },
             else => return,

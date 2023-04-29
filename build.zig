@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    //[[!! include 'build' !! 272 ]]
+    //[[!! include 'build' !! 269 ]]
     //[[ ################# !! GENERATED CODE -- DO NOT MODIFY !! ################# ]]
 
     const bits = b.createModule(.{
@@ -83,10 +83,6 @@ pub fn build(b: *std.Build) void {
     Simulator.dependencies.put("misc", misc) catch unreachable;
     Simulator.dependencies.put("physical_address", physical_address) catch unreachable;
 
-    const deep_hash_map = b.createModule(.{
-        .source_file = .{ .path = "pkg/deep_hash_map.zig" },
-    });
-
     const instruction_encoding = b.createModule(.{
         .source_file = .{ .path = "arch/instruction_encoding.zig" },
         .dependencies = &.{
@@ -95,6 +91,10 @@ pub fn build(b: *std.Build) void {
             .{ .name = "microcode", .module = microcode },
             .{ .name = "misc", .module = misc },
         },
+    });
+
+    const deep_hash_map = b.createModule(.{
+        .source_file = .{ .path = "pkg/deep_hash_map.zig" },
     });
 
     const sx = b.createModule(.{
@@ -115,7 +115,6 @@ pub fn build(b: *std.Build) void {
         .source_file = .{ .path = "assembler/assemble.zig" },
         .dependencies = &.{
             .{ .name = "bus_types", .module = bus_types },
-            .{ .name = "deep_hash_map", .module = deep_hash_map },
             .{ .name = "instruction_encoding", .module = instruction_encoding },
             .{ .name = "instruction_encoding_data", .module = instruction_encoding_data },
         },
@@ -167,10 +166,9 @@ pub fn build(b: *std.Build) void {
         .optimize = mode,
     });
     assemble_exe.addModule("bus_types", bus_types);
-    assemble_exe.addModule("deep_hash_map", deep_hash_map);
     assemble_exe.addModule("instruction_encoding", instruction_encoding);
     assemble_exe.addModule("instruction_encoding_data", instruction_encoding_data);
-    assemble_exe.install();
+    b.installArtifact(assemble_exe);
     _ = makeRunStep(b, assemble_exe, "assemble", "run assemble");
 
     const compile_arch = b.addExecutable(.{
@@ -192,7 +190,7 @@ pub fn build(b: *std.Build) void {
     compile_arch.addModule("srec", srec);
     compile_arch.addModule("sx", sx);
     compile_arch.addModule("temp_allocator", temp_allocator);
-    compile_arch.install();
+    b.installArtifact(compile_arch);
     _ = makeRunStep(b, compile_arch, "uc", "run compile_arch");
 
     const microsim = b.addExecutable(.{
@@ -218,32 +216,32 @@ pub fn build(b: *std.Build) void {
     microsim.addModule("zgui", zgui_pkg.zgui);
     zgui_pkg.link(microsim);
     microsim.want_lto = false;
-    microsim.install();
+    b.installArtifact(microsim);
     _ = makeRunStep(b, microsim, "usim", "run microsim");
 
-    // const tests1 = b.addTest(.{
-    //     .root_source_file = .{ .path = "arch/test_instruction_behavior.zig"},
-    //     .target = target,
-    //     .optimize = mode,
-    // });
-    // tests1.addModule("ControlSignals", ControlSignals);
-    // tests1.addModule("Simulator", Simulator);
-    // tests1.addModule("instruction_encoding", instruction_encoding);
-    // tests1.addModule("instruction_encoding_data", instruction_encoding_data);
-    // tests1.addModule("microcode", microcode);
-    // tests1.addModule("microcode_roms", microcode_roms);
-    // tests1.addModule("misc", misc);
-    // tests1.addModule("rom_compress", rom_compress);
-    // tests1.addModule("rom_decompress", rom_decompress);
-    // tests1.addModule("srec", srec);
+    const tests1 = b.addTest(.{
+        .root_source_file = .{ .path = "arch/test_instruction_behavior.zig"},
+        .target = target,
+        .optimize = mode,
+    });
+    tests1.addModule("ControlSignals", ControlSignals);
+    tests1.addModule("Simulator", Simulator);
+    tests1.addModule("instruction_encoding", instruction_encoding);
+    tests1.addModule("instruction_encoding_data", instruction_encoding_data);
+    tests1.addModule("microcode", microcode);
+    tests1.addModule("microcode_roms", microcode_roms);
+    tests1.addModule("misc", misc);
+    tests1.addModule("rom_compress", rom_compress);
+    tests1.addModule("rom_decompress", rom_decompress);
+    tests1.addModule("srec", srec);
 
-    // const tests2 = b.addTest(.{
-    //     .root_source_file = .{ .path = "arch/test_instruction_encoding.zig"},
-    //     .target = target,
-    //     .optimize = mode,
-    // });
-    // tests2.addModule("instruction_encoding", instruction_encoding);
-    // tests2.addModule("instruction_encoding_data", instruction_encoding_data);
+    const tests2 = b.addTest(.{
+        .root_source_file = .{ .path = "arch/test_instruction_encoding.zig"},
+        .target = target,
+        .optimize = mode,
+    });
+    tests2.addModule("instruction_encoding", instruction_encoding);
+    tests2.addModule("instruction_encoding_data", instruction_encoding_data);
 
     const tests3 = b.addTest(.{
         .root_source_file = .{ .path = "arch/test_misc.zig"},
@@ -259,7 +257,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = mode,
     });
-    tests4.addModule("deep_hash_map", deep_hash_map);
 
     const tests5 = b.addTest(.{
         .root_source_file = .{ .path = "assembler/lex.zig"},
@@ -282,8 +279,8 @@ pub fn build(b: *std.Build) void {
     tests7.addModule("rom_compress", rom_compress);
 
     const test_step = b.step("test", "Run all tests");
-    // test_step.dependOn(&tests1.step);
-    // test_step.dependOn(&tests2.step);
+    test_step.dependOn(&tests1.step);
+    test_step.dependOn(&tests2.step);
     test_step.dependOn(&tests3.step);
     test_step.dependOn(&tests4.step);
     test_step.dependOn(&tests5.step);
@@ -294,8 +291,8 @@ pub fn build(b: *std.Build) void {
     //[[ ######################### END OF GENERATED CODE ######################### ]]
 }
 
-fn makeRunStep(b: *std.build.Builder, exe: *std.build.LibExeObjStep, name: []const u8, desc: []const u8) *std.build.RunStep {
-    var run = exe.run();
+fn makeRunStep(b: *std.build.Builder, exe: *std.build.CompileStep, name: []const u8, desc: []const u8) *std.build.RunStep {
+    var run = b.addRunArtifact(exe);
     run.step.dependOn(b.getInstallStep());
     b.step(name, desc).dependOn(&run.step);
     return run;

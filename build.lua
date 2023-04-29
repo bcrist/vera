@@ -280,7 +280,7 @@ end
 for _, fun in ipairs(pass_exe_to) do
     writeln(nl, fun, '(', safe_name, ');')
 end`
-`safe_name`.install();
+b.installArtifact(`safe_name`);
 _ = makeRunStep(b, `safe_name`, "`run_step`", "run `name`");
 ]]
 
