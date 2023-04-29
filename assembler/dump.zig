@@ -101,6 +101,7 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
                 .signed_cast, .unsigned_cast, .maybe_signed_cast,
                 .negate, .complement, .absolute_address_cast,
                 .data_address_cast, .insn_address_cast, .stack_address_cast, .remove_address_cast,
+                .reg_to_index, .index_to_reg8, .index_to_reg16, .index_to_reg32,
                 => |unary| {
                     try writer.print(" #{}", .{ unary });
                 },

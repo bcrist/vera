@@ -1,6 +1,7 @@
 const std = @import("std");
 const lex = @import("lex.zig");
 const ie = @import("instruction_encoding");
+const layout = @import("layout.zig");
 const Assembler = @import("Assembler.zig");
 const SourceFile = @import("SourceFile.zig");
 const Instruction = @import("Instruction.zig");
@@ -276,6 +277,61 @@ fn tryResolveExpressionType(
             };
             resolveConstantDependsOnLayout(expr_flags, expr_handle, inner_expr);
         },
+        .index_to_reg8, .index_to_reg16, .index_to_reg32 => |inner_expr| {
+            if (expr_flags[inner_expr].contains(.constant_depends_on_layout)) {
+                a.recordError(file_handle, expr_tokens[expr_handle], "Operand cannot vary on memory layout");
+                expr_resolved_types[expr_handle] = .{ .poison = {} };
+                return true;
+            }
+            expr_resolved_types[expr_handle] = switch (expr_resolved_types[inner_expr]) {
+                .unknown => return false,
+                .poison => .{ .poison = {} },
+                .constant => t: {
+                    const constant = layout.resolveExpressionConstant(a, file, file_handle, 0, inner_expr);
+                    const index = constant.asInt() catch {
+                        a.recordError(file_handle, expr_tokens[expr_handle], "Operand out of range");
+                        break :t .{ .poison = {} };
+                    };
+                    if (index < 0 or index > 15) {
+                        a.recordError(file_handle, expr_tokens[expr_handle], "Operand out of range");
+                        break :t .{ .poison = {} };
+                    }
+
+                    const reg = ie.IndexedRegister{
+                        .index = @intCast(u4, index),
+                        .signedness = null,
+                    };
+
+                    break :t switch (info) {
+                        .index_to_reg8 => .{ .reg8 = reg },
+                        .index_to_reg16 => .{ .reg16 = reg },
+                        .index_to_reg32 => .{ .reg32 = reg },
+                        else => unreachable,
+                    };
+                },
+                .raw_base_offset, .data_address, .insn_address, .stack_address,
+                .symbol_def, .reg8, .reg16, .reg32, .sr => t: {
+                    a.recordError(file_handle, expr_tokens[expr_handle], "Operand must be a constant expression");
+                    break :t .{ .poison = {} };
+                },
+            };
+        },
+        .reg_to_index => |inner_expr| {
+            expr_resolved_types[expr_handle] = switch (expr_resolved_types[inner_expr]) {
+                .unknown => return false,
+                .poison => .{ .poison = {} },
+                .reg8, .reg16, .reg32 => |reg| t: {
+                    const constant = Constant.initInt(reg.index, null);
+                    expr_resolved_constants[expr_handle] = constant.intern(a.arena, a.gpa, &a.constants);
+                    break :t .{ .constant = {} };
+                },
+                .raw_base_offset, .data_address, .insn_address, .stack_address,
+                .constant, .symbol_def, .sr => t: {
+                    a.recordError(file_handle, expr_tokens[expr_handle], "Operand must be a GPR expression");
+                    break :t .{ .poison = {} };
+                },
+            };
+        },
         .multiply, .shl, .shr, .concat, .concat_repeat, .bitwise_or, .bitwise_xor, .bitwise_and,
         .length_cast, .truncate, .sign_extend, .zero_extend => |bin| {
             const left = expr_resolved_types[bin.left];
@@ -349,7 +405,7 @@ fn tryResolveExpressionType(
                 .raw_base_offset => |bo| .{ .data_address = bo },
                 .reg8, .reg16, .reg32, .constant, .sr => .{ .data_address = ie.BaseOffsetType.init(inner_type, null) catch unreachable },
                 .insn_address, .stack_address => t: {
-                    a.recordError(file_handle, expr_tokens[expr_handle], "Casting between address spaces is not allowed.  Use `.d .raw` if you really want this.");
+                    a.recordError(file_handle, expr_tokens[expr_handle], "Casting directly between address spaces is not allowed.  Use `.d .raw` if you really want this.");
                     break :t .{ .poison = {} };
                 },
                 .symbol_def => unreachable,

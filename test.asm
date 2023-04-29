@@ -16,4 +16,4 @@ _loop:
 _end:
     c   last -> r0
     ret
-    c .s .raw _loop - ip + sp -> x0
+    ld .d x0 -> .rb (.idx last + 1) .unsigned

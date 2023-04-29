@@ -651,6 +651,14 @@ const Parser = struct {
                     break :info .{ .token = t, .right_bp = 0, .expr = .stack_address_cast };
                 } else if (self.tryKeyword("raw")) {
                     break :info .{ .token = t, .right_bp = 0, .expr = .remove_address_cast };
+                } else if (self.tryKeyword("r")) {
+                    break :info .{ .token = t, .right_bp = 0xFF, .expr = .index_to_reg16 };
+                } else if (self.tryKeyword("rx")) {
+                    break :info .{ .token = t, .right_bp = 0xFF, .expr = .index_to_reg32 };
+                } else if (self.tryKeyword("rb")) {
+                    break :info .{ .token = t, .right_bp = 0xFF, .expr = .index_to_reg8 };
+                } else if (self.tryKeyword("idx")) {
+                    break :info .{ .token = t, .right_bp = 0xFF, .expr = .reg_to_index };
                 } else {
                     t = begin;
                     return null;
@@ -975,6 +983,10 @@ const Parser = struct {
             .insn_address_cast,
             .stack_address_cast,
             .remove_address_cast,
+            .index_to_reg8,
+            .index_to_reg16,
+            .index_to_reg32,
+            .reg_to_index,
             => unreachable,
         });
     }
@@ -993,6 +1005,10 @@ const Parser = struct {
             .insn_address_cast => .{ .insn_address_cast = inner },
             .stack_address_cast => .{ .stack_address_cast = inner },
             .remove_address_cast => .{ .remove_address_cast = inner },
+            .index_to_reg8 => .{ .index_to_reg8 = inner },
+            .index_to_reg16 => .{ .index_to_reg16 = inner },
+            .index_to_reg32 => .{ .index_to_reg32 = inner },
+            .reg_to_index => .{ .reg_to_index = inner },
 
             .literal_int,
             .literal_str,
@@ -1059,6 +1075,10 @@ const Parser = struct {
             .insn_address_cast,
             .stack_address_cast,
             .remove_address_cast,
+            .index_to_reg8,
+            .index_to_reg16,
+            .index_to_reg32,
+            .reg_to_index,
             => unreachable,
         });
     }

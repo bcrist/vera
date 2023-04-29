@@ -259,7 +259,7 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
     return layout_changed;
 }
 
-fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle, ip: u32, expr_handle: Expression.Handle) *const Constant {
+pub fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle, ip: u32, expr_handle: Expression.Handle) *const Constant {
     var expr_infos = file.expressions.items(.info);
     var expr_tokens = file.expressions.items(.token);
     var expr_resolved_constants = file.expressions.items(.resolved_constant);
@@ -273,14 +273,11 @@ fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, file_handle: Sour
     switch (info) {
         .literal_symbol_def, .directive_symbol_def,
         .literal_int, .literal_str,
-        => unreachable, // These should be guaranteed to already have resolved_constant set
+        => unreachable,
 
-        .list, .arrow_list, .literal_reg => {
-            // These don't have a meaningful value
-            // but in the case of errors, we might end up trying to look for it anyway,
-            // so we'll set it to zero:
-            expr_resolved_constants[expr_handle] = &Constant.builtin.zero;
-        },
+        .list, .arrow_list, .literal_reg,
+        .index_to_reg8, .index_to_reg16, .index_to_reg32, .reg_to_index,
+        => expr_resolved_constants[expr_handle] = &Constant.builtin.zero,
 
         .literal_symbol_ref => {
             const token_handle = expr_tokens[expr_handle];

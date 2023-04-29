@@ -1,6 +1,8 @@
 ## Assembler
 .db/dw/dd directives
 
+Usage of a label that's fixed by an .org directive should not cause the expression to be marked .constant_depends_on_layout
+
 Warn when .org, .align, or an implied .align causes a hole in code that is reachable through control flow
 
 How do we deal with stack labels since Sections arent set up until encode phase?
