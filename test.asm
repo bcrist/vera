@@ -1,5 +1,5 @@
 fib: .entry etext
-    .org 0x2000
+    //.org 0x2FF1
     .def n r0
     .def last r1
     .def prev r2
@@ -15,5 +15,8 @@ _loop:
     b.p _loop
 _end:
     c   last -> r0
+    ld str -> x15
     ret
-    ld .d x0 -> .rb (.idx last + 1) .unsigned
+
+.const data
+str: .db "Hellorld!"

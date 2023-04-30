@@ -9,8 +9,13 @@ const Error = @This();
 file: SourceFile.Handle,
 token: Token.Handle,
 desc: []const u8,
+flags: std.EnumSet(Flags),
 
-pub fn print(self: Error, assembler: Assembler, writer: anytype) !void {
+pub const Flags = enum {
+    remove_on_layout_reset,
+};
+
+pub fn print(self: Error, assembler: *const Assembler, writer: anytype) !void {
     const file = assembler.files.items[self.file];
     try writer.print("{s}: {s}\n", .{ file.name, self.desc });
     const token = file.tokens.get(self.token);

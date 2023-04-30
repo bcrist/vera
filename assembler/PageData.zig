@@ -12,15 +12,17 @@ pub const UsageBitmap = std.StaticBitSet(page_size);
 page: bus.Page,
 section: Section.Handle,
 usage: UsageBitmap,
-data: [page_size]u8,
+data: []u8,
 
 const PageData = @This();
 
-pub fn init(page: bus.Page, section: Section.Handle) PageData {
+pub fn init(allocator: std.mem.Allocator, page: bus.Page, section: Section.Handle) PageData {
+    const data = allocator.alloc(u8, page_size) catch @panic("OOM");
+    std.mem.set(u8, data, 0);
     return .{
         .page = page,
         .section = section,
         .usage = UsageBitmap.initEmpty(),
-        .data = [_]u8{0} ** page_size,
+        .data = data,
     };
 }

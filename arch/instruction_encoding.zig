@@ -421,7 +421,7 @@ pub const ParameterSource = enum {
     IP_plus_4_16, // the word at IP+4
 };
 
-fn getMinLengthForParamSource(src: ParameterSource) u7 {
+fn getMinLengthForParamSource(src: ParameterSource) u3 {
     return switch (src) {
         .implicit, .OA, .OB, .OB_OA, .opcode => 2,
         .IP_plus_2_OA, .IP_plus_2_OB, .IP_plus_2_8 => 3,
@@ -1304,8 +1304,8 @@ pub fn comptimeParameterEncodings(comptime args: anytype) []const ParameterEncod
     }
 }
 
-pub fn getInstructionLength(encoding: InstructionEncoding) u7 {
-    var len: u7 = 2;
+pub fn getInstructionLength(encoding: InstructionEncoding) u3 {
+    var len: u3 = 2;
 
     if (encoding.mnemonic == .NOPE) {
         // special case; NOPE is really a branch, that skips a byte,

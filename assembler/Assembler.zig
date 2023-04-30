@@ -64,6 +64,10 @@ pub fn deinit(self: *Assembler, deinit_arena: bool) void {
             constant.deinit(self.arena);
             self.arena.destroy(constant);
         }
+
+        for (self.pages.items(.data)) |buf| {
+            self.arena.free(buf);
+        }
     }
 
     for (self.files.items) |file| {
@@ -96,6 +100,59 @@ pub fn adoptSource(self: *Assembler, name: []const u8, source: []const u8) Sourc
     return handle;
 }
 
+pub fn assemble(self: *Assembler) void {
+    for (self.files.items, 0..) |*file, file_handle| {
+        typechecking.processLabelsAndSections(self, file, @intCast(SourceFile.Handle, file_handle));
+    }
+
+    if (!typechecking.resolveExpressionTypes(self)) return;
+
+    typechecking.checkInstructionsAndDirectives(self);
+    
+    // TODO check for duplicate labels
+
+    for (self.files.items, 0..) |*file, file_handle| {
+        dead_code.markBlocksToKeep(self, file, @intCast(SourceFile.Handle, file_handle));
+    }
+
+    var fixed_org_chunks = std.ArrayListUnmanaged(SourceFile.Chunk) {};
+    var auto_org_chunks = std.ArrayListUnmanaged(SourceFile.Chunk) {};
+    defer fixed_org_chunks.deinit(self.gpa);
+    defer auto_org_chunks.deinit(self.gpa);
+    for (self.files.items, 0..) |*file, file_handle| {
+        file.collectChunks(@intCast(SourceFile.Handle, file_handle), self.gpa, &fixed_org_chunks, &auto_org_chunks);
+    }
+
+    var attempts: usize = 0;
+    const max_attempts = 100;
+    while (attempts < max_attempts) : (attempts += 1) {
+        self.pages.len = 0;
+        self.page_lookup.clearRetainingCapacity();
+
+        layout.resetLayoutDependentExpressions(self);
+
+        var try_again = layout.doFixedOrgLayout(self, fixed_org_chunks.items);
+        try_again = layout.doAutoOrgLayout(self, auto_org_chunks.items) or try_again;
+
+        // TODO better handling of degenerate/recursive cases where the layout never reaches an equilibrium?
+        if (self.invalid_program or !try_again) break;
+    }
+
+    if (attempts == max_attempts) {
+        std.debug.print("Failed to find a stable layout after {} iterations!\n", .{ attempts });
+        self.invalid_program = true;
+    }
+
+    // TODO validate that there are no overlapping chunks, instructions that would cause a page align fault, etc.
+
+    for (self.files.items, 0..) |*file, file_handle| {
+        layout.encodePageData(self, file, @intCast(SourceFile.Handle, file_handle));
+    }
+}
+
+// TODO functions for outputting assembled data to file or in-memory buffer
+
+
 pub fn getSource(self: *Assembler, handle: SourceFile.Handle) *SourceFile {
     return &self.files.items[handle];
 }
@@ -109,7 +166,7 @@ pub fn findOrCreatePage(self: *Assembler, page: bus.Page, section: Section.Handl
 
     const handle = @intCast(PageData.Handle, self.pages.len);
     self.page_lookup.ensureUnusedCapacity(self.gpa, 1) catch @panic("OOM");
-    self.pages.append(self.gpa, PageData.init(page, section)) catch @panic("OOM");
+    self.pages.append(self.gpa, PageData.init(self.arena, page, section)) catch @panic("OOM");
     self.page_lookup.putAssumeCapacity(page, handle);
     // std.debug.print("{X:0>13}: Created page for section {}\n", .{ page, section });
     return handle;
@@ -205,53 +262,53 @@ pub fn lookupSymbol(self: *Assembler, file: *const SourceFile, file_handle: Sour
     return .{ .not_found = {} };
 }
 
+pub fn buildInstruction(self: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle, ip: u32, mnemonic: ie.Mnemonic, suffix: ie.MnemonicSuffix, params: ?Expression.Handle) !ie.Instruction {
+    self.params_temp.clearRetainingCapacity();
+    if (params) |base_expr_handle| {
+        const expr_infos = file.expressions.items(.info);
+        const expr_resolved_types = file.expressions.items(.resolved_type);
 
-pub fn assemble(self: *Assembler) void {
-    for (self.files.items, 0..) |*file, file_handle| {
-        typechecking.processLabelsAndSections(self, file, @intCast(SourceFile.Handle, file_handle));
+        var expr_handle = base_expr_handle;
+        var is_arrow = false; // TODO want a way to have is_arrow on the first parameter
+        while (true) {
+            const info = expr_infos[expr_handle];
+            switch (info) {
+                .list, .arrow_list => |bin| {
+                    try self.buildInstructionParameter(file, file_handle, ip, bin.left, is_arrow, expr_resolved_types[bin.left]);
+                    is_arrow = info == .arrow_list;
+                    expr_handle = bin.right;
+                },
+                else => {
+                    try self.buildInstructionParameter(file, file_handle, ip, expr_handle, is_arrow, expr_resolved_types[expr_handle]);
+                    break;
+                },
+            }
+        }
     }
 
-    if (!typechecking.resolveExpressionTypes(self)) return;
-
-    typechecking.checkInstructionsAndDirectives(self);
-    
-    // TODO check for duplicate labels
-
-    for (self.files.items, 0..) |*file, file_handle| {
-        dead_code.markBlocksToKeep(self, file, @intCast(SourceFile.Handle, file_handle));
-    }
-
-    var fixed_org_chunks = std.ArrayListUnmanaged(SourceFile.Chunk) {};
-    var auto_org_chunks = std.ArrayListUnmanaged(SourceFile.Chunk) {};
-    defer fixed_org_chunks.deinit(self.gpa);
-    defer auto_org_chunks.deinit(self.gpa);
-    for (self.files.items, 0..) |*file, file_handle| {
-        file.collectChunks(@intCast(SourceFile.Handle, file_handle), self.gpa, &fixed_org_chunks, &auto_org_chunks);
-    }
-
-    var attempts: usize = 0;
-    const max_attempts = 100;
-    while (attempts < max_attempts) : (attempts += 1) {
-        self.pages.len = 0;
-        self.page_lookup.clearRetainingCapacity();
-
-        layout.resetLayoutDependentExpressions(self);
-
-        var try_again = layout.doFixedOrgLayout(self, fixed_org_chunks.items);
-        try_again = layout.doAutoOrgLayout(self, auto_org_chunks.items) or try_again;
-
-        // TODO better handling of degenerate/recursive cases where the layout never reaches an equilibrium?
-        if (self.invalid_program or !try_again) break;
-    }
-
-    if (attempts == max_attempts) {
-        std.debug.print("Failed to find a stable layout after {} iterations!\n", .{ attempts });
-        self.invalid_program = true;
-    }
-
-    // TODO validate that there are no overlapping chunks, instructions that would cause a page align fault, etc.
-
-    // TODO encode instructions into PageData
+    return .{
+        .mnemonic = mnemonic,
+        .suffix = suffix,
+        .params = self.params_temp.items,
+    };
 }
 
-// TODO functions for outputting assembled data to file or in-memory buffer
+fn buildInstructionParameter(
+    self: *Assembler,
+    file: *SourceFile,
+    file_handle: SourceFile.Handle,
+    ip: u32,
+    expr_handle: Expression.Handle,
+    is_arrow: bool,
+    resolved_type: ie.ExpressionType,
+) !void {
+    if (resolved_type == .poison) {
+        return error.Poisoned;
+    }
+    const constant = layout.resolveExpressionConstant(self, file, file_handle, ip, expr_handle);
+    self.params_temp.append(self.gpa, .{
+        .arrow = is_arrow,
+        .expr_type = resolved_type,
+        .constant = try constant.asInt(),
+    }) catch @panic("OOM");
+}

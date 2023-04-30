@@ -219,7 +219,7 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
                 // TODO handle alignment
             },
             .db => {
-
+                // TODO
             },
             .dw => {
                 // TODO handle alignment
@@ -418,25 +418,13 @@ fn resolveSymbolRefExprConstant(
     } else unreachable;
 }
 
-fn resolveInstructionEncoding(a: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle, ip: u32, insn_handle: Instruction.Handle, op: *Instruction.Operation, params: ?Expression.Handle) u7 {
-    const expr_infos = file.expressions.items(.info);
-    const expr_resolved_types = file.expressions.items(.resolved_type);
-
-    a.params_temp.clearRetainingCapacity();
-    if (params) |expr_handle| {
-        buildInstructionParameters(a, file, file_handle, ip, expr_handle, false, expr_infos, expr_resolved_types) catch return 0;
-    }
-
-    const what = op.insn;
-    var encoding_iter = a.edb.getMatchingEncodings(.{
-        .mnemonic = what.mnemonic,
-        .suffix = what.suffix,
-        .params = a.params_temp.items,
-    });
-
+fn resolveInstructionEncoding(a: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle, ip: u32, insn_handle: Instruction.Handle, op: *Instruction.Operation, params: ?Expression.Handle) u3 {
+    // TODO record errors in a.errors or a.layout_dependent_errors
+    const insn = a.buildInstruction(file, file_handle, ip, op.insn.mnemonic, op.insn.suffix, params) catch return 0;
+    var encoding_iter = a.edb.getMatchingEncodings(insn);
     a.params_temp.clearRetainingCapacity();
 
-    var best_length: ?u7 = null;
+    var best_length: ?u3 = null;
     var best_encoding: ?*const ie.InstructionEncoding = null;
     while (encoding_iter.nextPointer()) |enc| {
         const length = ie.getInstructionLength(enc.*);
@@ -462,41 +450,65 @@ fn resolveInstructionEncoding(a: *Assembler, file: *SourceFile, file_handle: Sou
     return 0;
 }
 
-fn buildInstructionParameters(
-    a: *Assembler,
-    file: *SourceFile,
-    file_handle: SourceFile.Handle,
-    ip: u32,
-    params: Expression.Handle,
-    is_arrow: bool,
-    expr_infos: []const Expression.Info,
-    expr_resolved_types: []const ie.ExpressionType,
-) !void {
-    // TODO want a way to have is_arrow on the first parameter?
-    switch (expr_infos[params]) {
-        .list => |bin| {
-            try buildInstructionParameters(a, file, file_handle, ip, bin.left, is_arrow, expr_infos, expr_resolved_types);
-            try buildInstructionParameters(a, file, file_handle, ip, bin.right, false, expr_infos, expr_resolved_types);
-            return;
-        },
-        .arrow_list => |bin| {
-            try buildInstructionParameters(a, file, file_handle, ip, bin.left, is_arrow, expr_infos, expr_resolved_types);
-            try buildInstructionParameters(a, file, file_handle, ip, bin.right, true, expr_infos, expr_resolved_types);
-            return;
-        },
-        else => {}
+pub fn encodePageData(a: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle) void {
+    const insn_operations = file.instructions.items(.operation);
+    const insn_params = file.instructions.items(.params);
+    const insn_addresses = file.instructions.items(.address);
+    const insn_lengths = file.instructions.items(.length);
+
+    var page_datas = a.pages.items(.data);
+
+    for (0.., insn_operations) |insn_handle, op| {
+        switch (op) {
+            .none, .insn, .org, .@"align", .keep, .def, .undef,
+            .section, .code, .kcode, .entry, .kentry, .data, .kdata, .@"const", .kconst, .stack,
+            => {},
+
+            .bound_insn => |encoding| {
+                const address = insn_addresses[insn_handle];
+                const length = insn_lengths[insn_handle];
+                const params = insn_params[insn_handle];
+                const page = @truncate(bus.Page, address >> @bitSizeOf(bus.PageOffset));
+                const offset = @truncate(bus.PageOffset, address);
+                const page_data_handle = a.page_lookup.get(page) orelse unreachable;
+                var buffer = page_datas[page_data_handle][offset..];
+
+                const insn = a.buildInstruction(file, file_handle, address, encoding.mnemonic, encoding.suffix, params)
+                    catch unreachable; // If builInstruction failed, we wouldn't have been able to find an InstructionEncoding.
+
+                if (length > buffer.len) {
+                    if (@truncate(u1, address) == 1) {
+                        a.recordError(file_handle, file.instructions.items(.token)[insn_handle], "Instruction crosses page boundary and is not word aligned");
+                    }
+                    var temp = [_]u8{0} ** 8;
+                    const temp_insn = ie.encodeInstruction(insn, encoding.*, &temp);
+                    std.mem.copy(u8, buffer, temp_insn[0..buffer.len]);
+
+                    const next_page = page + 1;
+                    _ = next_page;
+                    const next_page_data_handle = a.page_lookup.get(page) orelse unreachable;
+                    const next_page_buf = page_datas[next_page_data_handle];
+                    std.mem.copy(u8, next_page_buf, temp_insn[buffer.len..]);
+                } else {
+                    _ = ie.encodeInstruction(insn, encoding.*, buffer);
+                }
+            },
+
+            .db => {
+                // TODO .db
+            },
+            .dw => {
+                // TODO .dw
+            },
+            .dd => {
+                // TODO .dd
+            },
+            .push => {
+                // TODO stack sections
+            },
+            .pop => {
+                // TODO stack sections
+            },
+        }
     }
-
-    const expr_type = expr_resolved_types[params];
-    if (expr_type == .poison) {
-        return error.Poisoned;
-    }
-
-    const constant = resolveExpressionConstant(a, file, file_handle, ip, params);
-
-    a.params_temp.append(a.gpa, .{
-        .arrow = is_arrow,
-        .expr_type = expr_type,
-        .constant = constant.asInt() catch 0,
-    }) catch @panic("OOM");
 }

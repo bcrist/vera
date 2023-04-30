@@ -151,7 +151,33 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
         try writer.print("'{s}'\n", .{ std.fmt.fmtSliceEscapeUpper(ptr.asString()) });
     }
 
-    // TODO pages
+    try writer.writeAll("Pages:\n");
+    for (self.pages.items(.page), self.pages.items(.section), self.pages.items(.usage), self.pages.items(.data)) |page, section_handle, usage, data| {
+        try writer.print("   {X:0>5}: #{}\n", .{ page, section_handle });
+        for (0..8) |row| {
+            try writer.writeAll("      usage:");
+            for (0..8) |col| {
+                try writer.writeAll(" ");
+                const chunk_index = row * 8 + (7 - col);
+                const usage_chunk = std.mem.toBytes(usage.masks[chunk_index]);
+                for (0..8) |byte| {
+                    try writer.print("{X:0>2}", .{ usage_chunk[7 - byte] });
+                }
+            }
+            try writer.writeAll("\n");
+        }
+        for (usage.masks, 0..) |usage_chunk, chunk_index| {
+            if (usage_chunk != 0) {
+                const offset = chunk_index * 64;
+                const data_chunk = data[offset .. offset + 64];
+                try writer.print("      data:{X:0>3}-{X:0>3}: ", .{ offset + 63, offset });
+                for (0..64) |i| {
+                    try writer.print("{X:0>2}", .{ data_chunk[63 - i] });
+                }
+                try writer.print(" {}\n", .{ fmtSliceReplaceNonAscii(data_chunk) });
+            }
+        }
+    }
 
     try writer.writeAll("Errors:\n");
     for (self.errors.items) |err| {
@@ -160,6 +186,30 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
 
     if (self.invalid_program) {
         try writer.writeAll("Program is invalid!\n");
+    }
+}
+
+pub fn fmtSliceReplaceNonAscii(bytes: []const u8) std.fmt.Formatter(formatSliceReplaceNonAsciiImpl) {
+    return .{ .data = bytes };
+}
+
+fn formatSliceReplaceNonAsciiImpl(
+    bytes: []const u8,
+    comptime fmt: []const u8,
+    options: std.fmt.FormatOptions,
+    writer: anytype,
+) !void {
+    _ = fmt;
+    _ = options;
+
+    for (bytes) |c| {
+        if (std.ascii.isPrint(c)) {
+            try writer.writeByte(c);
+        } else if (c == 0) {
+            try writer.writeByte('.');
+        } else {
+            try writer.writeByte('?');
+        }
     }
 }
 
