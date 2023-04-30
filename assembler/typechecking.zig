@@ -303,7 +303,9 @@ fn tryResolveExpressionType(
                 .unknown => return false,
                 .poison => .{ .poison = {} },
                 .constant => t: {
-                    const constant = layout.resolveExpressionConstant(a, file, file_handle, 0, inner_expr);
+                    const constant = layout.resolveExpressionConstant(a, file, file_handle, 0, inner_expr) orelse {
+                        break :t .{ .poison = {} };
+                    };
                     const index = constant.asInt() catch {
                         a.recordError(file_handle, expr_tokens[expr_handle], "Operand out of range", .{});
                         break :t .{ .poison = {} };

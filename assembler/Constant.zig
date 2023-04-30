@@ -431,6 +431,9 @@ pub fn asInt(self: Constant) !i64 {
 
     return value;
 }
+pub fn asIntNegated(self: Constant) !i64 {
+    return try std.math.negateCast(try self.asInt());
+}
 
 test "asInt" {
     try std.testing.expectEqual(@as(u64, 1), Constant.initInt(0, null).bit_count);
@@ -728,6 +731,7 @@ pub fn intern(self: *const Constant, arena: std.mem.Allocator, gpa: std.mem.Allo
     return constant;
 }
 
+// TODO remove me
 pub const builtin = struct {
     pub const zero = init("", 0);
 };

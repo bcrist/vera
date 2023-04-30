@@ -183,6 +183,17 @@ pub fn recordError(self: *Assembler, file_handle: SourceFile.Handle, token: lex.
     }) catch @panic("OOM");
 }
 
+pub fn recordExpressionLayoutError(self: *Assembler, file_handle: SourceFile.Handle, expr_handle: Expression.Handle, desc: []const u8, flags: Error.FlagSet) void {
+    var mutable_flags = flags;
+    const file = self.files.items[file_handle];
+    const token_handle = file.expressions.items(.token)[expr_handle];
+    const expr_flags = file.expressions.items(.flags)[expr_handle];
+    if (expr_flags.contains(.constant_depends_on_layout)) {
+        mutable_flags.insert(.remove_on_layout_reset);
+    }
+    self.recordError(file_handle, token_handle, desc, mutable_flags);
+}
+
 pub fn recordInsnEncodingError(self: *Assembler, file_handle: SourceFile.Handle, insn_handle: Instruction.Handle, flags: InsnEncodingError.FlagSet) void {
     self.insn_encoding_errors.append(self.gpa, .{
         .file = file_handle,
@@ -323,18 +334,20 @@ fn buildInstructionParameter(
     if (resolved_type == .poison) {
         return false;
     }
-    const constant = layout.resolveExpressionConstant(self, file, file_handle, ip, expr_handle);
-    const constant_value = constant.asInt() catch {
-        if (record_errors) {
-            const expr_token = file.expressions.items(.token)[expr_handle];
-            const expr_flags = file.expressions.items(.flags)[expr_handle];
-            var err_flags = Error.FlagSet{};
-            if (expr_flags.contains(.constant_depends_on_layout)) {
-                err_flags.insert(.remove_on_layout_reset);
+    const constant_value = v: {
+        const constant = layout.resolveExpressionConstant(self, file, file_handle, ip, expr_handle) orelse break :v 0;
+        break :v constant.asInt() catch {
+            if (record_errors) {
+                const expr_token = file.expressions.items(.token)[expr_handle];
+                const expr_flags = file.expressions.items(.flags)[expr_handle];
+                var err_flags = Error.FlagSet{};
+                if (expr_flags.contains(.constant_depends_on_layout)) {
+                    err_flags.insert(.remove_on_layout_reset);
+                }
+                self.recordError(file_handle, expr_token, "Parameter constant too large (must fit in i64)", err_flags);
             }
-            self.recordError(file_handle, expr_token, "Parameter constant too large (must fit in i64)", err_flags);
-        }
-        return false;
+            return false;
+        };
     };
     self.params_temp.append(self.gpa, .{
         .arrow = is_arrow,

@@ -9,6 +9,7 @@ const Constant = @import("Constant.zig");
 const Instruction = @import("Instruction.zig");
 const Expression = @import("Expression.zig");
 const PageData = @import("PageData.zig");
+const Error = @import("Error.zig");
 const InsnEncodingError = @import("InsnEncodingError.zig");
 
 pub fn resetLayoutDependentExpressions(a: *Assembler) void {
@@ -64,8 +65,17 @@ fn resolveFixedOrgAddress(a: *Assembler, chunk: SourceFile.Chunk) u32 {
         if (operations[insn_handle] == .org) {
             initial_address = file.instructions.items(.address)[insn_handle];
             if (file.instructions.items(.params)[insn_handle]) |expr_handle| {
-                var constant = resolveExpressionConstant(a, file, chunk.file, initial_address, expr_handle);
-                initial_address = std.math.cast(u32, constant.asInt() catch 0) orelse 0;
+                if (resolveExpressionConstant(a, file, chunk.file, initial_address, expr_handle)) |constant| {
+                    const address_i64 = constant.asInt() catch {
+                        a.recordExpressionLayoutError(chunk.file, expr_handle, ".org address too large", .{});
+                        break;
+                    };
+
+                    initial_address = std.math.cast(u32, address_i64) orelse {
+                        a.recordExpressionLayoutError(chunk.file, expr_handle, ".org address too large", .{});
+                        break;
+                    };
+                }
             }
             break;
         }
@@ -280,25 +290,25 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
     return layout_changed;
 }
 
-pub fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle, ip: u32, expr_handle: Expression.Handle) *const Constant {
-    var expr_infos = file.expressions.items(.info);
-    var expr_tokens = file.expressions.items(.token);
+pub fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle, ip: u32, expr_handle: Expression.Handle) ?*const Constant {
     var expr_resolved_constants = file.expressions.items(.resolved_constant);
-    var expr_resolved_types = file.expressions.items(.resolved_type);
-
     if (expr_resolved_constants[expr_handle]) |constant| {
         return constant;
     }
 
+    var expr_infos = file.expressions.items(.info);
+    const expr_tokens = file.expressions.items(.token);
+    const expr_resolved_types = file.expressions.items(.resolved_type);
+
     const info = expr_infos[expr_handle];
     switch (info) {
         .literal_symbol_def, .directive_symbol_def,
-        .literal_int, .literal_str,
+        .literal_int, .literal_str, .reg_to_index,
         => unreachable,
 
         .list, .arrow_list, .literal_reg,
-        .index_to_reg8, .index_to_reg16, .index_to_reg32, .reg_to_index,
-        => expr_resolved_constants[expr_handle] = &Constant.builtin.zero,
+        .index_to_reg8, .index_to_reg16, .index_to_reg32,
+        => return null,
 
         .literal_current_address => {
             var value = ip;
@@ -327,35 +337,54 @@ pub fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, file_handle: 
         },
 
         .negate => |inner_expr| {
-            const inner_constant = resolveExpressionConstant(a, file, file_handle, ip, inner_expr);
-            const value = std.math.negateCast(inner_constant.asInt() catch 0) catch 0;
+            const inner_constant = resolveExpressionConstant(a, file, file_handle, ip, inner_expr) orelse return null;
+            const value = inner_constant.asIntNegated() catch {
+                a.recordExpressionLayoutError(file_handle, expr_handle, "Overflow (constant too large)", .{});
+                return null;
+            };
             const new_constant = Constant.initInt(value, null);
             expr_resolved_constants[expr_handle] = new_constant.intern(a.arena, a.gpa, &a.constants);
         },
         .complement => |inner_expr| {
-            const inner = resolveExpressionConstant(a, file, file_handle, ip, inner_expr);
+            const inner = resolveExpressionConstant(a, file, file_handle, ip, inner_expr) orelse return null;
             const result = inner.complement(a.gpa, &a.constant_temp);
             expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
         },
         .plus, .minus, .multiply, .shl, .shr, => |bin| {
-            const left = resolveExpressionConstant(a, file, file_handle, ip, bin.left);
-            const right = resolveExpressionConstant(a, file, file_handle, ip, bin.right);
-            const lv = left.asInt() catch 0;
-            const rv = right.asInt() catch 0;
+            const left = resolveExpressionConstant(a, file, file_handle, ip, bin.left) orelse return null;
+            const right = resolveExpressionConstant(a, file, file_handle, ip, bin.right) orelse return null;
+            const lv = left.asInt() catch {
+                a.recordExpressionLayoutError(file_handle, bin.left, "Overflow (constant too large)", .{});
+                return null;
+            };
+            const rv = right.asInt() catch {
+                a.recordExpressionLayoutError(file_handle, bin.right, "Overflow (constant too large)", .{});
+                return null;
+            };
+
+            if (info == .shl or info == .shr) {
+                _ = std.math.cast(u6, rv) orelse {
+                    a.recordExpressionLayoutError(file_handle, expr_handle, "Overflow (constant too large)", .{});
+                };
+            }
+
             const value = switch (info) {
-                .plus => lv +% rv,
-                .minus => lv -% rv,
-                .multiply => lv *% rv,
-                .shl => lv << @truncate(u6, @bitCast(u64, rv)),
-                .shr => lv >> @truncate(u6, @bitCast(u64, rv)),
+                .plus => std.math.add(i64, lv, rv),
+                .minus => std.math.sub(i64, lv, rv),
+                .multiply => std.math.mul(i64, lv, rv),
+                .shl => std.math.shlExact(i64, lv, @intCast(u6, rv)),
+                .shr => lv >> @intCast(u6, rv),
                 else => unreachable,
+            } catch {
+                a.recordExpressionLayoutError(file_handle, expr_handle, "Overflow (constant too large)", .{});
+                return null;
             };
             const new_constant = Constant.initInt(value, null);
             expr_resolved_constants[expr_handle] = new_constant.intern(a.arena, a.gpa, &a.constants);
         },
         .concat, .bitwise_or, .bitwise_xor, .bitwise_and => |bin| {
-            const left = resolveExpressionConstant(a, file, file_handle, ip, bin.left);
-            const right = resolveExpressionConstant(a, file, file_handle, ip, bin.right);
+            const left = resolveExpressionConstant(a, file, file_handle, ip, bin.left) orelse return null;
+            const right = resolveExpressionConstant(a, file, file_handle, ip, bin.right) orelse return null;
             const result = switch (info) {
                 .concat => left.concat(a.gpa, &a.constant_temp, right.*),
                 .bitwise_or => left.bitwiseOr(a.gpa, &a.constant_temp, right.*),
@@ -366,24 +395,41 @@ pub fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, file_handle: 
             expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
         },
         .concat_repeat => |bin| {
-            const left = resolveExpressionConstant(a, file, file_handle, ip, bin.left);
-            const right = resolveExpressionConstant(a, file, file_handle, ip, bin.right);
-            const times = right.asInt() catch 0;
+            const left = resolveExpressionConstant(a, file, file_handle, ip, bin.left) orelse return null;
+            const right = resolveExpressionConstant(a, file, file_handle, ip, bin.right) orelse return null;
+            const times = right.asInt() catch {
+                a.recordExpressionLayoutError(file_handle, bin.right, "Overflow (constant too large)", .{});
+                return null;
+            };
             const result = left.repeat(a.gpa, &a.constant_temp, times);
             expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
         },
         .length_cast, .truncate, .sign_extend => |bin| {
-            const left = resolveExpressionConstant(a, file, file_handle, ip, bin.left);
-            const right = resolveExpressionConstant(a, file, file_handle, ip, bin.right);
-            const rv = @intCast(u64, @max(0, right.asInt() catch 0));
-            const result = left.cloneWithLength(a.gpa, &a.constant_temp, rv, .signed);
+            const left = resolveExpressionConstant(a, file, file_handle, ip, bin.left) orelse return null;
+            const right = resolveExpressionConstant(a, file, file_handle, ip, bin.right) orelse return null;
+            const width = right.asInt() catch {
+                a.recordExpressionLayoutError(file_handle, bin.right, "Overflow (constant too large)", .{});
+                return null;
+            };
+            if (width < 0) {
+                a.recordExpressionLayoutError(file_handle, bin.right, "Width must not be negative", .{});
+                return null;
+            }
+            const result = left.cloneWithLength(a.gpa, &a.constant_temp, @intCast(u64, width), .signed);
             expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
         },
         .zero_extend => |bin| {
-            const left = resolveExpressionConstant(a, file, file_handle, ip, bin.left);
-            const right = resolveExpressionConstant(a, file, file_handle, ip, bin.right);
-            const rv = @intCast(u64, @max(0, right.asInt() catch 0));
-            const result = left.cloneWithLength(a.gpa, &a.constant_temp, rv, .unsigned);
+            const left = resolveExpressionConstant(a, file, file_handle, ip, bin.left) orelse return null;
+            const right = resolveExpressionConstant(a, file, file_handle, ip, bin.right) orelse return null;
+            const width = right.asInt() catch {
+                a.recordExpressionLayoutError(file_handle, bin.right, "Overflow (constant too large)", .{});
+                return null;
+            };
+            if (width < 0) {
+                a.recordExpressionLayoutError(file_handle, bin.right, "Width must not be negative", .{});
+                return null;
+            }
+            const result = left.cloneWithLength(a.gpa, &a.constant_temp, @intCast(u64, width), .unsigned);
             expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
         },
         .signed_cast, .unsigned_cast, .maybe_signed_cast,
@@ -392,14 +438,25 @@ pub fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, file_handle: 
             expr_resolved_constants[expr_handle] = resolveExpressionConstant(a, file, file_handle, ip, inner_expr);
         },
         .absolute_address_cast => |inner_expr| {
-            const inner = resolveExpressionConstant(a, file, file_handle, ip, inner_expr);
-            const value = inner.asInt() catch 0;
-            const result = Constant.initInt(value +% ip, null);
+            const inner = resolveExpressionConstant(a, file, file_handle, ip, inner_expr) orelse return null;
+            const relative = inner.asInt() catch {
+                a.recordExpressionLayoutError(file_handle, inner_expr, "Relative address too large", .{});
+                return null;
+            };
+            const absolute = std.math.add(i64, relative, ip) catch {
+                a.recordExpressionLayoutError(file_handle, inner_expr, "Absolute address overflows u32", .{});
+                return null;
+            };
+            const absolute_u32 = std.math.cast(u32, absolute) orelse {
+                a.recordExpressionLayoutError(file_handle, inner_expr, "Absolute address overflows u32", .{});
+                return null;
+            };
+            const result = Constant.initInt(absolute_u32, null);
             expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
         },
     }
 
-    return expr_resolved_constants[expr_handle].?;
+    return expr_resolved_constants[expr_handle];
 }
 
 fn resolveSymbolRefExprConstant(
@@ -433,7 +490,8 @@ fn resolveSymbolRefExprConstant(
                 expr_resolved_constants[expr_handle] = constant.intern(a.arena, a.gpa, &a.constants);
             },
             .not_found => {
-                expr_resolved_constants[expr_handle] = &Constant.builtin.zero;
+                unreachable;
+                //expr_resolved_constants[expr_handle] = &Constant.builtin.zero;
             },
         }
     } else unreachable;
