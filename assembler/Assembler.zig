@@ -263,7 +263,7 @@ pub fn lookupSymbol(self: *Assembler, file: *const SourceFile, file_handle: Sour
     }
 
     // 3. stack labels from .pushed contexts
-    // TODO
+    // TODO stack sections
 
     // 4. global labels
     if (self.symbols.get(symbol)) |insn_ref| {
@@ -273,7 +273,7 @@ pub fn lookupSymbol(self: *Assembler, file: *const SourceFile, file_handle: Sour
     return .{ .not_found = {} };
 }
 
-pub fn buildInstruction(self: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle, ip: u32, mnemonic: ie.Mnemonic, suffix: ie.MnemonicSuffix, params: ?Expression.Handle) !ie.Instruction {
+pub fn buildInstruction(self: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle, ip: u32, mnemonic: ie.Mnemonic, suffix: ie.MnemonicSuffix, params: ?Expression.Handle, record_errors: bool) ?ie.Instruction {
     self.params_temp.clearRetainingCapacity();
     if (params) |base_expr_handle| {
         const expr_infos = file.expressions.items(.info);
@@ -285,12 +285,18 @@ pub fn buildInstruction(self: *Assembler, file: *SourceFile, file_handle: Source
             const info = expr_infos[expr_handle];
             switch (info) {
                 .list, .arrow_list => |bin| {
-                    try self.buildInstructionParameter(file, file_handle, ip, bin.left, is_arrow, expr_resolved_types[bin.left]);
+                    const expr_type = expr_resolved_types[bin.left];
+                    if (!self.buildInstructionParameter(file, file_handle, ip, bin.left, is_arrow, expr_type, record_errors)) {
+                        return null;
+                    }
                     is_arrow = info == .arrow_list;
                     expr_handle = bin.right;
                 },
                 else => {
-                    try self.buildInstructionParameter(file, file_handle, ip, expr_handle, is_arrow, expr_resolved_types[expr_handle]);
+                    const expr_type = expr_resolved_types[expr_handle];
+                    if (!self.buildInstructionParameter(file, file_handle, ip, expr_handle, is_arrow, expr_type, record_errors)) {
+                        return null;
+                    }
                     break;
                 },
             }
@@ -312,14 +318,28 @@ fn buildInstructionParameter(
     expr_handle: Expression.Handle,
     is_arrow: bool,
     resolved_type: ie.ExpressionType,
-) !void {
+    record_errors: bool,
+) bool {
     if (resolved_type == .poison) {
-        return error.Poisoned;
+        return false;
     }
     const constant = layout.resolveExpressionConstant(self, file, file_handle, ip, expr_handle);
+    const constant_value = constant.asInt() catch {
+        if (record_errors) {
+            const expr_token = file.expressions.items(.token)[expr_handle];
+            const expr_flags = file.expressions.items(.flags)[expr_handle];
+            var err_flags = Error.FlagSet{};
+            if (expr_flags.contains(.constant_depends_on_layout)) {
+                err_flags.insert(.remove_on_layout_reset);
+            }
+            self.recordError(file_handle, expr_token, "Parameter constant too large (must fit in i64)", err_flags);
+        }
+        return false;
+    };
     self.params_temp.append(self.gpa, .{
         .arrow = is_arrow,
         .expr_type = resolved_type,
-        .constant = try constant.asInt(),
+        .constant = constant_value,
     }) catch @panic("OOM");
+    return true;
 }

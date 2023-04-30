@@ -9,6 +9,7 @@ const Constant = @import("Constant.zig");
 const Instruction = @import("Instruction.zig");
 const Expression = @import("Expression.zig");
 const PageData = @import("PageData.zig");
+const InsnEncodingError = @import("InsnEncodingError.zig");
 
 pub fn resetLayoutDependentExpressions(a: *Assembler) void {
     // std.debug.print("Resetting Layout\n", .{});
@@ -237,13 +238,15 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
                 // TODO handle alignment
             },
             .db => {
-                // TODO
+                // TODO .db
             },
             .dw => {
                 // TODO handle alignment
+                // TODO .dw
             },
             .dd => {
                 // TODO handle alignment
+                // TODO .dd
             },
         }
 
@@ -437,8 +440,7 @@ fn resolveSymbolRefExprConstant(
 }
 
 fn resolveInstructionEncoding(a: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle, ip: u32, insn_handle: Instruction.Handle, op: *Instruction.Operation, params: ?Expression.Handle) u3 {
-    // TODO record errors in a.errors or a.layout_dependent_errors
-    const insn = a.buildInstruction(file, file_handle, ip, op.insn.mnemonic, op.insn.suffix, params) catch return 0;
+    const insn = a.buildInstruction(file, file_handle, ip, op.insn.mnemonic, op.insn.suffix, params, true) orelse return 0;
     var encoding_iter = a.edb.getMatchingEncodings(insn);
     a.params_temp.clearRetainingCapacity();
 
@@ -461,7 +463,11 @@ fn resolveInstructionEncoding(a: *Assembler, file: *SourceFile, file_handle: Sou
         return best_length.?;
     }
 
-    a.recordInsnEncodingError(file_handle, insn_handle, .{});
+    var err_flags = InsnEncodingError.FlagSet{};
+    if (file.instructions.items(.flags)[insn_handle].contains(.encoding_depends_on_layout)) {
+        err_flags.insert(.remove_on_layout_reset);
+    }
+    a.recordInsnEncodingError(file_handle, insn_handle, err_flags);
     return 0;
 }
 
@@ -488,8 +494,7 @@ pub fn encodePageData(a: *Assembler, file: *SourceFile, file_handle: SourceFile.
                 const page_data_handle = a.page_lookup.get(page) orelse unreachable;
                 var buffer = page_datas[page_data_handle][offset..];
 
-                const insn = a.buildInstruction(file, file_handle, address, encoding.mnemonic, encoding.suffix, params)
-                    catch unreachable; // If builInstruction failed, we wouldn't have been able to find an InstructionEncoding.
+                const insn = a.buildInstruction(file, file_handle, address, encoding.mnemonic, encoding.suffix, params, false).?;
 
                 if (length > buffer.len) {
                     if (@truncate(u1, address) == 1) {

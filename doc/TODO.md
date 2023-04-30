@@ -7,8 +7,6 @@ Usage of a label that's fixed by an .org directive should not cause the expressi
 
 Warn when .org, .align, or an implied .align causes a hole in code that is reachable through control flow
 
-How do we deal with stack labels since Sections arent set up until encode phase?
-
 Multi-line string literals
 
 Warn on multiple files with same name
