@@ -20,6 +20,24 @@ pub fn resetLayoutDependentExpressions(a: *Assembler) void {
             }
         }
     }
+
+    var errors = a.errors.items;
+    var i = errors.len;
+    while (i > 0) {
+        i -= 1;
+        if (errors[i].flags.contains(.remove_on_layout_reset)) {
+            _ = a.errors.swapRemove(i);
+        }
+    }
+
+    var insn_encoding_errors = a.insn_encoding_errors.items;
+    i = insn_encoding_errors.len;
+    while (i > 0) {
+        i -= 1;
+        if (insn_encoding_errors[i].flags.contains(.remove_on_layout_reset)) {
+            _ = a.insn_encoding_errors.swapRemove(i);
+        }
+    }
 }
 
 pub fn doFixedOrgLayout(a: *Assembler, chunks: []SourceFile.Chunk) bool {
@@ -443,10 +461,7 @@ fn resolveInstructionEncoding(a: *Assembler, file: *SourceFile, file_handle: Sou
         return best_length.?;
     }
 
-    const insn_token = file.instructions.items(.token)[insn_handle];
-    a.recordError(file_handle, insn_token, "No instruction encodings match instruction");
-    // TODO suggest valid encodings
-    a.invalid_program = true;
+    a.recordInsnEncodingError(file_handle, insn_handle, .{});
     return 0;
 }
 
@@ -478,7 +493,7 @@ pub fn encodePageData(a: *Assembler, file: *SourceFile, file_handle: SourceFile.
 
                 if (length > buffer.len) {
                     if (@truncate(u1, address) == 1) {
-                        a.recordError(file_handle, file.instructions.items(.token)[insn_handle], "Instruction crosses page boundary and is not word aligned");
+                        a.recordError(file_handle, file.instructions.items(.token)[insn_handle], "Instruction crosses page boundary and is not word aligned", .{});
                     }
                     var temp = [_]u8{0} ** 8;
                     const temp_insn = ie.encodeInstruction(insn, encoding.*, &temp);

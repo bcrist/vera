@@ -272,7 +272,7 @@ pub fn _FB10_FB1F() void {
 }
 
 pub fn _FB20_FB2F() void {
-    encoding(.C, .{ .imm16u, .to, .Ra });
+    encoding(.C, .{ .imm16u, .to, .RaU });
     //syntax("C imm16[0,65535] -> Ra");
     desc("Copy immediate to 16b register");
 
@@ -282,6 +282,14 @@ pub fn _FB20_FB2F() void {
     next_cycle();
 
     load_and_exec_next_insn(4);
+}
+// pub fn _alias_FB20_FB2F_imm15u() void {
+//     encoding(.C, .{ .imm15u, .to, .Ra });
+//     desc("Copy immediate to 16b register");
+// }
+pub fn _alias_FB20_FB2F_imm16s() void {
+    encoding(.C, .{ .imm16s, .to, .RaS });
+    desc("Copy immediate to 16b register");
 }
 
 pub fn _FB30_FB3F() void {

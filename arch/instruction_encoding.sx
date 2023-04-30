@@ -1714,7 +1714,7 @@
    (FB20 FB2F C
       (desc "Copy immediate to 16b register")
       (param (base constant) (base-src IP_plus_2_16) (range 0 65535))
-      (param -> (base reg16) (base-src OA))
+      (param -> (base reg16 (unsigned)) (base-src OA))
    )
    (FB30 FB3F C
       (desc "Copy immediate to 32b register")
@@ -1772,6 +1772,11 @@
       (desc "Store registerset")
       (param (base reg16) (base-src OB))
       (param -> (address data) (base reg32) (base-src OA))
+   )
+   (FB20 FB2F C
+      (desc "Copy immediate to 16b register")
+      (param (base constant) (base-src IP_plus_2_16) (range 0 32767) (range -32768 -1))
+      (param -> (base reg16 (signed)) (base-src OA))
    )
    (0100 0100 B
       (desc "IP-relative unconditional branch to IP+3; equivalent to NOPE")

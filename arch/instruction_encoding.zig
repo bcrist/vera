@@ -490,6 +490,10 @@ pub const ParameterEncoding = struct {
     constant_align: u3 = 1,
     constant_ranges: []const ConstantRange = &.{},
     alt_constant_ranges: []const ConstantRange = &.{},
+    // TODO allow restricting encoding to matching a subset of the full ConstantRanges that can be encoded.
+    // that way e.g. in addition to C .imm16u -> RaU and C .imm16s -> RaS, we can also have C .imm15u -> Ra.
+    // So the .signed/.unsigned suffix can be omitted for numbers that are the same regardless of
+    // signed/unsigned interpretation
 
     pub fn print(self: ParameterEncoding, writer: anytype) !void {
         if (self.arrow) {

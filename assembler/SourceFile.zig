@@ -1153,6 +1153,7 @@ const Parser = struct {
             .file = self.handle,
             .token = self.next_token,
             .desc = desc,
+            .flags = .{},
         }) catch @panic("OOM");
     }
     fn recordErrorAbs(self: *Parser, desc: []const u8, token: Token.Handle) void {
@@ -1160,6 +1161,7 @@ const Parser = struct {
             .file = self.handle,
             .token = token,
             .desc = desc,
+            .flags = .{},
         }) catch @panic("OOM");
     }
     fn recordErrorRel(self: *Parser, desc: []const u8, token_offset: i8) void {
@@ -1167,6 +1169,7 @@ const Parser = struct {
             .file = self.handle,
             .token = @intCast(Token.Handle, @as(i32, self.next_token) + token_offset),
             .desc = desc,
+            .flags = .{},
         }) catch @panic("OOM");
     }
 

@@ -60,12 +60,12 @@ pub fn processLabelsAndSections(a: *Assembler, file: *SourceFile, file_handle: S
                 }) catch @panic("OOM");
                 const found_kind = entry.value_ptr.kind;
                 if (found_kind != kind) switch (found_kind) {
-                    inline else => |k| a.recordError(file_handle, insn_tokens[insn_handle], "Section already exists; expected ." ++ @tagName(k)),
+                    inline else => |k| a.recordError(file_handle, insn_tokens[insn_handle], "Section already exists; expected ." ++ @tagName(k), .{}),
                 };
                 const block_handle = file.findBlockByInstruction(@intCast(Instruction.Handle, insn_handle));
                 block_sections[block_handle] = @intCast(Section.Handle, entry.index);
             } else {
-                a.recordError(file_handle, insn_tokens[insn_handle], "Unnamed sections are not currently supported");
+                a.recordError(file_handle, insn_tokens[insn_handle], "Unnamed sections are not currently supported", .{});
             }
         }
 
@@ -156,7 +156,7 @@ pub fn resolveExpressionTypes(a: *Assembler) bool {
             for (resolved_types, 0..) |expr_type, handle| {
                 if (expr_type == .unknown) {
                     resolved_types[handle] = .{ .poison = {} };
-                    a.recordError(@intCast(SourceFile.Handle, file_handle), tokens[handle], "Could not determine type for expression");
+                    a.recordError(@intCast(SourceFile.Handle, file_handle), tokens[handle], "Could not determine type for expression", .{});
                 }
             }
         }
@@ -192,11 +192,11 @@ fn tryResolveExpressionType(
                 expr_resolved_constants[expr_handle] = constant.intern(a.arena, a.gpa, &a.constants);
             } else |err| switch (err) {
                 error.Overflow => {
-                    a.recordError(file_handle, token_handle, "Integer literal too large");
+                    a.recordError(file_handle, token_handle, "Integer literal too large", .{});
                     expr_resolved_types[expr_handle] = .{ .poison = {} };
                 },
                 error.InvalidCharacter => {
-                    a.recordError(file_handle, token_handle, "Invalid character in literal");
+                    a.recordError(file_handle, token_handle, "Invalid character in literal", .{});
                     expr_resolved_types[expr_handle] = .{ .poison = {} };
                 },
                 error.InvalidToken => unreachable,
@@ -261,7 +261,7 @@ fn tryResolveExpressionType(
             builder.add(expr_resolved_types[bin.left]);
             builder.add(expr_resolved_types[bin.right]);
             const result_type: ExpressionType = builder.build() catch t: {
-                a.recordError(file_handle, expr_tokens[expr_handle], "Cannot represent result of symbolic addition");
+                a.recordError(file_handle, expr_tokens[expr_handle], "Cannot represent result of symbolic addition", .{});
                 break :t .{ .poison = {} };
             };
             if (result_type == .unknown) return false;
@@ -273,7 +273,7 @@ fn tryResolveExpressionType(
             builder.add(expr_resolved_types[bin.left]);
             builder.subtract(expr_resolved_types[bin.right]);
             const result_type: ExpressionType = builder.build() catch t: {
-                a.recordError(file_handle, expr_tokens[expr_handle], "Cannot represent result of symbolic subtraction");
+                a.recordError(file_handle, expr_tokens[expr_handle], "Cannot represent result of symbolic subtraction", .{});
                 break :t .{ .poison = {} };
             };
             if (result_type == .unknown) return false;
@@ -287,7 +287,7 @@ fn tryResolveExpressionType(
                 .constant => .{ .constant = {} },
                 .raw_base_offset, .data_address, .insn_address, .stack_address,
                 .symbol_def, .reg8, .reg16, .reg32, .sr => t: {
-                    a.recordError(file_handle, expr_tokens[expr_handle], "Operand must be a constant expression");
+                    a.recordError(file_handle, expr_tokens[expr_handle], "Operand must be a constant expression", .{});
                     break :t .{ .poison = {} };
                 },
             };
@@ -295,7 +295,7 @@ fn tryResolveExpressionType(
         },
         .index_to_reg8, .index_to_reg16, .index_to_reg32 => |inner_expr| {
             if (expr_flags[inner_expr].contains(.constant_depends_on_layout)) {
-                a.recordError(file_handle, expr_tokens[expr_handle], "Operand cannot vary on memory layout");
+                a.recordError(file_handle, expr_tokens[expr_handle], "Operand cannot vary on memory layout", .{});
                 expr_resolved_types[expr_handle] = .{ .poison = {} };
                 return true;
             }
@@ -305,11 +305,11 @@ fn tryResolveExpressionType(
                 .constant => t: {
                     const constant = layout.resolveExpressionConstant(a, file, file_handle, 0, inner_expr);
                     const index = constant.asInt() catch {
-                        a.recordError(file_handle, expr_tokens[expr_handle], "Operand out of range");
+                        a.recordError(file_handle, expr_tokens[expr_handle], "Operand out of range", .{});
                         break :t .{ .poison = {} };
                     };
                     if (index < 0 or index > 15) {
-                        a.recordError(file_handle, expr_tokens[expr_handle], "Operand out of range");
+                        a.recordError(file_handle, expr_tokens[expr_handle], "Operand out of range", .{});
                         break :t .{ .poison = {} };
                     }
 
@@ -327,7 +327,7 @@ fn tryResolveExpressionType(
                 },
                 .raw_base_offset, .data_address, .insn_address, .stack_address,
                 .symbol_def, .reg8, .reg16, .reg32, .sr => t: {
-                    a.recordError(file_handle, expr_tokens[expr_handle], "Operand must be a constant expression");
+                    a.recordError(file_handle, expr_tokens[expr_handle], "Operand must be a constant expression", .{});
                     break :t .{ .poison = {} };
                 },
             };
@@ -343,7 +343,7 @@ fn tryResolveExpressionType(
                 },
                 .raw_base_offset, .data_address, .insn_address, .stack_address,
                 .constant, .symbol_def, .sr => t: {
-                    a.recordError(file_handle, expr_tokens[expr_handle], "Operand must be a GPR expression");
+                    a.recordError(file_handle, expr_tokens[expr_handle], "Operand must be a GPR expression", .{});
                     break :t .{ .poison = {} };
                 },
             };
@@ -356,7 +356,7 @@ fn tryResolveExpressionType(
                 if (left == .poison or right == .poison) break :t .{ .poison = {} };
                 if (left == .unknown or right == .unknown) return false;
                 if (left == .constant and right == .constant) break :t .{ .constant = {} };
-                a.recordError(file_handle, expr_tokens[expr_handle], "Both operands must be constant expressions");
+                a.recordError(file_handle, expr_tokens[expr_handle], "Both operands must be constant expressions", .{});
                 break :t .{ .poison = {} };
             };
             resolveConstantDependsOnLayoutBinary(expr_flags, expr_handle, bin);
@@ -384,7 +384,7 @@ fn tryResolveExpressionType(
                 },
                 .raw_base_offset, .data_address, .insn_address, .stack_address,
                 .constant, .symbol_def, .sr => t: {
-                    a.recordError(file_handle, expr_tokens[expr_handle], "Operand must be a GPR expression");
+                    a.recordError(file_handle, expr_tokens[expr_handle], "Operand must be a GPR expression", .{});
                     break :t .{ .poison = {} };
                 },
             };
@@ -397,7 +397,7 @@ fn tryResolveExpressionType(
                 .poison => .{ .poison = {} },
                 .raw_base_offset, .data_address, .insn_address, .stack_address => |bo| t: {
                     if (!std.meta.eql(bo.base, .{ .sr = .ip })) {
-                        a.recordError(file_handle, expr_tokens[expr_handle], "Operand must be an IP-relative expression");
+                        a.recordError(file_handle, expr_tokens[expr_handle], "Operand must be an IP-relative expression", .{});
                         break :t .{ .poison = {} };
                     }
                     var builder = ie.ExpressionTypeBuilder{};
@@ -406,7 +406,7 @@ fn tryResolveExpressionType(
                     break :t builder.build() catch unreachable;
                 },
                 .reg8, .reg16, .reg32, .constant, .symbol_def, .sr => t: {
-                    a.recordError(file_handle, expr_tokens[expr_handle], "Operand must be an IP-relative expression");
+                    a.recordError(file_handle, expr_tokens[expr_handle], "Operand must be an IP-relative expression", .{});
                     break :t .{ .poison = {} };
                 },
             };
@@ -421,7 +421,7 @@ fn tryResolveExpressionType(
                 .raw_base_offset => |bo| .{ .data_address = bo },
                 .reg8, .reg16, .reg32, .constant, .sr => .{ .data_address = ie.BaseOffsetType.init(inner_type, null) catch unreachable },
                 .insn_address, .stack_address => t: {
-                    a.recordError(file_handle, expr_tokens[expr_handle], "Casting directly between address spaces is not allowed.  Use `.d .raw` if you really want this.");
+                    a.recordError(file_handle, expr_tokens[expr_handle], "Casting directly between address spaces is not allowed.  Use `.d .raw` if you really want this.", .{});
                     break :t .{ .poison = {} };
                 },
                 .symbol_def => unreachable,
@@ -437,7 +437,7 @@ fn tryResolveExpressionType(
                 .raw_base_offset => |bo| .{ .insn_address = bo },
                 .reg8, .reg16, .reg32, .constant, .sr => .{ .insn_address = ie.BaseOffsetType.init(inner_type, null) catch unreachable },
                 .data_address, .stack_address => t: {
-                    a.recordError(file_handle, expr_tokens[expr_handle], "Casting directly between address spaces is not allowed.  Use `.i .raw` if you really want this.");
+                    a.recordError(file_handle, expr_tokens[expr_handle], "Casting directly between address spaces is not allowed.  Use `.i .raw` if you really want this.", .{});
                     break :t .{ .poison = {} };
                 },
                 .symbol_def => unreachable,
@@ -453,7 +453,7 @@ fn tryResolveExpressionType(
                 .raw_base_offset => |bo| .{ .stack_address = bo },
                 .reg8, .reg16, .reg32, .constant, .sr => .{ .stack_address = ie.BaseOffsetType.init(inner_type, null) catch unreachable },
                 .data_address, .insn_address => t: {
-                    a.recordError(file_handle, expr_tokens[expr_handle], "Casting directly between address spaces is not allowed.  Use `.s .raw` if you really want this.");
+                    a.recordError(file_handle, expr_tokens[expr_handle], "Casting directly between address spaces is not allowed.  Use `.s .raw` if you really want this.", .{});
                     break :t .{ .poison = {} };
                 },
                 .symbol_def => unreachable,
@@ -531,7 +531,7 @@ fn tryResolveSymbolType(
             return true;
         },
         .not_found => {
-            a.recordError(file_handle, token_handle, "Reference to undefined symbol");
+            a.recordError(file_handle, token_handle, "Reference to undefined symbol", .{});
             expr_resolved_types[expr_handle] = .{ .poison = {} };
             return true;
         },

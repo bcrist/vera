@@ -12,6 +12,7 @@ const Instruction = @import("Instruction.zig");
 const Expression = @import("Expression.zig");
 const SourceFile = @import("SourceFile.zig");
 const Error = @import("Error.zig");
+const InsnEncodingError = @import("InsnEncodingError.zig");
 const PageData = @import("PageData.zig");
 
 const Assembler = @This();
@@ -21,11 +22,11 @@ gpa: std.mem.Allocator,
 arena: std.mem.Allocator,
 files: std.ArrayListUnmanaged(SourceFile) = .{},
 errors: std.ArrayListUnmanaged(Error) = .{},
+insn_encoding_errors: std.ArrayListUnmanaged(InsnEncodingError) = .{},
 symbols: std.StringHashMapUnmanaged(InstructionRef) = .{},
 sections: std.StringArrayHashMapUnmanaged(Section) = .{},
 pages: std.MultiArrayList(PageData) = .{},
 page_lookup: std.AutoHashMapUnmanaged(bus.Page, PageData.Handle) = .{},
-invalid_program: bool = false,
 constant_temp: std.ArrayListUnmanaged(u8) = .{},
 params_temp: std.ArrayListUnmanaged(ie.Parameter) = .{},
 constants: Constant.InternPool = .{},
@@ -76,6 +77,7 @@ pub fn deinit(self: *Assembler, deinit_arena: bool) void {
 
     self.files.deinit(self.gpa);
     self.errors.deinit(self.gpa);
+    self.insn_encoding_errors.deinit(self.gpa);
     self.symbols.deinit(self.gpa);
     self.sections.deinit(self.gpa);
     self.pages.deinit(self.gpa);
@@ -135,12 +137,12 @@ pub fn assemble(self: *Assembler) void {
         try_again = layout.doAutoOrgLayout(self, auto_org_chunks.items) or try_again;
 
         // TODO better handling of degenerate/recursive cases where the layout never reaches an equilibrium?
-        if (self.invalid_program or !try_again) break;
+        if (self.insn_encoding_errors.items.len > 0 or !try_again) break;
     }
 
     if (attempts == max_attempts) {
         std.debug.print("Failed to find a stable layout after {} iterations!\n", .{ attempts });
-        self.invalid_program = true;
+        //self.invalid_program = true;
     }
 
     // TODO validate that there are no overlapping chunks, instructions that would cause a page align fault, etc.
@@ -172,11 +174,20 @@ pub fn findOrCreatePage(self: *Assembler, page: bus.Page, section: Section.Handl
     return handle;
 }
 
-pub fn recordError(self: *Assembler, file_handle: SourceFile.Handle, token: lex.Token.Handle, desc: []const u8) void {
+pub fn recordError(self: *Assembler, file_handle: SourceFile.Handle, token: lex.Token.Handle, desc: []const u8, flags: Error.FlagSet) void {
     self.errors.append(self.gpa, .{
         .file = file_handle,
         .token = token,
         .desc = desc,
+        .flags = flags,
+    }) catch @panic("OOM");
+}
+
+pub fn recordInsnEncodingError(self: *Assembler, file_handle: SourceFile.Handle, insn_handle: Instruction.Handle, flags: InsnEncodingError.FlagSet) void {
+    self.insn_encoding_errors.append(self.gpa, .{
+        .file = file_handle,
+        .insn = insn_handle,
+        .flags = flags,
     }) catch @panic("OOM");
 }
 

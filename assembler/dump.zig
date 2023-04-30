@@ -181,11 +181,10 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
 
     try writer.writeAll("Errors:\n");
     for (self.errors.items) |err| {
-        try err.print(self.*, writer);
+        try err.print(self, writer);
     }
-
-    if (self.invalid_program) {
-        try writer.writeAll("Program is invalid!\n");
+    for (self.insn_encoding_errors.items) |err| {
+        try err.print(self, writer);
     }
 }
 

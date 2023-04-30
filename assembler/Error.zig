@@ -9,7 +9,9 @@ const Error = @This();
 file: SourceFile.Handle,
 token: Token.Handle,
 desc: []const u8,
-flags: std.EnumSet(Flags),
+flags: FlagSet,
+
+pub const FlagSet = std.EnumSet(Flags);
 
 pub const Flags = enum {
     remove_on_layout_reset,
