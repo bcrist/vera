@@ -23,6 +23,7 @@ arena: std.mem.Allocator,
 files: std.ArrayListUnmanaged(SourceFile) = .{},
 errors: std.ArrayListUnmanaged(Error) = .{},
 insn_encoding_errors: std.ArrayListUnmanaged(InsnEncodingError) = .{},
+overlapping_chunks: std.AutoArrayHashMapUnmanaged(SourceFile.ChunkPair, void) = .{},
 symbols: std.StringHashMapUnmanaged(InstructionRef) = .{},
 sections: std.StringArrayHashMapUnmanaged(Section) = .{},
 pages: std.MultiArrayList(PageData) = .{},
@@ -34,6 +35,19 @@ constants: Constant.InternPool = .{},
 pub const InstructionRef = struct {
     file: SourceFile.Handle,
     instruction: Instruction.Handle,
+};
+
+pub const AddressRange = struct {
+    begin: u32,
+    end: u32,
+
+    pub fn intersectionWith(self: AddressRange, other: AddressRange) AddressRange {
+        const begin = @max(self.begin, other.begin);
+        return .{
+            .begin = begin,
+            .end = @max(begin, @min(self.end, other.end)),
+        };
+    }
 };
 
 pub fn init(gpa: std.mem.Allocator, arena: std.mem.Allocator, edb: ie_data.EncoderDatabase) Assembler {
@@ -50,8 +64,6 @@ pub fn init(gpa: std.mem.Allocator, arena: std.mem.Allocator, edb: ie_data.Encod
         .gpa = gpa,
         .arena = arena,
     };
-
-    Constant.initInternPool(gpa, &self.constants);
 
     return self;
 }
@@ -75,9 +87,14 @@ pub fn deinit(self: *Assembler, deinit_arena: bool) void {
         file.deinit(self.gpa, maybe_arena);
     }
 
+    for (self.pages.items(.chunks)) |chunks| {
+        chunks.deinit(self.gpa);
+    }
+
     self.files.deinit(self.gpa);
     self.errors.deinit(self.gpa);
     self.insn_encoding_errors.deinit(self.gpa);
+    self.overlapping_chunks.deinit(self.gpa);
     self.symbols.deinit(self.gpa);
     self.sections.deinit(self.gpa);
     self.pages.deinit(self.gpa);
@@ -110,8 +127,6 @@ pub fn assemble(self: *Assembler) void {
     if (!typechecking.resolveExpressionTypes(self)) return;
 
     typechecking.checkInstructionsAndDirectives(self);
-    
-    // TODO check for duplicate labels
 
     for (self.files.items, 0..) |*file, file_handle| {
         dead_code.markBlocksToKeep(self, file, @intCast(SourceFile.Handle, file_handle));
@@ -128,10 +143,7 @@ pub fn assemble(self: *Assembler) void {
     var attempts: usize = 0;
     const max_attempts = 100;
     while (attempts < max_attempts) : (attempts += 1) {
-        self.pages.len = 0;
-        self.page_lookup.clearRetainingCapacity();
-
-        layout.resetLayoutDependentExpressions(self);
+        self.resetLayout();
 
         var try_again = layout.doFixedOrgLayout(self, fixed_org_chunks.items);
         try_again = layout.doAutoOrgLayout(self, auto_org_chunks.items) or try_again;
@@ -145,7 +157,12 @@ pub fn assemble(self: *Assembler) void {
         //self.invalid_program = true;
     }
 
-    // TODO validate that there are no overlapping chunks, instructions that would cause a page align fault, etc.
+    layout.populatePageChunks(self, fixed_org_chunks.items);
+    layout.populatePageChunks(self, auto_org_chunks.items);
+
+    for (self.pages.items(.chunks)) |chunks| {
+        layout.findOverlappingChunks(self, chunks.items);
+    }
 
     for (self.files.items, 0..) |*file, file_handle| {
         layout.encodePageData(self, file, @intCast(SourceFile.Handle, file_handle));
@@ -154,6 +171,66 @@ pub fn assemble(self: *Assembler) void {
 
 // TODO functions for outputting assembled data to file or in-memory buffer
 
+pub fn countErrors(self: *Assembler) usize {
+    return self.errors.items.len
+        + self.insn_encoding_errors.items.len
+        + self.overlapping_chunks.count()
+        ;
+}
+
+pub fn printErrors(self: *Assembler, writer: anytype) !void {
+    for (self.errors.items) |err| {
+        try err.print(self, writer);
+    }
+    for (self.insn_encoding_errors.items) |err| {
+        try err.print(self, writer);
+    }
+    for (self.overlapping_chunks.entries.items(.key)) |chunk_pair| {
+        const a_range = chunk_pair.a.getAddressRange(self);
+        const b_range = chunk_pair.b.getAddressRange(self);
+        const intersection = a_range.intersectionWith(b_range);
+
+        try writer.print("Found chunks overlapping on address range [{X:0>16},{X:0>16}]\n", .{
+            intersection.begin, intersection.end - 1,
+        });
+    }
+}
+
+fn resetLayout(self: *Assembler) void {
+    // std.debug.print("Resetting Layout\n", .{});
+    for (self.files.items) |*file| {
+        var expr_resolved_constants = file.expressions.items(.resolved_constant);
+        for (file.expressions.items(.flags), 0..) |flags, expr_handle| {
+            if (flags.contains(.constant_depends_on_layout)) {
+                expr_resolved_constants[expr_handle] = null;
+            }
+        }
+    }
+
+    var errors = self.errors.items;
+    var i = errors.len;
+    while (i > 0) {
+        i -= 1;
+        if (errors[i].flags.contains(.remove_on_layout_reset)) {
+            _ = self.errors.swapRemove(i);
+        }
+    }
+
+    var insn_encoding_errors = self.insn_encoding_errors.items;
+    i = insn_encoding_errors.len;
+    while (i > 0) {
+        i -= 1;
+        if (insn_encoding_errors[i].flags.contains(.remove_on_layout_reset)) {
+            _ = self.insn_encoding_errors.swapRemove(i);
+        }
+    }
+
+    for (self.pages.items(.chunks)) |*chunks| {
+        chunks.deinit(self.gpa);
+    }
+    self.pages.len = 0;
+    self.page_lookup.clearRetainingCapacity();
+}
 
 pub fn getSource(self: *Assembler, handle: SourceFile.Handle) *SourceFile {
     return &self.files.items[handle];
@@ -168,7 +245,7 @@ pub fn findOrCreatePage(self: *Assembler, page: bus.Page, section: Section.Handl
 
     const handle = @intCast(PageData.Handle, self.pages.len);
     self.page_lookup.ensureUnusedCapacity(self.gpa, 1) catch @panic("OOM");
-    self.pages.append(self.gpa, PageData.init(self.arena, page, section)) catch @panic("OOM");
+    self.pages.append(self.gpa, PageData.init(page, section)) catch @panic("OOM");
     self.page_lookup.putAssumeCapacity(page, handle);
     // std.debug.print("{X:0>13}: Created page for section {}\n", .{ page, section });
     return handle;

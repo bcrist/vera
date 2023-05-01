@@ -573,6 +573,7 @@ pub fn checkInstructionsAndDirectives(a: *Assembler) void {
             // TODO check that directives have the expected number and types of params
             // TODO check that instructions do not appear in data or stack sections
             // TODO check that data directives do not appear in code sections
+            // TODO check for shadowed symbols
         }
     }
 }

@@ -12,36 +12,6 @@ const PageData = @import("PageData.zig");
 const Error = @import("Error.zig");
 const InsnEncodingError = @import("InsnEncodingError.zig");
 
-pub fn resetLayoutDependentExpressions(a: *Assembler) void {
-    // std.debug.print("Resetting Layout\n", .{});
-    for (a.files.items) |*file| {
-        var expr_resolved_constants = file.expressions.items(.resolved_constant);
-        for (file.expressions.items(.flags), 0..) |flags, expr_handle| {
-            if (flags.contains(.constant_depends_on_layout)) {
-                expr_resolved_constants[expr_handle] = null;
-            }
-        }
-    }
-
-    var errors = a.errors.items;
-    var i = errors.len;
-    while (i > 0) {
-        i -= 1;
-        if (errors[i].flags.contains(.remove_on_layout_reset)) {
-            _ = a.errors.swapRemove(i);
-        }
-    }
-
-    var insn_encoding_errors = a.insn_encoding_errors.items;
-    i = insn_encoding_errors.len;
-    while (i > 0) {
-        i -= 1;
-        if (insn_encoding_errors[i].flags.contains(.remove_on_layout_reset)) {
-            _ = a.insn_encoding_errors.swapRemove(i);
-        }
-    }
-}
-
 pub fn doFixedOrgLayout(a: *Assembler, chunks: []SourceFile.Chunk) bool {
     var layout_changed = false;
     for (chunks) |chunk| {
@@ -106,13 +76,8 @@ fn resolveAutoOrgAddress(a: *Assembler, chunk: SourceFile.Chunk) u32 {
 
     const chunk_section_handle = chunk.section orelse return 0;
 
-    var file = a.getSource(chunk.file);
-    const insn_addresses = file.instructions.items(.address);
-    const insn_lengths = file.instructions.items(.length);
-
-    const first_address = insn_addresses[chunk.instructions.begin];
-    const end_address = insn_addresses[chunk.instructions.end - 1] + insn_lengths[chunk.instructions.end - 1];
-    const chunk_size = @max(1, end_address - first_address);
+    const address_range = chunk.getAddressRange(a);
+    const chunk_size = @max(1, address_range.end - address_range.begin);
 
     const pages = a.pages.items(.page);
     const page_sections = a.pages.items(.section);
@@ -490,8 +455,7 @@ fn resolveSymbolRefExprConstant(
                 expr_resolved_constants[expr_handle] = constant.intern(a.arena, a.gpa, &a.constants);
             },
             .not_found => {
-                unreachable;
-                //expr_resolved_constants[expr_handle] = &Constant.builtin.zero;
+                return;
             },
         }
     } else unreachable;
@@ -529,6 +493,39 @@ fn resolveInstructionEncoding(a: *Assembler, file: *SourceFile, file_handle: Sou
     return 0;
 }
 
+pub fn populatePageChunks(a: *Assembler, chunks: []const SourceFile.Chunk) void {
+    var page_chunks = a.pages.items(.chunks);
+    for (chunks) |chunk| {
+        const addresses = chunk.getAddressRange(a);
+        const first_page = addresses.begin >> @bitSizeOf(bus.PageOffset);
+        const last_page = (addresses.end - 1) >> @bitSizeOf(bus.PageOffset);
+
+        for (first_page .. last_page + 1) |page| {
+            const page_data_handle = a.page_lookup.get(@intCast(bus.Page, page)) orelse unreachable;
+            page_chunks[page_data_handle].append(a.gpa, chunk) catch @panic("OOM");
+        }
+    }
+}
+
+pub fn findOverlappingChunks(a: *Assembler, chunks: []const SourceFile.Chunk) void {
+    // This is just the obvious O(n^2) implementation, but since we've already
+    // grouped chunks by page, it shouldn't explode too terribly even for large programs,
+    // though there is an antagonistic case where you intentionally put a bunch of .orgs
+    // with the same address.  Therefore we'll stop checking after a total of 10
+    // overlapping pairs are found.
+    if (a.overlapping_chunks.count() >= 10) return;
+    for (chunks, 0..) |chunk, i| {
+        const chunk_range = chunk.getAddressRange(a);
+        const check_against = chunks[i + 1 ..];
+        for (check_against) |other_chunk| {
+            const other_range = other_chunk.getAddressRange(a);
+            if (chunk_range.begin >= other_range.end or chunk_range.end <= other_range.begin) continue;
+            a.overlapping_chunks.put(a.gpa, SourceFile.ChunkPair.init(chunk, other_chunk), {}) catch @panic("OOM");
+            if (a.overlapping_chunks.count() >= 10) return;
+        }
+    }
+}
+
 pub fn encodePageData(a: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle) void {
     const insn_operations = file.instructions.items(.operation);
     const insn_params = file.instructions.items(.params);
@@ -549,7 +546,7 @@ pub fn encodePageData(a: *Assembler, file: *SourceFile, file_handle: SourceFile.
                 const params = insn_params[insn_handle];
                 const page = @truncate(bus.Page, address >> @bitSizeOf(bus.PageOffset));
                 const offset = @truncate(bus.PageOffset, address);
-                const page_data_handle = a.page_lookup.get(page) orelse unreachable;
+                const page_data_handle = a.page_lookup.get(page) orelse continue;
                 var buffer = page_datas[page_data_handle][offset..];
 
                 const insn = a.buildInstruction(file, file_handle, address, encoding.mnemonic, encoding.suffix, params, false).?;
@@ -565,7 +562,7 @@ pub fn encodePageData(a: *Assembler, file: *SourceFile, file_handle: SourceFile.
                     const next_page = page + 1;
                     _ = next_page;
                     const next_page_data_handle = a.page_lookup.get(page) orelse unreachable;
-                    const next_page_buf = page_datas[next_page_data_handle];
+                    const next_page_buf = &page_datas[next_page_data_handle];
                     std.mem.copy(u8, next_page_buf, temp_insn[buffer.len..]);
                 } else {
                     _ = ie.encodeInstruction(insn, encoding.*, buffer);

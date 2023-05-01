@@ -730,14 +730,3 @@ pub fn intern(self: *const Constant, arena: std.mem.Allocator, gpa: std.mem.Allo
     result.key_ptr.* = constant;
     return constant;
 }
-
-// TODO remove me
-pub const builtin = struct {
-    pub const zero = init("", 0);
-};
-
-pub fn initInternPool(gpa: std.mem.Allocator, pool: *InternPool) void {
-    inline for (@typeInfo(builtin).Struct.decls) |decl| {
-        pool.put(gpa, &@field(builtin, decl.name), {}) catch @panic("OOM");
-    }
-}

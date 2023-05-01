@@ -1,6 +1,7 @@
 const std = @import("std");
 const bus = @import("bus_types");
 const Section = @import("Section.zig");
+const SourceFile = @import("SourceFile.zig");
 
 pub const page_size = std.math.maxInt(bus.PageOffset) + 1;
 pub const num_pages = std.math.maxInt(bus.Page) + 1;
@@ -12,17 +13,17 @@ pub const UsageBitmap = std.StaticBitSet(page_size);
 page: bus.Page,
 section: Section.Handle,
 usage: UsageBitmap,
-data: []u8,
+data: [page_size]u8,
+chunks: std.ArrayListUnmanaged(SourceFile.Chunk),
 
 const PageData = @This();
 
-pub fn init(allocator: std.mem.Allocator, page: bus.Page, section: Section.Handle) PageData {
-    const data = allocator.alloc(u8, page_size) catch @panic("OOM");
-    std.mem.set(u8, data, 0);
+pub fn init(page: bus.Page, section: Section.Handle) PageData {
     return .{
         .page = page,
         .section = section,
         .usage = UsageBitmap.initEmpty(),
-        .data = data,
+        .data = [_]u8{0}**page_size,
+        .chunks = .{},
     };
 }

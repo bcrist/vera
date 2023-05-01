@@ -38,11 +38,14 @@ pub const Token = struct {
     pub const Handle = u31;
 
     pub fn printContext(self: Token, source: []const u8, print_writer: anytype, max_line_width: usize) !void {
+        try printContextRange(self, self, source, print_writer, max_line_width);
+    }
+    pub fn printContextRange(first: Token, last: Token, source: []const u8, print_writer: anytype, max_line_width: usize) !void {
         var initial_line_number: usize = 1;
         var line_offset: usize = 0;
         var prev_line_offset: usize = 0;
         for (source, 0..) |ch, offset| {
-            if (offset >= self.offset) {
+            if (offset >= first.offset) {
                 break;
             }
             if (ch == '\n') {
@@ -57,9 +60,8 @@ pub const Token = struct {
             line_number -= 1;
         }
 
-        const highlight_location = self.location(source);
-        const highlight_start = @ptrToInt(highlight_location.ptr) - @ptrToInt(source.ptr);
-        const highlight_end = highlight_start + highlight_location.len;
+        const highlight_start = first.offset;
+        const highlight_end = last.offset + last.location(source).len;
 
         var iter = std.mem.split(u8, source[offset..], "\n");
         while (iter.next()) |line| {

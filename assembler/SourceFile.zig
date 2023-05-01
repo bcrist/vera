@@ -114,6 +114,37 @@ pub const Chunk = struct {
     section: ?Section.Handle,
     file: SourceFile.Handle,
     instructions: Instruction.Iterator,
+
+    pub fn getAddressRange(self: Chunk, a: *const Assembler) Assembler.AddressRange {
+        const file = &a.files.items[self.file];
+        const addresses = file.instructions.items(.address);
+        const lengths = file.instructions.items(.length);
+
+        const begin = addresses[self.instructions.begin];
+        const end = addresses[self.instructions.end - 1] + lengths[self.instructions.end - 1];
+
+        return .{
+            .begin = begin,
+            .end = end,
+        };
+    }
+
+};
+pub const ChunkPair = struct {
+    a: Chunk,
+    b: Chunk,
+
+    pub fn init(a: Chunk, b: Chunk) ChunkPair {
+        var self: ChunkPair = undefined;
+        if (a.file < b.file or a.file == b.file and a.instructions.begin < b.instructions.begin) {
+            self.a = a;
+            self.b = b;
+        } else {
+            self.a = b;
+            self.b = a;
+        }
+        return self;
+    }
 };
 
 pub fn collectChunks(

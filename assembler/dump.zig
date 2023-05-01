@@ -152,7 +152,7 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
     }
 
     try writer.writeAll("Pages:\n");
-    for (self.pages.items(.page), self.pages.items(.section), self.pages.items(.usage), self.pages.items(.data)) |page, section_handle, usage, data| {
+    for (self.pages.items(.page), self.pages.items(.section), self.pages.items(.usage), self.pages.items(.data), self.pages.items(.chunks)) |page, section_handle, usage, data, chunks| {
         try writer.print("   {X:0>5}: #{}\n", .{ page, section_handle });
         for (0..8) |row| {
             try writer.writeAll("      usage:");
@@ -177,15 +177,12 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
                 try writer.print(" {}\n", .{ fmtSliceReplaceNonAscii(data_chunk) });
             }
         }
+        for (chunks.items) |chunk| {
+            try writer.print("      chunk: file #{}: #{}-#{}\n", .{ chunk.file, chunk.instructions.begin, chunk.instructions.end });
+        }
     }
 
-    try writer.writeAll("Errors:\n");
-    for (self.errors.items) |err| {
-        try err.print(self, writer);
-    }
-    for (self.insn_encoding_errors.items) |err| {
-        try err.print(self, writer);
-    }
+    try self.printErrors(writer);
 }
 
 pub fn fmtSliceReplaceNonAscii(bytes: []const u8) std.fmt.Formatter(formatSliceReplaceNonAsciiImpl) {

@@ -19,7 +19,7 @@ pub const Flags = enum {
 
 pub fn print(self: Error, assembler: *const Assembler, writer: anytype) !void {
     const file = assembler.files.items[self.file];
-    try writer.print("{s}: {s}\n", .{ file.name, self.desc });
+    try writer.print("\n{s}: {s}\n", .{ file.name, self.desc });
     const token = file.tokens.get(self.token);
     try token.printContext(file.source, writer, 160);
 }

@@ -36,7 +36,7 @@ pub fn print(self: InsnEncodingError, assembler: *Assembler, writer: anytype) !v
 
     const insn = assembler.buildInstruction(file, self.file, address, mn.mnemonic, mn.suffix, params, false).?;
 
-    try writer.print("{s}: No encodings found matching instruction signature: ", .{ file.name });
+    try writer.print("\n{s}: No encodings found matching instruction signature: ", .{ file.name });
     try printInsnSignature(writer, insn);
 
     if (assembler.edb.mnemonic_to_encoding.get(insn.mnemonic)) |encodings| {
