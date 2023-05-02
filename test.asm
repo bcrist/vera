@@ -1,5 +1,4 @@
 fib: .entry etext
-    .org 0x2FF1
     .def n r0
     .def last r1
     .def prev r2
@@ -20,5 +19,5 @@ _end:
     ret
 
 .const data
-.org 0x1235
-str: .db "Hellorld!"
+.align 1024, 17
+str: .db 1,2,3,4,"Hellorld!" ** 9

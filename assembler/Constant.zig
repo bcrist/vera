@@ -310,70 +310,43 @@ pub fn cloneWithLength(self: Constant, allocator: std.mem.Allocator, storage: *s
     }
 
     storage.resize(allocator, (bit_count + 7) / 8) catch @panic("OOM");
-    switch (signedness) {
-        .signed => {
-            var iter = SxIterator.init(&self);
-            for (storage.items) |*b| {
-                b.* = iter.next();
-            }
-        },
-        .unsigned => {
-            var iter = ZxIterator.init(&self);
-            for (storage.items) |*b| {
-                b.* = iter.next();
-            }
-        },
+    var iter = self.byteIterator(signedness);
+    for (storage.items) |*b| {
+        b.* = iter.next();
     }
     truncateFinalByte(storage.items, bit_count);
     return init(storage.items.ptr, bit_count);
 }
 
-const ZxIterator = struct {
-    remaining: []const u8,
-
-    pub fn init(constant: *const Constant) ZxIterator {
-        return .{ .remaining = constant.asString(), };
-    }
-
-    pub fn next(self: *ZxIterator) u8 {
-        const remaining_bytes = self.remaining.len;
-        if (remaining_bytes > 0) {
-            const b = self.remaining[0];
-            self.remaining = self.remaining[1..];
-            return b;
-        } else {
-            return 0;
+pub fn byteIterator(self: *const Constant, signedness: std.builtin.Signedness) ByteIterator {
+    var str = self.asString();
+    var iter = ByteIterator{
+        .remaining = str,
+        .final_byte = str[str.len - 1],
+        .ext_byte = 0,
+    };
+    if (signedness == .signed) {
+        const final_byte_bits = @intCast(u3, self.bit_count & 0x7);
+        if (final_byte_bits == 0) {
+            if (0 != @truncate(u1, iter.final_byte >> 7)) {
+                iter.ext_byte = 0xFF;
+            }
+        } else if (0 != @truncate(u1, iter.final_byte >> (final_byte_bits - 1))) {
+            var mask = ~@as(u8, 0);
+            mask <<= final_byte_bits;
+            iter.final_byte |= mask;
+            iter.ext_byte = 0xFF;
         }
     }
-};
+    return iter;
+}
 
-const SxIterator = struct {
+const ByteIterator = struct {
     remaining: []const u8,
     final_byte: u8,
     ext_byte: u8,
 
-    pub fn init(constant: *const Constant) SxIterator {
-        var str = constant.asString();
-        var self = SxIterator{
-            .remaining = str,
-            .final_byte = str[str.len - 1],
-            .ext_byte = 0,
-        };
-        const final_byte_bits = @intCast(u3, constant.bit_count & 0x7);
-        if (final_byte_bits == 0) {
-            if (0 != @truncate(u1, self.final_byte >> 7)) {
-                self.ext_byte = 0xFF;
-            }
-        } else if (0 != @truncate(u1, self.final_byte >> (final_byte_bits - 1))) {
-            var mask = ~@as(u8, 0);
-            mask <<= final_byte_bits;
-            self.final_byte |= mask;
-            self.ext_byte = 0xFF;
-        }
-        return self;
-    }
-
-    pub fn next(self: *SxIterator) u8 {
+    pub fn next(self: *ByteIterator) u8 {
         const remaining_bytes = self.remaining.len;
         if (remaining_bytes > 0) {
             const b = self.remaining[0];
@@ -384,6 +357,14 @@ const SxIterator = struct {
             return self.final_byte;
         } else {
             return self.ext_byte;
+        }
+    }
+
+    pub fn skip(self: *ByteIterator, bytes: usize) void {
+        if (bytes >= self.remaining.len) {
+            self.remaining.len = 0;
+        } else {
+            self.remaining.len -= bytes;
         }
     }
 };
@@ -633,8 +614,8 @@ pub fn bitwiseOr(self: Constant, allocator: std.mem.Allocator, storage: *std.Arr
 
     storage.resize(allocator, (result_bit_count + 7) / 8) catch @panic("OOM");
 
-    var self_iter = SxIterator.init(&self);
-    var other_iter = SxIterator.init(&other);
+    var self_iter = self.byteIterator(.signed);
+    var other_iter = other.byteIterator(.signed);
     for (storage.items) |*b| {
         b.* = self_iter.next() | other_iter.next();
     }
@@ -654,8 +635,8 @@ pub fn bitwiseXor(self: Constant, allocator: std.mem.Allocator, storage: *std.Ar
 
     storage.resize(allocator, (result_bit_count + 7) / 8) catch @panic("OOM");
 
-    var self_iter = SxIterator.init(&self);
-    var other_iter = SxIterator.init(&other);
+    var self_iter = self.byteIterator(.signed);
+    var other_iter = other.byteIterator(.signed);
     for (storage.items) |*b| {
         b.* = self_iter.next() ^ other_iter.next();
     }
@@ -675,8 +656,8 @@ pub fn bitwiseAnd(self: Constant, allocator: std.mem.Allocator, storage: *std.Ar
 
     storage.resize(allocator, (result_bit_count + 7) / 8) catch @panic("OOM");
 
-    var self_iter = SxIterator.init(&self);
-    var other_iter = SxIterator.init(&other);
+    var self_iter = self.byteIterator(.signed);
+    var other_iter = other.byteIterator(.signed);
     for (storage.items) |*b| {
         b.* = self_iter.next() & other_iter.next();
     }

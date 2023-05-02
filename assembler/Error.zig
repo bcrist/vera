@@ -15,7 +15,20 @@ pub const FlagSet = std.EnumSet(Flags);
 
 pub const Flags = enum {
     remove_on_layout_reset,
+    desc_is_allocated,
 };
+
+pub fn init(gpa: std.mem.Allocator, file: SourceFile.Handle, token: Token.Handle, comptime fmt: []const u8, args: anytype, flags: FlagSet) Error {
+    const desc = std.fmt.allocPrint(gpa, fmt, args) catch @panic("OOM");
+    var mutable_flags = flags;
+    mutable_flags.insert(.desc_is_allocated);
+    return .{
+        .file = file,
+        .token = token,
+        .desc = desc,
+        .flags = mutable_flags,
+    };
+}
 
 pub fn print(self: Error, assembler: *const Assembler, writer: anytype) !void {
     const file = assembler.files.items[self.file];

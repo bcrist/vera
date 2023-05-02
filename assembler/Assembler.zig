@@ -91,6 +91,12 @@ pub fn deinit(self: *Assembler, deinit_arena: bool) void {
         chunks.deinit(self.gpa);
     }
 
+    for (self.errors.items) |err| {
+        if (err.flags.contains(.desc_is_allocated)) {
+            self.gpa.free(err.desc);
+        }
+    }
+
     self.files.deinit(self.gpa);
     self.errors.deinit(self.gpa);
     self.insn_encoding_errors.deinit(self.gpa);
@@ -154,7 +160,6 @@ pub fn assemble(self: *Assembler) void {
 
     if (attempts == max_attempts) {
         std.debug.print("Failed to find a stable layout after {} iterations!\n", .{ attempts });
-        //self.invalid_program = true;
     }
 
     layout.populatePageChunks(self, fixed_org_chunks.items);
@@ -211,7 +216,11 @@ fn resetLayout(self: *Assembler) void {
     var i = errors.len;
     while (i > 0) {
         i -= 1;
-        if (errors[i].flags.contains(.remove_on_layout_reset)) {
+        const flags = errors[i].flags;
+        if (flags.contains(.remove_on_layout_reset)) {
+            if (flags.contains(.desc_is_allocated)) {
+                self.gpa.free(errors[i].desc);
+            }
             _ = self.errors.swapRemove(i);
         }
     }

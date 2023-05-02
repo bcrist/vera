@@ -72,7 +72,9 @@ fn resolveAutoOrgAddress(a: *Assembler, chunk: SourceFile.Chunk) u32 {
     //      Chunks with a public label are allocated to pages where that label can be called from user code.
     //      Chunks without a public label are allocated to fully protected pages (i.e. same as kcode) or in areas of kentry pages where they don't overlap the entry addresses.
     //      So there's really 2 different kinds of pages for each named .kentry section
-    // TODO add a kentry output mode to write a "header" file that exports the addresses of 
+    // TODO add a kentry output mode to write a "header" file that exports the addresses of kentry labels
+
+    // TODO check for an initial .align directive in the chunk and try to satisfy it
 
     const chunk_section_handle = chunk.section orelse return 0;
 
@@ -170,24 +172,43 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
 
     var address = initial_address;
     var iter = chunk.instructions;
+    var check_for_alignment_holes = false;
     while (iter.next()) |insn_handle| {
         const old_insn_address = insn_addresses[insn_handle];
         var new_insn_address = address;
         switch (operations[insn_handle]) {
-            .none, .org, .keep, .def, .undef, .section, .code, .kcode, .entry, .kentry, .data, .kdata, .@"const", .kconst, .stack => {
-                // TODO need to look forwards to see if an .align, etc. is coming up that would require changing address now
-            },
-            .push => {
-                // TODO synthesize push instruction
-            },
-            .pop => {
-                // TODO synthesize pop instruction
+            .none, .org, .keep, .def, .undef,
+            .section, .code, .kcode, .entry, .kentry,
+            .data, .kdata, .@"const", .kconst, .stack => {
+                // Look forwards to see if an .align, etc. is coming up
+                var iter2 = chunk.instructions;
+                iter2.begin = insn_handle + 1;
+                while (iter2.next()) |insn2| {
+                    switch (operations[insn2]) {
+                        .none, .org, .keep, .def, .undef,
+                        .section, .code, .kcode, .entry, .kentry,
+                        .data, .kdata, .@"const", .kconst, .stack => {},
+
+                        .@"align" => {
+                            if (params[insn2]) |align_expr| {
+                                address = resolveAlignment(a, file, chunk.file, address, align_expr, false, check_for_alignment_holes, insn2, chunk.section);
+                            }
+                            break;
+                        },
+                        .dw, .dd => {
+                            address = applyAlignment(a, file, chunk.file, address, 2, 0, false, check_for_alignment_holes, insn2, chunk.section);
+                            break;
+                        },
+                        else => break,
+                    }
+                }
             },
             .insn => {
                 const length = resolveInstructionEncoding(a, file, chunk.file, address, insn_handle, &operations[insn_handle], params[insn_handle]);
                 insn_lengths[insn_handle] = length;
                 address += length;
                 layout_changed = true;
+                check_for_alignment_holes = true;
             },
             .bound_insn => |encoding| {
                 if (insn_flags[insn_handle].contains(.encoding_depends_on_layout)) {
@@ -208,20 +229,40 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
                 } else {
                     address += insn_lengths[insn_handle];
                 }
+                check_for_alignment_holes = true;
             },
             .@"align" => {
-                // TODO handle alignment
+                if (params[insn_handle]) |align_expr| {
+                    address = resolveAlignment(a, file, chunk.file, address, align_expr, true, check_for_alignment_holes, insn_handle, chunk.section);
+                }
             },
             .db => {
-                // TODO .db
+                if (params[insn_handle]) |expr_handle| {
+                    address += resolveDataDirectiveLength(a, file, chunk.file, address, insn_handle, expr_handle, 1);
+                }
+                check_for_alignment_holes = true;
             },
             .dw => {
-                // TODO handle alignment
-                // TODO .dw
+                address = applyAlignment(a, file, chunk.file, address, 2, 0, true, check_for_alignment_holes, insn_handle, chunk.section);
+                if (params[insn_handle]) |expr_handle| {
+                    address += resolveDataDirectiveLength(a, file, chunk.file, address, insn_handle, expr_handle, 2);
+                }
+                check_for_alignment_holes = true;
             },
             .dd => {
-                // TODO handle alignment
-                // TODO .dd
+                address = applyAlignment(a, file, chunk.file, address, 2, 0, true, check_for_alignment_holes, insn_handle, chunk.section);
+                if (params[insn_handle]) |expr_handle| {
+                    address += resolveDataDirectiveLength(a, file, chunk.file, address, insn_handle, expr_handle, 4);
+                }
+                check_for_alignment_holes = true;
+            },
+            .push => {
+                // TODO synthesize push instruction
+                check_for_alignment_holes = true;
+            },
+            .pop => {
+                // TODO synthesize pop instruction
+                check_for_alignment_holes = true;
             },
         }
 
@@ -253,6 +294,168 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
     }
 
     return layout_changed;
+}
+
+fn resolveAlignment(
+    a: *Assembler,
+    file: *SourceFile,
+    file_handle: SourceFile.Handle,
+    address: u32,
+    align_expr: Expression.Handle,
+    report_errors: bool,
+    check_for_alignment_holes: bool,
+    insn_handle: Instruction.Handle,
+    section_handle: ?Section.Handle
+) u32 {
+    var alignment_expr: Expression.Handle = align_expr;
+    var alignment: i64 = 0;
+    var offset: i64 = 0;
+    switch (file.expressions.items(.info)[align_expr]) {
+        .list => |bin| {
+            alignment_expr = bin.left;
+            if (resolveExpressionConstant(a, file, file_handle, address, bin.left)) |constant| {
+                alignment = constant.asInt() catch {
+                    if (report_errors) {
+                        const token = file.expressions.items(.token)[bin.left];
+                        const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
+                        a.recordError(file_handle, token, "Overflow (alignment too large)", err_flags);
+                    }
+                    return address;
+                };
+            }
+            if (resolveExpressionConstant(a, file, file_handle, address, bin.right)) |constant| {
+                offset = constant.asInt() catch {
+                    if (report_errors) {
+                        const token = file.expressions.items(.token)[bin.right];
+                        const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
+                        a.recordError(file_handle, token, "Overflow (offset too large)", err_flags);
+                    }
+                    return address;
+                };
+                if (offset >= alignment or offset < 0) {
+                    if (report_errors) {
+                        const token = file.expressions.items(.token)[bin.right];
+                        const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
+                        a.recordError(file_handle, token, "Invalid offset (must be less than alignment)", err_flags);
+                    }
+                    return address;
+                }
+            }
+        },
+        else => {
+            if (resolveExpressionConstant(a, file, file_handle, address, align_expr)) |constant| {
+                alignment = constant.asInt() catch {
+                    if (report_errors) {
+                        const token = file.expressions.items(.token)[align_expr];
+                        const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
+                        a.recordError(file_handle, token, "Overflow (alignment too large)", err_flags);
+                    }
+                    return address;
+                };
+            }
+        }
+    }
+
+    if (alignment <= 1) {
+        return address;
+    }
+
+    if (@popCount(alignment) != 1) {
+        if (report_errors) {
+            const token = file.expressions.items(.token)[alignment_expr];
+            const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
+            a.recordError(file_handle, token, "Invalid alignment (must be power of 2)", err_flags);
+        }
+        return address;
+    }
+
+    const alignment_u32 = std.math.cast(u32, alignment) orelse {
+        if (report_errors) {
+            const token = file.expressions.items(.token)[alignment_expr];
+            const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
+            a.recordError(file_handle, token, "Overflow (alignment must fit in u32)", err_flags);
+        }
+        return address;
+    };
+
+    return applyAlignment(a, file, file_handle, address, alignment_u32, @intCast(u32, offset), report_errors, check_for_alignment_holes, insn_handle, section_handle);
+}
+
+fn applyAlignment(
+    a: *Assembler,
+    file: *SourceFile,
+    file_handle: SourceFile.Handle,
+    address: u32,
+    alignment: u32,
+    offset: u32,
+    report_errors: bool,
+    check_for_alignment_holes: bool,
+    insn_handle: Instruction.Handle,
+    section_handle: ?Section.Handle
+) u32 {
+    var new_address_usize = std.mem.alignBackward(address, alignment) + offset;
+    if (new_address_usize < address) {
+        new_address_usize += alignment;
+    }
+
+    const new_address = std.math.cast(u32, new_address_usize) orelse {
+        if (report_errors) {
+            const token = file.instructions.items(.token)[insn_handle];
+            const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
+            a.recordError(file_handle, token, "Aligned address overflow", err_flags);
+        }
+        return address;
+    };
+
+    if (new_address != address and check_for_alignment_holes) {
+        if (section_handle) |section| switch (a.getSection(section).kind) {
+            .info,
+            .data_user,
+            .data_kernel,
+            .constant_user,
+            .constant_kernel,
+            .stack,
+            => {},
+
+            .code_user,
+            .code_kernel,
+            .entry_user,
+            .entry_kernel,
+            => {
+                const token = file.instructions.items(.token)[insn_handle];
+                const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
+                a.recordError(file_handle, token, "Alignment not satisfied within instruction stream (try using NOP, NOPE, or an unconditional branch before this point)", err_flags);
+            },
+        };
+    }
+
+    return new_address;
+}
+
+fn resolveDataDirectiveLength(a: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle, ip: u32, insn_handle: Instruction.Handle, params_expr_handle: Expression.Handle, granularity_bytes: u8) u32 {
+    var length: u32 = 0;
+
+    const expr_infos = file.expressions.items(.info);
+    var expr_handle = params_expr_handle;
+    while (true) switch (expr_infos[expr_handle]) {
+        .list => |bin| {
+            length += resolveDataExpressionLength(a, file, file_handle, ip, bin.left, granularity_bytes);
+            expr_handle = bin.right;
+        },
+        else => {
+            length += resolveDataExpressionLength(a, file, file_handle, ip, expr_handle, granularity_bytes);
+            break;
+        },
+    };
+
+    file.instructions.items(.length)[insn_handle] = length;
+
+    return length;
+}
+fn resolveDataExpressionLength(a: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle, ip: u32, expr_handle: Expression.Handle, granularity_bytes: u8) u32 {
+    if (resolveExpressionConstant(a, file, file_handle, ip, expr_handle)) |constant| {
+        return @intCast(u32, std.mem.alignForward(constant.bit_count, granularity_bytes * 8) / 8);
+    } else return 0;
 }
 
 pub fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle, ip: u32, expr_handle: Expression.Handle) ?*const Constant {
@@ -495,6 +698,7 @@ fn resolveInstructionEncoding(a: *Assembler, file: *SourceFile, file_handle: Sou
 
 pub fn populatePageChunks(a: *Assembler, chunks: []const SourceFile.Chunk) void {
     var page_chunks = a.pages.items(.chunks);
+    var page_sections = a.pages.items(.section);
     for (chunks) |chunk| {
         const addresses = chunk.getAddressRange(a);
         const first_page = addresses.begin >> @bitSizeOf(bus.PageOffset);
@@ -503,6 +707,14 @@ pub fn populatePageChunks(a: *Assembler, chunks: []const SourceFile.Chunk) void 
         for (first_page .. last_page + 1) |page| {
             const page_data_handle = a.page_lookup.get(@intCast(bus.Page, page)) orelse unreachable;
             page_chunks[page_data_handle].append(a.gpa, chunk) catch @panic("OOM");
+            if (chunk.section) |section| {
+                if (page_sections[page_data_handle] != section) {
+                    const token = a.getSource(chunk.file).instructions.items(.token)[chunk.instructions.begin];
+                    a.errors.append(a.gpa, Error.init(a.gpa, chunk.file, token,
+                        "Chunk starting here was allocated to page 0x{X:0>5}, but that page is in use by another section", .{ page }, .{})
+                    ) catch @panic("OOM");
+                }
+            }
         }
     }
 }
@@ -531,6 +743,9 @@ pub fn encodePageData(a: *Assembler, file: *SourceFile, file_handle: SourceFile.
     const insn_params = file.instructions.items(.params);
     const insn_addresses = file.instructions.items(.address);
     const insn_lengths = file.instructions.items(.length);
+
+    const expr_infos = file.expressions.items(.info);
+    const expr_resolved_constants = file.expressions.items(.resolved_constant);
 
     var page_datas = a.pages.items(.data);
 
@@ -569,14 +784,30 @@ pub fn encodePageData(a: *Assembler, file: *SourceFile, file_handle: SourceFile.
                 }
             },
 
-            .db => {
-                // TODO .db
-            },
-            .dw => {
-                // TODO .dw
-            },
-            .dd => {
-                // TODO .dd
+            .db, .dw, .dd => {
+                const granularity_bytes: u8 = switch (op) {
+                    .db => 1,
+                    .dw => 2,
+                    .dd => 4,
+                    else => unreachable,
+                };
+                const address = insn_addresses[insn_handle];
+                const length: usize = insn_lengths[insn_handle];
+                const params = insn_params[insn_handle] orelse continue;
+                var page = @truncate(bus.Page, address >> @bitSizeOf(bus.PageOffset));
+                const initial_offset = @truncate(bus.PageOffset, address);
+                var page_data_handle = a.page_lookup.get(page) orelse continue;
+                var buffer = page_datas[page_data_handle][initial_offset..];
+                var written: usize = 0;
+
+                while (length - written > buffer.len) {
+                    encodeDataDirective(expr_infos, expr_resolved_constants, params, granularity_bytes, written, buffer);
+                    written += buffer.len;
+                    page += 1;
+                    page_data_handle = a.page_lookup.get(page) orelse break;
+                    buffer = &page_datas[page_data_handle];
+                }
+                encodeDataDirective(expr_infos, expr_resolved_constants, params, granularity_bytes, written, buffer);
             },
             .push => {
                 // TODO stack sections
@@ -586,4 +817,58 @@ pub fn encodePageData(a: *Assembler, file: *SourceFile, file_handle: SourceFile.
             },
         }
     }
+}
+
+fn encodeDataDirective(
+    expr_infos: []const Expression.Info,
+    expr_resolved_constants: []const ?*const Constant,
+    params_expr_handle: Expression.Handle,
+    granularity_bytes: u8,
+    skip_bytes: usize,
+    out: []u8
+) void {
+    var bytes_to_skip = skip_bytes;
+    var buf = out;
+    var expr_handle = params_expr_handle;
+    while (true) switch (expr_infos[expr_handle]) {
+        .list => |bin| {
+            if (expr_resolved_constants[bin.left]) |constant| {
+                const bytes = encodeDataExpression(constant, granularity_bytes, bytes_to_skip, buf);
+                if (bytes > bytes_to_skip) {
+                    const bytes_written = bytes - bytes_to_skip;
+                    bytes_to_skip = 0;
+                    buf = buf[bytes_written..];
+                    if (buf.len == 0) return;
+                } else {
+                    bytes_to_skip -= bytes;
+                }
+            }
+            expr_handle = bin.right;
+        },
+        else => if (expr_resolved_constants[expr_handle]) |constant| {
+            _ = encodeDataExpression(constant, granularity_bytes, bytes_to_skip, buf);
+            break;
+        },
+    };
+}
+fn encodeDataExpression(expr_constant: *const Constant, granularity_bytes: u8, skip_bytes: usize, out: []u8) usize {
+    var constant_bytes = std.mem.alignForward(expr_constant.bit_count, granularity_bytes * 8) / 8;
+    if (skip_bytes >= constant_bytes) {
+        return constant_bytes;
+    }
+
+    var iter = expr_constant.byteIterator(.signed);
+    iter.skip(skip_bytes);
+    constant_bytes -= skip_bytes;
+
+    var buf = out;
+    if (buf.len > constant_bytes) {
+        buf.len = constant_bytes;
+    }
+
+    for (buf) |*b| {
+        b.* = iter.next();
+    }
+
+    return skip_bytes + buf.len;
 }
