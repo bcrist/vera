@@ -8,6 +8,7 @@ const Instruction = @import("Instruction.zig");
 const Expression = @import("Expression.zig");
 const Constant = @import("Constant.zig");
 const Section = @import("Section.zig");
+const Error = @import("Error.zig");
 const Token = lex.Token;
 const ExpressionType = ie.ExpressionType;
 const SectionBlock = SourceFile.SectionBlock;
@@ -16,17 +17,19 @@ const SectionBlock = SourceFile.SectionBlock;
 // The resolved constant for these expressions is the raw symbol name.
 // Any labels which do not begin with `_` and are not in a stack section will be added to the global symbol table.
 // Create Sections for each named section block and set the SectionBlock.section handle to reference it.
-pub fn processLabelsAndSections(a: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle) void {
-    var insn_tokens = file.instructions.items(.token);
-    var labels = file.instructions.items(.label);
-    var operations = file.instructions.items(.operation);
-    var params = file.instructions.items(.params);
+pub fn processLabelsAndSections(a: *Assembler, file: *SourceFile) void {
+    const insn_slice = file.instructions.slice();
+    var insn_tokens = insn_slice.items(.token);
+    var labels = insn_slice.items(.label);
+    var operations = insn_slice.items(.operation);
+    var params = insn_slice.items(.params);
 
-    var expr_resolved_types = file.expressions.items(.resolved_type);
-    var expr_resolved_constants = file.expressions.items(.resolved_constant);
-    var expr_infos = file.expressions.items(.info);
-    var expr_tokens = file.expressions.items(.token);
-    var expr_flags = file.expressions.items(.flags);
+    const expr_slice = file.expressions.slice();
+    var expr_resolved_types = expr_slice.items(.resolved_type);
+    var expr_resolved_constants = expr_slice.items(.resolved_constant);
+    var expr_infos = expr_slice.items(.info);
+    var expr_tokens = expr_slice.items(.token);
+    var expr_flags = expr_slice.items(.flags);
 
     var block_sections = file.blocks.items(.section);
 
@@ -52,7 +55,7 @@ pub fn processLabelsAndSections(a: *Assembler, file: *SourceFile, file_handle: S
                     => unreachable,
                 };
 
-                const symbol_constant = resolveSymbolDefExpr(a, file, file_handle, section_name_expr, expr_tokens, expr_infos, expr_resolved_constants, expr_resolved_types, expr_flags);
+                const symbol_constant = resolveSymbolDefExpr(a, file, section_name_expr, expr_tokens, expr_infos, expr_resolved_constants, expr_resolved_types, expr_flags);
                 const section_name = symbol_constant.asString();
                 const entry = a.sections.getOrPutValue(a.gpa, section_name, .{
                     .name = section_name,
@@ -60,21 +63,21 @@ pub fn processLabelsAndSections(a: *Assembler, file: *SourceFile, file_handle: S
                 }) catch @panic("OOM");
                 const found_kind = entry.value_ptr.kind;
                 if (found_kind != kind) switch (found_kind) {
-                    inline else => |k| a.recordError(file_handle, insn_tokens[insn_handle], "Section already exists; expected ." ++ @tagName(k), .{}),
+                    inline else => |k| a.recordError(file.handle, insn_tokens[insn_handle], "Section already exists; expected ." ++ @tagName(k), .{}),
                 };
                 const block_handle = file.findBlockByInstruction(@intCast(Instruction.Handle, insn_handle));
                 block_sections[block_handle] = @intCast(Section.Handle, entry.index);
             } else {
-                a.recordError(file_handle, insn_tokens[insn_handle], "Unnamed sections are not currently supported", .{});
+                a.recordError(file.handle, insn_tokens[insn_handle], "Unnamed sections are not currently supported", .{});
             }
         }
 
         if (maybe_label_expr) |label_expr| {
-            const symbol_constant = resolveSymbolDefExpr(a, file, file_handle, label_expr, expr_tokens, expr_infos, expr_resolved_constants, expr_resolved_types, expr_flags);
+            const symbol_constant = resolveSymbolDefExpr(a, file, label_expr, expr_tokens, expr_infos, expr_resolved_constants, expr_resolved_types, expr_flags);
             const symbol = symbol_constant.asString();
             if (!in_stack_section and !std.mem.startsWith(u8, symbol, "_")) {
                 a.symbols.put(a.gpa, symbol, .{
-                    .file = file_handle,
+                    .file = file.handle,
                     .instruction = @intCast(Instruction.Handle, insn_handle),
                 }) catch @panic("OOM");
             }
@@ -85,7 +88,6 @@ pub fn processLabelsAndSections(a: *Assembler, file: *SourceFile, file_handle: S
 fn resolveSymbolDefExpr(
     a: *Assembler,
     file: *SourceFile,
-    file_handle: SourceFile.Handle,
     symbol_def_expr: Expression.Handle,
     expr_tokens: []const lex.Token.Handle,
     expr_infos: []const Expression.Info,
@@ -108,7 +110,7 @@ fn resolveSymbolDefExpr(
                 expr_resolved_constants[symbol_def_expr] = interned_symbol_name;
                 expr_resolved_types[symbol_def_expr] = .{ .symbol_def = {} };
                 return interned_symbol_name;
-            } else if (tryResolveExpressionType(a, file, file_handle, inner_expr, expr_tokens, expr_infos, expr_resolved_constants, expr_resolved_types, expr_flags)) {
+            } else if (tryResolveExpressionType(a, file, inner_expr, expr_tokens, expr_infos, expr_resolved_constants, expr_resolved_types, expr_flags)) {
                 const interned_symbol_name = expr_resolved_constants[inner_expr].?;
                 expr_resolved_constants[symbol_def_expr] = interned_symbol_name;
                 expr_resolved_types[symbol_def_expr] = .{ .symbol_def = {} };
@@ -126,7 +128,7 @@ pub fn resolveExpressionTypes(a: *Assembler) bool {
         made_progress = false;
         unresolved = false;
 
-        for (a.files.items, 0..) |*file, file_handle| {
+        for (a.files.items) |*file| {
             var expr_resolved_types = file.expressions.items(.resolved_type);
             var expr_resolved_constants = file.expressions.items(.resolved_constant);
             var expr_infos = file.expressions.items(.info);
@@ -135,9 +137,7 @@ pub fn resolveExpressionTypes(a: *Assembler) bool {
 
             for (expr_resolved_types, 0..) |expr_type, handle| {
                 if (expr_type == .unknown) {
-                    if (tryResolveExpressionType(a, file,
-                        @intCast(SourceFile.Handle, file_handle),
-                        @intCast(Expression.Handle, handle),
+                    if (tryResolveExpressionType(a, file, @intCast(Expression.Handle, handle),
                         expr_tokens, expr_infos, expr_resolved_constants, expr_resolved_types, expr_flags,
                     )) {
                         made_progress = true;
@@ -150,13 +150,13 @@ pub fn resolveExpressionTypes(a: *Assembler) bool {
     }
 
     if (unresolved) {
-        for (a.files.items, 0..) |*file, file_handle| {
+        for (a.files.items) |*file| {
             const resolved_types = file.expressions.items(.resolved_type);
             const tokens = file.expressions.items(.token);
             for (resolved_types, 0..) |expr_type, handle| {
                 if (expr_type == .unknown) {
                     resolved_types[handle] = .{ .poison = {} };
-                    a.recordError(@intCast(SourceFile.Handle, file_handle), tokens[handle], "Could not determine type for expression", .{});
+                    a.recordError(file.handle, tokens[handle], "Could not determine type for expression", .{});
                 }
             }
         }
@@ -169,7 +169,6 @@ pub fn resolveExpressionTypes(a: *Assembler) bool {
 fn tryResolveExpressionType(
     a: *Assembler,
     file: *SourceFile,
-    file_handle: SourceFile.Handle,
     expr_handle: Expression.Handle,
     expr_tokens: []const lex.Token.Handle,
     expr_infos: []const Expression.Info,
@@ -192,11 +191,11 @@ fn tryResolveExpressionType(
                 expr_resolved_constants[expr_handle] = constant.intern(a.arena, a.gpa, &a.constants);
             } else |err| switch (err) {
                 error.Overflow => {
-                    a.recordError(file_handle, token_handle, "Integer literal too large", .{});
+                    a.recordError(file.handle, token_handle, "Integer literal too large", .{});
                     expr_resolved_types[expr_handle] = .{ .poison = {} };
                 },
                 error.InvalidCharacter => {
-                    a.recordError(file_handle, token_handle, "Invalid character in literal", .{});
+                    a.recordError(file.handle, token_handle, "Invalid character in literal", .{});
                     expr_resolved_types[expr_handle] = .{ .poison = {} };
                 },
                 error.InvalidToken => unreachable,
@@ -246,22 +245,22 @@ fn tryResolveExpressionType(
             const token_handle = expr_tokens[expr_handle];
             const symbol_literal = file.tokens.get(token_handle).location(file.source);
             const symbol_constant = Constant.initSymbolLiteral(a.gpa, &a.constant_temp, symbol_literal);
-            return tryResolveSymbolType(a, file, file_handle, expr_handle, token_handle, symbol_constant.asString(), expr_resolved_types, expr_flags);
+            return tryResolveSymbolType(a, file, expr_handle, token_handle, symbol_constant.asString(), expr_resolved_types, expr_flags);
         },
         .directive_symbol_ref => |inner_expr| {
             if (expr_resolved_constants[inner_expr]) |symbol| {
-                return tryResolveSymbolType(a, file, file_handle, expr_handle, expr_tokens[expr_handle], symbol.asString(), expr_resolved_types, expr_flags);
+                return tryResolveSymbolType(a, file, expr_handle, expr_tokens[expr_handle], symbol.asString(), expr_resolved_types, expr_flags);
             } else return false;
         },
         .literal_symbol_def, .directive_symbol_def => {
-            _ = resolveSymbolDefExpr(a, file, file_handle, expr_handle, expr_tokens, expr_infos, expr_resolved_constants, expr_resolved_types, expr_flags);
+            _ = resolveSymbolDefExpr(a, file, expr_handle, expr_tokens, expr_infos, expr_resolved_constants, expr_resolved_types, expr_flags);
         },
         .plus => |bin| {
             var builder = ie.ExpressionTypeBuilder{};
             builder.add(expr_resolved_types[bin.left]);
             builder.add(expr_resolved_types[bin.right]);
             const result_type: ExpressionType = builder.build() catch t: {
-                a.recordError(file_handle, expr_tokens[expr_handle], "Cannot represent result of symbolic addition", .{});
+                a.recordError(file.handle, expr_tokens[expr_handle], "Cannot represent result of symbolic addition", .{});
                 break :t .{ .poison = {} };
             };
             if (result_type == .unknown) return false;
@@ -273,7 +272,7 @@ fn tryResolveExpressionType(
             builder.add(expr_resolved_types[bin.left]);
             builder.subtract(expr_resolved_types[bin.right]);
             const result_type: ExpressionType = builder.build() catch t: {
-                a.recordError(file_handle, expr_tokens[expr_handle], "Cannot represent result of symbolic subtraction", .{});
+                a.recordError(file.handle, expr_tokens[expr_handle], "Cannot represent result of symbolic subtraction", .{});
                 break :t .{ .poison = {} };
             };
             if (result_type == .unknown) return false;
@@ -287,7 +286,7 @@ fn tryResolveExpressionType(
                 .constant => .{ .constant = {} },
                 .raw_base_offset, .data_address, .insn_address, .stack_address,
                 .symbol_def, .reg8, .reg16, .reg32, .sr => t: {
-                    a.recordError(file_handle, expr_tokens[expr_handle], "Operand must be a constant expression", .{});
+                    a.recordError(file.handle, expr_tokens[expr_handle], "Operand must be a constant expression", .{});
                     break :t .{ .poison = {} };
                 },
             };
@@ -295,7 +294,7 @@ fn tryResolveExpressionType(
         },
         .index_to_reg8, .index_to_reg16, .index_to_reg32 => |inner_expr| {
             if (expr_flags[inner_expr].contains(.constant_depends_on_layout)) {
-                a.recordError(file_handle, expr_tokens[expr_handle], "Operand cannot vary on memory layout", .{});
+                a.recordError(file.handle, expr_tokens[expr_handle], "Operand cannot vary on memory layout", .{});
                 expr_resolved_types[expr_handle] = .{ .poison = {} };
                 return true;
             }
@@ -303,15 +302,15 @@ fn tryResolveExpressionType(
                 .unknown => return false,
                 .poison => .{ .poison = {} },
                 .constant => t: {
-                    const constant = layout.resolveExpressionConstant(a, file, file_handle, 0, inner_expr) orelse {
+                    const constant = layout.resolveExpressionConstant(a, file, 0, inner_expr) orelse {
                         break :t .{ .poison = {} };
                     };
                     const index = constant.asInt() catch {
-                        a.recordError(file_handle, expr_tokens[expr_handle], "Operand out of range", .{});
+                        a.recordError(file.handle, expr_tokens[expr_handle], "Operand out of range", .{});
                         break :t .{ .poison = {} };
                     };
                     if (index < 0 or index > 15) {
-                        a.recordError(file_handle, expr_tokens[expr_handle], "Operand out of range", .{});
+                        a.recordError(file.handle, expr_tokens[expr_handle], "Operand out of range", .{});
                         break :t .{ .poison = {} };
                     }
 
@@ -329,7 +328,7 @@ fn tryResolveExpressionType(
                 },
                 .raw_base_offset, .data_address, .insn_address, .stack_address,
                 .symbol_def, .reg8, .reg16, .reg32, .sr => t: {
-                    a.recordError(file_handle, expr_tokens[expr_handle], "Operand must be a constant expression", .{});
+                    a.recordError(file.handle, expr_tokens[expr_handle], "Operand must be a constant expression", .{});
                     break :t .{ .poison = {} };
                 },
             };
@@ -345,7 +344,7 @@ fn tryResolveExpressionType(
                 },
                 .raw_base_offset, .data_address, .insn_address, .stack_address,
                 .constant, .symbol_def, .sr => t: {
-                    a.recordError(file_handle, expr_tokens[expr_handle], "Operand must be a GPR expression", .{});
+                    a.recordError(file.handle, expr_tokens[expr_handle], "Operand must be a GPR expression", .{});
                     break :t .{ .poison = {} };
                 },
             };
@@ -358,7 +357,7 @@ fn tryResolveExpressionType(
                 if (left == .poison or right == .poison) break :t .{ .poison = {} };
                 if (left == .unknown or right == .unknown) return false;
                 if (left == .constant and right == .constant) break :t .{ .constant = {} };
-                a.recordError(file_handle, expr_tokens[expr_handle], "Both operands must be constant expressions", .{});
+                a.recordError(file.handle, expr_tokens[expr_handle], "Both operands must be constant expressions", .{});
                 break :t .{ .poison = {} };
             };
             resolveConstantDependsOnLayoutBinary(expr_flags, expr_handle, bin);
@@ -386,7 +385,7 @@ fn tryResolveExpressionType(
                 },
                 .raw_base_offset, .data_address, .insn_address, .stack_address,
                 .constant, .symbol_def, .sr => t: {
-                    a.recordError(file_handle, expr_tokens[expr_handle], "Operand must be a GPR expression", .{});
+                    a.recordError(file.handle, expr_tokens[expr_handle], "Operand must be a GPR expression", .{});
                     break :t .{ .poison = {} };
                 },
             };
@@ -399,7 +398,7 @@ fn tryResolveExpressionType(
                 .poison => .{ .poison = {} },
                 .raw_base_offset, .data_address, .insn_address, .stack_address => |bo| t: {
                     if (!std.meta.eql(bo.base, .{ .sr = .ip })) {
-                        a.recordError(file_handle, expr_tokens[expr_handle], "Operand must be an IP-relative expression", .{});
+                        a.recordError(file.handle, expr_tokens[expr_handle], "Operand must be an IP-relative expression", .{});
                         break :t .{ .poison = {} };
                     }
                     var builder = ie.ExpressionTypeBuilder{};
@@ -408,7 +407,7 @@ fn tryResolveExpressionType(
                     break :t builder.build() catch unreachable;
                 },
                 .reg8, .reg16, .reg32, .constant, .symbol_def, .sr => t: {
-                    a.recordError(file_handle, expr_tokens[expr_handle], "Operand must be an IP-relative expression", .{});
+                    a.recordError(file.handle, expr_tokens[expr_handle], "Operand must be an IP-relative expression", .{});
                     break :t .{ .poison = {} };
                 },
             };
@@ -423,7 +422,7 @@ fn tryResolveExpressionType(
                 .raw_base_offset => |bo| .{ .data_address = bo },
                 .reg8, .reg16, .reg32, .constant, .sr => .{ .data_address = ie.BaseOffsetType.init(inner_type, null) catch unreachable },
                 .insn_address, .stack_address => t: {
-                    a.recordError(file_handle, expr_tokens[expr_handle], "Casting directly between address spaces is not allowed.  Use `.d .raw` if you really want this.", .{});
+                    a.recordError(file.handle, expr_tokens[expr_handle], "Casting directly between address spaces is not allowed.  Use `.d .raw` if you really want this.", .{});
                     break :t .{ .poison = {} };
                 },
                 .symbol_def => unreachable,
@@ -439,7 +438,7 @@ fn tryResolveExpressionType(
                 .raw_base_offset => |bo| .{ .insn_address = bo },
                 .reg8, .reg16, .reg32, .constant, .sr => .{ .insn_address = ie.BaseOffsetType.init(inner_type, null) catch unreachable },
                 .data_address, .stack_address => t: {
-                    a.recordError(file_handle, expr_tokens[expr_handle], "Casting directly between address spaces is not allowed.  Use `.i .raw` if you really want this.", .{});
+                    a.recordError(file.handle, expr_tokens[expr_handle], "Casting directly between address spaces is not allowed.  Use `.i .raw` if you really want this.", .{});
                     break :t .{ .poison = {} };
                 },
                 .symbol_def => unreachable,
@@ -455,7 +454,7 @@ fn tryResolveExpressionType(
                 .raw_base_offset => |bo| .{ .stack_address = bo },
                 .reg8, .reg16, .reg32, .constant, .sr => .{ .stack_address = ie.BaseOffsetType.init(inner_type, null) catch unreachable },
                 .data_address, .insn_address => t: {
-                    a.recordError(file_handle, expr_tokens[expr_handle], "Casting directly between address spaces is not allowed.  Use `.s .raw` if you really want this.", .{});
+                    a.recordError(file.handle, expr_tokens[expr_handle], "Casting directly between address spaces is not allowed.  Use `.s .raw` if you really want this.", .{});
                     break :t .{ .poison = {} };
                 },
                 .symbol_def => unreachable,
@@ -497,14 +496,13 @@ fn resolveConstantDependsOnLayoutBinary(expr_flags: []Expression.FlagSet, expr_h
 fn tryResolveSymbolType(
     a: *Assembler,
     file: *const SourceFile,
-    file_handle: SourceFile.Handle,
     expr_handle: Expression.Handle,
     token_handle: Token.Handle,
     symbol: []const u8,
     expr_resolved_types: []ExpressionType,
     expr_flags: []Expression.FlagSet,
 ) bool {
-    if (a.lookupSymbol(file, file_handle, token_handle, symbol)) |target| switch (target) {
+    if (a.lookupSymbol(file, token_handle, symbol)) |target| switch (target) {
         .expression => |target_expr_handle| {
             const target_type = expr_resolved_types[target_expr_handle];
             if (target_type != .unknown) {
@@ -533,7 +531,7 @@ fn tryResolveSymbolType(
             return true;
         },
         .not_found => {
-            a.recordError(file_handle, token_handle, "Reference to undefined symbol", .{});
+            a.recordError(file.handle, token_handle, "Reference to undefined symbol", .{});
             expr_resolved_types[expr_handle] = .{ .poison = {} };
             return true;
         },
@@ -543,17 +541,18 @@ fn tryResolveSymbolType(
 }
 
 pub fn checkInstructionsAndDirectives(a: *Assembler) void {
-    for (a.files.items, 0..) |*file, file_handle| {
-        _ = file_handle;
-
-        var operations = file.instructions.items(.operation);
-        var params = file.instructions.items(.params);
+    for (a.files.items) |*file| {
+        var insn_operations = file.instructions.items(.operation);
+        var insn_params = file.instructions.items(.params);
         var insn_flags = file.instructions.items(.flags);
+        var insn_tokens = file.expressions.items(.token);
 
         var expr_infos = file.expressions.items(.info);
         var expr_flags = file.expressions.items(.flags);
+        var expr_tokens = file.expressions.items(.token);
+        var expr_resolved_types = file.expressions.items(.resolved_type);
 
-        for (operations, params, 0..) |op, maybe_params, insn_handle| {
+        for (insn_operations, insn_params, 0..) |op, maybe_params, insn_handle| {
             switch (op) {
                 .none => std.debug.assert(maybe_params == null),
                 .bound_insn => unreachable,
@@ -564,9 +563,80 @@ pub fn checkInstructionsAndDirectives(a: *Assembler) void {
                         }
                     }
                 },
-                .org, .@"align", .keep, .def, .undef, .db, .dw, .dd,
-                .section, .code, .kcode, .entry, .kentry, .data, .kdata, .@"const", .kconst, .stack,
+                .keep => if (maybe_params) |params_expr| {
+                    const token = expr_tokens[params_expr];
+                    a.recordError(file.handle, token, "Expected no parameters", .{});
+                },
+                .org => {
+                    var params = [_]?Expression.Handle{null};
+                    getParamHandles(a, file.handle, maybe_params, expr_infos, expr_tokens, &params);
+                    if (params[0]) |address_expr| {
+                        switch (expr_resolved_types[address_expr]) {
+                            .unknown, .symbol_def => unreachable,
+                            .poison, .constant => {},
+                            .reg8, .reg16, .reg32, .sr => {
+                                const token = expr_tokens[address_expr];
+                                a.recordError(file.handle, token, "Expected constant or absolute address, not register", .{});
+                            },
+                            .raw_base_offset, .data_address, .insn_address, .stack_address => |bo| {
+                                if (std.meta.eql(bo.base, .{ .sr = .ip }) and bo.offset == .constant) {
+                                    const token = expr_tokens[address_expr];
+                                    a.recordError(file.handle, token, "Expected absolute address, not relative; try using '@'", .{});
+                                } else if (bo.base != .constant or bo.offset != .none) {
+                                    const token = expr_tokens[address_expr];
+                                    a.recordError(file.handle, token, "Expected constant or absolute address", .{});
+                                }
+                            },
+                        }
+                    } else {
+                        const token = insn_tokens[insn_handle];
+                        a.recordError(file.handle, token, ".org directive must be followed by address expression", .{});
+                    }
+                },
+                .@"align" => {
+                    var params = [_]?Expression.Handle{null} ** 2;
+                    getParamHandles(a, file.handle, maybe_params, expr_infos, expr_tokens, &params);
+                    if (params[0]) |align_expr| {
+                        switch (expr_resolved_types[align_expr]) {
+                            .unknown, .symbol_def => unreachable,
+                            .poison, .constant => {},
+                            .reg8, .reg16, .reg32, .sr,
+                            .raw_base_offset, .data_address, .insn_address, .stack_address => {
+                                const token = expr_tokens[align_expr];
+                                a.recordError(file.handle, token, "Expected constant", .{});
+                            },
+                        }
+                    } else {
+                        const token = insn_tokens[insn_handle];
+                        a.recordError(file.handle, token, ".align directive must be followed by constant expression", .{});
+                    }
+
+                    if (params[1]) |offset_expr| {
+                        switch (expr_resolved_types[offset_expr]) {
+                            .unknown, .symbol_def => unreachable,
+                            .poison, .constant => {},
+                            .reg8, .reg16, .reg32, .sr,
+                            .raw_base_offset, .data_address, .insn_address, .stack_address => {
+                                const token = expr_tokens[offset_expr];
+                                a.recordError(file.handle, token, "Expected constant", .{});
+                            },
+                        }
+                    }
+                },
+                .undef => if (maybe_params) |params_expr| {
+                    checkUndefExpr(a, file, params_expr);
+                } else {
+                    const token = insn_tokens[insn_handle];
+                    a.recordError(file.handle, token, "Expected at least one .def symbol name", .{});
+                },
+
+                .db, .dw, .dd,
                 .push, .pop,
+
+
+                .def, .section, .stack,
+                .code, .kcode, .entry, .kentry,
+                .data, .kdata, .@"const", .kconst,
                 => {}
             }
 
@@ -589,4 +659,41 @@ fn instructionHasLayoutDependentParams(expr_flags: []const Expression.FlagSet, e
         else => {},
     }
     return false;
+}
+
+fn checkUndefExpr(a: *Assembler, file: *const SourceFile, expr: Expression.Handle) void {
+    _ = expr;
+    _ = a;
+    _ = file;
+}
+
+fn getParamHandles(
+    a: *Assembler,
+    file_handle: SourceFile.Handle,
+    maybe_params_expr: ?Expression.Handle,
+    expr_infos: []const Expression.Info,
+    expr_tokens: []const lex.Token.Handle,
+    out: []?Expression.Handle,
+) void {
+    if (out.len == 0) return;
+    if (maybe_params_expr) |params_expr| {
+        var expr_handle = params_expr;
+        for (out) |*p| {
+            switch (expr_infos[expr_handle]) {
+                .list => |bin| {
+                    p.* = bin.left;
+                    expr_handle = bin.right;
+                },
+                .arrow_list => {
+                    a.recordError(file_handle, expr_tokens[expr_handle], "Expected ',' as parameter separator", .{});
+                    return;
+                },
+                else => {
+                    p.* = expr_handle;
+                    return;
+                }
+            }
+        }
+        a.recordError(file_handle, expr_tokens[expr_handle], "Too many parameters", .{});
+    }
 }

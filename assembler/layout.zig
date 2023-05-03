@@ -35,7 +35,7 @@ fn resolveFixedOrgAddress(a: *Assembler, chunk: SourceFile.Chunk) u32 {
         if (operations[insn_handle] == .org) {
             initial_address = file.instructions.items(.address)[insn_handle];
             if (file.instructions.items(.params)[insn_handle]) |expr_handle| {
-                if (resolveExpressionConstant(a, file, chunk.file, initial_address, expr_handle)) |constant| {
+                if (resolveExpressionConstant(a, file, initial_address, expr_handle)) |constant| {
                     const address_i64 = constant.asInt() catch {
                         a.recordExpressionLayoutError(chunk.file, expr_handle, ".org address too large", .{});
                         break;
@@ -191,12 +191,12 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
 
                         .@"align" => {
                             if (params[insn2]) |align_expr| {
-                                address = resolveAlignment(a, file, chunk.file, address, align_expr, false, check_for_alignment_holes, insn2, chunk.section);
+                                address = resolveAlignment(a, file, address, align_expr, false, check_for_alignment_holes, insn2, chunk.section);
                             }
                             break;
                         },
                         .dw, .dd => {
-                            address = applyAlignment(a, file, chunk.file, address, 2, 0, false, check_for_alignment_holes, insn2, chunk.section);
+                            address = applyAlignment(a, file, address, 2, 0, false, check_for_alignment_holes, insn2, chunk.section);
                             break;
                         },
                         else => break,
@@ -204,7 +204,7 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
                 }
             },
             .insn => {
-                const length = resolveInstructionEncoding(a, file, chunk.file, address, insn_handle, &operations[insn_handle], params[insn_handle]);
+                const length = resolveInstructionEncoding(a, file, address, insn_handle, &operations[insn_handle], params[insn_handle]);
                 insn_lengths[insn_handle] = length;
                 address += length;
                 layout_changed = true;
@@ -217,7 +217,7 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
                         .mnemonic = old_encoding.mnemonic,
                         .suffix = old_encoding.suffix,
                     }};
-                    const length = resolveInstructionEncoding(a, file, chunk.file, address, insn_handle, &operations[insn_handle], params[insn_handle]);
+                    const length = resolveInstructionEncoding(a, file, address, insn_handle, &operations[insn_handle], params[insn_handle]);
                     address += length;
                     switch (operations[insn_handle]) {
                         .bound_insn => |new_encoding| if (!ie.eql(old_encoding.*, new_encoding.*)) {
@@ -233,26 +233,26 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
             },
             .@"align" => {
                 if (params[insn_handle]) |align_expr| {
-                    address = resolveAlignment(a, file, chunk.file, address, align_expr, true, check_for_alignment_holes, insn_handle, chunk.section);
+                    address = resolveAlignment(a, file, address, align_expr, true, check_for_alignment_holes, insn_handle, chunk.section);
                 }
             },
             .db => {
                 if (params[insn_handle]) |expr_handle| {
-                    address += resolveDataDirectiveLength(a, file, chunk.file, address, insn_handle, expr_handle, 1);
+                    address += resolveDataDirectiveLength(a, file, address, insn_handle, expr_handle, 1);
                 }
                 check_for_alignment_holes = true;
             },
             .dw => {
-                address = applyAlignment(a, file, chunk.file, address, 2, 0, true, check_for_alignment_holes, insn_handle, chunk.section);
+                address = applyAlignment(a, file, address, 2, 0, true, check_for_alignment_holes, insn_handle, chunk.section);
                 if (params[insn_handle]) |expr_handle| {
-                    address += resolveDataDirectiveLength(a, file, chunk.file, address, insn_handle, expr_handle, 2);
+                    address += resolveDataDirectiveLength(a, file, address, insn_handle, expr_handle, 2);
                 }
                 check_for_alignment_holes = true;
             },
             .dd => {
-                address = applyAlignment(a, file, chunk.file, address, 2, 0, true, check_for_alignment_holes, insn_handle, chunk.section);
+                address = applyAlignment(a, file, address, 2, 0, true, check_for_alignment_holes, insn_handle, chunk.section);
                 if (params[insn_handle]) |expr_handle| {
-                    address += resolveDataDirectiveLength(a, file, chunk.file, address, insn_handle, expr_handle, 4);
+                    address += resolveDataDirectiveLength(a, file, address, insn_handle, expr_handle, 4);
                 }
                 check_for_alignment_holes = true;
             },
@@ -299,7 +299,6 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
 fn resolveAlignment(
     a: *Assembler,
     file: *SourceFile,
-    file_handle: SourceFile.Handle,
     address: u32,
     align_expr: Expression.Handle,
     report_errors: bool,
@@ -313,22 +312,22 @@ fn resolveAlignment(
     switch (file.expressions.items(.info)[align_expr]) {
         .list => |bin| {
             alignment_expr = bin.left;
-            if (resolveExpressionConstant(a, file, file_handle, address, bin.left)) |constant| {
+            if (resolveExpressionConstant(a, file, address, bin.left)) |constant| {
                 alignment = constant.asInt() catch {
                     if (report_errors) {
                         const token = file.expressions.items(.token)[bin.left];
                         const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
-                        a.recordError(file_handle, token, "Overflow (alignment too large)", err_flags);
+                        a.recordError(file.handle, token, "Overflow (alignment too large)", err_flags);
                     }
                     return address;
                 };
             }
-            if (resolveExpressionConstant(a, file, file_handle, address, bin.right)) |constant| {
+            if (resolveExpressionConstant(a, file, address, bin.right)) |constant| {
                 offset = constant.asInt() catch {
                     if (report_errors) {
                         const token = file.expressions.items(.token)[bin.right];
                         const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
-                        a.recordError(file_handle, token, "Overflow (offset too large)", err_flags);
+                        a.recordError(file.handle, token, "Overflow (offset too large)", err_flags);
                     }
                     return address;
                 };
@@ -336,19 +335,19 @@ fn resolveAlignment(
                     if (report_errors) {
                         const token = file.expressions.items(.token)[bin.right];
                         const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
-                        a.recordError(file_handle, token, "Invalid offset (must be less than alignment)", err_flags);
+                        a.recordError(file.handle, token, "Invalid offset (must be less than alignment)", err_flags);
                     }
                     return address;
                 }
             }
         },
         else => {
-            if (resolveExpressionConstant(a, file, file_handle, address, align_expr)) |constant| {
+            if (resolveExpressionConstant(a, file, address, align_expr)) |constant| {
                 alignment = constant.asInt() catch {
                     if (report_errors) {
                         const token = file.expressions.items(.token)[align_expr];
                         const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
-                        a.recordError(file_handle, token, "Overflow (alignment too large)", err_flags);
+                        a.recordError(file.handle, token, "Overflow (alignment too large)", err_flags);
                     }
                     return address;
                 };
@@ -364,7 +363,7 @@ fn resolveAlignment(
         if (report_errors) {
             const token = file.expressions.items(.token)[alignment_expr];
             const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
-            a.recordError(file_handle, token, "Invalid alignment (must be power of 2)", err_flags);
+            a.recordError(file.handle, token, "Invalid alignment (must be power of 2)", err_flags);
         }
         return address;
     }
@@ -373,18 +372,17 @@ fn resolveAlignment(
         if (report_errors) {
             const token = file.expressions.items(.token)[alignment_expr];
             const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
-            a.recordError(file_handle, token, "Overflow (alignment must fit in u32)", err_flags);
+            a.recordError(file.handle, token, "Overflow (alignment must fit in u32)", err_flags);
         }
         return address;
     };
 
-    return applyAlignment(a, file, file_handle, address, alignment_u32, @intCast(u32, offset), report_errors, check_for_alignment_holes, insn_handle, section_handle);
+    return applyAlignment(a, file, address, alignment_u32, @intCast(u32, offset), report_errors, check_for_alignment_holes, insn_handle, section_handle);
 }
 
 fn applyAlignment(
     a: *Assembler,
     file: *SourceFile,
-    file_handle: SourceFile.Handle,
     address: u32,
     alignment: u32,
     offset: u32,
@@ -402,7 +400,7 @@ fn applyAlignment(
         if (report_errors) {
             const token = file.instructions.items(.token)[insn_handle];
             const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
-            a.recordError(file_handle, token, "Aligned address overflow", err_flags);
+            a.recordError(file.handle, token, "Aligned address overflow", err_flags);
         }
         return address;
     };
@@ -424,7 +422,7 @@ fn applyAlignment(
             => {
                 const token = file.instructions.items(.token)[insn_handle];
                 const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
-                a.recordError(file_handle, token, "Alignment not satisfied within instruction stream (try using NOP, NOPE, or an unconditional branch before this point)", err_flags);
+                a.recordError(file.handle, token, "Alignment not satisfied within instruction stream (try using NOP, NOPE, or an unconditional branch before this point)", err_flags);
             },
         };
     }
@@ -432,18 +430,18 @@ fn applyAlignment(
     return new_address;
 }
 
-fn resolveDataDirectiveLength(a: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle, ip: u32, insn_handle: Instruction.Handle, params_expr_handle: Expression.Handle, granularity_bytes: u8) u32 {
+fn resolveDataDirectiveLength(a: *Assembler, file: *SourceFile, ip: u32, insn_handle: Instruction.Handle, params_expr_handle: Expression.Handle, granularity_bytes: u8) u32 {
     var length: u32 = 0;
 
     const expr_infos = file.expressions.items(.info);
     var expr_handle = params_expr_handle;
     while (true) switch (expr_infos[expr_handle]) {
         .list => |bin| {
-            length += resolveDataExpressionLength(a, file, file_handle, ip, bin.left, granularity_bytes);
+            length += resolveDataExpressionLength(a, file, ip, bin.left, granularity_bytes);
             expr_handle = bin.right;
         },
         else => {
-            length += resolveDataExpressionLength(a, file, file_handle, ip, expr_handle, granularity_bytes);
+            length += resolveDataExpressionLength(a, file, ip, expr_handle, granularity_bytes);
             break;
         },
     };
@@ -452,13 +450,13 @@ fn resolveDataDirectiveLength(a: *Assembler, file: *SourceFile, file_handle: Sou
 
     return length;
 }
-fn resolveDataExpressionLength(a: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle, ip: u32, expr_handle: Expression.Handle, granularity_bytes: u8) u32 {
-    if (resolveExpressionConstant(a, file, file_handle, ip, expr_handle)) |constant| {
+fn resolveDataExpressionLength(a: *Assembler, file: *SourceFile, ip: u32, expr_handle: Expression.Handle, granularity_bytes: u8) u32 {
+    if (resolveExpressionConstant(a, file, ip, expr_handle)) |constant| {
         return @intCast(u32, std.mem.alignForward(constant.bit_count, granularity_bytes * 8) / 8);
     } else return 0;
 }
 
-pub fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle, ip: u32, expr_handle: Expression.Handle) ?*const Constant {
+pub fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, ip: u32, expr_handle: Expression.Handle) ?*const Constant {
     var expr_resolved_constants = file.expressions.items(.resolved_constant);
     if (expr_resolved_constants[expr_handle]) |constant| {
         return constant;
@@ -496,43 +494,43 @@ pub fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, file_handle: 
             const token_handle = expr_tokens[expr_handle];
             const raw_symbol = file.tokens.get(token_handle).location(file.source);
             const symbol_constant = Constant.initSymbolLiteral(a.gpa, &a.constant_temp, raw_symbol);
-            resolveSymbolRefExprConstant(a, file, file_handle, ip, expr_handle, token_handle, symbol_constant, expr_resolved_types, expr_resolved_constants);
+            resolveSymbolRefExprConstant(a, file, ip, expr_handle, token_handle, symbol_constant, expr_resolved_types, expr_resolved_constants);
         },
         .directive_symbol_ref => |inner_expr| {
             const token_handle = expr_tokens[inner_expr];
             const symbol_constant = expr_resolved_constants[inner_expr].?;
-            resolveSymbolRefExprConstant(a, file, file_handle, ip, expr_handle, token_handle, symbol_constant.*, expr_resolved_types, expr_resolved_constants);
+            resolveSymbolRefExprConstant(a, file, ip, expr_handle, token_handle, symbol_constant.*, expr_resolved_types, expr_resolved_constants);
         },
 
         .negate => |inner_expr| {
-            const inner_constant = resolveExpressionConstant(a, file, file_handle, ip, inner_expr) orelse return null;
+            const inner_constant = resolveExpressionConstant(a, file, ip, inner_expr) orelse return null;
             const value = inner_constant.asIntNegated() catch {
-                a.recordExpressionLayoutError(file_handle, expr_handle, "Overflow (constant too large)", .{});
+                a.recordExpressionLayoutError(file.handle, expr_handle, "Overflow (constant too large)", .{});
                 return null;
             };
             const new_constant = Constant.initInt(value, null);
             expr_resolved_constants[expr_handle] = new_constant.intern(a.arena, a.gpa, &a.constants);
         },
         .complement => |inner_expr| {
-            const inner = resolveExpressionConstant(a, file, file_handle, ip, inner_expr) orelse return null;
+            const inner = resolveExpressionConstant(a, file, ip, inner_expr) orelse return null;
             const result = inner.complement(a.gpa, &a.constant_temp);
             expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
         },
         .plus, .minus, .multiply, .shl, .shr, => |bin| {
-            const left = resolveExpressionConstant(a, file, file_handle, ip, bin.left) orelse return null;
-            const right = resolveExpressionConstant(a, file, file_handle, ip, bin.right) orelse return null;
+            const left = resolveExpressionConstant(a, file, ip, bin.left) orelse return null;
+            const right = resolveExpressionConstant(a, file, ip, bin.right) orelse return null;
             const lv = left.asInt() catch {
-                a.recordExpressionLayoutError(file_handle, bin.left, "Overflow (constant too large)", .{});
+                a.recordExpressionLayoutError(file.handle, bin.left, "Overflow (constant too large)", .{});
                 return null;
             };
             const rv = right.asInt() catch {
-                a.recordExpressionLayoutError(file_handle, bin.right, "Overflow (constant too large)", .{});
+                a.recordExpressionLayoutError(file.handle, bin.right, "Overflow (constant too large)", .{});
                 return null;
             };
 
             if (info == .shl or info == .shr) {
                 _ = std.math.cast(u6, rv) orelse {
-                    a.recordExpressionLayoutError(file_handle, expr_handle, "Overflow (constant too large)", .{});
+                    a.recordExpressionLayoutError(file.handle, expr_handle, "Overflow (constant too large)", .{});
                 };
             }
 
@@ -544,15 +542,15 @@ pub fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, file_handle: 
                 .shr => lv >> @intCast(u6, rv),
                 else => unreachable,
             } catch {
-                a.recordExpressionLayoutError(file_handle, expr_handle, "Overflow (constant too large)", .{});
+                a.recordExpressionLayoutError(file.handle, expr_handle, "Overflow (constant too large)", .{});
                 return null;
             };
             const new_constant = Constant.initInt(value, null);
             expr_resolved_constants[expr_handle] = new_constant.intern(a.arena, a.gpa, &a.constants);
         },
         .concat, .bitwise_or, .bitwise_xor, .bitwise_and => |bin| {
-            const left = resolveExpressionConstant(a, file, file_handle, ip, bin.left) orelse return null;
-            const right = resolveExpressionConstant(a, file, file_handle, ip, bin.right) orelse return null;
+            const left = resolveExpressionConstant(a, file, ip, bin.left) orelse return null;
+            const right = resolveExpressionConstant(a, file, ip, bin.right) orelse return null;
             const result = switch (info) {
                 .concat => left.concat(a.gpa, &a.constant_temp, right.*),
                 .bitwise_or => left.bitwiseOr(a.gpa, &a.constant_temp, right.*),
@@ -563,38 +561,38 @@ pub fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, file_handle: 
             expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
         },
         .concat_repeat => |bin| {
-            const left = resolveExpressionConstant(a, file, file_handle, ip, bin.left) orelse return null;
-            const right = resolveExpressionConstant(a, file, file_handle, ip, bin.right) orelse return null;
+            const left = resolveExpressionConstant(a, file, ip, bin.left) orelse return null;
+            const right = resolveExpressionConstant(a, file, ip, bin.right) orelse return null;
             const times = right.asInt() catch {
-                a.recordExpressionLayoutError(file_handle, bin.right, "Overflow (constant too large)", .{});
+                a.recordExpressionLayoutError(file.handle, bin.right, "Overflow (constant too large)", .{});
                 return null;
             };
             const result = left.repeat(a.gpa, &a.constant_temp, times);
             expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
         },
         .length_cast, .truncate, .sign_extend => |bin| {
-            const left = resolveExpressionConstant(a, file, file_handle, ip, bin.left) orelse return null;
-            const right = resolveExpressionConstant(a, file, file_handle, ip, bin.right) orelse return null;
+            const left = resolveExpressionConstant(a, file, ip, bin.left) orelse return null;
+            const right = resolveExpressionConstant(a, file, ip, bin.right) orelse return null;
             const width = right.asInt() catch {
-                a.recordExpressionLayoutError(file_handle, bin.right, "Overflow (constant too large)", .{});
+                a.recordExpressionLayoutError(file.handle, bin.right, "Overflow (constant too large)", .{});
                 return null;
             };
             if (width < 0) {
-                a.recordExpressionLayoutError(file_handle, bin.right, "Width must not be negative", .{});
+                a.recordExpressionLayoutError(file.handle, bin.right, "Width must not be negative", .{});
                 return null;
             }
             const result = left.cloneWithLength(a.gpa, &a.constant_temp, @intCast(u64, width), .signed);
             expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
         },
         .zero_extend => |bin| {
-            const left = resolveExpressionConstant(a, file, file_handle, ip, bin.left) orelse return null;
-            const right = resolveExpressionConstant(a, file, file_handle, ip, bin.right) orelse return null;
+            const left = resolveExpressionConstant(a, file, ip, bin.left) orelse return null;
+            const right = resolveExpressionConstant(a, file, ip, bin.right) orelse return null;
             const width = right.asInt() catch {
-                a.recordExpressionLayoutError(file_handle, bin.right, "Overflow (constant too large)", .{});
+                a.recordExpressionLayoutError(file.handle, bin.right, "Overflow (constant too large)", .{});
                 return null;
             };
             if (width < 0) {
-                a.recordExpressionLayoutError(file_handle, bin.right, "Width must not be negative", .{});
+                a.recordExpressionLayoutError(file.handle, bin.right, "Width must not be negative", .{});
                 return null;
             }
             const result = left.cloneWithLength(a.gpa, &a.constant_temp, @intCast(u64, width), .unsigned);
@@ -603,20 +601,20 @@ pub fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, file_handle: 
         .signed_cast, .unsigned_cast, .maybe_signed_cast,
         .data_address_cast, .insn_address_cast, .stack_address_cast, .remove_address_cast,
          => |inner_expr| {
-            expr_resolved_constants[expr_handle] = resolveExpressionConstant(a, file, file_handle, ip, inner_expr);
+            expr_resolved_constants[expr_handle] = resolveExpressionConstant(a, file, ip, inner_expr);
         },
         .absolute_address_cast => |inner_expr| {
-            const inner = resolveExpressionConstant(a, file, file_handle, ip, inner_expr) orelse return null;
+            const inner = resolveExpressionConstant(a, file, ip, inner_expr) orelse return null;
             const relative = inner.asInt() catch {
-                a.recordExpressionLayoutError(file_handle, inner_expr, "Relative address too large", .{});
+                a.recordExpressionLayoutError(file.handle, inner_expr, "Relative address too large", .{});
                 return null;
             };
             const absolute = std.math.add(i64, relative, ip) catch {
-                a.recordExpressionLayoutError(file_handle, inner_expr, "Absolute address overflows u32", .{});
+                a.recordExpressionLayoutError(file.handle, inner_expr, "Absolute address overflows u32", .{});
                 return null;
             };
             const absolute_u32 = std.math.cast(u32, absolute) orelse {
-                a.recordExpressionLayoutError(file_handle, inner_expr, "Absolute address overflows u32", .{});
+                a.recordExpressionLayoutError(file.handle, inner_expr, "Absolute address overflows u32", .{});
                 return null;
             };
             const result = Constant.initInt(absolute_u32, null);
@@ -630,7 +628,6 @@ pub fn resolveExpressionConstant(a: *Assembler, file: *SourceFile, file_handle: 
 fn resolveSymbolRefExprConstant(
     a: *Assembler,
     file: *SourceFile,
-    file_handle: SourceFile.Handle,
     ip: u32,
     expr_handle: Expression.Handle,
     symbol_token_handle: lex.Token.Handle,
@@ -638,10 +635,10 @@ fn resolveSymbolRefExprConstant(
     expr_resolved_types: []const ie.ExpressionType,
     expr_resolved_constants: []?*const Constant,
 ) void {
-    if (a.lookupSymbol(file, file_handle, symbol_token_handle, symbol_constant.asString())) |target| {
+    if (a.lookupSymbol(file, symbol_token_handle, symbol_constant.asString())) |target| {
         switch (target) {
             .expression => |target_expr_handle| {
-                expr_resolved_constants[expr_handle] = resolveExpressionConstant(a, file, file_handle, ip, target_expr_handle);
+                expr_resolved_constants[expr_handle] = resolveExpressionConstant(a, file, ip, target_expr_handle);
             },
             .instruction => |target_insn_ref| {
                 const target_file = a.getSource(target_insn_ref.file);
@@ -664,8 +661,8 @@ fn resolveSymbolRefExprConstant(
     } else unreachable;
 }
 
-fn resolveInstructionEncoding(a: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle, ip: u32, insn_handle: Instruction.Handle, op: *Instruction.Operation, params: ?Expression.Handle) u3 {
-    const insn = a.buildInstruction(file, file_handle, ip, op.insn.mnemonic, op.insn.suffix, params, true) orelse return 0;
+fn resolveInstructionEncoding(a: *Assembler, file: *SourceFile, ip: u32, insn_handle: Instruction.Handle, op: *Instruction.Operation, params: ?Expression.Handle) u3 {
+    const insn = a.buildInstruction(file, ip, op.insn.mnemonic, op.insn.suffix, params, true) orelse return 0;
     var encoding_iter = a.edb.getMatchingEncodings(insn);
     a.params_temp.clearRetainingCapacity();
 
@@ -692,7 +689,7 @@ fn resolveInstructionEncoding(a: *Assembler, file: *SourceFile, file_handle: Sou
     if (file.instructions.items(.flags)[insn_handle].contains(.encoding_depends_on_layout)) {
         err_flags.insert(.remove_on_layout_reset);
     }
-    a.recordInsnEncodingError(file_handle, insn_handle, err_flags);
+    a.recordInsnEncodingError(file.handle, insn_handle, err_flags);
     return 0;
 }
 
@@ -738,7 +735,7 @@ pub fn findOverlappingChunks(a: *Assembler, chunks: []const SourceFile.Chunk) vo
     }
 }
 
-pub fn encodePageData(a: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle) void {
+pub fn encodePageData(a: *Assembler, file: *SourceFile) void {
     const insn_operations = file.instructions.items(.operation);
     const insn_params = file.instructions.items(.params);
     const insn_addresses = file.instructions.items(.address);
@@ -764,11 +761,11 @@ pub fn encodePageData(a: *Assembler, file: *SourceFile, file_handle: SourceFile.
                 const page_data_handle = a.page_lookup.get(page) orelse continue;
                 var buffer = page_datas[page_data_handle][offset..];
 
-                const insn = a.buildInstruction(file, file_handle, address, encoding.mnemonic, encoding.suffix, params, false).?;
+                const insn = a.buildInstruction(file, address, encoding.mnemonic, encoding.suffix, params, false).?;
 
                 if (length > buffer.len) {
                     if (@truncate(u1, address) == 1) {
-                        a.recordError(file_handle, file.instructions.items(.token)[insn_handle], "Instruction crosses page boundary and is not word aligned", .{});
+                        a.recordError(file.handle, file.instructions.items(.token)[insn_handle], "Instruction crosses page boundary and is not word aligned", .{});
                     }
                     var temp = [_]u8{0} ** 8;
                     const temp_insn = ie.encodeInstruction(insn, encoding.*, &temp);

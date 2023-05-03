@@ -1,14 +1,23 @@
+[assembler] validate number and type of parameters for directive instructions
+[assembler] validate that data and code are placed in the correct sections
+[assembler] output files
 [assembler] .local defs
+[assembler] check for shadowed symbols
 [assembler] Usage of a label that's fixed by an .org directive should not cause the expression to be marked .constant_depends_on_layout
 [assembler] Multi-line string literals
 [assembler] Warn on multiple files with same name
+[assembler] .stack sections, .push, .pop
 [assembler] Consider having stack sections use a different namespace from other section types, and make them local to the file they're defined in.
+[assembler] .kentry label alignment
+[assembler] section allowed page .range
+[assembler] initial arrow (nil first parameter)
 [assembler] Create disassembler
 [assembler] .str/.kstr "whatever" - creates a ptr+len data declaration - creates a new block in the `.const strings` section with the data (.kconst for .kstr) - may dedup data (enable with global assembler flag?)
 
 [test] Use assembler for test_instruction_behavior
 [test] Use assembler and disassembler for test_instruction_encoding
 
+[compile_arch] Add more aliases
 [compile_arch] Decompile/dump to HTML
 [compile_arch] Validate that the same instruction encoding doesn't map to multiple opcodes/aliases
 [compile_arch] Revamp instruction_builder.print_cycle_path()

@@ -11,6 +11,7 @@ const ExpressionType = ie.ExpressionType;
 
 const SourceFile = @This();
 
+handle: Handle,
 name: []const u8,
 source: []const u8,
 tokens: lex.TokenList,
@@ -46,6 +47,7 @@ pub fn parse(gpa: std.mem.Allocator, handle: Handle, name: []const u8, source: [
     errdefer tokens.deinit(gpa);
 
     var file = SourceFile{
+        .handle = handle,
         .name = name,
         .source = source,
         .tokens = tokens,
@@ -149,7 +151,6 @@ pub const ChunkPair = struct {
 
 pub fn collectChunks(
     self: *const SourceFile,
-    file_handle: SourceFile.Handle,
     gpa: std.mem.Allocator,
     fixed_org: *std.ArrayListUnmanaged(Chunk),
     auto_org: *std.ArrayListUnmanaged(Chunk),
@@ -171,7 +172,7 @@ pub fn collectChunks(
                     if (chunk_begin < new_chunk_begin) {
                         dest.append(gpa, .{
                             .section = section,
-                            .file = file_handle,
+                            .file = self.handle,
                             .instructions = .{
                                 .begin = chunk_begin,
                                 .end = new_chunk_begin,
@@ -187,7 +188,7 @@ pub fn collectChunks(
                     if (chunk_begin < new_chunk_begin) {
                         dest.append(gpa, .{
                             .section = section,
-                            .file = file_handle,
+                            .file = self.handle,
                             .instructions = .{
                                 .begin = chunk_begin,
                                 .end = new_chunk_begin,
@@ -205,7 +206,7 @@ pub fn collectChunks(
         if (chunk_begin < end) {
             dest.append(gpa, .{
                 .section = section,
-                .file = file_handle,
+                .file = self.handle,
                 .instructions = .{
                     .begin = chunk_begin,
                     .end = end,
@@ -434,6 +435,14 @@ const Parser = struct {
                 } else {
                     self.recordError("Expected symbol name");
                 }
+            } else if (directive == .undef) {
+                const params = self.parseSymbolDefList();
+                self.out.instructions.append(self.gpa, .{
+                    .label = label,
+                    .token = directive_token,
+                    .operation = .{ .undef = {} },
+                    .params = params,
+                }) catch @panic("OOM");
             } else {
                 const params = if (Instruction.isSectionDirective(directive)) self.parseSymbolDef() else self.parseExprList(false);
                 switch (directive) {
@@ -912,6 +921,29 @@ const Parser = struct {
             }
         }
         self.out.expressions.len = begin_expression_len;
+        self.next_token = begin;
+        return null;
+    }
+
+    fn parseSymbolDefList(self: *Parser) ?Expression.Handle {
+        const begin = self.next_token;
+        if (self.parseSymbolDef()) |lhs| {
+            self.skipLinespace();
+            const token = self.next_token;
+            if (self.tryToken(.comma)) {
+                if (self.parseSymbolDefList()) |rhs| {
+                    return self.addBinaryExpression(.list, token, lhs, rhs);
+                } else {
+                    if (!self.sync_to_end_of_line) {
+                        self.recordError("Expected symbol");
+                        self.sync_to_end_of_line = true;
+                    }
+                    return lhs;
+                }
+            } else {
+                return lhs;
+            }
+        }
         self.next_token = begin;
         return null;
     }

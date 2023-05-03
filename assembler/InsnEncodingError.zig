@@ -34,7 +34,7 @@ pub fn print(self: InsnEncodingError, assembler: *Assembler, writer: anytype) !v
         else => unreachable,
     };
 
-    const insn = assembler.buildInstruction(file, self.file, address, mn.mnemonic, mn.suffix, params, false).?;
+    const insn = assembler.buildInstruction(file, address, mn.mnemonic, mn.suffix, params, false).?;
 
     try writer.print("\n{s}: No encodings found matching instruction signature: ", .{ file.name });
     try printInsnSignature(writer, insn);

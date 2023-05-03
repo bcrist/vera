@@ -126,24 +126,24 @@ pub fn adoptSource(self: *Assembler, name: []const u8, source: []const u8) Sourc
 }
 
 pub fn assemble(self: *Assembler) void {
-    for (self.files.items, 0..) |*file, file_handle| {
-        typechecking.processLabelsAndSections(self, file, @intCast(SourceFile.Handle, file_handle));
+    for (self.files.items) |*file| {
+        typechecking.processLabelsAndSections(self, file);
     }
 
     if (!typechecking.resolveExpressionTypes(self)) return;
 
     typechecking.checkInstructionsAndDirectives(self);
 
-    for (self.files.items, 0..) |*file, file_handle| {
-        dead_code.markBlocksToKeep(self, file, @intCast(SourceFile.Handle, file_handle));
+    for (self.files.items) |*file| {
+        dead_code.markBlocksToKeep(self, file);
     }
 
     var fixed_org_chunks = std.ArrayListUnmanaged(SourceFile.Chunk) {};
     var auto_org_chunks = std.ArrayListUnmanaged(SourceFile.Chunk) {};
     defer fixed_org_chunks.deinit(self.gpa);
     defer auto_org_chunks.deinit(self.gpa);
-    for (self.files.items, 0..) |*file, file_handle| {
-        file.collectChunks(@intCast(SourceFile.Handle, file_handle), self.gpa, &fixed_org_chunks, &auto_org_chunks);
+    for (self.files.items) |*file| {
+        file.collectChunks(self.gpa, &fixed_org_chunks, &auto_org_chunks);
     }
 
     var attempts: usize = 0;
@@ -169,8 +169,8 @@ pub fn assemble(self: *Assembler) void {
         layout.findOverlappingChunks(self, chunks.items);
     }
 
-    for (self.files.items, 0..) |*file, file_handle| {
-        layout.encodePageData(self, file, @intCast(SourceFile.Handle, file_handle));
+    for (self.files.items) |*file| {
+        layout.encodePageData(self, file);
     }
 }
 
@@ -293,11 +293,12 @@ pub const SymbolTarget = union(enum) {
     expression: Expression.Handle, // always in the same file where it's being referenced
     instruction: InstructionRef,
 };
-pub fn lookupSymbol(self: *Assembler, file: *const SourceFile, file_handle: SourceFile.Handle, symbol_token_handle: lex.Token.Handle, symbol: []const u8) ?SymbolTarget {
+pub fn lookupSymbol(self: *Assembler, file: *const SourceFile, symbol_token_handle: lex.Token.Handle, symbol: []const u8) ?SymbolTarget {
     var operations = file.instructions.items(.operation);
     var params = file.instructions.items(.params);
     var labels = file.instructions.items(.label);
 
+    var expr_tokens = file.expressions.items(.token);
     var expr_info = file.expressions.items(.info);
     var resolved_constants = file.expressions.items(.resolved_constant);
 
@@ -325,14 +326,45 @@ pub fn lookupSymbol(self: *Assembler, file: *const SourceFile, file_handle: Sour
                 },
                 else => unreachable,
             },
-            .undef => {
-                if (resolved_constants[params[insn_handle] orelse unreachable]) |def_symbol| {
-                    if (std.mem.eql(u8, symbol, def_symbol.asString())) {
-                        def_symbol_definition = null;
+            .undef => if (def_symbol_definition) |_| {
+                if (params[insn_handle]) |params_expr| {
+                    var expr_handle = params_expr;
+                    undef_params: while (true) {
+                        const non_list_expr = switch (expr_info[expr_handle]) {
+                            .literal_symbol_ref, .directive_symbol_ref => expr_handle,
+                            .list => |bin| e: {
+                                expr_handle = bin.right;
+                                break :e bin.left;
+                            },
+                            else => break :undef_params,
+                        };
+
+                        switch (expr_info[non_list_expr]) {
+                            .literal_symbol_ref => {
+                                const token_handle = expr_tokens[non_list_expr];
+                                const raw_symbol = file.tokens.get(token_handle).location(file.source);
+                                const undef_symbol = Constant.initSymbolLiteral(self.gpa, &self.constant_temp, raw_symbol);
+                                if (std.mem.eql(u8, symbol, undef_symbol.asString())) {
+                                    def_symbol_definition = null;
+                                    break :undef_params;
+                                }
+                            },
+                            .directive_symbol_ref => |literal_expr| {
+                                if (resolved_constants[literal_expr]) |undef_symbol| {
+                                    if (std.mem.eql(u8, symbol, undef_symbol.asString())) {
+                                        def_symbol_definition = null;
+                                        break :undef_params;
+                                    }
+                                } else {
+                                    // .undef name hasn't been processed yet, maybe try again later.
+                                    return null;
+                                }
+                            },
+                            else => {}
+                        }
+
+                        if (non_list_expr == expr_handle) break;
                     }
-                } else {
-                    // .undef name hasn't been processed yet, maybe try again later.
-                    return null;
                 }
             },
             else => {},
@@ -351,7 +383,7 @@ pub fn lookupSymbol(self: *Assembler, file: *const SourceFile, file_handle: Sour
                 const label_constant = resolved_constants[label_expr] orelse unreachable;
                 if (std.mem.eql(u8, symbol, label_constant.asString())) {
                     return .{ .instruction = .{
-                        .file = file_handle,
+                        .file = file.handle,
                         .instruction = insn_handle,
                     }};
                 }
@@ -370,7 +402,7 @@ pub fn lookupSymbol(self: *Assembler, file: *const SourceFile, file_handle: Sour
     return .{ .not_found = {} };
 }
 
-pub fn buildInstruction(self: *Assembler, file: *SourceFile, file_handle: SourceFile.Handle, ip: u32, mnemonic: ie.Mnemonic, suffix: ie.MnemonicSuffix, params: ?Expression.Handle, record_errors: bool) ?ie.Instruction {
+pub fn buildInstruction(self: *Assembler, file: *SourceFile, ip: u32, mnemonic: ie.Mnemonic, suffix: ie.MnemonicSuffix, params: ?Expression.Handle, record_errors: bool) ?ie.Instruction {
     self.params_temp.clearRetainingCapacity();
     if (params) |base_expr_handle| {
         const expr_infos = file.expressions.items(.info);
@@ -383,7 +415,7 @@ pub fn buildInstruction(self: *Assembler, file: *SourceFile, file_handle: Source
             switch (info) {
                 .list, .arrow_list => |bin| {
                     const expr_type = expr_resolved_types[bin.left];
-                    if (!self.buildInstructionParameter(file, file_handle, ip, bin.left, is_arrow, expr_type, record_errors)) {
+                    if (!self.buildInstructionParameter(file, ip, bin.left, is_arrow, expr_type, record_errors)) {
                         return null;
                     }
                     is_arrow = info == .arrow_list;
@@ -391,7 +423,7 @@ pub fn buildInstruction(self: *Assembler, file: *SourceFile, file_handle: Source
                 },
                 else => {
                     const expr_type = expr_resolved_types[expr_handle];
-                    if (!self.buildInstructionParameter(file, file_handle, ip, expr_handle, is_arrow, expr_type, record_errors)) {
+                    if (!self.buildInstructionParameter(file, ip, expr_handle, is_arrow, expr_type, record_errors)) {
                         return null;
                     }
                     break;
@@ -410,7 +442,6 @@ pub fn buildInstruction(self: *Assembler, file: *SourceFile, file_handle: Source
 fn buildInstructionParameter(
     self: *Assembler,
     file: *SourceFile,
-    file_handle: SourceFile.Handle,
     ip: u32,
     expr_handle: Expression.Handle,
     is_arrow: bool,
@@ -421,7 +452,7 @@ fn buildInstructionParameter(
         return false;
     }
     const constant_value = v: {
-        const constant = layout.resolveExpressionConstant(self, file, file_handle, ip, expr_handle) orelse break :v 0;
+        const constant = layout.resolveExpressionConstant(self, file, ip, expr_handle) orelse break :v 0;
         break :v constant.asInt() catch {
             if (record_errors) {
                 const expr_token = file.expressions.items(.token)[expr_handle];
@@ -430,7 +461,7 @@ fn buildInstructionParameter(
                 if (expr_flags.contains(.constant_depends_on_layout)) {
                     err_flags.insert(.remove_on_layout_reset);
                 }
-                self.recordError(file_handle, expr_token, "Parameter constant too large (must fit in i64)", err_flags);
+                self.recordError(file.handle, expr_token, "Parameter constant too large (must fit in i64)", err_flags);
             }
             return false;
         };
