@@ -19,6 +19,13 @@ instructions: std.MultiArrayList(Instruction),
 expressions: std.MultiArrayList(Expression),
 blocks: std.MultiArrayList(SectionBlock),
 
+pub const Slices = struct {
+    file: *SourceFile,
+    insn: std.MultiArrayList(Instruction).Slice,
+    expr: std.MultiArrayList(Expression).Slice,
+    block: std.MultiArrayList(SectionBlock).Slice,
+};
+
 pub const SectionBlock = struct {
     first_token: lex.Token.Handle,
     first_insn: Instruction.Handle,
@@ -41,6 +48,15 @@ const MnemonicSuffix = ie.MnemonicSuffix;
 const max_mnemonic_length = 8;
 const max_suffix_length = 4;
 const max_directive_length = 8;
+
+pub fn slices(self: *SourceFile) Slices {
+    return .{
+        .file = self,
+        .insn = self.instructions.slice(),
+        .expr = self.expressions.slice(),
+        .block = self.blocks.slice(),
+    };
+}
 
 pub fn parse(gpa: std.mem.Allocator, handle: Handle, name: []const u8, source: []const u8, errors: *ErrorList) SourceFile {
     const tokens = lex.lex(gpa, source);

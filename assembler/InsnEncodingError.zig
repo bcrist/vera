@@ -20,12 +20,9 @@ pub const Flags = enum {
 
 pub fn print(self: InsnEncodingError, assembler: *Assembler, writer: anytype) !void {
     const file = &assembler.files.items[self.file];
+    const s = file.slices();
 
-    const address = file.instructions.items(.address)[self.insn];
-    const op = file.instructions.items(.operation)[self.insn];
-    const params = file.instructions.items(.params)[self.insn];
-
-    const mn: Instruction.MnemonicAndSuffix = switch (op) {
+    const mn: Instruction.MnemonicAndSuffix = switch (s.insn.items(.operation)[self.insn]) {
         .insn => |info| info,
         .bound_insn => |encoding| .{
             .mnemonic = encoding.mnemonic,
@@ -34,7 +31,7 @@ pub fn print(self: InsnEncodingError, assembler: *Assembler, writer: anytype) !v
         else => unreachable,
     };
 
-    const insn = assembler.buildInstruction(file, address, mn.mnemonic, mn.suffix, params, false).?;
+    const insn = assembler.buildInstruction(s, s.insn.items(.address)[self.insn], mn.mnemonic, mn.suffix, s.insn.items(.params)[self.insn], false).?;
 
     try writer.print("\n{s}: No encodings found matching instruction signature: ", .{ file.name });
     try printInsnSignature(writer, insn);

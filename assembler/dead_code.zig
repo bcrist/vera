@@ -9,8 +9,9 @@ const Constant = @import("Constant.zig");
 const SectionBlock = SourceFile.SectionBlock;
 
 pub fn markBlocksToKeep(a: *Assembler, file: *SourceFile) void {
-    const operations = file.instructions.items(.operation);
-    for (file.blocks.items(.first_insn), file.blocks.items(.end_insn), file.blocks.items(.keep)) |begin, end, *keep| {
+    const s = file.slices();
+    const operations = s.insn.items(.operation);
+    for (s.block.items(.first_insn), s.block.items(.end_insn), s.block.items(.keep)) |begin, end, *keep| {
         if (keep.*) continue;
 
         var iter = Instruction.Iterator{
@@ -21,7 +22,7 @@ pub fn markBlocksToKeep(a: *Assembler, file: *SourceFile) void {
             switch (operations[insn_handle]) {
                 .keep, .entry, .kentry => {
                     keep.* = true;
-                    traceReferencesInBlock(a, file, begin, end);
+                    traceReferencesInBlock(a, s, begin, end);
                     break;
                 },
                 else => {}
@@ -30,9 +31,8 @@ pub fn markBlocksToKeep(a: *Assembler, file: *SourceFile) void {
     }
 }
 
-fn traceReferencesInBlock(a: *Assembler, file: *SourceFile, first_insn: Instruction.Handle, end_insn: Instruction.Handle) void {
-    const insn_params = file.instructions.items(.params);
-    const expr_infos = file.expressions.items(.info);
+fn traceReferencesInBlock(a: *Assembler, s: SourceFile.Slices, first_insn: Instruction.Handle, end_insn: Instruction.Handle) void {
+    const insn_params = s.insn.items(.params);
 
     var iter = Instruction.Iterator{
         .begin = first_insn,
@@ -40,37 +40,37 @@ fn traceReferencesInBlock(a: *Assembler, file: *SourceFile, first_insn: Instruct
     };
     while (iter.next()) |insn_handle| {
         if (insn_params[insn_handle]) |expr_handle| {
-            traceReferencesInExpr(a, file, expr_infos, expr_handle);
+            traceReferencesInExpr(a, s, expr_handle);
         }
     }
 }
 
-fn traceReferencesInExpr(a: *Assembler, file: *SourceFile, expr_infos: []const Expression.Info, expr_handle: Expression.Handle) void {
-    switch (expr_infos[expr_handle]) {
+fn traceReferencesInExpr(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle) void {
+    switch (s.expr.items(.info)[expr_handle]) {
         .list, .arrow_list, .plus, .minus, .multiply, .shl, .shr,
         .concat, .concat_repeat, .bitwise_or, .bitwise_xor, .bitwise_and,
         .length_cast, .truncate, .sign_extend, .zero_extend => |binary| {
-            traceReferencesInExpr(a, file, expr_infos, binary.left);
-            traceReferencesInExpr(a, file, expr_infos, binary.right);
+            traceReferencesInExpr(a, s, binary.left);
+            traceReferencesInExpr(a, s, binary.right);
         },
 
         .negate, .complement, .signed_cast, .unsigned_cast, .maybe_signed_cast,
         .data_address_cast, .insn_address_cast, .stack_address_cast, .remove_address_cast,
         .index_to_reg8, .index_to_reg16, .index_to_reg32, .reg_to_index, .absolute_address_cast => |inner_expr| {
-            traceReferencesInExpr(a, file, expr_infos, inner_expr);
+            traceReferencesInExpr(a, s, inner_expr);
         },
 
         .literal_symbol_ref => {
-            const token_handle = file.expressions.items(.token)[expr_handle];
-            const raw_symbol = file.tokens.get(token_handle).location(file.source);
+            const token_handle = s.expr.items(.token)[expr_handle];
+            const raw_symbol = s.file.tokens.get(token_handle).location(s.file.source);
             const symbol_constant = Constant.initSymbolLiteral(a.gpa, &a.constant_temp, raw_symbol);
-            traceSymbol(a, file, token_handle, symbol_constant.asString());
+            traceSymbol(a, s, token_handle, symbol_constant.asString());
         },
 
         .directive_symbol_ref => |inner_expr| {
-            const token_handle = file.expressions.items(.token)[inner_expr];
-            const symbol_constant = file.expressions.items(.resolved_constant)[inner_expr].?;
-            traceSymbol(a, file, token_handle, symbol_constant.asString());
+            const token_handle = s.expr.items(.token)[inner_expr];
+            const symbol_constant = s.expr.items(.resolved_constant)[inner_expr].?;
+            traceSymbol(a, s, token_handle, symbol_constant.asString());
         },
 
         .literal_int,
@@ -83,17 +83,17 @@ fn traceReferencesInExpr(a: *Assembler, file: *SourceFile, expr_infos: []const E
     }
 }
 
-fn traceSymbol(a: *Assembler, file: *SourceFile, token_handle: lex.Token.Handle, symbol: []const u8) void {
-    if (a.lookupSymbol(file, token_handle, symbol)) |target| switch (target) {
+fn traceSymbol(a: *Assembler, s: SourceFile.Slices, token_handle: lex.Token.Handle, symbol: []const u8) void {
+    if (a.lookupSymbol(s, token_handle, symbol)) |target| switch (target) {
         .expression => |target_expr_handle| {
-            const target_token_handle = file.expressions.items(.token)[target_expr_handle];
-            const block_handle = file.findBlockByToken(target_token_handle);
-            var keep_flags = file.blocks.items(.keep);
+            const target_token_handle = s.expr.items(.token)[target_expr_handle];
+            const block_handle = s.file.findBlockByToken(target_token_handle);
+            var keep_flags = s.block.items(.keep);
             if (!keep_flags[block_handle]) {
                 keep_flags[block_handle] = true;
-                const begin = file.blocks.items(.first_insn)[block_handle];
-                const end = file.blocks.items(.end_insn)[block_handle];
-                traceReferencesInBlock(a, file, begin, end);
+                const begin = s.block.items(.first_insn)[block_handle];
+                const end = s.block.items(.end_insn)[block_handle];
+                traceReferencesInBlock(a, s, begin, end);
             }
         },
         .instruction => |insn_ref| {
@@ -104,7 +104,7 @@ fn traceSymbol(a: *Assembler, file: *SourceFile, token_handle: lex.Token.Handle,
                 keep_flags[block_handle] = true;
                 const begin = sym_file.blocks.items(.first_insn)[block_handle];
                 const end = sym_file.blocks.items(.end_insn)[block_handle];
-                traceReferencesInBlock(a, sym_file, begin, end);
+                traceReferencesInBlock(a, sym_file.slices(), begin, end);
             }
         },
         .not_found => {},

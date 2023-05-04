@@ -293,77 +293,34 @@ pub const SymbolTarget = union(enum) {
     expression: Expression.Handle, // always in the same file where it's being referenced
     instruction: InstructionRef,
 };
-pub fn lookupSymbol(self: *Assembler, file: *const SourceFile, symbol_token_handle: lex.Token.Handle, symbol: []const u8) ?SymbolTarget {
-    var operations = file.instructions.items(.operation);
-    var params = file.instructions.items(.params);
-    var labels = file.instructions.items(.label);
-
-    var expr_tokens = file.expressions.items(.token);
-    var expr_info = file.expressions.items(.info);
-    var resolved_constants = file.expressions.items(.resolved_constant);
+pub fn lookupSymbol(self: *Assembler, s: SourceFile.Slices, symbol_token_handle: lex.Token.Handle, symbol: []const u8) ?SymbolTarget {
+    const file = s.file;
+    const operations = s.insn.items(.operation);
+    const resolved_constants = s.expr.items(.resolved_constant);
 
     const insn_containing_symbol_expression = file.findInstructionByToken(symbol_token_handle);
 
     // 1. .def symbols
     var def_symbol_definition: ?Expression.Handle = null;
-    var block_handle = file.findBlockByToken(symbol_token_handle);
+    const block_handle = file.findBlockByToken(symbol_token_handle);
     var block_iter = file.blockInstructions(block_handle);
     while (block_iter.next()) |insn_handle| {
         if (insn_handle >= insn_containing_symbol_expression) break;
 
         switch (operations[insn_handle]) {
-            .def => switch (expr_info[params[insn_handle] orelse unreachable]) {
-                .list => |symbol_and_definition| {
-                    const def_symbol_expr = symbol_and_definition.left;
-                    if (resolved_constants[def_symbol_expr]) |def_symbol| {
-                        if (std.mem.eql(u8, symbol, def_symbol.asString())) {
-                            def_symbol_definition = symbol_and_definition.right;
-                        }
-                    } else {
-                        // .def name hasn't been processed yet, maybe try again later.
-                        return null;
-                    }
-                },
-                else => unreachable,
+            .def => {
+                const params_expr = s.insn.items(.params)[insn_handle].?;
+                const symbol_and_definition = s.expr.items(.info)[params_expr].list;
+                const def_symbol_expr = symbol_and_definition.left;
+                const def_symbol = resolved_constants[def_symbol_expr].?;
+                if (std.mem.eql(u8, symbol, def_symbol.asString())) {
+                    def_symbol_definition = symbol_and_definition.right;
+                }
             },
             .undef => if (def_symbol_definition) |_| {
-                if (params[insn_handle]) |params_expr| {
-                    var expr_handle = params_expr;
-                    undef_params: while (true) {
-                        const non_list_expr = switch (expr_info[expr_handle]) {
-                            .literal_symbol_ref, .directive_symbol_ref => expr_handle,
-                            .list => |bin| e: {
-                                expr_handle = bin.right;
-                                break :e bin.left;
-                            },
-                            else => break :undef_params,
-                        };
-
-                        switch (expr_info[non_list_expr]) {
-                            .literal_symbol_ref => {
-                                const token_handle = expr_tokens[non_list_expr];
-                                const raw_symbol = file.tokens.get(token_handle).location(file.source);
-                                const undef_symbol = Constant.initSymbolLiteral(self.gpa, &self.constant_temp, raw_symbol);
-                                if (std.mem.eql(u8, symbol, undef_symbol.asString())) {
-                                    def_symbol_definition = null;
-                                    break :undef_params;
-                                }
-                            },
-                            .directive_symbol_ref => |literal_expr| {
-                                if (resolved_constants[literal_expr]) |undef_symbol| {
-                                    if (std.mem.eql(u8, symbol, undef_symbol.asString())) {
-                                        def_symbol_definition = null;
-                                        break :undef_params;
-                                    }
-                                } else {
-                                    // .undef name hasn't been processed yet, maybe try again later.
-                                    return null;
-                                }
-                            },
-                            else => {}
-                        }
-
-                        if (non_list_expr == expr_handle) break;
+                if (s.insn.items(.params)[insn_handle]) |params_expr| {
+                    if (undefListContainsSymbol(self, s, params_expr, symbol)) {
+                        def_symbol_definition = null;
                     }
                 }
             },
@@ -376,7 +333,7 @@ pub fn lookupSymbol(self: *Assembler, file: *const SourceFile, symbol_token_hand
 
     // 2. private labels
     if (std.mem.startsWith(u8, symbol, "_")) {
-        block_handle = file.findBlockByToken(symbol_token_handle);
+        const labels = s.insn.items(.label);
         block_iter = file.blockInstructions(block_handle);
         while (block_iter.next()) |insn_handle| {
             if (labels[insn_handle]) |label_expr| {
@@ -402,11 +359,31 @@ pub fn lookupSymbol(self: *Assembler, file: *const SourceFile, symbol_token_hand
     return .{ .not_found = {} };
 }
 
-pub fn buildInstruction(self: *Assembler, file: *SourceFile, ip: u32, mnemonic: ie.Mnemonic, suffix: ie.MnemonicSuffix, params: ?Expression.Handle, record_errors: bool) ?ie.Instruction {
+fn undefListContainsSymbol(self: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle, symbol: []const u8) bool {
+    switch (s.expr.items(.info)[expr_handle]) {
+        .list => |bin| {
+            return undefListContainsSymbol(self, s, bin.left, symbol)
+                or undefListContainsSymbol(self, s, bin.right, symbol);
+        },
+        .literal_symbol_def => {
+            const token_handle = s.expr.items(.token)[expr_handle];
+            const raw_symbol = s.file.tokens.get(token_handle).location(s.file.source);
+            const undef_symbol = Constant.initSymbolLiteral(self.gpa, &self.constant_temp, raw_symbol);
+            return std.mem.eql(u8, symbol, undef_symbol.asString());
+        },
+        .directive_symbol_def => |literal_expr| {
+            const undef_symbol = s.expr.items(.resolved_constant)[literal_expr].?;
+            return std.mem.eql(u8, symbol, undef_symbol.asString());
+        },
+        else => unreachable,
+    }
+}
+
+pub fn buildInstruction(self: *Assembler, s: SourceFile.Slices, ip: u32, mnemonic: ie.Mnemonic, suffix: ie.MnemonicSuffix, params: ?Expression.Handle, record_errors: bool) ?ie.Instruction {
     self.params_temp.clearRetainingCapacity();
     if (params) |base_expr_handle| {
-        const expr_infos = file.expressions.items(.info);
-        const expr_resolved_types = file.expressions.items(.resolved_type);
+        const expr_infos = s.expr.items(.info);
+        const expr_resolved_types = s.expr.items(.resolved_type);
 
         var expr_handle = base_expr_handle;
         var is_arrow = false; // TODO want a way to have is_arrow on the first parameter
@@ -415,7 +392,7 @@ pub fn buildInstruction(self: *Assembler, file: *SourceFile, ip: u32, mnemonic: 
             switch (info) {
                 .list, .arrow_list => |bin| {
                     const expr_type = expr_resolved_types[bin.left];
-                    if (!self.buildInstructionParameter(file, ip, bin.left, is_arrow, expr_type, record_errors)) {
+                    if (!self.buildInstructionParameter(s, ip, bin.left, is_arrow, expr_type, record_errors)) {
                         return null;
                     }
                     is_arrow = info == .arrow_list;
@@ -423,7 +400,7 @@ pub fn buildInstruction(self: *Assembler, file: *SourceFile, ip: u32, mnemonic: 
                 },
                 else => {
                     const expr_type = expr_resolved_types[expr_handle];
-                    if (!self.buildInstructionParameter(file, ip, expr_handle, is_arrow, expr_type, record_errors)) {
+                    if (!self.buildInstructionParameter(s, ip, expr_handle, is_arrow, expr_type, record_errors)) {
                         return null;
                     }
                     break;
@@ -441,7 +418,7 @@ pub fn buildInstruction(self: *Assembler, file: *SourceFile, ip: u32, mnemonic: 
 
 fn buildInstructionParameter(
     self: *Assembler,
-    file: *SourceFile,
+    s: SourceFile.Slices,
     ip: u32,
     expr_handle: Expression.Handle,
     is_arrow: bool,
@@ -452,16 +429,16 @@ fn buildInstructionParameter(
         return false;
     }
     const constant_value = v: {
-        const constant = layout.resolveExpressionConstant(self, file, ip, expr_handle) orelse break :v 0;
+        const constant = layout.resolveExpressionConstant(self, s, ip, expr_handle) orelse break :v 0;
         break :v constant.asInt() catch {
             if (record_errors) {
-                const expr_token = file.expressions.items(.token)[expr_handle];
-                const expr_flags = file.expressions.items(.flags)[expr_handle];
+                const expr_token = s.expr.items(.token)[expr_handle];
+                const expr_flags = s.expr.items(.flags)[expr_handle];
                 var err_flags = Error.FlagSet{};
                 if (expr_flags.contains(.constant_depends_on_layout)) {
                     err_flags.insert(.remove_on_layout_reset);
                 }
-                self.recordError(file.handle, expr_token, "Parameter constant too large (must fit in i64)", err_flags);
+                self.recordError(s.file.handle, expr_token, "Parameter constant too large (must fit in i64)", err_flags);
             }
             return false;
         };

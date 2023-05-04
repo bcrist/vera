@@ -7,7 +7,6 @@ fib: .entry etext
     c   0 -> prev
     c   1 -> last
     b.np _end
-    .undef str
 loop:
     dec n -> n
     c   last -> temp
