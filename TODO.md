@@ -1,4 +1,5 @@
-[assembler] validate number and type of parameters for directive instructions
+[assembler] .zx/.sx/' operators don't report overflow errors when shrinking width
+[assembler] Default section names
 [assembler] validate that data and code are placed in the correct sections
 [assembler] output files
 [assembler] .local defs

@@ -516,8 +516,21 @@ pub fn resolveExpressionConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, e
             expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
         },
         .plus, .minus, .multiply, .shl, .shr, => |bin| {
-            const left = resolveExpressionConstant(a, s, ip, bin.left) orelse return null;
-            const right = resolveExpressionConstant(a, s, ip, bin.right) orelse return null;
+            const left = resolveExpressionConstant(a, s, ip, bin.left) orelse {
+                const right = resolveExpressionConstant(a, s, ip, bin.right) orelse return null;
+                const value = right.asIntNegated() catch {
+                    a.recordExpressionLayoutError(s.file.handle, expr_handle, "Overflow (constant too large)", .{});
+                    return null;
+                };
+                const new_constant = Constant.initInt(value, null);
+                expr_resolved_constants[expr_handle] = new_constant.intern(a.arena, a.gpa, &a.constants);
+                return expr_resolved_constants[expr_handle];
+            };
+            const right = resolveExpressionConstant(a, s, ip, bin.right) orelse {
+                expr_resolved_constants[expr_handle] = left;
+                return expr_resolved_constants[expr_handle];
+            };
+
             const lv = left.asInt() catch {
                 a.recordExpressionLayoutError(s.file.handle, bin.left, "Overflow (constant too large)", .{});
                 return null;
@@ -824,8 +837,10 @@ fn encodeDataDirective(s: SourceFile.Slices, params_expr_handle: Expression.Hand
             }
             expr_handle = bin.right;
         },
-        else => if (expr_resolved_constants[expr_handle]) |constant| {
-            _ = encodeDataExpression(constant, granularity_bytes, bytes_to_skip, buf);
+        else => {
+            if (expr_resolved_constants[expr_handle]) |constant| {
+                _ = encodeDataExpression(constant, granularity_bytes, bytes_to_skip, buf);
+            }
             break;
         },
     };

@@ -627,9 +627,19 @@ fn checkInstructionsAndDirectivesInFile(a: *Assembler, s: SourceFile.Slices) voi
                 a.recordError(s.file.handle, token, "Expected at least one .def symbol name", .{});
             },
 
-            .db, .dw, .dd,
-            .push, .pop,
+            .db, .dw, .dd => if (maybe_params) |params_expr| {
+                checkDataDirectiveExpr(a, s, params_expr);
+            } else {
+                const token = s.insn.items(.token)[insn_handle];
+                a.recordError(s.file.handle, token, "Expected at least one data expression", .{});
+            },
 
+            .push => {
+                // TODO .push
+            },
+            .pop => {
+                // TODO .pop
+            },
 
             .def, .section, .stack,
             .code, .kcode, .entry, .kentry,
@@ -637,7 +647,6 @@ fn checkInstructionsAndDirectivesInFile(a: *Assembler, s: SourceFile.Slices) voi
             => {}
         }
 
-        // TODO check that directives have the expected number and types of params
         // TODO check that instructions do not appear in data or stack sections
         // TODO check that data directives do not appear in code sections
         // TODO check for shadowed symbols
@@ -683,6 +692,31 @@ fn checkUndefExpr(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression.H
             a.recordError(s.file.handle, token, "Labels cannot be un-defined", .{});
         },
     };
+}
+
+fn checkDataDirectiveExpr(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle) void {
+    switch (s.expr.items(.info)[expr_handle]) {
+        .list => |bin| {
+            checkDataDirectiveExpr(a, s, bin.left);
+            checkDataDirectiveExpr(a, s, bin.right);
+            return;
+        },
+        .arrow_list => |bin| {
+            checkDataDirectiveExpr(a, s, bin.left);
+
+            const token = s.expr.items(.token)[expr_handle];
+            a.recordError(s.file.handle, token, "Expected ','", .{});
+        },
+        else => switch (s.expr.items(.resolved_type)[expr_handle]) {
+            .unknown, .poison, .constant => {},
+            .symbol_def => unreachable,
+            .raw_base_offset, .data_address, .insn_address, .stack_address,
+            .reg8, .reg16, .reg32, .sr => {
+                const token = s.expr.items(.token)[expr_handle];
+                a.recordError(s.file.handle, token, "Expected constant expression", .{});
+            },
+        },
+    }
 }
 
 fn getParamHandles(a: *Assembler, s: SourceFile.Slices, maybe_params_expr: ?Expression.Handle, out: []?Expression.Handle) void {

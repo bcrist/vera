@@ -348,7 +348,7 @@ const ByteIterator = struct {
 
     pub fn next(self: *ByteIterator) u8 {
         const remaining_bytes = self.remaining.len;
-        if (remaining_bytes > 0) {
+        if (remaining_bytes > 1) {
             const b = self.remaining[0];
             self.remaining = self.remaining[1..];
             return b;

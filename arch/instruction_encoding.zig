@@ -267,8 +267,9 @@ pub const ExpressionTypeBuilder = struct {
     }
 
     fn getInnerTypeDifference(a: InnerType, b: InnerType) ?InnerType {
-        // constants can always be subtracted, which is still a constant (we don't know if they're the same value)
-        if (a == .constant and b == .constant) return a;
+        if (b == .none) return a;
+        if (a == .none and b == .constant) return b;
+        if (a == .constant and b == .constant) return b;
 
         // registers can "cancel out"
         if (std.meta.eql(a, b)) return .{ .none = {} };

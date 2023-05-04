@@ -20,5 +20,7 @@ _end:
     ret
 
 .const data
-.align 4096, (.raw @loop) .trunc 12 // essentially says 'put this at the same page offset as loop has in its page'
-str: .db 1,2,3,4,"Hellorld!" ** 9
+//.align 4096, (.raw @loop) .trunc 12 // essentially says 'put this at the same page offset as loop has in its page'
+//str: .db 1,2,3,4,"Hellorld!" ** 9
+.align 128
+str: .dd (.raw loop - ip) ' 1
