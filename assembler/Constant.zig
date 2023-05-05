@@ -431,6 +431,51 @@ test "asInt" {
     try std.testing.expectEqual(@as(anyerror!i64, error.Overflow), Constant.initString("abcdefghijklmnopqrstuvwxyz", null).asInt());
 }
 
+pub fn requiredBits(self: Constant) u64 {
+    if (self.bit_count <= 64) {
+        var value = self.asInt() catch unreachable;
+        if (value < 0) {
+            return 64 - @clz(~value) + 1;
+        } else {
+            return 64 - @clz(value) + 1;
+        }
+    }
+
+    const buf = self.asString();
+
+    var i = buf.len - 1;
+    var c = buf[i];
+
+    const leftover_bits = @intCast(u3, self.bit_count & 0x7);
+    const sign_bit = if (leftover_bits == 0) 7 else leftover_bits - 1;
+    const sign = @truncate(u1, c >> sign_bit);
+
+    var b = sign_bit;
+
+    var useless_bits: u64 = 0;
+
+    while (true) {
+        if (b == 0) {
+            if (i > 0) {
+                i -= 1;
+                c = buf[i];
+                b = 7;
+            } else {
+                return self.bit_count - useless_bits;
+            }
+        } else {
+            b -= 1;
+        }
+
+        const bit = @truncate(u1, c >> b);
+        if (bit != sign) break;
+
+        useless_bits += 1;
+    }
+
+    return self.bit_count - useless_bits;
+}
+
 pub fn concat(self: Constant, allocator: std.mem.Allocator, storage: *std.ArrayListUnmanaged(u8), other: Constant) Constant {
     const combined_bit_count = self.bit_count + other.bit_count;
     if (combined_bit_count <= 64) {

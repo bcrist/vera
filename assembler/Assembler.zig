@@ -269,11 +269,11 @@ pub fn recordError(self: *Assembler, file_handle: SourceFile.Handle, token: lex.
     }) catch @panic("OOM");
 }
 
-pub fn recordExpressionLayoutError(self: *Assembler, file_handle: SourceFile.Handle, expr_handle: Expression.Handle, desc: []const u8, flags: Error.FlagSet) void {
+pub fn recordExpressionLayoutError(self: *Assembler, file_handle: SourceFile.Handle, ctx_expr_handle: Expression.Handle, token_expr_handle: Expression.Handle, desc: []const u8, flags: Error.FlagSet) void {
     var mutable_flags = flags;
     const file = self.files.items[file_handle];
-    const token_handle = file.expressions.items(.token)[expr_handle];
-    const expr_flags = file.expressions.items(.flags)[expr_handle];
+    const token_handle = file.expressions.items(.token)[token_expr_handle];
+    const expr_flags = file.expressions.items(.flags)[ctx_expr_handle];
     if (expr_flags.contains(.constant_depends_on_layout)) {
         mutable_flags.insert(.remove_on_layout_reset);
     }
