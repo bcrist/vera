@@ -549,11 +549,18 @@ fn checkInstructionsAndDirectivesInFile(a: *Assembler, s: SourceFile.Slices) voi
 
     var expr_resolved_types = s.expr.items(.resolved_type);
 
+    var allow_code = true;
+    var allow_data = true;
+
     for (s.insn.items(.operation), s.insn.items(.params), 0..) |op, maybe_params, insn_handle| {
         switch (op) {
             .none => std.debug.assert(maybe_params == null),
             .bound_insn => unreachable,
             .insn => {
+                if (!allow_code) {
+                    const token = s.insn.items(.token)[insn_handle];
+                    a.recordError(s.file.handle, token, "Instructions are not allowed in .data/.kdata/.const/.kconst/.stack sections", .{});
+                }
                 if (maybe_params) |params_handle| {
                     if (instructionHasLayoutDependentParams(s, params_handle)) {
                         insn_flags[insn_handle].insert(.encoding_depends_on_layout);
@@ -627,28 +634,49 @@ fn checkInstructionsAndDirectivesInFile(a: *Assembler, s: SourceFile.Slices) voi
                 a.recordError(s.file.handle, token, "Expected at least one .def symbol name", .{});
             },
 
-            .db, .dw, .dd => if (maybe_params) |params_expr| {
-                checkDataDirectiveExpr(a, s, params_expr);
-            } else {
-                const token = s.insn.items(.token)[insn_handle];
-                a.recordError(s.file.handle, token, "Expected at least one data expression", .{});
+            .db, .dw, .dd => {
+                if (!allow_data) {
+                    const token = s.insn.items(.token)[insn_handle];
+                    a.recordError(s.file.handle, token, "Data directives are not allowed in .entry/.kentry/.code/.kcode sections", .{});
+                }
+                if (maybe_params) |params_expr| {
+                    checkDataDirectiveExpr(a, s, params_expr);
+                } else {
+                    const token = s.insn.items(.token)[insn_handle];
+                    a.recordError(s.file.handle, token, "Expected at least one data expression", .{});
+                }
             },
 
             .push => {
+                if (!allow_code) {
+                    const token = s.insn.items(.token)[insn_handle];
+                    a.recordError(s.file.handle, token, "Instructions are not allowed in .data/.kdata/.const/.kconst/.stack sections", .{});
+                }
                 // TODO .push
             },
             .pop => {
+                if (!allow_code) {
+                    const token = s.insn.items(.token)[insn_handle];
+                    a.recordError(s.file.handle, token, "Instructions are not allowed in .data/.kdata/.const/.kconst/.stack sections", .{});
+                }
                 // TODO .pop
             },
 
-            .def, .section, .stack,
-            .code, .kcode, .entry, .kentry,
-            .data, .kdata, .@"const", .kconst,
-            => {}
+            .def => {},
+            .section => {
+                allow_code = true;
+                allow_data = true;
+            },
+            .code, .kcode, .entry, .kentry => {
+                allow_code = true;
+                allow_data = false;
+            },
+            .data, .kdata, .@"const", .kconst, .stack => {
+                allow_code = false;
+                allow_data = true;
+            }
         }
 
-        // TODO check that instructions do not appear in data or stack sections
-        // TODO check that data directives do not appear in code sections
         // TODO check for shadowed symbols
     }
 }

@@ -23,4 +23,4 @@ _end:
 //.align 4096, (.raw @loop) .trunc 12 // essentially says 'put this at the same page offset as loop has in its page'
 //str: .db 1,2,3,4,"Hellorld!" ** 9
 .align 128
-str: .db 0x0FFFF_FFFF_FFFF_FFFF_F ' 1
+str: .db -1 ' 1

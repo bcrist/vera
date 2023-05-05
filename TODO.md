@@ -1,5 +1,4 @@
 [assembler] Default section names
-[assembler] validate that data and code are placed in the correct sections
 [assembler] output files
 [assembler] .local defs
 [assembler] check for shadowed symbols
