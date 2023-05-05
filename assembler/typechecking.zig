@@ -26,42 +26,57 @@ pub fn processLabelsAndSections(a: *Assembler, file: *SourceFile) void {
         if (Instruction.isSectionDirective(op)) {
             in_stack_section = op == .stack;
 
+            const kind: Section.Kind = switch (op) {
+                .section => .info,
+                .code => .code_user,
+                .kcode => .code_kernel,
+                .entry => .entry_user,
+                .kentry => .entry_kernel,
+                .data => .data_user,
+                .kdata => .data_kernel,
+                .@"const" => .constant_user,
+                .kconst => .constant_kernel,
+                .stack => .stack,
+
+                .none, .insn, .bound_insn, .org, .@"align", .keep, .def, .undef, .db, .dw, .dd, .push, .pop,
+                => unreachable,
+            };
+
+            var section_name: []const u8 = undefined;
             if (insn_params[insn_handle]) |section_name_expr| {
-                const kind: Section.Kind = switch (op) {
-                    .section => .info,
-                    .code => .code_user,
-                    .kcode => .code_kernel,
-                    .entry => .entry_user,
-                    .kentry => .entry_kernel,
-                    .data => .data_user,
-                    .kdata => .data_kernel,
-                    .@"const" => .constant_user,
-                    .kconst => .constant_kernel,
-                    .stack => .stack,
-
-                    .none, .insn, .bound_insn, .org, .@"align", .keep, .def, .undef, .db, .dw, .dd, .push, .pop,
-                    => unreachable,
-                };
-
                 const symbol_constant = resolveSymbolDefExpr(a, s, section_name_expr);
-                const section_name = symbol_constant.asString();
-                const entry = a.sections.getOrPutValue(a.gpa, section_name, .{
-                    .name = section_name,
-                    .kind = kind,
-                }) catch @panic("OOM");
-                const found_kind = entry.value_ptr.kind;
-                if (found_kind != kind) switch (found_kind) {
-                    inline else => |k| {
-                        const token = s.insn.items(.token)[insn_handle];
-                        a.recordError(file.handle, token, "Section already exists; expected ." ++ @tagName(k), .{});
-                    },
-                };
-                const block_handle = file.findBlockByInstruction(@intCast(Instruction.Handle, insn_handle));
-                s.block.items(.section)[block_handle] = @intCast(Section.Handle, entry.index);
+                section_name = symbol_constant.asString();
             } else {
-                const token = s.insn.items(.token)[insn_handle];
-                a.recordError(file.handle, token, "Unnamed sections are not currently supported", .{});
+                section_name = switch (kind) {
+                    .info => "default_info",
+                    .code_user => "default_code",
+                    .code_kernel => "kernel_code",
+                    .entry_user => "entry_code",
+                    .entry_kernel => "kernel_entry_code",
+                    .data_user => "rwdata",
+                    .data_kernel => "kernel_rwdata",
+                    .constant_user => "rdata",
+                    .constant_kernel => "kernel_rdata",
+                    .stack => "__default_stack",
+                };
+                if (kind == .stack) {
+                    const token = s.insn.items(.token)[insn_handle];
+                    a.recordError(file.handle, token, "Stack sections must be named.", .{});
+                }
             }
+            const entry = a.sections.getOrPutValue(a.gpa, section_name, .{
+                .name = section_name,
+                .kind = kind,
+            }) catch @panic("OOM");
+            const found_kind = entry.value_ptr.kind;
+            if (found_kind != kind) switch (found_kind) {
+                inline else => |k| {
+                    const token = s.insn.items(.token)[insn_handle];
+                    a.recordError(file.handle, token, "Section already exists; expected ." ++ @tagName(k), .{});
+                },
+            };
+            const block_handle = file.findBlockByInstruction(@intCast(Instruction.Handle, insn_handle));
+            s.block.items(.section)[block_handle] = @intCast(Section.Handle, entry.index);
         } else if (op == .def) {
             const params_expr = insn_params[insn_handle].?;
             const symbol_expr = s.expr.items(.info)[params_expr].list.left;

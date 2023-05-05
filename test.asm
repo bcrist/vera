@@ -1,4 +1,4 @@
-fib: .entry etext
+fib: .entry
     .org 0x1000
     .def n r0
     .def last r1
@@ -19,7 +19,7 @@ _end:
     ld .d x15 -> r0
     ret
 
-.const data
+.const
 //.align 4096, (.raw @loop) .trunc 12 // essentially says 'put this at the same page offset as loop has in its page'
 //str: .db 1,2,3,4,"Hellorld!" ** 9
 .align 128

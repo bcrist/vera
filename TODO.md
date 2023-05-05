@@ -1,4 +1,3 @@
-[assembler] Default section names
 [assembler] output files
 [assembler] .local defs
 [assembler] check for shadowed symbols
