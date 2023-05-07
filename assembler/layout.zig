@@ -222,11 +222,13 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
                     const length = resolveInstructionEncoding(a, s, address, insn_handle, &insn_operations[insn_handle], insn_params[insn_handle]);
                     address += length;
                     switch (insn_operations[insn_handle]) {
-                        .bound_insn => |new_encoding| if (!old_encoding.eqlExceptOpcodes(new_encoding.*)) {
+                        .bound_insn => |new_encoding| if (!old_encoding.eqlIncludingOpcodes(new_encoding.*)) {
                             insn_lengths[insn_handle] = length;
                             layout_changed = true;
                         },
-                        else => {},
+                        else => {
+                            layout_changed = true;
+                        },
                     }
                 } else {
                     address += insn_lengths[insn_handle];

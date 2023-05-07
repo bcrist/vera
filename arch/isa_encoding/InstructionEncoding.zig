@@ -19,6 +19,13 @@ pub const WithDescription = struct {
     desc: []const u8,
 };
 
+pub fn eqlIncludingOpcodes(a: InstructionEncoding, b: InstructionEncoding) bool {
+    return a.eqlExceptOpcodes(b)
+        and a.opcodes.min == b.opcodes.min
+        and a.opcodes.max == b.opcodes.max
+        ;
+}
+
 pub fn eqlExceptOpcodes(a: InstructionEncoding, b: InstructionEncoding) bool {
     // Note intentionally not checking opcodes.min or opcodes.max
     return a.mnemonic == b.mnemonic
