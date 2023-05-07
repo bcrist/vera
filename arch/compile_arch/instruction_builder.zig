@@ -1,25 +1,28 @@
 const std = @import("std");
+const bits = @import("bits");
 const allocators = @import("allocators.zig");
 const uc = @import("microcode");
 const ControlSignals = @import("ControlSignals");
+const isa = @import("isa_types");
 const misc = @import("misc");
-const ie = @import("instruction_encoding");
+const ie = @import("isa_encoding");
+const ce = @import("comptime_encoding");
 const arch = @import("arch_builder.zig");
 const cycle_builder = @import("cycle_builder.zig");
 
 const assert = std.debug.assert;
 
-const Opcode = misc.Opcode;
-const CycleData = cycle_builder.CycleData;
-const Mnemonic = ie.Mnemonic;
-const MnemonicSuffix = ie.MnemonicSuffix;
-const AddressSpace = ie.AddressSpace;
+const Opcode = isa.Opcode;
+const Mnemonic = isa.Mnemonic;
+const MnemonicSuffix = isa.MnemonicSuffix;
+const AddressSpace = isa.AddressSpace;
 const InstructionEncoding = ie.InstructionEncoding;
 const ParameterEncoding = ie.ParameterEncoding;
-const comptimeAddressSpaceParameterEncoding = ie.comptimeAddressSpaceParameterEncoding;
-const comptimeRelativeParameterEncoding = ie.comptimeRelativeParameterEncoding;
-const comptimeParameterEncodings = ie.comptimeParameterEncodings;
-const comptimeParameterEncoding = ie.comptimeParameterEncoding;
+const CycleData = cycle_builder.CycleData;
+const comptimeAddressSpaceParameterEncoding = ce.addressSpaceParameterEncoding;
+const comptimeRelativeParameterEncoding = ce.relativeParameterEncoding;
+const comptimeParameterEncodings = ce.parameterEncodings;
+const comptimeParameterEncoding = ce.parameterEncoding;
 
 const temp_alloc = allocators.temp_arena.allocator();
 
@@ -32,7 +35,7 @@ pub const InstructionRegState = enum {
 };
 
 const InstructionData = struct {
-    original_opcode_range: ?ie.OpcodeRange,
+    original_opcode_range: ?isa.OpcodeRange,
     initial_uc_address: ?uc.Address,
     allowed_flags: uc.FlagSet,
     flags: uc.FlagSet,
@@ -168,7 +171,7 @@ pub fn IP_relative(comptime addr_space: ?AddressSpace, comptime raw_encoding: an
         pub const param_encoding = comptimeAddressSpaceParameterEncoding(
             comptimeRelativeParameterEncoding(
                 comptimeParameterEncoding(raw_encoding),
-                .{ .sr = .ip },
+                .{ .sr = .IP },
                 .implicit,
             ),
             addr_space,
@@ -180,7 +183,7 @@ pub fn SP_relative(comptime addr_space: ?AddressSpace, comptime raw_encoding: an
         pub const param_encoding = comptimeAddressSpaceParameterEncoding(
             comptimeRelativeParameterEncoding(
                 comptimeParameterEncoding(raw_encoding),
-                .{ .sr = .sp },
+                .{ .sr = .SP },
                 .implicit,
             ),
             addr_space,
@@ -192,7 +195,7 @@ pub fn KXP_relative(comptime addr_space: ?AddressSpace, comptime raw_encoding: a
         pub const param_encoding = comptimeAddressSpaceParameterEncoding(
             comptimeRelativeParameterEncoding(
                 comptimeParameterEncoding(raw_encoding),
-                .{ .sr = .kxp },
+                .{ .sr = .KXP },
                 .implicit,
             ),
             addr_space,
@@ -204,7 +207,7 @@ pub fn UXP_relative(comptime addr_space: ?AddressSpace, comptime raw_encoding: a
         pub const param_encoding = comptimeAddressSpaceParameterEncoding(
             comptimeRelativeParameterEncoding(
                 comptimeParameterEncoding(raw_encoding),
-                .{ .sr = .uxp },
+                .{ .sr = .UXP },
                 .implicit,
             ),
             addr_space,
@@ -223,7 +226,7 @@ pub fn parameter(index: usize) ParameterEncoding {
 pub fn getParameterOffset(param_index: usize) misc.SignedOffsetForLiteral {
     if (insn) |i| {
         if (i.encoding) |enc| {
-            return ie.getParameterOffsetForOpcode(misc.SignedOffsetForLiteral, enc, enc.params[param_index], opcode());
+            return getParameterValueForOpcode(misc.SignedOffsetForLiteral, enc, opcode(), enc.params[param_index].offset, enc.params[param_index].offset_src);
         } else panic("Encoding has not been specified yet for this instruction!", .{});
     } else panic("Not currently processing an instruction", .{});
 }
@@ -231,9 +234,44 @@ pub fn getParameterOffset(param_index: usize) misc.SignedOffsetForLiteral {
 pub fn getParameterConstant(comptime T: type, param_index: usize) T {
     if (insn) |i| {
         if (i.encoding) |enc| {
-            return ie.getParameterConstantForOpcode(T, enc, enc.params[param_index], opcode());
+            return getParameterValueForOpcode(T, enc, opcode(), enc.params[param_index].base, enc.params[param_index].base_src);
         } else panic("Encoding has not been specified yet for this instruction!", .{});
     } else panic("Not currently processing an instruction", .{});
+}
+
+fn getParameterValueForOpcode(comptime T: type, insn_encoding: InstructionEncoding, insn_opcode: Opcode, base_offset: ParameterEncoding.BaseOffsetEncoding, src: ParameterEncoding.Source) T {
+    var raw: i64 = undefined;
+    switch (src) {
+        .OA, .OB, .OB_OA => {
+            const ua = uc.getAddressForOpcode(insn_opcode, .{});
+            raw = switch (src) {
+                .OA => uc.getOAForAddress(ua) orelse unreachable,
+                .OB => uc.getOBForAddress(ua) orelse unreachable,
+                .OB_OA => bits.concat(.{
+                    uc.getOAForAddress(ua) orelse unreachable,
+                    uc.getOBForAddress(ua) orelse unreachable,
+                }),
+                else => unreachable,
+            };
+        },
+        .opcode => {
+            std.debug.assert(insn_opcode >= insn_encoding.opcodes.min);
+            std.debug.assert(insn_opcode <= insn_encoding.opcodes.max);
+            raw = @as(i64, insn_opcode) - insn_encoding.opcode_base;
+        },
+        .implicit => {
+            raw = 0;
+        },
+        .IP_plus_2_OA, .IP_plus_2_OB, .IP_plus_2_8, .IP_plus_2_16, .IP_plus_2_32, .IP_plus_4_16 => {
+            @panic("Constant value varies based on immediate stored outside of opcode");
+        },
+    }
+
+    return @intCast(T, switch (base_offset) {
+        .constant => |constant_encoding| constant_encoding.decodeConstant(raw) orelse
+            std.debug.panic("Opcode {X:0>4} results in a constant outside the configured range(s) for this parameter", .{ insn_opcode }),
+        else => std.debug.panic("Parameter does not use constant as expected", .{}),
+    });
 }
 
 pub fn desc(s: []const u8) void {
@@ -630,7 +668,7 @@ const ProcessOpcodeResult = struct {
     queried_opcode: bool,
 };
 
-fn processOpcode(original_range: ie.OpcodeRange, the_opcode: Opcode, func: *const fn () void, is_alias: bool) ProcessOpcodeResult {
+fn processOpcode(original_range: isa.OpcodeRange, the_opcode: Opcode, func: *const fn () void, is_alias: bool) ProcessOpcodeResult {
     var config = ProcessConfig{
         .func = func,
         .original_opcode_range = original_range,
@@ -683,7 +721,7 @@ fn processOpcode(original_range: ie.OpcodeRange, the_opcode: Opcode, func: *cons
         }
 
         if (result.encoding) |result_enc| {
-            if (!ie.eql(permutation_result.encoding.?, result_enc)) {
+            if (!permutation_result.encoding.?.eqlExceptOpcodes(result_enc)) {
                 printCyclePath(initial_uc_address, permutation_result.encoding);
                 panic("Expected all permutations to have the same encoding.", .{});
             }
@@ -702,9 +740,9 @@ fn processOpcode(original_range: ie.OpcodeRange, the_opcode: Opcode, func: *cons
         if (result.next_insn_offset != result.next_unread_insn_offset) {
             printCyclePath(uc.getAddressForOpcode(the_opcode, .{}), result.encoding);
             panic("Expected next instruction to be loaded from an offset of {} but it was actually from {}", .{ result.next_unread_insn_offset, result.next_insn_offset });
-        } else if (result.next_insn_offset != ie.getInstructionLength(insn_encoding)) {
+        } else if (result.next_insn_offset != insn_encoding.getInstructionLength()) {
             printCyclePath(uc.getAddressForOpcode(the_opcode, .{}), result.encoding);
-            panic("Expected instruction length of {} based on encoding, but next instruction was loaded from {}", .{ ie.getInstructionLength(insn_encoding), result.next_insn_offset });
+            panic("Expected instruction length of {} based on encoding, but next instruction was loaded from {}", .{ insn_encoding.getInstructionLength(), result.next_insn_offset });
         }
     }
 
@@ -717,7 +755,7 @@ fn processOpcode(original_range: ie.OpcodeRange, the_opcode: Opcode, func: *cons
 
 const ProcessConfig = struct {
     func: *const fn () void,
-    original_opcode_range: ?ie.OpcodeRange,
+    original_opcode_range: ?isa.OpcodeRange,
     initial_uc_address: ?uc.Address,
     allowed_flags: uc.FlagSet,
     flags: uc.FlagSet,

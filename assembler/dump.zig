@@ -1,6 +1,7 @@
 const std = @import("std");
-const ie = @import("instruction_encoding");
+const ie = @import("isa_encoding");
 const Assembler = @import("Assembler.zig");
+const ExpressionType = ie.Parameter.ExpressionType;
 
 pub fn dump(self: *Assembler, writer: anytype) !void {
     try writer.writeAll("Files:\n");
@@ -209,7 +210,7 @@ fn formatSliceReplaceNonAsciiImpl(
     }
 }
 
-fn dumpType(writer: anytype, expr_type: ie.ExpressionType, prefix: []const u8) !void {
+fn dumpType(writer: anytype, expr_type: ExpressionType, prefix: []const u8) !void {
     try writer.print("{s}{s}", .{ prefix, @tagName(expr_type) });
     switch (expr_type) {
         .unknown, .poison, .symbol_def, .constant => {},

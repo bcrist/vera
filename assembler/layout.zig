@@ -1,5 +1,5 @@
 const std = @import("std");
-const ie = @import("instruction_encoding");
+const ie = @import("isa_encoding");
 const bus = @import("bus_types");
 const lex = @import("lex.zig");
 const Assembler = @import("Assembler.zig");
@@ -222,7 +222,7 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
                     const length = resolveInstructionEncoding(a, s, address, insn_handle, &insn_operations[insn_handle], insn_params[insn_handle]);
                     address += length;
                     switch (insn_operations[insn_handle]) {
-                        .bound_insn => |new_encoding| if (!ie.eql(old_encoding.*, new_encoding.*)) {
+                        .bound_insn => |new_encoding| if (!old_encoding.eqlExceptOpcodes(new_encoding.*)) {
                             insn_lengths[insn_handle] = length;
                             layout_changed = true;
                         },
@@ -502,7 +502,7 @@ pub fn resolveExpressionConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, e
     switch (info) {
         .literal_symbol_def, .directive_symbol_def,
         .literal_int, .literal_str, .reg_to_index,
-        => unreachable,
+        => return null,
 
         .list, .arrow_list, .literal_reg,
         .index_to_reg8, .index_to_reg16, .index_to_reg32,
@@ -512,7 +512,7 @@ pub fn resolveExpressionConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, e
             var value = ip;
             switch (s.expr.items(.resolved_type)[expr_handle]) {
                 .raw_base_offset, .data_address, .insn_address, .stack_address => |bo| {
-                    if (std.meta.eql(bo.base, .{ .sr = .ip })) {
+                    if (std.meta.eql(bo.base, .{ .sr = .IP })) {
                         value = 0;
                     }
                 },
@@ -688,7 +688,7 @@ fn resolveSymbolRefExprConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, ex
                 var value: i64 = target_file.instructions.items(.address)[target_insn_ref.instruction];
                 switch (s.expr.items(.resolved_type)[expr_handle]) {
                     .raw_base_offset, .data_address, .insn_address, .stack_address => |info| {
-                        if (std.meta.eql(info.base, .{ .sr = .ip })) {
+                        if (std.meta.eql(info.base, .{ .sr = .IP })) {
                             value -= ip;
                         }
                     },
@@ -712,7 +712,7 @@ fn resolveInstructionEncoding(a: *Assembler, s: SourceFile.Slices, ip: u32, insn
     var best_length: ?u3 = null;
     var best_encoding: ?*const ie.InstructionEncoding = null;
     while (encoding_iter.nextPointer()) |enc| {
-        const length = ie.getInstructionLength(enc.*);
+        const length = enc.getInstructionLength();
         if (best_length) |cur_length| {
             if (length < cur_length) {
                 best_encoding = enc;
@@ -816,7 +816,7 @@ pub fn encodePageData(a: *Assembler, file: *SourceFile) void {
                         a.recordError(file.handle, file.instructions.items(.token)[insn_handle], "Instruction crosses page boundary and is not word aligned", .{});
                     }
                     var temp = [_]u8{0} ** 8;
-                    const temp_insn = ie.encodeInstruction(insn, encoding.*, &temp);
+                    const temp_insn = insn.write(encoding.*, &temp);
                     std.mem.copy(u8, buffer, temp_insn[0..buffer.len]);
 
                     const next_page = page + 1;
@@ -825,7 +825,7 @@ pub fn encodePageData(a: *Assembler, file: *SourceFile) void {
                     const next_page_buf = &page_datas[next_page_data_handle];
                     std.mem.copy(u8, next_page_buf, temp_insn[buffer.len..]);
                 } else {
-                    _ = ie.encodeInstruction(insn, encoding.*, buffer);
+                    _ = insn.write(encoding.*, buffer);
                 }
             },
 

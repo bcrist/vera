@@ -27,18 +27,21 @@
 )
 (dir arch
     (pkg ControlSignals)
-    (pkg instruction_encoding)
-    (pkg instruction_encoding_data)
     (pkg microcode)
-    (pkg microcode_rom_serialization)
     (pkg misc)
+    (pkg isa_types)
+    (pkg isa_encoding)
+    (pkg comptime_encoding)
     (pkg bus_types)
     (pkg address_translator_types)
     (pkg physical_address)
-    (exe compile_arch (run_step uc))
 )
+(dir arch/isa_encoding)
 (dir arch/microcode_roms
-    (pkg microcode_roms (path roms))
+    (pkg microcode_roms)
+)
+(dir arch/compile_arch
+    (exe compile_arch (run_step uc))
 )
 (dir microsim
     (pkg Simulator)

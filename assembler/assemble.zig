@@ -1,15 +1,15 @@
 const std = @import("std");
-const ie = @import("instruction_encoding");
-const ie_data = @import("instruction_encoding_data");
+const ie = @import("isa_encoding");
 const Assembler = @import("Assembler.zig");
 const dump = @import("dump.zig");
+const output = @import("output.zig");
 
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
 
     var temp = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    const edb = try ie_data.EncoderDatabase.init(arena.allocator(), ie_data.data, temp.allocator());
+    const edb = try ie.data.EncoderDatabase.init(arena.allocator(), temp.allocator());
 
     var a = Assembler.init(gpa.allocator(), arena.allocator(), edb);
 
@@ -23,7 +23,7 @@ pub fn main() !void {
 
     a.assemble();
 
-    try a.writeListing(std.io.getStdOut().writer(), .{ .ordering = .address });
+    try output.writeListing(&a, std.io.getStdOut().writer(), .{ .ordering = .address });
 
     //try dump.dump(&a, std.io.getStdOut().writer());
 

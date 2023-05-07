@@ -1,6 +1,7 @@
 const std = @import("std");
 const lex = @import("lex.zig");
-const ie = @import("instruction_encoding");
+const isa = @import("isa_types");
+const ie = @import("isa_encoding");
 const layout = @import("layout.zig");
 const Assembler = @import("Assembler.zig");
 const SourceFile = @import("SourceFile.zig");
@@ -10,7 +11,7 @@ const Constant = @import("Constant.zig");
 const Section = @import("Section.zig");
 const Error = @import("Error.zig");
 const Token = lex.Token;
-const ExpressionType = ie.ExpressionType;
+const ExpressionType = ie.Parameter.ExpressionType;
 const SectionBlock = SourceFile.SectionBlock;
 
 // Set the resolved type for labels to .symbol_def.
@@ -230,9 +231,9 @@ fn tryResolveExpressionType(a: *Assembler, s: SourceFile.Slices, expr_handle: Ex
             const block_handle = s.file.findBlockByToken(token_handle);
             if (s.block.items(.section)[block_handle]) |section_handle| {
                 expr_resolved_types[expr_handle] = switch (a.getSection(section_handle).kind) {
-                    .code_user, .code_kernel, .entry_user, .entry_kernel => ExpressionType.relativeAddress(.insn, .{ .sr = .ip }),
-                    .data_user, .data_kernel, .constant_user, .constant_kernel => ExpressionType.relativeAddress(.data, .{ .sr = .ip }),
-                    .stack => ExpressionType.relativeAddress(.stack, .{ .sr = .sp }),
+                    .code_user, .code_kernel, .entry_user, .entry_kernel => ExpressionType.relativeAddress(.insn, .{ .sr = .IP }),
+                    .data_user, .data_kernel, .constant_user, .constant_kernel => ExpressionType.relativeAddress(.data, .{ .sr = .IP }),
+                    .stack => ExpressionType.relativeAddress(.stack, .{ .sr = .SP }),
                     .info => ExpressionType.absoluteAddress(.data),
                 } catch unreachable;
             } else {
@@ -257,7 +258,7 @@ fn tryResolveExpressionType(a: *Assembler, s: SourceFile.Slices, expr_handle: Ex
             _ = resolveSymbolDefExpr(a, s, expr_handle);
         },
         .plus => |bin| {
-            var builder = ie.ExpressionTypeBuilder{};
+            var builder = ExpressionType.Builder{};
             builder.add(expr_resolved_types[bin.left]);
             builder.add(expr_resolved_types[bin.right]);
             const result_type: ExpressionType = builder.build() catch t: {
@@ -270,7 +271,7 @@ fn tryResolveExpressionType(a: *Assembler, s: SourceFile.Slices, expr_handle: Ex
             resolveConstantDependsOnLayoutBinary(s, expr_handle, bin);
         },
         .minus => |bin| {
-            var builder = ie.ExpressionTypeBuilder{};
+            var builder = ExpressionType.Builder{};
             builder.add(expr_resolved_types[bin.left]);
             builder.subtract(expr_resolved_types[bin.right]);
             const result_type: ExpressionType = builder.build() catch t: {
@@ -321,7 +322,7 @@ fn tryResolveExpressionType(a: *Assembler, s: SourceFile.Slices, expr_handle: Ex
                         break :t .{ .poison = {} };
                     }
 
-                    const reg = ie.IndexedRegister{
+                    const reg = isa.IndexedRegister{
                         .index = @intCast(u4, index),
                         .signedness = null,
                     };
@@ -408,14 +409,14 @@ fn tryResolveExpressionType(a: *Assembler, s: SourceFile.Slices, expr_handle: Ex
                 .unknown => return false,
                 .poison => .{ .poison = {} },
                 .raw_base_offset, .data_address, .insn_address, .stack_address => |bo| t: {
-                    if (!std.meta.eql(bo.base, .{ .sr = .ip })) {
+                    if (!std.meta.eql(bo.base, .{ .sr = .IP })) {
                         const token = s.expr.items(.token)[expr_handle];
                         a.recordError(s.file.handle, token, "Operand must be an IP-relative expression", .{});
                         break :t .{ .poison = {} };
                     }
-                    var builder = ie.ExpressionTypeBuilder{};
+                    var builder = ExpressionType.Builder{};
                     builder.add(inner_type);
-                    builder.subtract(.{ .sr = .ip });
+                    builder.subtract(.{ .sr = .IP });
                     break :t builder.build() catch unreachable;
                 },
                 .reg8, .reg16, .reg32, .constant, .symbol_def, .sr => t: {
@@ -433,7 +434,7 @@ fn tryResolveExpressionType(a: *Assembler, s: SourceFile.Slices, expr_handle: Ex
                 .poison => .{ .poison = {} },
                 .data_address => inner_type,
                 .raw_base_offset => |bo| .{ .data_address = bo },
-                .reg8, .reg16, .reg32, .constant, .sr => .{ .data_address = ie.BaseOffsetType.init(inner_type, null) catch unreachable },
+                .reg8, .reg16, .reg32, .constant, .sr => .{ .data_address = ExpressionType.BaseOffset.init(inner_type, null) catch unreachable },
                 .insn_address, .stack_address => t: {
                     const token = s.expr.items(.token)[expr_handle];
                     a.recordError(s.file.handle, token, "Casting directly between address spaces is not allowed.  Use `.d .raw` if you really want this.", .{});
@@ -450,7 +451,7 @@ fn tryResolveExpressionType(a: *Assembler, s: SourceFile.Slices, expr_handle: Ex
                 .poison => .{ .poison = {} },
                 .insn_address => inner_type,
                 .raw_base_offset => |bo| .{ .insn_address = bo },
-                .reg8, .reg16, .reg32, .constant, .sr => .{ .insn_address = ie.BaseOffsetType.init(inner_type, null) catch unreachable },
+                .reg8, .reg16, .reg32, .constant, .sr => .{ .insn_address = ExpressionType.BaseOffset.init(inner_type, null) catch unreachable },
                 .data_address, .stack_address => t: {
                     const token = s.expr.items(.token)[expr_handle];
                     a.recordError(s.file.handle, token, "Casting directly between address spaces is not allowed.  Use `.i .raw` if you really want this.", .{});
@@ -467,7 +468,7 @@ fn tryResolveExpressionType(a: *Assembler, s: SourceFile.Slices, expr_handle: Ex
                 .poison => .{ .poison = {} },
                 .stack_address => inner_type,
                 .raw_base_offset => |bo| .{ .stack_address = bo },
-                .reg8, .reg16, .reg32, .constant, .sr => .{ .stack_address = ie.BaseOffsetType.init(inner_type, null) catch unreachable },
+                .reg8, .reg16, .reg32, .constant, .sr => .{ .stack_address = ExpressionType.BaseOffset.init(inner_type, null) catch unreachable },
                 .data_address, .insn_address => t: {
                     const token = s.expr.items(.token)[expr_handle];
                     a.recordError(s.file.handle, token, "Casting directly between address spaces is not allowed.  Use `.s .raw` if you really want this.", .{});
@@ -531,9 +532,9 @@ fn tryResolveSymbolType(a: *Assembler, s: SourceFile.Slices, expr_handle: Expres
             const block_handle = sym_file.findBlockByInstruction(insn_ref.instruction);
             if (sym_file.blocks.items(.section)[block_handle]) |section_handle| {
                 expr_resolved_types[expr_handle] = switch (a.getSection(section_handle).kind) {
-                    .code_user, .code_kernel, .entry_user, .entry_kernel => ExpressionType.relativeAddress(.insn, .{ .sr = .ip }),
-                    .data_user, .data_kernel, .constant_user, .constant_kernel => ExpressionType.relativeAddress(.data, .{ .sr = .ip }),
-                    .stack => ExpressionType.relativeAddress(.stack, .{ .sr = .sp }),
+                    .code_user, .code_kernel, .entry_user, .entry_kernel => ExpressionType.relativeAddress(.insn, .{ .sr = .IP }),
+                    .data_user, .data_kernel, .constant_user, .constant_kernel => ExpressionType.relativeAddress(.data, .{ .sr = .IP }),
+                    .stack => ExpressionType.relativeAddress(.stack, .{ .sr = .SP }),
                     .info => ExpressionType.absoluteAddress(.data),
                 } catch unreachable;
             } else {
@@ -598,7 +599,7 @@ fn checkInstructionsAndDirectivesInFile(a: *Assembler, s: SourceFile.Slices) voi
                             a.recordError(s.file.handle, token, "Expected constant or absolute address, not register", .{});
                         },
                         .raw_base_offset, .data_address, .insn_address, .stack_address => |bo| {
-                            if (std.meta.eql(bo.base, .{ .sr = .ip }) and bo.offset == .constant) {
+                            if (std.meta.eql(bo.base, .{ .sr = .IP }) and bo.offset == .constant) {
                                 const token = s.expr.items(.token)[address_expr];
                                 a.recordError(s.file.handle, token, "Expected absolute address, not relative; try using '@'", .{});
                             } else if (bo.base != .constant or bo.offset != .none) {

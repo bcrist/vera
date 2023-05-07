@@ -6,7 +6,16 @@ const ControlSignals = @import("ControlSignals");
 const uc = @import("microcode");
 const misc = @import("misc");
 
-pub const Roms = [6][]const u8;
+pub const all_compressed_data = [_][]const u8{
+    @embedFile("rom_0"),
+    @embedFile("rom_1"),
+    @embedFile("rom_2"),
+    @embedFile("rom_3"),
+    @embedFile("rom_4"),
+    @embedFile("rom_5"),
+};
+
+pub const CompressedRomData = [6][]const u8;
 
 const RomEntry = rom_compress.Entry(u16, u16);
 
@@ -180,8 +189,8 @@ fn convertMicrocodeToRomEntries(comptime RomData: type, microcode: *const [misc.
     }
 }
 
-pub fn writeCompressedRoms(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, microcode: *const [misc.microcode_length]?*ControlSignals) !Roms {
-    var result: Roms = undefined;
+pub fn writeCompressedRoms(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, microcode: *const [misc.microcode_length]?*ControlSignals) !CompressedRomData {
+    var result: CompressedRomData = undefined;
     var entries = try std.ArrayList(RomEntry).initCapacity(temp_allocator, misc.microcode_length);
     defer entries.deinit();
     inline for ([_]type{ Rom0Data, Rom1Data, Rom2Data, Rom3Data, Rom4Data, Rom5Data }, 0..) |RomData, n| {
@@ -210,7 +219,7 @@ fn readCompressedRom(comptime RomData: type, compressed_data: []const u8, cs: *[
     rom_decompress.decompress(compressed_data, &ctx);
 }
 
-pub fn readCompressedRoms(roms: Roms, microcode: *[misc.microcode_length]ControlSignals) void {
+pub fn readCompressedRoms(roms: CompressedRomData, microcode: *[misc.microcode_length]ControlSignals) void {
     std.mem.set(ControlSignals, microcode, ControlSignals.init());
     inline for ([_]type{ Rom0Data, Rom1Data, Rom2Data, Rom3Data, Rom4Data, Rom5Data }, 0..) |RomData, n| {
         readCompressedRom(RomData, roms[n], microcode);
@@ -257,8 +266,8 @@ fn convertMicrocodeToSRec(comptime RomData: type, microcode: *const [misc.microc
     return result_allocator.dupe(u8, encoder.data.items);
 }
 
-pub fn writeSRecRoms(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, microcode: *const [misc.microcode_length]?*ControlSignals) !Roms {
-    var result: Roms = undefined;
+pub fn writeSRecRoms(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, microcode: *const [misc.microcode_length]?*ControlSignals) !CompressedRomData {
+    var result: CompressedRomData = undefined;
     inline for ([_]type{ Rom0Data, Rom1Data, Rom2Data, Rom3Data, Rom4Data, Rom5Data }, 0..) |RomData, n| {
         result[n] = try convertMicrocodeToSRec(RomData, microcode, result_allocator, temp_allocator);
     }

@@ -1,25 +1,22 @@
 const std = @import("std");
 const sx = @import("sx");
 const deep_hash_map = @import("deep_hash_map");
-const ie = @import("instruction_encoding");
+const isa = @import("isa_types");
 const misc = @import("misc");
 
-const Instruction = ie.Instruction;
-const Parameter = ie.Parameter;
-const InstructionEncoding = ie.InstructionEncoding;
-const ParameterEncoding = ie.ParameterEncoding;
-const ParameterEncodingBaseType = ie.ParameterEncodingBaseType;
-const ConstantRange = ie.ConstantRange;
-const InstructionEncodingAndDescription = ie.InstructionEncodingAndDescription;
-const Mnemonic = ie.Mnemonic;
-const MnemonicSuffix = ie.MnemonicSuffix;
-const AddressSpace = ie.AddressSpace;
-const SpecialRegister = ie.SpecialRegister;
-const IndexedRegisterRange = ie.IndexedRegisterRange;
-const ParameterSource = ie.ParameterSource;
-const Opcode = misc.Opcode;
+const Instruction = @import("Instruction.zig");
+const Parameter = @import("Parameter.zig");
+const InstructionEncoding = @import("InstructionEncoding.zig");
+const ParameterEncoding = @import("ParameterEncoding.zig");
+const Opcode = isa.Opcode;
+const Mnemonic = isa.Mnemonic;
+const MnemonicSuffix = isa.MnemonicSuffix;
+const AddressSpace = isa.AddressSpace;
+const SpecialRegister = isa.SpecialRegister;
+const ConstantRange = isa.ConstantRange;
+const IndexedRegisterRange = isa.IndexedRegisterRange;
 
-pub const data = @embedFile("instruction_encoding.sx");
+const sx_data = @embedFile("isa.sx");
 
 pub fn writeInstructionEncoding(comptime W: type, writer: *sx.Writer(W), encoding: InstructionEncoding, maybe_desc: ?[]const u8) !void {
     try writer.open();
@@ -64,94 +61,77 @@ pub fn writeInstructionEncoding(comptime W: type, writer: *sx.Writer(W), encodin
         }
 
         try writer.expression("base");
-        try writer.tag(param.base);
-        switch (param.base) {
-            .none, .constant => {},
-            .sr => |reg| try writer.tag(reg),
-            .reg8, .reg16, .reg32 => |reg| {
-                if (reg.min != 0 or reg.max != 15) {
-                    try writer.expression("index");
-                    try writer.int(reg.min, 10);
-                    try writer.int(reg.max, 10);
-                    _ = try writer.close();
-                }
-                if (reg.signedness) |s| {
-                    switch (s) {
-                        .signed => try writer.expression("signed"),
-                        .unsigned => try writer.expression("unsigned"),
-                    }
-                    _ = try writer.close();
-                }
-            },
-        }
-        _ = try writer.close();
-
-        if (param.offset != .none) {
-            try writer.expression("offset");
-            try writer.tag(param.offset);
-            switch (param.offset) {
-                .none, .constant => {},
-                .sr => |reg| try writer.tag(reg),
-                .reg8, .reg16, .reg32 => |reg| {
-                    if (reg.min != 0 or reg.max != 15) {
-                        try writer.expression("index");
-                        try writer.int(reg.min, 10);
-                        try writer.int(reg.max, 10);
-                        _ = try writer.close();
-                    }
-                    if (reg.signedness) |s| {
-                        switch (s) {
-                            .signed => try writer.expression("signed"),
-                            .unsigned => try writer.expression("unsigned"),
-                        }
-                        _ = try writer.close();
-                    }
-                },
-            }
-            _ = try writer.close();
-        }
-
+        try writeBaseOffsetEncoding(writer, param.base);
         if (param.base_src != .implicit) {
-            try writer.expression("base-src");
+            try writer.expression("src");
             try writer.tag(param.base_src);
             _ = try writer.close();
         }
+        _ = try writer.close();
 
-        if (param.offset_src != .implicit) {
-            try writer.expression("offset-src");
-            try writer.tag(param.offset_src);
+        if (param.offset != .none or param.offset_src != .implicit) {
+            try writer.expression("offset");
+            try writeBaseOffsetEncoding(writer, param.offset);
+            if (param.offset_src != .implicit) {
+                try writer.expression("src");
+                try writer.tag(param.offset_src);
+                _ = try writer.close();
+            }
             _ = try writer.close();
         }
-
-        if (param.constant_reverse) {
-            try writer.expression("rev");
-            _ = try writer.close();
-        }
-
-        for (param.constant_ranges) |range| {
-            try writer.expression("range");
-            try writer.int(range.min, 10);
-            try writer.int(range.max, 10);
-            _ = try writer.close();
-        }
-
-        for (param.alt_constant_ranges) |range| {
-            try writer.expression("alt-range");
-            try writer.int(range.min, 10);
-            try writer.int(range.max, 10);
-            _ = try writer.close();
-        }
-
-        if (param.constant_align != 1) {
-            try writer.expression("align");
-            try writer.int(param.constant_align, 10);
-            _ = try writer.close();
-        }
-
         _ = try writer.close();
     }
 
     _ = try writer.close();
+}
+
+fn writeBaseOffsetEncoding(writer: anytype, boe: ParameterEncoding.BaseOffsetEncoding) !void {
+    try writer.tag(boe);
+     switch (boe) {
+        .none => {},
+        .constant => |ce| {
+            if (ce.reverse) {
+                try writer.expression("rev");
+                _ = try writer.close();
+            }
+
+            for (ce.ranges) |range| {
+                try writer.expression("range");
+                try writer.int(range.min, 10);
+                try writer.int(range.max, 10);
+                _ = try writer.close();
+            }
+
+            for (ce.alt_ranges) |range| {
+                try writer.expression("alt-range");
+                try writer.int(range.min, 10);
+                try writer.int(range.max, 10);
+                _ = try writer.close();
+            }
+
+            if (ce.granularity != 1) {
+                try writer.expression("granularity");
+                try writer.int(ce.granularity, 10);
+                _ = try writer.close();
+            }
+        },
+        .reg8, .reg16, .reg32 => |reg| {
+            if (reg.min != 0 or reg.max != 15) {
+                try writer.expression("index");
+                try writer.int(reg.min, 10);
+                try writer.int(reg.max, 10);
+                _ = try writer.close();
+            }
+            if (reg.signedness) |s| {
+                switch (s) {
+                    .signed => try writer.expression("signed"),
+                    .unsigned => try writer.expression("unsigned"),
+                }
+                _ = try writer.close();
+            }
+        },
+        .sr => |reg| try writer.tag(reg),
+    }
 }
 
 pub const InstructionEncodingParser = struct {
@@ -193,7 +173,7 @@ pub const InstructionEncodingParser = struct {
         self.temp_parameter_encodings.deinit(self.temp_allocator);
     }
 
-    pub fn next(self: *InstructionEncodingParser) !?InstructionEncodingAndDescription {
+    pub fn next(self: *InstructionEncodingParser) !?InstructionEncoding.WithDescription {
         if (self.first) {
             try self.reader.requireOpen();
             self.first = false;
@@ -214,15 +194,11 @@ pub const InstructionEncodingParser = struct {
         while (true) {
             if (try self.reader.expression("desc")) {
                 const temp_desc = try self.reader.requireAnyString();
-                try self.reader.requireClose();
                 if (self.parse_descriptions) {
                     description = try self.dedupDescription(temp_desc);
                 }
             } else if (try self.reader.expression("param")) {
                 const arrow = try self.reader.string("->");
-                // const base_type = try self.reader.requireAnyEnum(BaseExpressionType);
-                // const offset_type = try self.reader.anyEnum(BaseExpressionType) orelse .none;
-
                 var param = ParameterEncoding{
                     .arrow = arrow,
                 };
@@ -231,123 +207,34 @@ pub const InstructionEncodingParser = struct {
                     if (try self.reader.expression("address")) {
                         param.address_space = try self.reader.requireAnyEnum(AddressSpace);
                     } else if (try self.reader.expression("base")) {
-                        const kind = try self.reader.requireAnyEnum(std.meta.Tag(ParameterEncodingBaseType));
-                        switch (kind) {
-                            .none => {
-                                param.base = .{ .none = {} };
-                            },
-                            .constant => {
-                                param.base = .{ .constant = {} };
-                            },
-                            .sr => {
-                                const sr = try self.reader.requireAnyEnum(SpecialRegister);
-                                param.base = .{ .sr = sr };
-                            },
-                            .reg8, .reg16, .reg32 => {
-                                var irr = IndexedRegisterRange{};
-                                if (try self.reader.expression("index")) {
-                                    irr.min = try self.reader.requireAnyInt(misc.RegisterIndex, 10);
-                                    irr.max = try self.reader.requireAnyInt(misc.RegisterIndex, 10);
-                                    try self.reader.requireClose();
-                                }
-                                if (try self.reader.expression("signed")) {
-                                    irr.signedness = .signed;
-                                    try self.reader.requireClose();
-                                } else if (try self.reader.expression("unsigned")) {
-                                    irr.signedness = .unsigned;
-                                    try self.reader.requireClose();
-                                }
-                                param.base = switch (kind) {
-                                    .reg8 => .{ .reg8 = irr },
-                                    .reg16 => .{ .reg16 = irr },
-                                    .reg32 => .{ .reg32 = irr },
-                                    else => unreachable,
-                                };
-                            },
+                        param.base = try self.parseBaseOffsetEncoding();
+                        if (try self.reader.expression("src")) {
+                            param.base_src = try self.reader.requireAnyEnum(ParameterEncoding.Source);
+                            try self.reader.requireClose();
                         }
                     } else if (try self.reader.expression("offset")) {
-                        const kind = try self.reader.requireAnyEnum(std.meta.Tag(ParameterEncodingBaseType));
-                        switch (kind) {
-                            .none => {
-                                param.offset = .{ .none = {} };
-                            },
-                            .constant => {
-                                param.offset = .{ .constant = {} };
-                            },
-                            .sr => {
-                                const sr = try self.reader.requireAnyEnum(SpecialRegister);
-                                param.offset = .{ .sr = sr };
-                            },
-                            .reg8, .reg16, .reg32 => {
-                                var irr = IndexedRegisterRange{};
-                                if (try self.reader.expression("index")) {
-                                    irr.min = try self.reader.requireAnyInt(misc.RegisterIndex, 10);
-                                    irr.max = try self.reader.requireAnyInt(misc.RegisterIndex, 10);
-                                    try self.reader.requireClose();
-                                }
-                                if (try self.reader.expression("signed")) {
-                                    irr.signedness = .signed;
-                                    try self.reader.requireClose();
-                                } else if (try self.reader.expression("unsigned")) {
-                                    irr.signedness = .unsigned;
-                                    try self.reader.requireClose();
-                                }
-                                param.offset = switch (kind) {
-                                    .reg8 => .{ .reg8 = irr },
-                                    .reg16 => .{ .reg16 = irr },
-                                    .reg32 => .{ .reg32 = irr },
-                                    else => unreachable,
-                                };
-                            },
+                        param.offset = try self.parseBaseOffsetEncoding();
+                        if (try self.reader.expression("src")) {
+                            param.offset_src = try self.reader.requireAnyEnum(ParameterEncoding.Source);
+                            try self.reader.requireClose();
                         }
-                    } else if (try self.reader.expression("base-src")) {
-                        param.base_src = try self.reader.requireAnyEnum(ParameterSource);
-                    } else if (try self.reader.expression("offset-src")) {
-                        param.offset_src = try self.reader.requireAnyEnum(ParameterSource);
-                    } else if (try self.reader.expression("rev")) {
-                        param.constant_reverse = true;
-                    } else if (try self.reader.expression("range")) {
-                        try self.temp_constant_ranges.append(self.temp_allocator, .{
-                            .min = try self.reader.requireAnyInt(i64, 10),
-                            .max = try self.reader.requireAnyInt(i64, 10),
-                        });
-                    } else if (try self.reader.expression("alt-range")) {
-                        try self.temp_alt_constant_ranges.append(self.temp_allocator, .{
-                            .min = try self.reader.requireAnyInt(i64, 10),
-                            .max = try self.reader.requireAnyInt(i64, 10),
-                        });
-                    } else if (try self.reader.expression("align")) {
-                        param.constant_align = try self.reader.requireAnyInt(u3, 10);
                     } else break;
 
                     try self.reader.requireClose();
                 }
-
-                try self.reader.requireClose();
-
-                if (self.temp_constant_ranges.items.len > 0) {
-                    param.constant_ranges = try self.dedupConstantRanges(self.temp_constant_ranges.items);
-                }
-
-                if (self.temp_alt_constant_ranges.items.len > 0) {
-                    param.alt_constant_ranges = try self.dedupConstantRanges(self.temp_alt_constant_ranges.items);
-                }
-
-                self.temp_constant_ranges.clearRetainingCapacity();
-                self.temp_alt_constant_ranges.clearRetainingCapacity();
-
                 try self.temp_parameter_encodings.append(self.temp_allocator, param);
             } else if (try self.reader.expression("opcode-base")) {
                 opcode_base = try self.reader.requireAnyUnsigned(Opcode, 16);
-                try self.reader.requireClose();
             } else break;
+
+            try self.reader.requireClose();
         }
         try self.reader.requireClose();
 
         const params = try self.dedupParameterEncodings(self.temp_parameter_encodings.items);
         self.temp_parameter_encodings.clearRetainingCapacity();
 
-        return InstructionEncodingAndDescription{
+        return InstructionEncoding.WithDescription{
             .encoding = .{
                 .mnemonic = mnemonic,
                 .suffix = suffix,
@@ -360,6 +247,74 @@ pub const InstructionEncodingParser = struct {
             },
             .desc = description,
         };
+    }
+
+    fn parseBaseOffsetEncoding(self: *InstructionEncodingParser) !ParameterEncoding.BaseOffsetEncoding {
+        const kind = try self.reader.requireAnyEnum(std.meta.Tag(ParameterEncoding.BaseOffsetEncoding));
+        switch (kind) {
+            .none => return .{ .none = {} },
+            .sr => return .{ .sr = try self.reader.requireAnyEnum(SpecialRegister) },
+            .constant => {
+                var ce = ParameterEncoding.ConstantEncoding{};
+
+                self.temp_constant_ranges.clearRetainingCapacity();
+                self.temp_alt_constant_ranges.clearRetainingCapacity();
+
+                while (true) {
+                    if (try self.reader.expression("rev")) {
+                        ce.reverse = true;
+                    } else if (try self.reader.expression("range")) {
+                        try self.temp_constant_ranges.append(self.temp_allocator, .{
+                            .min = try self.reader.requireAnyInt(i64, 10),
+                            .max = try self.reader.requireAnyInt(i64, 10),
+                        });
+                    } else if (try self.reader.expression("alt-range")) {
+                        try self.temp_alt_constant_ranges.append(self.temp_allocator, .{
+                            .min = try self.reader.requireAnyInt(i64, 10),
+                            .max = try self.reader.requireAnyInt(i64, 10),
+                        });
+                    } else if (try self.reader.expression("granularity")) {
+                        ce.granularity = try self.reader.requireAnyInt(u3, 10);
+                    } else break;
+
+                    try self.reader.requireClose();
+                }
+
+                if (self.temp_constant_ranges.items.len > 0) {
+                    ce.ranges = try self.dedupConstantRanges(self.temp_constant_ranges.items);
+                }
+
+                if (self.temp_alt_constant_ranges.items.len > 0) {
+                    ce.alt_ranges = try self.dedupConstantRanges(self.temp_alt_constant_ranges.items);
+                }
+
+                self.temp_constant_ranges.clearRetainingCapacity();
+                self.temp_alt_constant_ranges.clearRetainingCapacity();
+
+                return .{ .constant = ce };
+            },
+            .reg8, .reg16, .reg32 => {
+                var irr = IndexedRegisterRange{};
+                if (try self.reader.expression("index")) {
+                    irr.min = try self.reader.requireAnyInt(misc.RegisterIndex, 10);
+                    irr.max = try self.reader.requireAnyInt(misc.RegisterIndex, 10);
+                    try self.reader.requireClose();
+                }
+                if (try self.reader.expression("signed")) {
+                    irr.signedness = .signed;
+                    try self.reader.requireClose();
+                } else if (try self.reader.expression("unsigned")) {
+                    irr.signedness = .unsigned;
+                    try self.reader.requireClose();
+                }
+                return switch (kind) {
+                    .reg8 => .{ .reg8 = irr },
+                    .reg16 => .{ .reg16 = irr },
+                    .reg32 => .{ .reg32 = irr },
+                    else => unreachable,
+                };
+            },
+        }
     }
 
     fn dedupDescription(self: *InstructionEncodingParser, desc: []const u8) ![]const u8 {
@@ -390,7 +345,7 @@ pub const InstructionEncodingParser = struct {
 pub const EncoderDatabase = struct {
     mnemonic_to_encoding: std.EnumMap(Mnemonic, []InstructionEncoding) = .{},
 
-    pub fn init(arena: std.mem.Allocator, sx_data: []const u8, temp: std.mem.Allocator) !EncoderDatabase {
+    pub fn init(arena: std.mem.Allocator, temp: std.mem.Allocator) !EncoderDatabase {
         var stream = std.io.fixedBufferStream(sx_data);
         var parser = InstructionEncodingParser{
             .reader = sx.reader(temp, stream.reader()),
@@ -415,7 +370,7 @@ pub const EncoderDatabase = struct {
                 var stderr = std.io.getStdErr().writer();
                 const context = parser.reader.getNextTokenContext() catch return err;
                 stderr.writeAll("Syntax error in instruction encoding data:\n") catch return err;
-                context.printForString(data, stderr, 150) catch return err;
+                context.printForString(sx_data, stderr, 150) catch return err;
             }
             return err;
         }) |encoding_and_desc| {
@@ -487,7 +442,7 @@ pub const DecoderDatabase = struct {
     opcode_to_encoding_12b: std.AutoHashMapUnmanaged(u12, InstructionEncoding),
     opcode_to_encoding_16b: std.AutoHashMapUnmanaged(u16, InstructionEncoding),
 
-    pub fn init(arena: std.mem.Allocator, sx_data: []const u8, temp: std.mem.Allocator) !DecoderDatabase {
+    pub fn init(arena: std.mem.Allocator, temp: std.mem.Allocator) !DecoderDatabase {
         var stream = std.io.fixedBufferStream(sx_data);
         var parser = InstructionEncodingParser{
             .reader = sx.reader(temp, stream.reader()),
@@ -518,7 +473,7 @@ pub const DecoderDatabase = struct {
                 var stderr = std.io.getStdErr().writer();
                 const context = parser.reader.getNextTokenContext() catch return err;
                 stderr.writeAll("Syntax error in instruction encoding data:\n") catch return err;
-                context.printForString(data, stderr, 150) catch return err;
+                context.printForString(sx_data, stderr, 150) catch return err;
             }
             return err;
         }) |encoding_and_desc| {
@@ -598,7 +553,7 @@ pub const DecoderDatabase = struct {
     }
 
     pub fn extractEncoding(self: DecoderDatabase, encoded_instruction: []const u8) ?InstructionEncoding {
-        return self.getEncodingForOpcode(ie.readOpcode(encoded_instruction));
+        return self.getEncodingForOpcode(Parameter.readOpcode(encoded_instruction));
     }
 
 };
@@ -634,7 +589,7 @@ pub const Decoder = struct {
             .params = params,
         };
 
-        const length = ie.getInstructionLength(encoding);
+        const length = encoding.getInstructionLength();
 
         self.last_instruction = self.remaining[0..length];
         self.remaining = self.remaining[length..];
@@ -658,7 +613,7 @@ pub fn testIdempotence(ddb: *const DecoderDatabase, edb: *const EncoderDatabase,
         }
 
         var buf: [6]u8 = [_]u8{0} ** 6;
-        var encoded = try ie.encodeInstruction(insn, encoding, &buf);
+        var encoded = try insn.write(encoding, &buf);
 
         var temp: [10 * @sizeOf(Parameter)]u8 = undefined;
         var alloc = std.heap.FixedBufferAllocator.init(&temp);

@@ -1,9 +1,10 @@
 const ib = @import("instruction_builder.zig");
 const cb = @import("cycle_builder.zig");
 const ControlSignals = @import("ControlSignals");
-const ie = @import("instruction_encoding");
+const isa = @import("isa_types");
+const ie = @import("isa_encoding");
 
-const Mnemonic = ie.Mnemonic;
+const Mnemonic = isa.Mnemonic;
 
 const getParameterConstant = ib.getParameterConstant;
 const desc = ib.desc;

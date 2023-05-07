@@ -1,6 +1,5 @@
 const std = @import("std");
-const ie = @import("instruction_encoding");
-const ie_data = @import("instruction_encoding_data").data;
+const ie = @import("isa_encoding");
 
 test "Instruction encoding" {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);

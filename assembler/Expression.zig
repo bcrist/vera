@@ -1,13 +1,13 @@
 const std = @import("std");
 const lex = @import("lex.zig");
-const ie = @import("instruction_encoding");
+const ie = @import("isa_encoding");
 const Constant = @import("Constant.zig");
 const SourceFile = @import("SourceFile.zig");
 const Instruction = @import("Instruction.zig");
 
 const Expression = @This();
 
-const ExpressionType = ie.ExpressionType;
+const ExpressionType = ie.Parameter.ExpressionType;
 
 token: lex.Token.Handle,
 info: Info,

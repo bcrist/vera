@@ -1,13 +1,13 @@
 const std = @import("std");
-const uc_roms = @import("microcode_rom_serialization");
+const uc_roms = @import("microcode_roms");
 const misc = @import("misc");
-const ie = @import("instruction_encoding");
-const ie_data = @import("instruction_encoding_data");
+const ie = @import("isa_encoding");
 const zglfw = @import("zglfw");
 const ControlSignals = @import("ControlSignals");
 const Simulator = @import("Simulator");
 const Gui = @import("gui/Gui.zig");
 const Config = @import("Config.zig");
+const ExpressionType = ie.Parameter.ExpressionType;
 
 const glfw_time_reset_interval: f64 = 10_000;
 const cpu_clock_frequency_hz: u64 = 20_000_000;
@@ -20,7 +20,7 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
 
     const microcode = try arena.allocator().create([misc.microcode_length]ControlSignals);
-    uc_roms.readCompressedRoms(@import("microcode_roms").compressed_data, microcode);
+    uc_roms.readCompressedRoms(@import("microcode_roms").all_compressed_data, microcode);
     var sim = try Simulator.init(arena.allocator(), microcode);
     var xo = std.rand.Xoshiro256.init(12345);
     sim.randomizeState(xo.random());
@@ -28,46 +28,22 @@ pub fn main() !void {
         std.mem.set(u16, chip, 0xFFFF);
     }
 
-    const edb = try ie_data.EncoderDatabase.init(arena.allocator(), ie_data.data, arena.allocator());
+    const edb = try ie.data.EncoderDatabase.init(arena.allocator(), arena.allocator());
+    _ = edb;
 
-    var program_data: [256]u8 = undefined;
-    var encoder = ie.Encoder.init(&program_data);
-    const program = [_]ie.Instruction {
-        .{
-            .mnemonic = .C,
-            .suffix = .none,
-            .params = &[_]ie.Parameter{
-                ie.parameter(.{ .constant = {}}, 0),
-                ie.toParameter(ie.ExpressionType.reg(32, 12, null), 0),
-            },
-        },
-        .{
-            .mnemonic = .ADD,
-            .suffix = .none,
-            .params = &[_]ie.Parameter{
-                ie.parameter(ie.ExpressionType.reg(32, 12, null), 0),
-                ie.parameter(.{ .constant = {}}, -128),
-                ie.toParameter(ie.ExpressionType.reg(32, 1, null), 0),
-            },
-        },
-    };
-    for (program) |insn| {
-        var insn_iter = edb.getMatchingEncodings(insn);
-        encoder.encode(insn, insn_iter.next().?);
-    }
-    const vector_table = misc.ZeropageVectorTable{
-        .double_fault = 0xFFFE,
-        .page_fault = 0xFFFD,
-        .access_fault = 0xFFFC,
-        .page_align_fault = 0xFFFB,
-        .instruction_protection_fault = 0xFFFA,
-        .invalid_instruction = 0xFFF9,
-        .pipe_0_reset = @sizeOf(misc.ZeropageVectorTable),
-    };
+    // const vector_table = misc.ZeropageVectorTable{
+    //     .double_fault = 0xFFFE,
+    //     .page_fault = 0xFFFD,
+    //     .access_fault = 0xFFFC,
+    //     .page_align_fault = 0xFFFB,
+    //     .instruction_protection_fault = 0xFFFA,
+    //     .invalid_instruction = 0xFFF9,
+    //     .pipe_0_reset = @sizeOf(misc.ZeropageVectorTable),
+    // };
     
-    var flash = sim.memory.flashIterator(0x7E_000 * 8);
-    _ = flash.writeAll(std.mem.asBytes(&vector_table));
-    _ = flash.writeAll(&program_data);
+    // var flash = sim.memory.flashIterator(0x7E_000 * 8);
+    // _ = flash.writeAll(std.mem.asBytes(&vector_table));
+    // _ = flash.writeAll(&program_data);
 
 
     var ram_iter = sim.memory.flashIterator(0);

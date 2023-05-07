@@ -1,13 +1,14 @@
 const std = @import("std");
 const lex = @import("lex.zig");
-const ie = @import("instruction_encoding");
+const isa = @import("isa_types");
+const ie = @import("isa_encoding");
 const Assembler = @import("Assembler.zig");
 const Instruction = @import("Instruction.zig");
 const Expression = @import("Expression.zig");
 const Section = @import("Section.zig");
 const Error = @import("Error.zig");
 const ErrorList = std.ArrayListUnmanaged(Error);
-const ExpressionType = ie.ExpressionType;
+const ExpressionType = ie.Parameter.ExpressionType;
 
 const SourceFile = @This();
 
@@ -42,8 +43,8 @@ const Token = lex.Token;
 const TokenKind = lex.TokenKind;
 const TokenList = lex.TokenList;
 
-const Mnemonic = ie.Mnemonic;
-const MnemonicSuffix = ie.MnemonicSuffix;
+const Mnemonic = isa.Mnemonic;
+const MnemonicSuffix = isa.MnemonicSuffix;
 
 const max_mnemonic_length = 8;
 const max_suffix_length = 4;
@@ -198,7 +199,7 @@ pub fn collectChunks(
                     chunk_begin = new_chunk_begin;
                     dest = fixed_org;
                 },
-                .insn => |i| if (ie.getBranchKind(i.mnemonic, i.suffix) == .unconditional) {
+                .insn => |i| if (isa.getBranchKind(i.mnemonic, i.suffix) == .unconditional) {
                     // Control will never flow past an unconditional branch, so we can treat anything after as a different chunk
                     const new_chunk_begin = insn_handle + 1;
                     if (chunk_begin < new_chunk_begin) {
@@ -889,22 +890,22 @@ const Parser = struct {
                 const lower = std.ascii.lowerString(&buf, id);
                 if (lower[1] == 'p') {
                     if (std.mem.eql(u8, lower, "ip")) {
-                        return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .ip });
+                        return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .IP });
                     } else if (std.mem.eql(u8, lower, "sp")) {
-                        return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .sp });
+                        return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .SP });
                     } else if (std.mem.eql(u8, lower, "rp")) {
-                        return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .rp });
+                        return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .RP });
                     } else if (std.mem.eql(u8, lower, "bp")) {
-                        return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .bp });
+                        return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .BP });
                     }
                 } else if (std.mem.eql(u8, lower, "uxp")) {
-                    return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .uxp });
+                    return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .UXP });
                 } else if (std.mem.eql(u8, lower, "kxp")) {
-                    return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .kxp });
+                    return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .KXP });
                 } else if (std.mem.eql(u8, lower, "stat")) {
-                    return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .stat });
+                    return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .STAT });
                 } else if (std.mem.eql(u8, lower, "asn")) {
-                    return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .asn });
+                    return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .ASN });
                 }
             }
         }

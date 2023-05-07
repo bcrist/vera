@@ -1,12 +1,14 @@
 const assert = @import("std").debug.assert;
 const ib = @import("instruction_builder.zig");
 const cb = @import("cycle_builder.zig");
-const ie = @import("instruction_encoding");
+const isa = @import("isa_types");
+const ie = @import("isa_encoding");
+const ce = @import("comptime_encoding");
 
 const ParameterEncoding = ie.ParameterEncoding;
-const MnemonicSuffix = ie.MnemonicSuffix;
-const ConstantRange = ie.ConstantRange;
-const constantRange = ie.constantRange;
+const MnemonicSuffix = isa.MnemonicSuffix;
+const ConstantRange = isa.ConstantRange;
+const constantRange = ce.constantRange;
 
 const getParameterOffset = ib.getParameterOffset;
 const encoding = ib.encoding;
@@ -322,11 +324,12 @@ fn conditionIsInverse(condition: MnemonicSuffix) bool {
 }
 
 const n6_14 = ParameterEncoding{
-    .base = .{ .constant = {} },
-    .constant_ranges = &[_]ConstantRange{
-        .{ .min = 4,  .max = 14 },
-        .{ .min = -6, .max = -2 },
-    },
+    .base = .{ .constant = .{
+        .ranges = &[_]ConstantRange{
+            .{ .min = 4,  .max = 14 },
+            .{ .min = -6, .max = -2 },
+        },
+    }},
     .base_src = .OA,
 };
 

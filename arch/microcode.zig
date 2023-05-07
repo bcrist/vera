@@ -1,8 +1,9 @@
 const std = @import("std");
 const bits = @import("bits");
 const misc = @import("misc");
+const isa = @import("isa_types");
 
-const Opcode = misc.Opcode;
+const Opcode = isa.Opcode;
 
 pub const Address = u16;
 pub const Continuation = u10;

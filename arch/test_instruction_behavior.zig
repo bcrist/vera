@@ -1,9 +1,8 @@
 const std = @import("std");
-const ie = @import("instruction_encoding");
+const ie = @import("isa_encoding");
 const ControlSignals = @import("ControlSignals");
 const uc_roms = @import("microcode_rom_serialization.zig");
 const misc = @import("misc");
-const ie_data = @import("instruction_encoding_data").data;
 const Simulator = @import("Simulator");
 const RegisterFile = Simulator.RegisterFile;
 

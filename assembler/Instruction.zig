@@ -1,6 +1,7 @@
 const std = @import("std");
+const isa = @import("isa_types");
+const ie = @import("isa_encoding");
 const lex = @import("lex.zig");
-const ie = @import("instruction_encoding");
 const Expression = @import("Expression.zig");
 const Constant = @import("Constant.zig");
 
@@ -45,8 +46,8 @@ pub const Operation = union(enum) {
 };
 
 pub const MnemonicAndSuffix = struct {
-    mnemonic: ie.Mnemonic,
-    suffix: ie.MnemonicSuffix,
+    mnemonic: isa.Mnemonic,
+    suffix: isa.MnemonicSuffix,
 };
 
 pub const Flags = enum {

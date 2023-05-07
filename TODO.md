@@ -14,6 +14,7 @@
 [assembler] initial arrow (nil first parameter)
 [assembler] Create disassembler
 [assembler] .str/.kstr "whatever" - creates a ptr+len data declaration - creates a new block in the `.const strings` section with the data (.kconst for .kstr) - may dedup data (enable with global assembler flag?)
+[assembler] improve vscode plugin
 
 [test] Use assembler for test_instruction_behavior
 [test] Use assembler and disassembler for test_instruction_encoding

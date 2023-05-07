@@ -5,7 +5,7 @@ const ib = @import("instruction_builder.zig");
 const cb = @import("cycle_builder.zig");
 const uc = @import("microcode");
 const arch = @import("arch_builder.zig");
-const uc_serialization = @import("microcode_rom_serialization.zig");
+const uc_roms = @import("microcode_roms");
 const ControlSignals = @import("ControlSignals");
 
 pub fn main() !void {
@@ -51,12 +51,12 @@ pub fn main() !void {
     // std.debug.print("{} continuations left\n", .{ arch.getContinuationsLeft() });
 
     {
-        var f = try std.fs.cwd().createFile("arch/instruction_encoding.sx", .{});
+        var f = try std.fs.cwd().createFile("arch/isa_encoding/isa.sx", .{});
         defer f.close();
         try arch.writeInstructionEncodings(f.writer());
     }
 
-    var rom_data = try uc_serialization.writeCompressedRoms(allocators.temp_arena.allocator(), allocators.temp_arena.allocator(), &arch.microcode);
+    var rom_data = try uc_roms.writeCompressedRoms(allocators.temp_arena.allocator(), allocators.temp_arena.allocator(), &arch.microcode);
 
     for (rom_data, 0..) |data, n| {
         std.debug.print("ROM {}: {} bytes compressed\n", .{ n, data.len });
@@ -69,7 +69,7 @@ pub fn main() !void {
         try af.finish();
     }
 
-    rom_data = try uc_serialization.writeSRecRoms(allocators.temp_arena.allocator(), allocators.temp_arena.allocator(), &arch.microcode);
+    rom_data = try uc_roms.writeSRecRoms(allocators.temp_arena.allocator(), allocators.temp_arena.allocator(), &arch.microcode);
     for (rom_data, 0..) |data, n| {
         var path_buf: [32]u8 = undefined;
         var path = try std.fmt.bufPrint(&path_buf, "arch/microcode_roms/rom_{}.srec", .{ n });

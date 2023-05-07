@@ -3,7 +3,6 @@ const bus = @import("bus_types");
 const bits = @import("bits");
 const ControlSignals = @import("ControlSignals");
 
-pub const Opcode = u16;
 pub const RegisterIndex = u4; // for GPRs
 pub const SignedOffsetForLiteral = i7; // note not all possible values are valid
 pub const RegistersetNumber = u6; // aka RSN

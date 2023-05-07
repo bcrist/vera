@@ -5,8 +5,8 @@ const ControlSignals = @import("ControlSignals");
 const uc = @import("microcode");
 const bits = @import("bits");
 const sx = @import("sx");
-const ie_data = @import("instruction_encoding_data");
-const instruction_encoding = @import("instruction_encoding");
+const isa = @import("isa_types");
+const ie = @import("isa_encoding");
 const misc = @import("misc");
 const deep_hash_map = @import("deep_hash_map");
 const panic = @import("instruction_builder.zig").panic;
@@ -14,9 +14,8 @@ const panic = @import("instruction_builder.zig").panic;
 const gpa = &allocators.global_gpa;
 const perm_arena = &allocators.global_arena;
 
-const Opcode = misc.Opcode;
-const InstructionEncoding = instruction_encoding.InstructionEncoding;
-const InstructionEncodingAndDescription = instruction_encoding.InstructionEncodingAndDescription;
+const Opcode = isa.Opcode;
+const InstructionEncoding = ie.InstructionEncoding;
 
 var cycle_dedup = deep_hash_map.DeepAutoHashMap(*ControlSignals, *ControlSignals).init(gpa.allocator());
 
@@ -29,7 +28,7 @@ var used_signals: [misc.microcode_length]std.EnumSet(ControlSignals.SignalName) 
 var instructions: [misc.opcode_count]?*InstructionEncoding = .{ null } ** misc.opcode_count;
 var descriptions: [misc.opcode_count]?[]const u8 = .{ null } ** misc.opcode_count;
 
-var aliases = std.ArrayList(InstructionEncodingAndDescription).init(gpa.allocator());
+var aliases = std.ArrayList(InstructionEncoding.WithDescription).init(gpa.allocator());
 
 var next_unconditional_continuation: uc.Continuation = 0x1FF;
 var next_conditional_continuation: uc.Continuation = 0x3FF;
@@ -235,7 +234,7 @@ fn getOrCreateInstruction(in: InstructionEncoding) *InstructionEncoding {
     if (first_opcode > 0) {
         var prev = instructions[first_opcode - uc.getOpcodeGranularity(first_opcode)];
         if (prev) |p| {
-            if (instruction_encoding.eql(in, p.*)) {
+            if (in.eqlExceptOpcodes(p.*)) {
                 p.opcodes.max = last_opcode;
                 return p;
             }
@@ -285,10 +284,10 @@ pub fn validateAliases() !void {
     for (aliases.items) |alias| {
         var opcode_iter = uc.opcodeIterator(alias.encoding.opcodes.min, alias.encoding.opcodes.max);
         while (opcode_iter.next()) |opcode| {
-            if (getInstructionByOpcode(opcode)) |ie| {
-                const original_len = instruction_encoding.getInstructionLength(ie.*);
-                const alias_len = instruction_encoding.getInstructionLength(alias.encoding);
-                if (original_len != alias_len and !(ie.mnemonic == .NOPE and alias.encoding.mnemonic == .B and alias.encoding.suffix == .none)) {
+            if (getInstructionByOpcode(opcode)) |encoding| {
+                const original_len = encoding.getInstructionLength();
+                const alias_len = alias.encoding.getInstructionLength();
+                if (original_len != alias_len and !(encoding.mnemonic == .NOPE and alias.encoding.mnemonic == .B and alias.encoding.suffix == .none)) {
                     try stderr.print("Alias for opcode {X:0>4} has length {} but expected lenth is {}\n", .{ opcode, alias_len, original_len });
                 }
             } else {
@@ -467,12 +466,12 @@ pub fn writeInstructionEncodings(inner_writer: anytype) !void {
     for (instructions, descriptions, 0..) |maybe_insn, maybe_desc, opcode| {
         if (maybe_insn) |i| {
             if (i.opcodes.min == opcode) {
-                try ie_data.writeInstructionEncoding(InnerWriter, &writer, i.*, maybe_desc);
+                try ie.data.writeInstructionEncoding(InnerWriter, &writer, i.*, maybe_desc);
             }
         }
     }
     for (aliases.items) |alias| {
-        try ie_data.writeInstructionEncoding(InnerWriter, &writer, alias.encoding, alias.desc);
+        try ie.data.writeInstructionEncoding(InnerWriter, &writer, alias.encoding, alias.desc);
     }
 
     try writer.done();
