@@ -23,6 +23,10 @@ pub fn main() !void {
 
     a.assemble();
 
-    try dump.dump(&a, std.io.getStdOut().writer());
+    try a.writeListing(std.io.getStdOut().writer(), .{ .ordering = .address });
+
+    //try dump.dump(&a, std.io.getStdOut().writer());
+
+    try a.printErrors(std.io.getStdErr().writer());
 
 }

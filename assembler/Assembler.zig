@@ -26,6 +26,7 @@ insn_encoding_errors: std.ArrayListUnmanaged(InsnEncodingError) = .{},
 overlapping_chunks: std.AutoArrayHashMapUnmanaged(SourceFile.ChunkPair, void) = .{},
 symbols: std.StringHashMapUnmanaged(InstructionRef) = .{},
 sections: std.StringArrayHashMapUnmanaged(Section) = .{},
+chunks: std.ArrayListUnmanaged(ChunkWithAddress) = .{},
 pages: std.MultiArrayList(PageData) = .{},
 page_lookup: std.AutoHashMapUnmanaged(bus.Page, PageData.Handle) = .{},
 constant_temp: std.ArrayListUnmanaged(u8) = .{},
@@ -35,6 +36,20 @@ constants: Constant.InternPool = .{},
 pub const InstructionRef = struct {
     file: SourceFile.Handle,
     instruction: Instruction.Handle,
+};
+
+pub const ChunkWithAddress = struct {
+    chunk: SourceFile.Chunk,
+    address: u32,
+
+    fn lessThan(_: void, lhs: ChunkWithAddress, rhs: ChunkWithAddress) bool {
+        return lhs.address < rhs.address;
+    }
+};
+
+pub const Alignment = struct {
+    modulo: u32,
+    offset: u32,
 };
 
 pub const AddressRange = struct {
@@ -103,6 +118,7 @@ pub fn deinit(self: *Assembler, deinit_arena: bool) void {
     self.overlapping_chunks.deinit(self.gpa);
     self.symbols.deinit(self.gpa);
     self.sections.deinit(self.gpa);
+    self.chunks.deinit(self.gpa);
     self.pages.deinit(self.gpa);
     self.page_lookup.deinit(self.gpa);
     self.constant_temp.deinit(self.gpa);
@@ -155,7 +171,7 @@ pub fn assemble(self: *Assembler) void {
         try_again = layout.doAutoOrgLayout(self, auto_org_chunks.items) or try_again;
 
         // TODO better handling of degenerate/recursive cases where the layout never reaches an equilibrium?
-        if (self.insn_encoding_errors.items.len > 0 or !try_again) break;
+        if (!try_again) break;
     }
 
     if (attempts == max_attempts) {
@@ -164,6 +180,8 @@ pub fn assemble(self: *Assembler) void {
 
     layout.populatePageChunks(self, fixed_org_chunks.items);
     layout.populatePageChunks(self, auto_org_chunks.items);
+
+    std.sort.sort(ChunkWithAddress, self.chunks.items, {}, ChunkWithAddress.lessThan);
 
     for (self.pages.items(.chunks)) |chunks| {
         layout.findOverlappingChunks(self, chunks.items);
@@ -174,7 +192,437 @@ pub fn assemble(self: *Assembler) void {
     }
 }
 
-// TODO functions for outputting assembled data to file or in-memory buffer
+pub const IntelHexOptions = struct {
+    num_roms: u8 = 1,           // e.g. 4 for boot rom
+    rom_width_bytes: u8 = 2,    // e.g. 2 for boot rom
+    address_offset: i64 = 0,    // added to addresses before being placed in roms
+    merge_all_sections: bool = true,
+};
+pub fn writeIntelHex() !void {
+    // TODO
+}
+
+pub const MotorolaSRecOptions = struct {
+    num_roms: u8 = 1,           // e.g. 4 for boot rom
+    rom_width_bytes: u8 = 2,    // e.g. 2 for boot rom
+    address_offset: i64 = 0,    // added to addresses before being placed in roms
+    merge_all_sections: bool = true,
+};
+pub fn writeMotorolaSRec(self: *Assembler, options: MotorolaSRecOptions) !void {
+    _ = options;
+
+    // var safe_section_names_used = std.StringHashMap(void).init(self.gpa);
+    // defer safe_section_names_used.deinit();
+
+    for (self.chunks.items) |chunk_and_address| {
+        const addr = chunk_and_address.address;
+        const chunk = chunk_and_address.chunk;
+
+        std.debug.print("{}: section {?} #{}-{}\n", .{ addr, chunk.section, chunk.instructions.begin, chunk.instructions.end });
+    }
+
+
+}
+
+pub const SimSxOptions = struct {
+    address_offset: i64 = 0,    // added to addresses before being placed in roms
+};
+pub fn writeSimSx() !void {
+    // TODO
+}
+
+pub const ListOptions = struct {
+    ordering: enum {
+        file,
+        address,
+    } = .address,
+};
+pub fn writeListing(self: *Assembler, writer: anytype, options: ListOptions) !void {
+    switch (options.ordering) {
+        .file => {
+            var last_file: ?SourceFile.Handle = null;
+            for (self.files.items) |*file| {
+                const blocks = file.blocks.slice();
+                for (blocks.items(.first_insn),
+                    blocks.items(.end_insn),
+                    blocks.items(.section),
+                    blocks.items(.keep),
+                ) |begin, end, section, keep| {
+                    try self.writeListingForChunk(writer, .{
+                        .section = section,
+                        .file = file.handle,
+                        .instructions = .{
+                            .begin = begin,
+                            .end = end,
+                        },
+                    }, keep, last_file);
+                    last_file = file.handle;
+                }
+            }
+        },
+        .address => {
+            var last_file: ?SourceFile.Handle = null;
+            for (self.chunks.items) |chunk_and_address| {
+                try self.writeListingForChunk(writer, chunk_and_address.chunk, true, last_file);
+                last_file = chunk_and_address.chunk.file;
+            }
+        },
+    }
+}
+
+fn writeListingForChunk(self: *Assembler, writer: anytype, chunk: SourceFile.Chunk, keep: bool, last_file: ?SourceFile.Handle) !void {
+    const file = self.getSource(chunk.file);
+    const s = file.slices();
+
+    const insn_tokens = s.insn.items(.token);
+    const insn_params = s.insn.items(.params);
+    const insn_operations = s.insn.items(.operation);
+    const insn_addresses = s.insn.items(.address);
+    const insn_lengths = s.insn.items(.length);
+
+    //const expr_infos = s.expr.items(.info);
+    //const expr_constants = s.expr.items(.resolved_constant);
+    //const expr_types = s.expr.items(.resolved_type);
+
+    const tokens = file.tokens.slice();
+    const token_kinds = tokens.items(.kind);
+    const token_offsets = tokens.items(.offset);
+
+    if (chunk.file != last_file) {
+        try writer.print(".source {s}\n", .{ file.name });
+    }
+
+    var iter = chunk.instructions;
+    while (iter.next()) |insn_handle| {
+        var start_of_line = insn_tokens[insn_handle];
+        var end_of_line = start_of_line;
+        while (start_of_line > 0 and token_kinds[start_of_line - 1] != .newline) {
+            start_of_line -= 1;
+        }
+        while (token_kinds[end_of_line] != .newline and token_kinds[end_of_line] != .eof) {
+            end_of_line += 1;
+            std.debug.assert(end_of_line <= file.tokens.len);
+        }
+        const line = file.source[token_offsets[start_of_line] .. token_offsets[end_of_line]];
+
+        if (!keep) {
+            try writer.writeByteNTimes(' ', 80);
+            try writer.print("// {s}\n", .{ line } );
+            continue;
+        }
+
+        switch (insn_operations[insn_handle]) {
+            .section, .code, .kcode, .entry, .kentry,
+            .data, .kdata, .@"const", .kconst, .stack,
+            .none, .insn, .keep, .def, .undef,
+            => {
+                try writer.writeByteNTimes(' ', 80);
+                try writer.print("// {s}\n", .{ line } );
+            },
+
+            .bound_insn => |encoding| {
+                const address = insn_addresses[insn_handle];
+                const params = insn_params[insn_handle];
+
+                try writer.print("{X:0>16} ", .{ address });
+
+                const insn = self.buildInstruction(s, address, encoding.mnemonic, encoding.suffix, params, false).?;
+                self.constant_temp.clearRetainingCapacity();
+                var temp_writer = self.constant_temp.writer(self.gpa);
+                try insn.print(temp_writer, address);
+                const insn_space = self.constant_temp.items.len + 1;
+                var space_remaining = if (insn_space >= 63) 0 else 63 - @intCast(u8, insn_space);
+                try writer.writeAll(self.constant_temp.items);
+                try writer.writeByte(' ');
+                self.constant_temp.clearRetainingCapacity();
+
+                var d = [_]u8{0}**8;
+                _ = ie.encodeInstruction(insn, encoding.*, &d);
+
+                var needs_ip_plus_2_byte = false;
+                var needs_ip_plus_2_word = false;
+                var needs_ip_plus_2_dword = false;
+                var needs_ip_plus_4_word = false;
+
+                for (encoding.params) |param_encoding| {
+                    switch (param_encoding.base_src) {
+                        .implicit, .opcode, .OA, .OB, .OB_OA => {},
+                        .IP_plus_2_OA, .IP_plus_2_OB, .IP_plus_2_8 => needs_ip_plus_2_byte = true,
+                        .IP_plus_2_16 => needs_ip_plus_2_word = true,
+                        .IP_plus_2_32 => needs_ip_plus_2_dword = true,
+                        .IP_plus_4_16 => needs_ip_plus_4_word = true,
+                    }
+                    switch (param_encoding.offset_src) {
+                        .implicit, .opcode, .OA, .OB, .OB_OA => {},
+                        .IP_plus_2_OA, .IP_plus_2_OB, .IP_plus_2_8 => needs_ip_plus_2_byte = true,
+                        .IP_plus_2_16 => needs_ip_plus_2_word = true,
+                        .IP_plus_2_32 => needs_ip_plus_2_dword = true,
+                        .IP_plus_4_16 => needs_ip_plus_4_word = true,
+                    }
+                }
+
+                if (needs_ip_plus_2_dword) {
+                    if (space_remaining >= 16) {
+                        try writer.writeByteNTimes(' ', space_remaining - 16);
+                        try writer.print("# {X:0>2}{X:0>2}{X:0>2}{X:0>2} {X:0>2}{X:0>2} // {s}\n", .{
+                            d[5], d[4], d[3], d[2], d[1], d[0], line
+                        });
+                    } else if (space_remaining >= 7) {
+                        try writer.writeByteNTimes(' ', space_remaining - 7);
+                        try writer.print("# {X:0>2}{X:0>2} // {s}\n{X:0>16}", .{ d[1], d[0], line, address + 2 });
+                        try writer.writeByteNTimes(' ', 53);
+                        try writer.print("# {X:0>2}{X:0>2}{X:0>2}{X:0>2}\n", .{ d[5], d[4], d[3], d[2] });
+                    } else {
+                        try writer.writeByteNTimes(' ', space_remaining);
+                        try writer.print("// {s}\n", .{ line });
+                        try writer.writeByteNTimes(' ', 64);
+                        try writer.print("# {X:0>2}{X:0>2}{X:0>2}{X:0>2} {X:0>2}{X:0>2}\n", .{
+                            d[5], d[4], d[3], d[2], d[1], d[0]
+                        });
+                    }
+                } else if (needs_ip_plus_4_word) {
+                    if (space_remaining >= 17) {
+                        try writer.writeByteNTimes(' ', space_remaining - 17);
+                        try writer.print("# {X:0>2}{X:0>2} {X:0>2}{X:0>2} {X:0>2}{X:0>2} // {s}\n", .{
+                            d[5], d[4], d[3], d[2], d[1], d[0], line
+                        });
+                    } else if (space_remaining >= 12) {
+                        try writer.writeByteNTimes(' ', space_remaining - 12);
+                        try writer.print("# {X:0>2}{X:0>2} {X:0>2}{X:0>2} // {s}\n{X:0>16}", .{ d[3], d[2], d[1], d[0], line, address + 4 });
+                        try writer.writeByteNTimes(' ', 57);
+                        try writer.print("# {X:0>2}{X:0>2}\n", .{ d[5], d[4] });
+                    } else if (space_remaining >= 7) {
+                        try writer.writeByteNTimes(' ', space_remaining - 7);
+                        try writer.print("# {X:0>2}{X:0>2} // {s}\n{X:0>16}", .{ d[1], d[0], line, address + 2 });
+                        try writer.writeByteNTimes(' ', 52);
+                        try writer.print("# {X:0>2}{X:0>2} {X:0>2}{X:0>2}\n", .{ d[5], d[4], d[3], d[2] });
+                    } else {
+                        try writer.writeByteNTimes(' ', space_remaining);
+                        try writer.print("// {s}\n", .{ line });
+                        try writer.writeByteNTimes(' ', 63);
+                        try writer.print("# {X:0>2}{X:0>2} {X:0>2}{X:0>2} {X:0>2}{X:0>2}\n", .{
+                            d[5], d[4], d[3], d[2], d[1], d[0]
+                        });
+                    }
+                } else if (needs_ip_plus_2_word) {
+                    if (space_remaining >= 12) {
+                        try writer.writeByteNTimes(' ', space_remaining - 12);
+                        try writer.print("# {X:0>2}{X:0>2} {X:0>2}{X:0>2} // {s}\n", .{ d[3], d[2], d[1], d[0], line });
+                    } else if (space_remaining >= 7) {
+                        try writer.writeByteNTimes(' ', space_remaining - 7);
+                        try writer.print("# {X:0>2}{X:0>2} // {s}\n{X:0>16}", .{ d[1], d[0], line, address + 2 });
+                        try writer.writeByteNTimes(' ', 57);
+                        try writer.print("# {X:0>2}{X:0>2}\n", .{ d[3], d[2] });
+                    } else {
+                        try writer.writeByteNTimes(' ', space_remaining);
+                        try writer.print("// {s}\n", .{ line });
+                        try writer.writeByteNTimes(' ', 68);
+                        try writer.print("# {X:0>2}{X:0>2} {X:0>2}{X:0>2}\n", .{ d[3], d[2], d[1], d[0] });
+                    }
+                } else if (needs_ip_plus_2_byte) {
+                    if (space_remaining >= 10) {
+                        try writer.writeByteNTimes(' ', space_remaining - 10);
+                        try writer.print("# {X:0>2} {X:0>2}{X:0>2} // {s}\n", .{ d[2], d[1], d[0], line });
+                    } else if (space_remaining >= 7) {
+                        try writer.writeByteNTimes(' ', space_remaining - 7);
+                        try writer.print("# {X:0>2}{X:0>2} // {s}\n{X:0>16}", .{ d[1], d[0], line, address + 2 });
+                        try writer.writeByteNTimes(' ', 59);
+                        try writer.print("# {X:0>2}\n", .{ d[2] });
+                    } else {
+                        try writer.writeByteNTimes(' ', space_remaining);
+                        try writer.print("// {s}\n", .{ line });
+                        try writer.writeByteNTimes(' ', 70);
+                        try writer.print("# {X:0>2} {X:0>2}{X:0>2}\n", .{ d[2], d[1], d[0] });
+                    }
+                } else {
+                    if (space_remaining >= 7) {
+                        try writer.writeByteNTimes(' ', space_remaining - 7);
+                        try writer.print("# {X:0>2}{X:0>2} // {s}\n", .{ d[1], d[0], line });
+                    } else {
+                        try writer.writeByteNTimes(' ', space_remaining);
+                        try writer.print("// {s}\n", .{ line });
+                        try writer.writeByteNTimes(' ', 73);
+                        try writer.print("# {X:0>2}{X:0>2}\n", .{ d[1], d[0] });
+                    }
+                }
+            },
+
+            .push => {
+                // TODO stack sections
+            },
+
+            .pop => {
+                // TODO stack sections
+            },
+
+            .org => {
+                self.constant_temp.clearRetainingCapacity();
+                var temp_writer = self.constant_temp.writer(self.gpa);
+                try temp_writer.print(".org 0x{X}", .{ insn_addresses[insn_handle] });
+                try writer.print("{s:<80}", .{ self.constant_temp.items });
+                try writer.print("// {s}\n", .{ line } );
+                self.constant_temp.clearRetainingCapacity();
+            },
+
+            .@"align" => {
+                if (layout.getResolvedAlignment(s, insn_params[insn_handle])) |alignment| {
+                    self.constant_temp.clearRetainingCapacity();
+                    var temp_writer = self.constant_temp.writer(self.gpa);
+                    try temp_writer.print(".align {}", .{ alignment.modulo });
+                    if (alignment.offset > 0) {
+                        try temp_writer.print(", {}", .{ alignment.offset });
+                    }
+                    try writer.print("{s:<80}", .{ self.constant_temp.items });
+                    self.constant_temp.clearRetainingCapacity();
+                } else {
+                    try writer.writeByteNTimes(' ', 80);
+                }
+                try writer.print("// {s}\n", .{ line } );
+            },
+
+            .db => {
+                var address = insn_addresses[insn_handle];
+                var length = insn_lengths[insn_handle];
+                var write_line = true;
+                var data_iter = PageData.DataIterator.init(self, address);
+                const bytes_per_line = 20;
+                var temp = [_]u8{0} ** bytes_per_line;
+                while (length > bytes_per_line) {
+                    try writer.print("{X:0>16}  #", .{ address });
+                    for (0..bytes_per_line) |i| {
+                        temp[bytes_per_line - 1 - i] = data_iter.next();
+                    }
+                    address += bytes_per_line;
+                    length -= bytes_per_line;
+
+                    for (temp) |b| {
+                        try writer.print(" {X:0>2}", .{ b });
+                    }
+
+                    if (write_line) {
+                        try writer.print(" // {s}\n", .{ line } );
+                        write_line = false;
+                    } else try writer.writeAll("\n");
+                }
+
+                self.constant_temp.clearRetainingCapacity();
+                for (0..length) |i| {
+                    temp[length - 1 - i] = data_iter.next();
+                }
+
+                var temp_writer = self.constant_temp.writer(self.gpa);
+                try temp_writer.writeAll("#");
+                for (temp[0..length]) |b| {
+                    try temp_writer.print(" {X:0>2}", .{ b });
+                }
+
+                try writer.print("{X:0>16}{s:>63}", .{ address, self.constant_temp.items });
+                self.constant_temp.clearRetainingCapacity();
+                if (write_line) {
+                    try writer.print(" // {s}\n", .{ line } );
+                } else try writer.writeAll("\n");
+            },
+            .dw => {
+                var address = insn_addresses[insn_handle];
+                var length = insn_lengths[insn_handle];
+                var write_line = true;
+                var data_iter = PageData.DataIterator.init(self, address);
+                const words_per_line = 12;
+                var temp = [_]u16{0} ** words_per_line;
+                while (length > words_per_line * 2) {
+                    try writer.print("{X:0>16}  #", .{ address });
+                    for (0..words_per_line) |i| {
+                        var word: u16 = data_iter.next();
+                        word |= @as(u16, data_iter.next()) << 8;
+                        temp[words_per_line - 1 - i] = word;
+                    }
+                    address += words_per_line * 2;
+                    length -= words_per_line * 2;
+
+                    for (temp) |w| {
+                        try writer.print(" {X:0>4}", .{ w });
+                    }
+
+                    if (write_line) {
+                        try writer.print(" // {s}\n", .{ line } );
+                        write_line = false;
+                    } else try writer.writeAll("\n");
+                }
+
+                self.constant_temp.clearRetainingCapacity();
+                const word_length = (length + 1) / 2;
+                for (0..word_length) |i| {
+                    var word: u16 = data_iter.next();
+                    word |= @as(u16, data_iter.next()) << 8;
+                    temp[word_length - 1 - i] = word;
+                }
+
+                var temp_writer = self.constant_temp.writer(self.gpa);
+                try temp_writer.writeAll("#");
+                for (temp[0..word_length]) |w| {
+                    try temp_writer.print(" {X:0>4}", .{ w });
+                }
+
+                try writer.print("{X:0>16}{s:>63}", .{ address, self.constant_temp.items });
+                self.constant_temp.clearRetainingCapacity();
+                if (write_line) {
+                    try writer.print(" // {s}\n", .{ line } );
+                } else try writer.writeAll("\n");
+            },
+            .dd => {
+                var address = insn_addresses[insn_handle];
+                var length = insn_lengths[insn_handle];
+                var write_line = true;
+                var data_iter = PageData.DataIterator.init(self, address);
+                const dwords_per_line = 6;
+                var temp = [_]u32{0} ** dwords_per_line;
+                while (length > dwords_per_line * 4) {
+                    try writer.print("{X:0>16}        #", .{ address });
+                    for (0..dwords_per_line) |i| {
+                        var dword: u32 = data_iter.next();
+                        dword |= @as(u32, data_iter.next()) << 8;
+                        dword |= @as(u32, data_iter.next()) << 16;
+                        dword |= @as(u32, data_iter.next()) << 24;
+                        temp[dwords_per_line - 1 - i] = dword;
+                    }
+                    address += dwords_per_line * 4;
+                    length -= dwords_per_line * 4;
+
+                    for (temp) |dw| {
+                        try writer.print(" {X:0>8}", .{ dw });
+                    }
+
+                    if (write_line) {
+                        try writer.print(" // {s}\n", .{ line } );
+                        write_line = false;
+                    } else try writer.writeAll("\n");
+                }
+
+                self.constant_temp.clearRetainingCapacity();
+                const dword_length = (length + 3) / 4;
+                for (0..dword_length) |i| {
+                    var dword: u32 = data_iter.next();
+                    dword |= @as(u32, data_iter.next()) << 8;
+                    dword |= @as(u32, data_iter.next()) << 16;
+                    dword |= @as(u32, data_iter.next()) << 24;
+                    temp[dword_length - 1 - i] = dword;
+                }
+
+                var temp_writer = self.constant_temp.writer(self.gpa);
+                try temp_writer.writeAll("#");
+                for (temp[0..dword_length]) |dw| {
+                    try temp_writer.print(" {X:0>8}", .{ dw });
+                }
+
+                try writer.print("{X:0>16}{s:>63}", .{ address, self.constant_temp.items });
+                self.constant_temp.clearRetainingCapacity();
+                if (write_line) {
+                    try writer.print(" // {s}\n", .{ line } );
+                } else try writer.writeAll("\n");
+            },
+        }
+    }
+}
 
 pub fn countErrors(self: *Assembler) usize {
     return self.errors.items.len

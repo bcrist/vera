@@ -495,6 +495,14 @@ const Parser = struct {
                 .operation = .{ .none = {} },
                 .params = null,
             }) catch @panic("OOM");
+        } else {
+            // Add a meaningless instruction to ensure that instruction handles directly correspond to line numbers (minus one)
+            self.out.instructions.append(self.gpa, .{
+                .label = null,
+                .token = self.next_token,
+                .operation = .{ .none = {} },
+                .params = null,
+            }) catch @panic("OOM");
         }
         self.skipLinespace();
         _ = self.tryToken(.comment);

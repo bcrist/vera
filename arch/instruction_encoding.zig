@@ -1334,7 +1334,7 @@ pub const Parameter = struct {
     expr_type: ExpressionType,
     constant: i64,
 
-    pub fn print(self: Parameter, writer: anytype) !void {
+    pub fn print(self: Parameter, writer: anytype, address: u32) !void {
         if (self.arrow) {
             try writer.writeAll("-> ");
         }
@@ -1350,6 +1350,7 @@ pub const Parameter = struct {
                     .reg8 => "B",
                     .reg16 => "R",
                     .reg32 => "X",
+                    else => unreachable,
                 });
                 try writer.print("{}", .{ reg.index });
                 if (reg.signedness) |s| {
@@ -1363,24 +1364,30 @@ pub const Parameter = struct {
                 var buf: [4]u8 = .{ 0 } ** 4;
                 try writer.writeAll(std.ascii.upperString(&buf, @tagName(reg)));
             },
-            .data_address, .insn_address, .stack_address => |info| {
+            .raw_base_offset, .data_address, .insn_address, .stack_address => |info| {
                 try writer.writeAll(switch (self.expr_type) {
+                    .raw_base_offset => "",
                     .data_address => ".d ",
                     .insn_address => ".i ",
                     .stack_address => ".s ",
+                    else => unreachable,
                 });
                 switch (info.base) {
-                    .constant => {
-                        try writer.print("{s}", .{ self.constant });
+                    .none => {},
+                    .constant => if (self.constant < 0) {
+                        try writer.print("-0x{X}", .{ -self.constant });
+                    } else {
+                        try writer.print("0x{X}", .{ self.constant });
                     },
-                    .reg8, .reg16, .reg32 => {
+                    .reg8, .reg16, .reg32 => |reg| {
                         try writer.writeAll(switch (info.base) {
                             .reg8 => "B",
                             .reg16 => "R",
                             .reg32 => "X",
+                            else => unreachable,
                         });
-                        try writer.print("{}", .{ info.base.index });
-                        if (info.base.signedness) |s| {
+                        try writer.print("{}", .{ reg.index });
+                        if (reg.signedness) |s| {
                             try writer.writeAll(switch (s) {
                                 .unsigned => " .unsigned",
                                 .signed => " .signed",
@@ -1393,17 +1400,26 @@ pub const Parameter = struct {
                     },
                 }
                 switch (info.offset) {
+                    .none => {},
                     .constant => if (info.base != .constant and self.constant != 0) {
-                        try writer.print(" + {s}", .{ self.constant });
+                        if (info.base == .sr and info.base.sr == .ip) {
+                            const target = address + self.constant;
+                            try writer.print(" + 0x{X} - 0x{X}", .{ target, address });
+                        } else if (self.constant < 0) {
+                            try writer.print(" - 0x{X}", .{ -self.constant });
+                        } else {
+                            try writer.print(" + 0x{X}", .{ -self.constant });
+                        }
                     },
-                    .reg8, .reg16, .reg32 => {
+                    .reg8, .reg16, .reg32 => |reg| {
                         try writer.writeAll(switch (info.offset) {
                             .reg8 => " + B",
                             .reg16 => " + R",
                             .reg32 => " + X",
+                            else => unreachable,
                         });
-                        try writer.print("{}", .{ info.offset.index });
-                        if (info.offset.signedness) |s| {
+                        try writer.print("{}", .{ reg.index });
+                        if (reg.signedness) |s| {
                             try writer.writeAll(switch (s) {
                                 .unsigned => " .unsigned",
                                 .signed => " .signed",
@@ -1519,10 +1535,20 @@ pub const Instruction = struct {
     suffix: MnemonicSuffix,
     params: []const Parameter,
 
-    pub fn print(self: Instruction, writer: anytype) !void {
-        try writer.writeAll(@tagName(self.mnemonic));
+    pub fn print(self: Instruction, writer: anytype, address: u32) !void {
+        const mnemonic_str = @tagName(self.mnemonic);
+        var len = mnemonic_str.len;
+        try writer.writeAll(mnemonic_str);
         if (self.suffix != .none) {
-            try writer.print(".{s}", .{ @tagName(self.suffix) });
+            const suffix_str = @tagName(self.suffix);
+            try writer.writeByte('.');
+            for (suffix_str) |b| {
+                try writer.writeByte(if (b == '_') '.' else b);
+            }
+            len += suffix_str.len + 1;
+        }
+        if (len < 5) {
+            try writer.writeByteNTimes(' ', 5 - len);
         }
         var first = true;
         for (self.params) |param| {
@@ -1532,9 +1558,8 @@ pub const Instruction = struct {
                 try writer.writeByte(',');
             }
             try writer.writeByte(' ');
-            try param.print(writer);
+            try param.print(writer, address);
         }
-        try writer.writeByte('\n');
     }
 
     pub fn eql(self: Instruction, other: Instruction) bool {

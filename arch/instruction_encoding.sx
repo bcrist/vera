@@ -61,7 +61,7 @@
    )
    (0180 0180 B
       (desc "Absolute unconditional branch")
-      (param (base constant) (base-src IP_plus_2_32) (range 0 4294967295))
+      (param (address insn) (base constant) (base-src IP_plus_2_32) (range 0 4294967295))
    )
    (0181 0181 CALL
       (desc "Call IP-relative subroutine")

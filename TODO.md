@@ -1,4 +1,7 @@
 [assembler] output files
+[assembler] refactor Constant to keep track of signedness instead of assuming everything is signed
+[assembler] add cycle counts to listing output
+[assembler] add line numbers to listing output (maybe need to check lexer - can newlines be escaped?)
 [assembler] .local defs
 [assembler] check for shadowed symbols
 [assembler] Usage of a label that's fixed by an .org directive should not cause the expression to be marked .constant_depends_on_layout
@@ -15,6 +18,7 @@
 [test] Use assembler for test_instruction_behavior
 [test] Use assembler and disassembler for test_instruction_encoding
 
+[compile_arch] Compute min/max cycles per instruction, add to encoding sx
 [compile_arch] Add more aliases
 [compile_arch] Decompile/dump to HTML
 [compile_arch] Validate that the same instruction encoding doesn't map to multiple opcodes/aliases

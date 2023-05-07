@@ -193,7 +193,7 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
 
                         .@"align" => {
                             if (insn_params[insn2]) |align_expr| {
-                                address = resolveAlignment(a, s, address, align_expr, false, check_for_alignment_holes, insn2, chunk.section);
+                                address = resolveAndApplyAlignment(a, s, address, align_expr, false, check_for_alignment_holes, insn2, chunk.section);
                             }
                             break;
                         },
@@ -235,7 +235,7 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
             },
             .@"align" => {
                 if (insn_params[insn_handle]) |align_expr| {
-                    address = resolveAlignment(a, s, address, align_expr, true, check_for_alignment_holes, insn_handle, chunk.section);
+                    address = resolveAndApplyAlignment(a, s, address, align_expr, true, check_for_alignment_holes, insn_handle, chunk.section);
                 }
             },
             .db => {
@@ -276,7 +276,7 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
 
     if (chunk.section) |section_handle| {
         const initial_page = initial_address >> @bitSizeOf(bus.PageOffset);
-        const final_page = (address - 1) >> @bitSizeOf(bus.PageOffset);
+        const final_page = if (address == initial_address) initial_page else (address - 1) >> @bitSizeOf(bus.PageOffset);
 
         for (initial_page .. final_page + 1) |page| {
             const page_data_handle = a.findOrCreatePage(@intCast(bus.Page, page), section_handle);
@@ -298,7 +298,40 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
     return layout_changed;
 }
 
-fn resolveAlignment(
+pub fn getResolvedAlignment(s: SourceFile.Slices, maybe_align_expr: ?Expression.Handle) ?Assembler.Alignment {
+    const align_expr = maybe_align_expr orelse return null;
+
+    const expr_constants = s.expr.items(.resolved_constant);
+
+    var alignment: i64 = 0;
+    var offset: i64 = 0;
+    switch (s.expr.items(.info)[align_expr]) {
+        .list => |bin| {
+            if (expr_constants[bin.left]) |constant| {
+                alignment = constant.asInt() catch return null;
+            }
+            if (expr_constants[bin.right]) |constant| {
+                offset = constant.asInt() catch return null;
+            }
+        },
+        else => {
+            if (expr_constants[align_expr]) |constant| {
+                alignment = constant.asInt() catch return null;
+            }
+        }
+    }
+
+    if (alignment <= 1 or offset >= alignment or offset < 0 or @popCount(alignment) != 1) {
+        return null;
+    }
+
+    return .{
+        .modulo = std.math.cast(u32, alignment) orelse return null,
+        .offset = std.math.cast(u32, offset) orelse return null,
+    };
+}
+
+fn resolveAndApplyAlignment(
     a: *Assembler,
     s: SourceFile.Slices,
     address: u32,
@@ -709,7 +742,15 @@ pub fn populatePageChunks(a: *Assembler, chunks: []const SourceFile.Chunk) void 
     for (chunks) |chunk| {
         const addresses = chunk.getAddressRange(a);
         const first_page = addresses.begin >> @bitSizeOf(bus.PageOffset);
-        const last_page = (addresses.end - 1) >> @bitSizeOf(bus.PageOffset);
+        var last_page = first_page;
+        if (addresses.end != addresses.begin) {
+            last_page = (addresses.end - 1) >> @bitSizeOf(bus.PageOffset);
+        }
+
+        a.chunks.append(a.gpa, .{
+            .chunk = chunk,
+            .address = addresses.begin,
+        }) catch @panic("OOM");
 
         for (first_page .. last_page + 1) |page| {
             const page_data_handle = a.page_lookup.get(@intCast(bus.Page, page)) orelse unreachable;

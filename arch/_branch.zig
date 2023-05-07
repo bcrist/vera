@@ -202,7 +202,7 @@ pub fn _FAB0_FABF() void {
 }
 
 pub fn _0180() void {
-    encoding(.B, .{ .imm32u });
+    encoding(.B, .{ addr(.insn, .imm32u) });
     //syntax("B imm32[0,4294967295]");
     desc("Absolute unconditional branch");
 
