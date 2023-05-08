@@ -32,8 +32,7 @@ const branch = cb.branch;
 const illegal_instruction = cb.illegal_instruction;
 
 pub fn _handler_7() void {
-    //syntax("(interrupt)");
-    //desc("Interrupt handler");
+        //desc("Interrupt handler");
     assert(uc_address() == @enumToInt(uc.Vectors.interrupt));
     const vector_register = physical_address.fromFrame(@enumToInt(physical_address.DeviceFrame.sys_interrupt_controller));
 
@@ -68,7 +67,6 @@ pub fn _handler_7() void {
 
 pub fn _018C() void {
     encoding(.IRET, .{});
-    //syntax("IRET");
     desc("Return from interrupt");
 
     if (!kernel()) {

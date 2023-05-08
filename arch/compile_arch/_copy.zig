@@ -46,7 +46,6 @@ const LL_to_ZNVC = cb.LL_to_ZNVC;
 
 pub fn _4800_48FF() void {
     encoding(.C, .{ .Ra, .to, .Rb });
-    //syntax("C Ra -> Rb");
     desc("Copy 16b register to another 16b register");
 
     op_reg_to_LL(.OA);
@@ -56,7 +55,6 @@ pub fn _4800_48FF() void {
 
 pub fn _4900_49FF() void {
     encoding(.C, .{ .RaU, .to, .Xb });
-    //syntax("C URa -> Xb");
     desc("Copy unsigned value from 16b register to 32b register");
 
     op_reg_to_L(.OA, .zx);
@@ -66,7 +64,6 @@ pub fn _4900_49FF() void {
 
 pub fn _4A00_4AFF() void {
     encoding(.C, .{ .RaS, .to, .Xb });
-    //syntax("C SRa -> Xb");
     desc("Copy signed value from 16b register to 32b register");
 
     op_reg_to_L(.OA, .sx);
@@ -76,7 +73,6 @@ pub fn _4A00_4AFF() void {
 
 pub fn _4B00_4BFF() void {
     encoding(.C, .{ .Xa, .to, .Xb });
-    //syntax("C Xa -> Xb");
     desc("Copy 32b register to another 32b register");
 
     op_reg32_to_L(.OA);
@@ -157,7 +153,6 @@ pub fn _5810_581F() void {
 
 pub fn _5820_582F() void {
     encoding(.C, .{ SP_relative(null, .imm16u), .to, .Xa });
-    //syntax("C SP+imm[0,65535] -> Xa");
     desc("Copy SP-relative (immediate offset) address to 32b register");
 
     IP_read_to_D(2, .word);
@@ -171,7 +166,6 @@ pub fn _5820_582F() void {
 }
 pub fn _5830_583F() void {
     encoding(.C, .{ SP_relative(null, .imm16n), .to, .Xa });
-    //syntax("C SP+imm[-65536,-1] -> Xa");
     desc("Copy SP-relative (immediate offset) address to 32b register");
 
     IP_read_to_D(2, .word);
@@ -186,7 +180,6 @@ pub fn _5830_583F() void {
 
 pub fn _5C00_5CFF() void {
     encoding(.C, .{ .immb4u, .to, .Ra });
-    //syntax("C imm4[0,15] -> Ra");
     desc("Copy immediate to 16b register");
 
     literal_to_LL(getParameterConstant(SignedOffsetForLiteral, 0));
@@ -195,7 +188,6 @@ pub fn _5C00_5CFF() void {
 }
 pub fn _5D00_5DFF() void {
     encoding(.C, .{ .immb4n, .to, .Ra });
-    //syntax("C imm4[-16,-1] -> Ra");
     desc("Copy immediate to 16b register");
 
     literal_to_LL(getParameterConstant(SignedOffsetForLiteral, 0));
@@ -205,7 +197,6 @@ pub fn _5D00_5DFF() void {
 
 pub fn _5E00_5EFF() void {
     encoding(.C, .{ .immb4u, .to, .Xa });
-    //syntax("C imm4[0,15] -> Xa");
     desc("Copy immediate to 32b register");
 
     literal_to_L(getParameterConstant(SignedOffsetForLiteral, 0));
@@ -214,7 +205,6 @@ pub fn _5E00_5EFF() void {
 }
 pub fn _5F00_5FFF() void {
     encoding(.C, .{ .immb4n, .to, .Xa });
-    //syntax("C imm4[-16,-1] -> Xa");
     desc("Copy immediate to 32b register");
 
     literal_to_L(getParameterConstant(SignedOffsetForLiteral, 0));
@@ -247,7 +237,6 @@ pub fn _5840_58FF() void {
 
 pub fn _FB00_FB0F() void {
     encoding(.C, .{ .imm8u, .to, .Ra });
-    //syntax("C imm8[0,255] -> Ra");
     desc("Copy immediate to 16b register");
 
     IP_read_to_D(2, .byte);
@@ -260,7 +249,6 @@ pub fn _FB00_FB0F() void {
 
 pub fn _FB10_FB1F() void {
     encoding(.C, .{ .imm8u, .to, .Xa });
-    //syntax("C imm8[0,255] -> Xa");
     desc("Copy immediate to 32b register");
 
     IP_read_to_D(2, .byte);
@@ -273,7 +261,6 @@ pub fn _FB10_FB1F() void {
 
 pub fn _FB20_FB2F() void {
     encoding(.C, .{ .imm16u, .to, .RaU });
-    //syntax("C imm16[0,65535] -> Ra");
     desc("Copy immediate to 16b register");
 
     IP_read_to_D(2, .word);
@@ -294,7 +281,6 @@ pub fn _alias_FB20_FB2F_imm16s() void {
 
 pub fn _FB30_FB3F() void {
     encoding(.C, .{ .imm16u, .to, .Xa });
-    //syntax("C imm16[0,65535] -> Xa");
     desc("Copy immediate to 32b register");
 
     IP_read_to_D(2, .word);
@@ -307,7 +293,6 @@ pub fn _FB30_FB3F() void {
 
 pub fn _FB40_FB4F() void {
     encoding(.C, .{ .imm16n, .to, .Xa });
-    //syntax("C imm16[-65536,-1] -> Xa");
     desc("Copy immediate to 32b register");
 
     IP_read_to_D(2, .word);
@@ -319,8 +304,7 @@ pub fn _FB40_FB4F() void {
 }
 
 pub fn _FB50_FB5F() void {
-    encoding(.C, .{ .imm32, .to, .Xa });
-    //syntax("C imm32[0,4294967295] -> Xa");
+    encoding(.C, .{ .imm32u, .to, .XaU });
     desc("Copy immediate to 32b register");
 
     IP_read_to_D(2, .word);
@@ -336,10 +320,13 @@ pub fn _FB50_FB5F() void {
 
     load_and_exec_next_insn(6);
 }
+pub fn _alias_FB50_FB5F_signed() void {
+    encoding(.C, .{ .imm32s, .to, .XaS });
+    desc("Copy immediate to 32b register");
+}
 
 pub fn _FB60_FB6F() void {
     encoding(.C, .{ .Ra, .to, .Ra1, .to, .Rb1 });
-    //syntax("C Ra -> Ra1 -> Rb1");
     desc("16b three register copy or swap");
 
     IP_read_to_D(2, .byte);
@@ -359,7 +346,6 @@ pub fn _FB60_FB6F() void {
 
 pub fn _FB70_FB7F() void {
     encoding(.C, .{ .Xa, .to, .Xa1, .to, .Xb1 });
-    //syntax("C Xa -> Xa1 -> Xb1");
     desc("32b three register copy or swap");
 
     IP_read_to_D(2, .byte);
@@ -379,7 +365,6 @@ pub fn _FB70_FB7F() void {
 
 pub fn _5900_59FF() void {
     encoding(.DUP, .{ .Ra, .to, .Xb });
-    //syntax("DUP Ra -> Xb");
     desc("Concatenate 16b register with itself, storing result in 32b register");
 
     op_reg_to_JL(.OA);
@@ -390,7 +375,6 @@ pub fn _5900_59FF() void {
 
 pub fn _FBD0_FBDF() void {
     encoding(.C, .{ .STAT, .to, .Ra });
-    //syntax("C STAT -> Ra");
     desc("Copy status register to 16b register");
 
     STAT_to_L();
@@ -400,7 +384,6 @@ pub fn _FBD0_FBDF() void {
 
 pub fn _FBE0_FBEF() void {
     encoding(.C, .{ .Ra, .to, .STAT });
-    //syntax("C Ra -> STAT");
     desc("Copy 16b register to status register (flags only)");
 
     op_reg_to_LL(.OA);
@@ -410,7 +393,6 @@ pub fn _FBE0_FBEF() void {
 
 pub fn _FAE0_FAEF() void {
     encoding(.C, .{ .RP, .to, .Xa });
-    //syntax("C RP -> Xa");
     desc("Copy return pointer to 32b register");
 
     SR_to_L(.rp);
@@ -420,7 +402,6 @@ pub fn _FAE0_FAEF() void {
 
 pub fn _FAF0_FAFF() void {
     encoding(.C, .{ .Xa, .to, .RP });
-    //syntax("C Xa -> RP");
     desc("Copy 32b register to return pointer");
 
     op_reg32_to_L(.OA);
@@ -430,7 +411,6 @@ pub fn _FAF0_FAFF() void {
 
 pub fn _FBF0_FBFF() void {
     encoding(.C, .{ .BP, .to, .Xa });
-    //syntax("C BP -> Xa");
     desc("Copy base pointer to 32b register");
 
     SR_to_L(.bp);
@@ -440,7 +420,6 @@ pub fn _FBF0_FBFF() void {
 
 pub fn _E4F0_E4FF() void {
     encoding(.C, .{ .Xa, .to, .BP });
-    //syntax("C Xa -> BP");
     desc("Copy 32b register to base pointer");
 
     op_reg32_to_L(.OA);
@@ -450,7 +429,6 @@ pub fn _E4F0_E4FF() void {
 
 pub fn _E460_E46F() void {
     encoding(.C, .{ .ASN, .to, .Xa });
-    //syntax("C ASN -> Xa");
     desc("Copy address space number to 32b register");
 
     if (!kernel()) {
@@ -465,7 +443,6 @@ pub fn _E460_E46F() void {
 
 pub fn _E470_E47F() void {
     encoding(.C, .{ .Xa, .to, .ASN });
-    //syntax("C Xa -> ASN");
     desc("Copy 32b register to address space number");
 
     if (!kernel()) {
@@ -482,7 +459,6 @@ pub fn _E470_E47F() void {
 
 pub fn _93B0_93BF() void {
     encoding(.C, .{ .KXP, .to, .Xa });
-    //syntax("C KXP -> Xa");
     desc("Copy kernel context pointer to 32b register");
 
     if (!kernel()) {
@@ -497,7 +473,6 @@ pub fn _93B0_93BF() void {
 
 pub fn _93C0_93CF() void {
     encoding(.C, .{ .Xa, .to, .KXP });
-    //syntax("C Xa -> KXP");
     desc("Copy 32b register to kernel context pointer");
 
     if (!kernel()) {
@@ -514,7 +489,6 @@ pub fn _93C0_93CF() void {
 
 pub fn _93D0_93DF() void {
     encoding(.C, .{ .UXP, .to, .Xa });
-    //syntax("C UXP -> Xa");
     desc("Copy user context pointer to 32b register");
 
     SR_to_L(.uxp);
@@ -524,7 +498,6 @@ pub fn _93D0_93DF() void {
 
 pub fn _93E0_93EF() void {
     encoding(.C, .{ .Xa, .to, .UXP });
-    //syntax("C Xa -> UXP");
     desc("Copy 32b register to user context pointer");
 
     op_reg32_to_L(.OA);
@@ -536,7 +509,6 @@ pub fn _93E0_93EF() void {
 
 pub fn _9380_938F() void {
     encoding(.C, .{ .SP, .to, .Xa });
-    //syntax("C SP -> Xa");
     desc("Copy stack pointer to 32b register");
 
     SR_to_L(.sp);

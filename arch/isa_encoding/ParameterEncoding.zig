@@ -105,7 +105,6 @@ pub const ConstantEncoding = struct {
     reverse: bool = false, // store constant as `N - value` instead of `value`
     granularity: u3 = 1,
     ranges: []const ConstantRange = &.{},
-    alt_ranges: []const ConstantRange = &.{}, // TODO remove alt_ranges; use aliases instead
 
     // TODO allow restricting encoding to matching a subset of the full ConstantRanges that can be encoded.
     // that way e.g. in addition to C .imm16u -> RaU and C .imm16s -> RaS, we can also have C .imm15u -> Ra.
@@ -121,19 +120,7 @@ pub const ConstantEncoding = struct {
 
         var total_values: i64 = 0;
         var raw: i64 = 0;
-
         var i: usize = 0;
-        while (i < self.alt_ranges.len) : (i += 1) {
-            const alt = self.alt_ranges[i];
-            if (constant >= alt.min and constant <= alt.max) {
-                raw = total_values + @divTrunc((constant - alt.min), self.granularity);
-            }
-            total_values += @divTrunc((alt.max - alt.min + self.granularity), self.granularity);
-        }
-
-        total_values = 0;
-
-        i = 0;
         while (i < self.ranges.len) : (i += 1) {
             const range = self.ranges[i];
             if (constant >= range.min and constant <= range.max) {

@@ -371,12 +371,8 @@ fn tryImmediateParameterEncoding(comptime name: []const u8) ?ParameterEncoding {
                 encoding.base.constant.ranges = signedConstantRange(min * a, max * a);
             },
             0 => {
-                const min: i64 = 0;
-                const max: i64 = (1 << n_bits) - 1;
-                encoding.base.constant.ranges = constantRange(min * a, max * a);
-                const signed_min: i64 = -(1 << (n_bits - 1));
-                const signed_max: i64 = (1 << (n_bits - 1)) - 1;
-                encoding.base.constant.alt_ranges = signedConstantRange(signed_min * a, signed_max * a);
+                // signedness must be specified!
+                return null;
             },
             else => unreachable,
         }
@@ -438,15 +434,6 @@ fn validateConstantEncoding(comptime encoding: ParameterEncoding.ConstantEncodin
                 }));
             }
             total_values += range.max - range.min + encoding.granularity;
-        }
-
-        for (encoding.alt_ranges) |range| {
-            if (range.max < range.min) {
-                @compileError(std.fmt.comptimePrint("Alt range minimum bound of {} must not be larger than maximum bound of {}", .{
-                    range.min,
-                    range.max,
-                }));
-            }
         }
 
         if (total_values < min_total_values or total_values > max_total_values) {

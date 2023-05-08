@@ -36,7 +36,6 @@ const load_and_exec_next_insn = cb.load_and_exec_next_insn;
 
 pub fn _FB80_FB8F() void {
     encoding(.C, .{ .Xa, .to, .SP });
-    //syntax("C Xa -> SP");
     desc("Copy 32b register to stack pointer");
 
     op_reg32_to_L(.OA);
@@ -46,7 +45,6 @@ pub fn _FB80_FB8F() void {
 
 pub fn _0008() void {
     encoding(.UNFRAME, .{ .R0U });
-    //syntax("UNFRAME SRa");
     desc("Add 16b register to stack pointer");
 
     SR_plus_reg_to_L(.sp, 0, .zx, .fresh, .no_flags);
@@ -56,7 +54,6 @@ pub fn _0008() void {
 
 pub fn _0009() void {
     encoding(.FRAME, .{ .R0U });
-    //syntax("FRAME SRa");
     desc("Subtract 16b register from stack pointer");
 
     SR_minus_reg_to_L(.sp, 0, .zx, .fresh, .no_flags);
@@ -66,7 +63,6 @@ pub fn _0009() void {
 
 pub fn _5A00_5AFF() void {
     encoding(.UNFRAME, .{ .immba8u });
-    //syntax("UNFRAME immba[0,255]");
     desc("Add immediate to stack pointer");
 
     SR_to_J(.sp);
@@ -78,7 +74,6 @@ pub fn _5A00_5AFF() void {
 
 pub fn _5B00_5BFF() void {
     encoding(.FRAME, .{ .immba8u });
-    //syntax("FRAME immba[0,255]");
     desc("Subtract immediate from stack pointer");
 
     SR_to_J(.sp);
@@ -90,7 +85,6 @@ pub fn _5B00_5BFF() void {
 
 pub fn _0004() void {
     encoding(.UNFRAME, .{ .imm16u });
-    //syntax("UNFRAME imm16[0,65535]");
     desc("Add immediate to stack pointer");
 
     IP_read_to_D(2, .word);
@@ -107,7 +101,6 @@ pub fn _0004() void {
 
 pub fn _0005() void {
     encoding(.FRAME, .{ .imm16u });
-    //syntax("FRAME imm16[0,65535]");
     desc("Subtract immediate from stack pointer");
 
     IP_read_to_D(2, .word);
@@ -127,13 +120,11 @@ pub fn _E480_E49F() void {
     switch (OB()) {
         0x8 => {
             encoding(.POP, .{ .BaU });
-            //syntax("POP UBa");
             desc("Pop unsigned byte from stack to 16b register");
             ext = .zx;
         },
         0x9 => {
             encoding(.POP, .{ .BaS });
-            //syntax("POP SBa");
             desc("Pop signed byte from stack to 16b register");
             ext = .sx;
         },
@@ -152,7 +143,6 @@ pub fn _E480_E49F() void {
 
 pub fn _E4A0_E4AF() void {
     encoding(.POP, .{ .Ra });
-    //syntax("POP Ra");
     desc("Pop word from stack to 16b register");
 
     read_to_D(.sp, 0, .word, .stack);
@@ -167,7 +157,6 @@ pub fn _E4A0_E4AF() void {
 
 pub fn _E4B0_E4BF() void {
     encoding(.POP, .{ .Xa });
-    //syntax("POP Xa");
     desc("Pop double word from stack to 32b register");
 
     read_to_D(.sp, 0, .word, .stack);
@@ -188,7 +177,6 @@ pub fn _E4B0_E4BF() void {
 
 pub fn _E4C0_E4CF() void {
     encoding(.PUSH, .{ .Ba });
-    //syntax("PUSH Ba");
     desc("Push byte to stack from 16b register");
 
     op_reg_to_LL(.OA);
@@ -202,7 +190,6 @@ pub fn _E4C0_E4CF() void {
 
 pub fn _E4D0_E4DF() void {
     encoding(.PUSH, .{ .Ra });
-    //syntax("PUSH Ra");
     desc("Push word to stack from 16b register");
 
     op_reg_to_LL(.OA);
@@ -216,7 +203,6 @@ pub fn _E4D0_E4DF() void {
 
 pub fn _E4E0_E4EF() void {
     encoding(.PUSH, .{ .Xa });
-    //syntax("PUSH Xa");
     desc("Push double word to stack from 32b register");
 
     op_reg_to_LL(.OA);

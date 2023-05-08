@@ -435,14 +435,6 @@ fn checkConstantInRange(constant: i64, constant_encoding: ParameterEncoding.Cons
             }
         }
     }
-    for (constant_encoding.alt_ranges) |range| {
-        if (constant >= range.min and constant <= range.max) {
-            var dc = constant - range.min;
-            if (@rem(dc, constant_encoding.granularity) == 0) {
-                return true;
-            }
-        }
-    }
     return false;
 }
 

@@ -102,13 +102,6 @@ fn writeBaseOffsetEncoding(writer: anytype, boe: ParameterEncoding.BaseOffsetEnc
                 _ = try writer.close();
             }
 
-            for (ce.alt_ranges) |range| {
-                try writer.expression("alt-range");
-                try writer.int(range.min, 10);
-                try writer.int(range.max, 10);
-                _ = try writer.close();
-            }
-
             if (ce.granularity != 1) {
                 try writer.expression("granularity");
                 try writer.int(ce.granularity, 10);
@@ -144,7 +137,6 @@ pub const InstructionEncodingParser = struct {
     constant_ranges: deep_hash_map.DeepAutoHashMapUnmanaged([]const ConstantRange, void) = .{},
     parameter_encodings: deep_hash_map.DeepAutoHashMapUnmanaged([]const ParameterEncoding, void) = .{},
     temp_constant_ranges: std.ArrayListUnmanaged(ConstantRange) = .{},
-    temp_alt_constant_ranges: std.ArrayListUnmanaged(ConstantRange) = .{},
     temp_parameter_encodings: std.ArrayListUnmanaged(ParameterEncoding) = .{},
 
     pub fn deinitData(self: *InstructionEncodingParser) void {
@@ -169,7 +161,6 @@ pub const InstructionEncodingParser = struct {
         self.constant_ranges.deinit(self.temp_allocator);
         self.parameter_encodings.deinit(self.temp_allocator);
         self.temp_constant_ranges.deinit(self.temp_allocator);
-        self.temp_alt_constant_ranges.deinit(self.temp_allocator);
         self.temp_parameter_encodings.deinit(self.temp_allocator);
     }
 
@@ -258,18 +249,12 @@ pub const InstructionEncodingParser = struct {
                 var ce = ParameterEncoding.ConstantEncoding{};
 
                 self.temp_constant_ranges.clearRetainingCapacity();
-                self.temp_alt_constant_ranges.clearRetainingCapacity();
 
                 while (true) {
                     if (try self.reader.expression("rev")) {
                         ce.reverse = true;
                     } else if (try self.reader.expression("range")) {
                         try self.temp_constant_ranges.append(self.temp_allocator, .{
-                            .min = try self.reader.requireAnyInt(i64, 10),
-                            .max = try self.reader.requireAnyInt(i64, 10),
-                        });
-                    } else if (try self.reader.expression("alt-range")) {
-                        try self.temp_alt_constant_ranges.append(self.temp_allocator, .{
                             .min = try self.reader.requireAnyInt(i64, 10),
                             .max = try self.reader.requireAnyInt(i64, 10),
                         });
@@ -284,12 +269,7 @@ pub const InstructionEncodingParser = struct {
                     ce.ranges = try self.dedupConstantRanges(self.temp_constant_ranges.items);
                 }
 
-                if (self.temp_alt_constant_ranges.items.len > 0) {
-                    ce.alt_ranges = try self.dedupConstantRanges(self.temp_alt_constant_ranges.items);
-                }
-
                 self.temp_constant_ranges.clearRetainingCapacity();
-                self.temp_alt_constant_ranges.clearRetainingCapacity();
 
                 return .{ .constant = ce };
             },

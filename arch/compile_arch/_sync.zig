@@ -44,7 +44,6 @@ const ZN_from_LL = cb.ZN_from_LL;
 
 pub fn _0002() void {
     encoding(.SYNC, .{});
-    //syntax("SYNC");
     desc("Forces the next instruction to be atomic");
     atomic_next_cycle_until_end();
     load_and_exec_next_insn(2);
@@ -52,7 +51,6 @@ pub fn _0002() void {
 
 pub fn _3000_30FF() void {
     encoding(.ALD, .{ addr(.data, .Xa), .to, .Rb });
-    //syntax("ALD.D Xa -> Rb");
     desc("Atomic load 16b register using pointer to data memory");
 
     op_reg32_to_L(.OA);
@@ -69,7 +67,6 @@ pub fn _3000_30FF() void {
 
 pub fn _3100_31FF() void {
     encoding(.ALD, .{ addr(.data, .Xa), .to, .Xb });
-    //syntax("ALD.D Xa -> Xb");
     desc("Atomic load 32b register using pointer to data memory");
 
     op_reg32_to_L(.OA);
@@ -92,7 +89,6 @@ pub fn _3100_31FF() void {
 
 pub fn _3200_32FF() void {
     encoding(.AST, .{ .Rb, .to, addr(.data, .Xa) });
-    //syntax("AST.D Rb -> Xa");
     desc("Atomic store 16b register using pointer to data memory");
 
     op_reg32_to_L(.OA);
@@ -108,7 +104,6 @@ pub fn _3200_32FF() void {
 
 pub fn _3300_33FF() void {
     encoding(.AST, .{ .Xb, .to, addr(.data, .Xa) });
-    //syntax("AST.D Xb -> Xa");
     desc("Atomic store 32b register using pointer to data memory");
 
     op_reg32_to_L(.OA);
@@ -129,7 +124,6 @@ pub fn _3300_33FF() void {
 
 pub fn _3400_34FF() void {
     encoding(.ASTZ, .{ .Rb, .to, addr(.data, .Xa) });
-    //syntax("ASTZ.D Rb -> Xa");
     desc("Atomic store 16b register using pointer to data memory, if previous stored value is 0");
 
     op_reg32_to_L(.OA);
@@ -157,7 +151,6 @@ fn astz16_continuation() void {
 
 pub fn _3500_35FF() void {
     encoding(.ASTZ, .{ .Xb, .to, addr(.data, .Xa) });
-    //syntax("ASTZ.D Xb -> Xa");
     desc("Atomic store 32b register using pointer to data memory, if previous stored value is 0");
 
     op_reg32_to_L(.OA);
@@ -196,7 +189,6 @@ fn astz32_continuation() void {
 
 pub fn _3600_36FF() void {
     encoding(.AADD, .{ addr(.data, .Xa), .to, .R0, .Rb, .to, addr(.data, .Xa) });
-    //syntax("AADD.D Xa -> R0, Rb -> Xa");
     desc("16b Atomic add using pointer to data memory");
 
     op_reg32_to_L(.OA);
@@ -221,7 +213,6 @@ pub fn _3600_36FF() void {
 
 pub fn _3700_37FF() void {
     encoding(.AADD, .{ addr(.data, .Xa), .to, .X0, .Xb, .to, addr(.data, .Xa) });
-    //syntax("AADD.D Xa -> X0, Xb -> Xa");
     desc("32b Atomic add using pointer to data memory");
 
     op_reg32_to_L(.OA);
@@ -263,7 +254,6 @@ pub fn _3700_37FF() void {
 
 pub fn _3800_380F() void {
     encoding(.AINC, .{ addr(.data, .Xa), .to, .Ra });
-    //syntax("AINC.D Xa -> Ra");
     desc("16b Atomic increment using pointer to data memory, overwriting pointer with new value");
 
     op_reg32_to_L(.OA);
@@ -286,7 +276,6 @@ pub fn _3800_380F() void {
 
 pub fn _3900_39FF() void {
     encoding(.AINC, .{ addr(.data, .Xa), .to, .Xa });
-    //syntax("AINC.D Xa -> Xa");
     desc("32b Atomic increment using pointer to data memory, overwriting pointer with new value");
 
     op_reg32_to_L(.OA);
@@ -320,7 +309,6 @@ pub fn _3900_39FF() void {
 
 pub fn _3A00_3A0F() void {
     encoding(.ADECNZ, .{ addr(.data, .Xa), .to, .Ra });
-    //syntax("ADECNZ.D Xa -> Rb");
     desc("16b Atomic decrement using pointer to data memory, if stored value is not zero.  Overwrites address with final value.");
 
     op_reg32_to_L(.OA);
@@ -350,7 +338,6 @@ fn adecnz16_continuation() void {
 
 pub fn _3B00_3B0F() void {
     encoding(.ADECNZ, .{ addr(.data, .Xa), .to, .Xa });
-    //syntax("ADECNZ.D Xa -> Xa");
     desc("32b Atomic decrement using pointer to data memory, if stored value is not zero.  Overwrites address with final value.");
 
     op_reg32_to_L(.OA);
@@ -392,7 +379,6 @@ fn adecnz32_continuation() void {
 
 pub fn _3C00_3C0F() void {
     encoding(.AX, .{ addr(.data, .Xa), .to, .Rb1, .Ra1, .to, addr(.data, .Xa) });
-    //syntax("AX.D Xa -> Rb1, Ra1 -> Xa");
     desc("16b Atomic exchange using pointer to data memory");
 
     op_reg32_to_L(.OA);
@@ -418,7 +404,6 @@ pub fn _3C00_3C0F() void {
 
 pub fn _3C10_3C1F() void {
     encoding(.AX, .{ addr(.data, .Xa), .to, .Xb1, .Xa1, .to, addr(.data, .Xa) });
-    //syntax("AX.D Xa -> Xb1, Xa1 -> Xa");
     desc("32b Atomic exchange using pointer to data memory");
 
     op_reg32_to_L(.OA);
@@ -455,7 +440,6 @@ pub fn _3C10_3C1F() void {
 
 pub fn _3C20_3C2F() void {
     encoding(.AXE, .{ addr(.data, .Xa), .to, .R0, .Rb1, .Ra1, .to, addr(.data, .Xa) });
-    //syntax("AXE.D Xa -> R0, Rb1, Ra1 -> Xa");
     desc("16b Atomic exchange using pointer to data memory, if stored value equals probe value");
 
     op_reg32_to_L(.OA);
@@ -493,7 +477,6 @@ fn axe16_continuation() void {
 
 pub fn _3C30_3C3F() void {
     encoding(.AXE, .{ addr(.data, .Xa), .to, .X0, .Xb1, .Xa1, .to, addr(.data, .Xa) });
-    //syntax("AXE.D Xa -> X0, Xb1, Xa1 -> Xa");
     desc("32b Atomic exchange using pointer to data memory, if stored value equals probe value");
 
     op_reg32_to_L(.OA);

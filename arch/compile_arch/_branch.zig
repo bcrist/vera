@@ -81,19 +81,16 @@ pub fn _0100() void {
 }
 pub fn _alias_0100() void {
     encoding(.B, .{ IP_relative(.insn, .imm_3_3) });
-    //syntax("B IP+immba[3,3]");
     desc("IP-relative unconditional branch to IP+3; equivalent to NOPE");
 }
 pub fn _0101_013C() void {
     encoding(.B, .{ IP_relative(.insn, .imm_4_63) });
-    //syntax("B IP+immba[4,63]");
     desc("IP-relative unconditional branch");
 
     branch(.ip, getParameterOffset(0));
 }
 pub fn _013D_017B() void {
     encoding(.B, .{ IP_relative(.insn, .imm_n64_n2) });
-    //syntax("B IP+immba[-64,-2]");
     desc("IP-relative unconditional branch");
 
     branch(.ip, getParameterOffset(0));
@@ -101,7 +98,6 @@ pub fn _013D_017B() void {
 
 pub fn _017C() void {
     encoding(.B, .{ IP_relative(.insn, .imm8_63_318) });
-    //syntax("B IP+imm8[63,318]");
     desc("IP-relative unconditional branch");
 
     IP_read_to_D(2, .byte);
@@ -118,7 +114,6 @@ pub fn _017C() void {
 
 pub fn _017D() void {
     encoding(.B, .{ IP_relative(.insn, .imm8_n319_n64_rev) });
-    //syntax("B IP+imm8[-319,-64]");
     desc("IP-relative unconditional branch");
 
     IP_read_to_D(2, .byte);
@@ -135,7 +130,6 @@ pub fn _017D() void {
 
 pub fn _017E() void {
     encoding(.B, .{ IP_relative(.insn, .imm16u) });
-    //syntax("B IP+imm16[0,65535]");
     desc("IP-relative unconditional branch");
 
     IP_read_to_D(2, .word);
@@ -152,7 +146,6 @@ pub fn _017E() void {
 
 pub fn _017F() void {
     encoding(.B, .{ IP_relative(.insn, .imm16n) });
-    //syntax("B IP+imm16[-65536,-1]");
     desc("IP-relative unconditional branch");
 
     IP_read_to_D(2, .word);
@@ -169,7 +162,6 @@ pub fn _017F() void {
 
 pub fn _0006() void {
     encoding(.B, .{ IP_relative(.insn, .R0U) });
-    //syntax("B IP+UR0");
     desc("IP-relative unsigned register unconditional branch");
 
     SR_plus_reg_to_L(.ip, 0, .zx, .fresh, .no_flags);
@@ -181,7 +173,6 @@ pub fn _0006() void {
 
 pub fn _0007() void {
     encoding(.B, .{ IP_relative(.insn, .R0S) });
-    //syntax("B IP+SR0");
     desc("IP-relative signed register unconditional branch");
 
     SR_plus_reg_to_L(.ip, 0, .sx, .fresh, .no_flags);
@@ -193,7 +184,6 @@ pub fn _0007() void {
 
 pub fn _FAB0_FABF() void {
     encoding(.B, .{ addr(.insn, .Xa) });
-    //syntax("B Xa");
     desc("Register unconditional branch");
 
     op_reg32_to_L(.OA);
@@ -205,7 +195,6 @@ pub fn _FAB0_FABF() void {
 
 pub fn _0180() void {
     encoding(.B, .{ addr(.insn, .imm32u) });
-    //syntax("B imm32[0,4294967295]");
     desc("Absolute unconditional branch");
 
     IP_read_to_D(2, .word);
@@ -224,7 +213,6 @@ pub fn _0180() void {
 
 pub fn _0200_023C() void {
     encodingWithSuffix(.B, .Z, .{ IP_relative(.insn, .imm_3_63) });
-    //syntax("B.Z IP+immba[3,63]");
     desc("IP-relative branch if zero");
 
     if (zero()) {
@@ -235,7 +223,6 @@ pub fn _0200_023C() void {
 }
 pub fn _023D_027B() void {
     encodingWithSuffix(.B, .Z, .{ IP_relative(.insn, .imm_n64_n2) });
-    //syntax("B.Z IP+immba[-64,-2]");
     desc("IP-relative branch if zero");
 
     if (zero()) {
@@ -247,7 +234,6 @@ pub fn _023D_027B() void {
 
 pub fn _0300_033C() void {
     encodingWithSuffix(.B, .NZ, .{ IP_relative(.insn, .imm_3_63) });
-    //syntax("B.NZ IP+immba[3,63]");
     desc("IP-relative branch if nonzero");
 
     if (!zero()) {
@@ -258,7 +244,6 @@ pub fn _0300_033C() void {
 }
 pub fn _033D_037B() void {
     encodingWithSuffix(.B, .NZ, .{ IP_relative(.insn, .imm_n64_n2) });
-    //syntax("B.NZ IP+immba[-64,-2]");
     desc("IP-relative branch if nonzero");
 
     if (!zero()) {
@@ -483,7 +468,6 @@ pub fn _0C95() void { conditional_s16(.NP); }
 
 pub fn _0184() void {
     encoding(.BP, .{});
-    //syntax("BP");
     desc("Branch to start of current page");
 
     SRL_logic_literal_to_LL(.ip, .jl_and_k, 0xF000, .fresh, .no_flags);
@@ -496,7 +480,6 @@ pub fn _0184() void {
 
 pub fn _0185() void {
     encoding(.BPN, .{});
-    //syntax("BPN");
     desc("Branch to start of next page");
 
     SRL_logic_literal_to_LL(.ip, .njl_nand_k, 0xF000, .fresh, .no_flags);
@@ -509,7 +492,6 @@ pub fn _0185() void {
 
 pub fn _0186() void {
     encoding(.BB, .{});
-    //syntax("BB");
     desc("Branch to start of current 256-byte-aligned block");
 
     SRL_logic_literal_to_LL(.ip, .jl_and_k, 0xFF00, .fresh, .no_flags);
@@ -522,7 +504,6 @@ pub fn _0186() void {
 
 pub fn _0187() void {
     encoding(.BBN, .{});
-    //syntax("BBN");
     desc("Branch to start of next 256-byte-aligned block");
 
     SRL_logic_literal_to_LL(.ip, .jl_or_k, 0xFF, .fresh, .no_flags);
@@ -535,7 +516,6 @@ pub fn _0187() void {
 
 pub fn _0188() void {
     encoding(.EAB, .{ addr(.insn, .X0) });
-    //syntax("EAB X0");
     desc("Enable address translation + register unconditional branch");
 
     if (!kernel()) {
@@ -553,7 +533,6 @@ pub fn _0188() void {
 
 pub fn _0189() void {
     encoding(.DAB, .{ addr(.insn, .X0) });
-    //syntax("DAB X0");
     desc("Disable address translation + register unconditional branch");
 
     if (!kernel()) {

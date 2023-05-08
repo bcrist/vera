@@ -31,25 +31,21 @@ pub fn _1F00_1F3F() void {
             mode = .data;
             dir = .write;
             encodingWithSuffix(.SAT, .W, .{ .Xa, .to, addr(.data, .X0) });
-            //syntax("SAT.W");
         },
         0x10 => {
             mode = .data;
             dir = .read;
             encodingWithSuffix(.SAT, .R, .{ .Xa, .to, addr(.data, .X0) });
-            //syntax("SAT.R");
         },
         0x20 => {
             mode = .stack;
             dir = .read;
             encodingWithSuffix(.SAT, .S, .{ .Xa, .to, addr(.stack, .X0) });
-            //syntax("SAT.S");
         },
         0x30 => {
             mode = .insn;
             dir = .read;
             encodingWithSuffix(.SAT, .I, .{ .Xa, .to, addr(.insn, .X0) });
-            //syntax("SAT.I");
         },
         else => unreachable,
     }
@@ -89,25 +85,21 @@ pub fn _1F40_1F7F() void {
             mode = .data;
             dir = .write;
             encodingWithSuffix(.RAT, .W, .{ .Ra });
-            //syntax("RAT.W");
         },
         0x50 => {
             mode = .data;
             dir = .read;
             encodingWithSuffix(.RAT, .R, .{ .Ra });
-            //syntax("RAT.R");
         },
         0x60 => {
             mode = .stack;
             dir = .read;
             encodingWithSuffix(.RAT, .S, .{ .Ra });
-            //syntax("RAT.S");
         },
         0x70 => {
             mode = .insn;
             dir = .read;
             encodingWithSuffix(.RAT, .I, .{ .Ra });
-            //syntax("RAT.I");
         },
         else => unreachable,
     }

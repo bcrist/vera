@@ -226,28 +226,24 @@ fn store32(reg: misc.RegisterIndex, bus_mode: ControlSignals.BusMode, offset: Si
 // Instruction memory loads
 pub fn _C800_C8FF() void {
     encoding(.LD, .{ addr(.insn, .Xa), .to, .BbU });
-    //syntax("LD.I Xa -> UBb");
     desc("Load unsigned byte using pointer to instruction memory");
     fromRegPointer(0);
     opLoad8(.OB, .insn, .zx, 0);
 }
 pub fn _C900_C9FF() void {
     encoding(.LD, .{ addr(.insn, .Xa), .to, .BbS });
-    //syntax("LD.I Xa -> SBb");
     desc("Load signed byte using pointer to instruction memory");
     fromRegPointer(0);
     opLoad8(.OB, .insn, .sx, 0);
 }
 pub fn _CA00_CAFF() void {
     encoding(.LD, .{ addr(.insn, .Xa), .to, .Rb });
-    //syntax("LD.I Xa -> Rb");
     desc("Load 16b register using pointer to instruction memory");
     fromRegPointer(0);
     opLoad16(.OB, .insn, 0);
 }
 pub fn _CB00_CBFF() void {
     encoding(.LD, .{ addr(.insn, .Xa), .to, .Xb });
-    //syntax("LD.I Xa -> Xb");
     desc("Load 32b register using pointer to instruction memory");
     fromRegPointer(0);
     opLoad32(.OB, .insn, 0);
@@ -256,28 +252,24 @@ pub fn _CB00_CBFF() void {
 // plain stack pointer load/store
 pub fn _D800_D8FF() void {
     encoding(.LD, .{ addr(.stack, .Xa), .to, .BbU });
-    //syntax("LD.S Xa -> UBb");
     desc("Load unsigned byte using pointer to stack memory");
     fromRegPointer(0);
     opLoad8(.OB, .stack, .zx, 0);
 }
 pub fn _D900_D9FF() void {
     encoding(.LD, .{ addr(.stack, .Xa), .to, .BbS });
-    //syntax("LD.S Xa -> SBb");
     desc("Load signed byte using pointer to stack memory");
     fromRegPointer(0);
     opLoad8(.OB, .stack, .sx, 0);
 }
 pub fn _DA00_DAFF() void {
     encoding(.LD, .{ addr(.stack, .Xa), .to, .Rb });
-    //syntax("LD.S Xa -> Rb");
     desc("Load 16b register using pointer to stack memory");
     fromRegPointer(0);
     opLoad16(.OB, .stack, 0);
 }
 pub fn _DB00_DBFF() void {
     encoding(.LD, .{ addr(.stack, .Xa), .to, .Xb });
-    //syntax("LD.S Xa -> Xb");
     desc("Load 32b register using pointer to stack memory");
     fromRegPointer(0);
     opLoad32(.OB, .stack, 0);
@@ -285,21 +277,18 @@ pub fn _DB00_DBFF() void {
 
 pub fn _1000_10FF() void {
     encoding(.ST, .{ .Bb, .to, addr(.stack, .Xa) });
-    //syntax("ST.S Bb -> Xa");
     desc("Store byte using pointer to stack memory");
     fromRegPointer(0);
     opStore8(.OB, .stack, 0);
 }
 pub fn _1100_11FF() void {
     encoding(.ST, .{ .Rb, .to, addr(.stack, .Xa) });
-    //syntax("ST.S Rb -> Xa");
     desc("Store 16b register using pointer to stack memory");
     fromRegPointer(0);
     opStore16(.OB, .stack, 0);
 }
 pub fn _1200_12FF() void {
     encoding(.ST, .{ .Xb, .to, addr(.stack, .Xa) });
-    //syntax("ST.S Xb -> Xa");
     desc("Store 32b register using pointer to stack memory");
     fromRegPointer(0);
     opStore32(.OB, .stack, 0);
@@ -308,28 +297,24 @@ pub fn _1200_12FF() void {
 // plain data pointer load/store
 pub fn _E800_E8FF() void {
     encoding(.LD, .{ addr(.data, .Xa), .to, .BbU });
-    //syntax("LD.D Xa -> UBb");
     desc("Load unsigned byte using pointer to data memory");
     fromRegPointer(0);
     opLoad8(.OB, .data, .zx, 0);
 }
 pub fn _E900_E9FF() void {
     encoding(.LD, .{ addr(.data, .Xa), .to, .BbS });
-    //syntax("LD.D Xa -> SBb");
     desc("Load signed byte using pointer to data memory");
     fromRegPointer(0);
     opLoad8(.OB, .data, .sx, 0);
 }
 pub fn _EA00_EAFF() void {
     encoding(.LD, .{ addr(.data, .Xa), .to, .Rb });
-    //syntax("LD.D Xa -> Rb");
     desc("Load 16b register using pointer to data memory");
     fromRegPointer(0);
     opLoad16(.OB, .data, 0);
 }
 pub fn _EB00_EBFF() void {
     encoding(.LD, .{ addr(.data, .Xa), .to, .Xb });
-    //syntax("LD.D Xa -> Xb");
     desc("Load 32b register using pointer to data memory");
     fromRegPointer(0);
     opLoad32(.OB, .data, 0);
@@ -337,21 +322,18 @@ pub fn _EB00_EBFF() void {
 
 pub fn _1300_13FF() void {
     encoding(.ST, .{ .Bb, .to, addr(.data, .Xa) });
-    //syntax("ST.D Bb -> Xa");
     desc("Store byte using pointer to data memory");
     fromRegPointer(0);
     opStore8(.OB, .data, 0);
 }
 pub fn _1400_14FF() void {
     encoding(.ST, .{ .Rb, .to, addr(.data, .Xa) });
-    //syntax("ST.D Rb -> Xa");
     desc("Store 16b register using pointer to data memory");
     fromRegPointer(0);
     opStore16(.OB, .data, 0);
 }
 pub fn _1500_15FF() void {
     encoding(.ST, .{ .Xb, .to, addr(.data, .Xa) });
-    //syntax("ST.D Xb -> Xa");
     desc("Store 32b register using pointer to data memory");
     fromRegPointer(0);
     opStore32(.OB, .data, 0);
@@ -360,28 +342,24 @@ pub fn _1500_15FF() void {
 // data pointer+reg load/store
 pub fn _EC00_ECFF() void {
     encoding(.LD, .{ Xa_relative(.data, .RbU), .to, .B0U });
-    //syntax("LD.D Xa+URb -> UB0");
     desc("Load unsigned byte using pointer to data memory with 16b register offset");
     fromRegPointerPlusRegOffset();
     load8(0, .data, .zx, 0);
 }
 pub fn _ED00_EDFF() void {
     encoding(.LD, .{ Xa_relative(.data, .RbU), .to, .B0S });
-    //syntax("LD.D Xa+URb -> SB0");
     desc("Load signed byte using pointer to data memory with 16b register offset");
     fromRegPointerPlusRegOffset();
     load8(0, .data, .sx, 0);
 }
 pub fn _EE00_EEFF() void {
     encoding(.LD, .{ Xa_relative(.data, .RbU), .to, .R0 });
-    //syntax("LD.D Xa+URb -> R0");
     desc("Load 16b register using pointer to data memory with 16b register offset");
     fromRegPointerPlusRegOffset();
     load16(0, .data, 0);
 }
 pub fn _EF00_EFFF() void {
     encoding(.LD, .{ Xa_relative(.data, .RbU), .to, .X0 });
-    //syntax("LD.D Xa+URb -> X0");
     desc("Load 32b register using pointer to data memory with 16b register offset");
     fromRegPointerPlusRegOffset();
     load32(0, .data, 0);
@@ -389,21 +367,18 @@ pub fn _EF00_EFFF() void {
 
 pub fn _1600_16FF() void {
     encoding(.ST, .{ .B0, .to, Xa_relative(.data, .RbU) });
-    //syntax("ST.D B0 -> Xa+URb");
     desc("Store byte using pointer to data memory with 16b register offset");
     fromRegPointerPlusRegOffset();
     store8(0, .data, 0);
 }
 pub fn _1700_17FF() void {
     encoding(.ST, .{ .R0, .to, Xa_relative(.data, .RbU) });
-    //syntax("ST.D R0 -> Xa+URb");
     desc("Store 16b register using pointer to data memory with 16b register offset");
     fromRegPointerPlusRegOffset();
     store16(0, .data, 0);
 }
 pub fn _1800_18FF() void {
     encoding(.ST, .{ .X0, .to, Xa_relative(.data, .RbU) });
-    //syntax("ST.D X0 -> Xa+URb");
     desc("Store 32b register using pointer to data memory with 16b register offset");
     fromRegPointerPlusRegOffset();
     store32(0, .data, 0);
@@ -412,28 +387,24 @@ pub fn _1800_18FF() void {
 // data pointer+imm load/store
 pub fn _DC00_DCFF() void {
     encoding(.LD, .{ Xa_relative(.data, .immb4u), .to, .B0U });
-    //syntax("LD.D Xa+immb[0,15] -> UB0");
     desc("Load unsigned byte using pointer to data memory with immediate offset");
     fromRegPointerPlusImmOffset(OB());
     load8(0, .data, .zx, 0);
 }
 pub fn _DD00_DDFF() void {
     encoding(.LD, .{ Xa_relative(.data, .immb4u), .to, .B0S });
-    //syntax("LD.D Xa+immb[0,15] -> SB0");
     desc("Load signed byte using pointer to data memory with immediate offset");
     fromRegPointerPlusImmOffset(OB());
     load8(0, .data, .sx, 0);
 }
 pub fn _DE00_DEFF() void {
     encoding(.LD, .{ Xa_relative(.data, .@"immb4u/2"), .to, .R0 });
-    //syntax("LD.D Xa+2*immb[0,15] -> R0");
     desc("Load 16b register using pointer to data memory with immediate offset (align 2)");
     fromRegPointerPlusImmOffset(@as(SignedOffsetForLiteral, OB()) * 2);
     load16(0, .data, 0);
 }
 pub fn _DF00_DFFF() void {
     encoding(.LD, .{ Xa_relative(.data, .@"immb4u/4"), .to, .X0 });
-    //syntax("LD.D Xa+4*immb[0,15] -> X0");
     desc("Load 32b register using pointer to data memory with immediate offset (align 4)");
     fromRegPointerPlusImmOffset(@as(SignedOffsetForLiteral, OB()) * 4);
     load32(0, .data, 0);
@@ -441,21 +412,18 @@ pub fn _DF00_DFFF() void {
 
 pub fn _1900_19FF() void {
     encoding(.ST, .{ .B0, .to, Xa_relative(.data, .immb4u) });
-    //syntax("ST.D B0 -> Xa+immb[0,15]");
     desc("Store byte using pointer to data memory with immediate offset");
     fromRegPointerPlusImmOffset(OB());
     store8(0, .data, 0);
 }
 pub fn _1A00_1AFF() void {
     encoding(.ST, .{ .R0, .to, Xa_relative(.data, .@"immb4u/2") });
-    //syntax("ST.D R0 -> Xa+2*immb[0,15]");
     desc("Store 16b register using pointer to data memory with immediate offset (align 2)");
     fromRegPointerPlusImmOffset(@as(SignedOffsetForLiteral, OB()) * 2);
     store16(0, .data, 0);
 }
 pub fn _1B00_1BFF() void {
     encoding(.ST, .{ .X0, .to, Xa_relative(.data, .@"immb4u/4") });
-    //syntax("ST.D X0 -> Xa+4*immb[0,15]");
     desc("Store 32b register using pointer to data memory with immediate offset (align 4)");
     fromRegPointerPlusImmOffset(@as(SignedOffsetForLiteral, OB()) * 4);
     store32(0, .data, 0);
@@ -464,28 +432,24 @@ pub fn _1B00_1BFF() void {
 // SP+imm load/store
 pub fn _CC00_CCFF() void {
     encoding(.LD, .{ SP_relative(.stack, .immb4u), .to, .BaU });
-    //syntax("LD.S SP+immb[0,15] -> UBa");
     desc("Load unsigned byte from stack with immediate offset");
     fromSPPlusImmOffset(OB());
     opLoad8(.OA, .stack, .zx, 0);
 }
 pub fn _CD00_CDFF() void {
     encoding(.LD, .{ SP_relative(.stack, .immb4u), .to, .BaS });
-    //syntax("LD.S SP+immb[0,15] -> SBa");
     desc("Load signed byte from stack with immediate offset");
     fromSPPlusImmOffset(OB());
     opLoad8(.OA, .stack, .sx, 0);
 }
 pub fn _CE00_CEFF() void {
     encoding(.LD, .{ SP_relative(.stack, .@"immb4u/2"), .to, .Ra });
-    //syntax("LD.S SP+2*immb[0,15] -> Ra");
     desc("Load 16b register from stack with immediate offset (align 2)");
     fromSPPlusImmOffset(@as(SignedOffsetForLiteral, OB()) * 2);
     opLoad16(.OA, .stack, 0);
 }
 pub fn _CF00_CFFF() void {
     encoding(.LD, .{ SP_relative(.stack, .@"immb4u/4"), .to, .Xa });
-    //syntax("LD.S SP+4*immb[0,15] -> Xa");
     desc("Load 32b register from stack with immediate offset (align 4)");
     fromSPPlusImmOffset(@as(SignedOffsetForLiteral, OB()) * 4);
     opLoad32(.OA, .stack, 0);
@@ -493,21 +457,18 @@ pub fn _CF00_CFFF() void {
 
 pub fn _1C00_1CFF() void {
     encoding(.ST, .{ .Ba, .to, SP_relative(.stack, .immb4u) });
-    //syntax("ST.S Ba -> SP+immb[0,15]");
     desc("Store byte to stack with immediate offset");
     fromSPPlusImmOffset(OB());
     opStore8(.OA, .stack, 0);
 }
 pub fn _1D00_1DFF() void {
     encoding(.ST, .{ .Ra, .to, SP_relative(.stack, .@"immb4u/2") });
-    //syntax("ST.S Ra -> SP+2*immb[0,15]");
     desc("Store 16b register to stack with immediate offset (align 2)");
     fromSPPlusImmOffset(@as(SignedOffsetForLiteral, OB()) * 2);
     opStore16(.OA, .stack, 0);
 }
 pub fn _1E00_1EFF() void {
     encoding(.ST, .{ .Xa, .to, SP_relative(.stack, .@"immb4u/4") });
-    //syntax("ST.S Xa -> SP+4*immb[0,15]");
     desc("Store 32b register to stack with immediate offset (align 4)");
     fromSPPlusImmOffset(@as(SignedOffsetForLiteral, OB()) * 4);
     opStore32(.OA, .stack, 0);
@@ -516,28 +477,24 @@ pub fn _1E00_1EFF() void {
 // SP+imm16 load/store
 pub fn _C000_C00F() void {
     encoding(.LD, .{ SP_relative(.stack, .imm16s), .to, .BaU });
-    //syntax("LD.S SP+imm16[-32768,32767] -> UBa");
     desc("Load unsigned byte from stack with immediate offset");
     fromSPPlusImm16Offset();
     opLoad8(.OA, .stack, .zx, 0);
 }
 pub fn _C010_C01F() void {
     encoding(.LD, .{ SP_relative(.stack, .imm16s), .to, .BaS });
-    //syntax("LD.S SP+imm16[-32768,32767] -> SBa");
     desc("Load signed byte from stack with immediate offset");
     fromSPPlusImm16Offset();
     opLoad8(.OA, .stack, .sx, 0);
 }
 pub fn _C020_C02F() void {
     encoding(.LD, .{ SP_relative(.stack, .imm16s), .to, .Ra });
-    //syntax("LD.S SP+imm16[-32768,32767] -> Ra");
     desc("Load 16b register from stack with immediate offset");
     fromSPPlusImm16Offset();
     opLoad16(.OA, .stack, 0);
 }
 pub fn _C030_C03F() void {
     encoding(.LD, .{ SP_relative(.stack, .imm16s), .to, .Xa });
-    //syntax("LD.S SP+imm16[-32768,32767] -> Xa");
     desc("Load 32b register from stack with immediate offset");
     fromSPPlusImm16Offset();
     opLoad32(.OA, .stack, 0);
@@ -545,21 +502,18 @@ pub fn _C030_C03F() void {
 
 pub fn _C040_C04F() void {
     encoding(.ST, .{ .Ba, .to, SP_relative(.stack, .imm16s) });
-    //syntax("ST.S Ba -> SP+imm16[-32768,32767]");
     desc("Store byte to stack with immediate offset");
     fromSPPlusImm16Offset();
     opStore8(.OA, .stack, 0);
 }
 pub fn _C050_C05F() void {
     encoding(.ST, .{ .Ra, .to, SP_relative(.stack, .imm16s) });
-    //syntax("ST.S Ra -> SP+imm16[-32768,32767]");
     desc("Store 16b register to stack with immediate offset");
     fromSPPlusImm16Offset();
     opStore16(.OA, .stack, 0);
 }
 pub fn _C060_C06F() void {
     encoding(.ST, .{ .Xa, .to, SP_relative(.stack, .imm16s) });
-    //syntax("ST.S Xa -> SP+imm16[-32768,32767]");
     desc("Store 32b register to stack with immediate offset");
     fromSPPlusImm16Offset();
     opStore32(.OA, .stack, 0);
@@ -568,28 +522,24 @@ pub fn _C060_C06F() void {
 // SP+reg load/store
 pub fn _BC00_BCFF() void {
     encoding(.LD, .{ SP_relative(.stack, .RbS), .to, .BaU });
-    //syntax("LD.S SP+SRb -> UBa");
     desc("Load unsigned byte from stack with 16b register offset");
     fromSPPlusRegOffset();
     opLoad8(.OA, .stack, .zx, 0);
 }
 pub fn _BD00_BDFF() void {
     encoding(.LD, .{ SP_relative(.stack, .RbS), .to, .BaS });
-    //syntax("LD.S SP+SRb -> SBa");
     desc("Load signed byte from stack with 16b register offset");
     fromSPPlusRegOffset();
     opLoad8(.OA, .stack, .sx, 0);
 }
 pub fn _BE00_BEFF() void {
     encoding(.LD, .{ SP_relative(.stack, .RbS), .to, .Ra });
-    //syntax("LD.S SP+SRb -> Ra");
     desc("Load 16b register from stack with 16b register offset");
     fromSPPlusRegOffset();
     opLoad16(.OA, .stack, 0);
 }
 pub fn _BF00_BFFF() void {
     encoding(.LD, .{ SP_relative(.stack, .RbS), .to, .Xa });
-    //syntax("LD.S SP+SRb -> Xa");
     desc("Load 32b register from stack with 16b register offset");
     fromSPPlusRegOffset();
     opLoad32(.OA, .stack, 0);
@@ -597,21 +547,18 @@ pub fn _BF00_BFFF() void {
 
 pub fn _2000_20FF() void {
     encoding(.ST, .{ .Ba, .to, SP_relative(.stack, .RbS) });
-    //syntax("ST.S Ba -> SP+SRb");
     desc("Store byte to stack with 16b register offset");
     fromSPPlusRegOffset();
     opStore8(.OA, .stack, 0);
 }
 pub fn _2100_21FF() void {
     encoding(.ST, .{ .Ra, .to, SP_relative(.stack, .RbS) });
-    //syntax("ST.S Ra -> SP+SRb");
     desc("Store 16b register to stack with 16b register offset");
     fromSPPlusRegOffset();
     opStore16(.OA, .stack, 0);
 }
 pub fn _2200_22FF() void {
     encoding(.ST, .{ .Xa, .to, SP_relative(.stack, .RbS) });
-    //syntax("ST.S Xa -> SP+SRb");
     desc("Store 32b register to stack with 16b register offset");
     fromSPPlusRegOffset();
     opStore32(.OA, .stack, 0);
@@ -620,28 +567,24 @@ pub fn _2200_22FF() void {
 // postincrement load/store
 pub fn _9800_98FF() void {
     encoding(.LDI, .{ addr(.data, .Xa), .to, .BbU });
-    //syntax("LDI.D Xa -> UBb");
     desc("Load unsigned byte using pointer to data memory; postincrement");
     incRegPointer(1);
     opLoad8(.OB, .data, .zx, -1);
 }
 pub fn _9900_99FF() void {
     encoding(.LDI, .{ addr(.data, .Xa), .to, .BbS });
-    //syntax("LDI.D Xa -> SBb");
     desc("Load signed byte using pointer to data memory; postincrement");
     incRegPointer(1);
     opLoad8(.OB, .data, .sx, -1);
 }
 pub fn _9A00_9AFF() void {
     encoding(.LDI, .{ addr(.data, .Xa), .to, .Rb });
-    //syntax("LDI.D Xa -> Rb");
     desc("Load 16b register using pointer to data memory; postincrement");
     incRegPointer(2);
     opLoad16(.OB, .data, -2);
 }
 pub fn _9B00_9BFF() void {
     encoding(.LDI, .{ addr(.data, .Xa), .to, .Xb });
-    //syntax("LDI.D Xa -> Xb");
     desc("Load 32b register using pointer to data memory; postincrement");
     incRegPointer(4);
     opLoad32(.OB, .data, -4);
@@ -649,21 +592,18 @@ pub fn _9B00_9BFF() void {
 
 pub fn _2300_23FF() void {
     encoding(.STI, .{ .Bb, .to, addr(.data, .Xa) });
-    //syntax("STI.D Bb -> Xa");
     desc("Store byte using pointer to data memory; postincrement");
     incRegPointer(1);
     opStore8(.OB, .data, -1);
 }
 pub fn _2400_24FF() void {
     encoding(.STI, .{ .Rb, .to, addr(.data, .Xa) });
-    //syntax("STI.D Rb -> Xa");
     desc("Store 16b register using pointer to data memory; postincrement");
     incRegPointer(2);
     opStore16(.OB, .data, -2);
 }
 pub fn _2500_25FF() void {
     encoding(.STI, .{ .Xb, .to, addr(.data, .Xa) });
-    //syntax("STI.D Xb -> Xa");
     desc("Store 32b register using pointer to data memory; postincrement");
     incRegPointer(4);
     opStore32(.OB, .data, -4);
@@ -672,28 +612,24 @@ pub fn _2500_25FF() void {
 // preincrement load/store
 pub fn _9C00_9CFF() void {
     encoding(.ILD, .{ addr(.data, .Xa), .to, .BbU });
-    //syntax("ILD.D Xa -> UBb");
     desc("Load unsigned byte using pointer to data memory; preincrement");
     incRegPointer(1);
     opLoad8(.OB, .data, .zx, 0);
 }
 pub fn _9D00_9DFF() void {
     encoding(.ILD, .{ addr(.data, .Xa), .to, .BbS });
-    //syntax("ILD.D Xa -> SBb");
     desc("Load signed byte using pointer to data memory; preincrement");
     incRegPointer(1);
     opLoad8(.OB, .data, .sx, 0);
 }
 pub fn _9E00_9EFF() void {
     encoding(.ILD, .{ addr(.data, .Xa), .to, .Rb });
-    //syntax("ILD.D Xa -> Rb");
     desc("Load 16b register using pointer to data memory; preincrement");
     incRegPointer(2);
     opLoad16(.OB, .stack, 0);
 }
 pub fn _9F00_9FFF() void {
     encoding(.ILD, .{ addr(.data, .Xa), .to, .Xb });
-    //syntax("ILD.D Xa -> Xb");
     desc("Load 32b register using pointer to data memory; preincrement");
     incRegPointer(4);
     opLoad32(.OB, .stack, 0);
@@ -701,21 +637,18 @@ pub fn _9F00_9FFF() void {
 
 pub fn _2600_26FF() void {
     encoding(.IST, .{ .Bb, .to, addr(.data, .Xa) });
-    //syntax("IST.D Bb -> Xa");
     desc("Load signed byte using pointer to data memory; preincrement");
     incRegPointer(1);
     opStore8(.OB, .data, 0);
 }
 pub fn _2700_27FF() void {
     encoding(.IST, .{ .Rb, .to, addr(.data, .Xa) });
-    //syntax("IST.D Rb -> Xa");
     desc("Load 16b register using pointer to data memory; preincrement");
     incRegPointer(2);
     opStore16(.OB, .stack, 0);
 }
 pub fn _2800_28FF() void {
     encoding(.IST, .{ .Xb, .to, addr(.data, .Xa) });
-    //syntax("IST.D Xb -> Xa");
     desc("Load 32b register using pointer to data memory; preincrement");
     incRegPointer(4);
     opStore32(.OB, .stack, 0);
@@ -724,7 +657,6 @@ pub fn _2800_28FF() void {
 // user context load
 pub fn _B800_B8FF() void {
     encoding(.LD, .{ UXP_relative(.data, .@"immb4u/2"), .to, .Ra });
-    //syntax("LD.D UXP+2*immb[0,15] -> Ra");
     desc("Load 16b register from user context, with immediate offset (align 2)");
 
     SR_plus_literal_to_L(.uxp, @as(SignedOffsetForLiteral, OB()) * 2, .fresh, .no_flags);
@@ -736,7 +668,6 @@ pub fn _B800_B8FF() void {
 }
 // pub fn _B800_B8FF() void {
 //     encoding(.LD, .{ UXP_relative(.insn, .@"immb4u/2"), .to, .Ra });
-//     //syntax("LD.D UXP+2*immb[0,15] -> Ra");
 //     desc("Load 16b register from user context, with immediate offset (align 2)");
     
 //     SR_plus_literal_to_L(.uxp, @as(SignedOffsetForLiteral, OB()) * 2, .fresh, .no_flags);
@@ -749,7 +680,6 @@ pub fn _B800_B8FF() void {
 
 pub fn _B900_B9FF() void {
     encoding(.LD, .{ UXP_relative(.data, .@"immb4u/4"), .to, .Xa });
-    //syntax("LD.D UXP+4*immb[0,15] -> Xa");
     desc("Load 32b register from user context, with immediate offset (align 4)");
 
     SR_plus_literal_to_L(.uxp, @as(SignedOffsetForLiteral, OB()) * 4, .fresh, .no_flags);
@@ -761,7 +691,6 @@ pub fn _B900_B9FF() void {
 }
 // pub fn _B900_B9FF() void {
 //     encoding(.LD, .{ UXP_relative(.insn, .@"immb4u/4"), .to, .Xa });
-//     //syntax("LD.D UXP+4*immb[0,15] -> Xa");
 //     desc("Load 32b register from user context, with immediate offset (align 4)");
     
 //     SR_plus_literal_to_L(.uxp, @as(SignedOffsetForLiteral, OB()) * 4, .fresh, .no_flags);
@@ -775,7 +704,6 @@ pub fn _B900_B9FF() void {
 // kernel context load
 pub fn _BA00_BAFF() void {
     encoding(.LD, .{ KXP_relative(.data, .@"immb4u/2"), .to, .Ra });
-    //syntax("LD.D KXP+2*immb[0,15] -> Ra");
     desc("Load 16b register from user context, with immediate offset (align 2)");
 
     if (!kernel()) {
@@ -792,7 +720,6 @@ pub fn _BA00_BAFF() void {
 }
 // pub fn _BA00_BAFF() void {
 //     encoding(.LD, .{ KXP_relative(.insn, .@"immb4u/2"), .to, .Ra });
-//     //syntax("LD.D KXP+2*immb[0,15] -> Ra");
 //     desc("Load 16b register from user context, with immediate offset (align 2)");
     
 //     if (!kernel()) {
@@ -810,7 +737,6 @@ pub fn _BA00_BAFF() void {
 
 pub fn _BB00_BBFF() void {
     encoding(.LD, .{ KXP_relative(.data, .@"immb4u/4"), .to, .Xa });
-    //syntax("LD.D KXP+4*immb[0,15] -> Xa");
     desc("Load 32b register from user context, with immediate offset (align 4)");
 
     if (!kernel()) {
@@ -827,7 +753,6 @@ pub fn _BB00_BBFF() void {
 }
 // pub fn _BB00_BBFF() void {
 //     encoding(.LD, .{ KXP_relative(.insn, .@"immb4u/4"), .to, .Xa });
-//     //syntax("LD.D KXP+4*immb[0,15] -> Xa");
 //     desc("Load 32b register from user context, with immediate offset (align 4)");
     
 //     if (!kernel()) {
