@@ -730,10 +730,7 @@ fn resolveInstructionEncoding(a: *Assembler, s: SourceFile.Slices, ip: u32, insn
         return best_length.?;
     }
 
-    var err_flags = InsnEncodingError.FlagSet{};
-    if (s.insn.items(.flags)[insn_handle].contains(.encoding_depends_on_layout)) {
-        err_flags.insert(.remove_on_layout_reset);
-    }
+    var err_flags = InsnEncodingError.FlagSet.initOne(.remove_on_layout_reset);
     a.recordInsnEncodingError(s.file.handle, insn_handle, err_flags);
     return 0;
 }

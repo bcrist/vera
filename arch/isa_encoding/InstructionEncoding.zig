@@ -16,7 +16,7 @@ opcodes: OpcodeRange,
 
 pub const WithDescription = struct {
     encoding: InstructionEncoding,
-    desc: []const u8,
+    desc: []const u8,   
 };
 
 pub fn eqlIncludingOpcodes(a: InstructionEncoding, b: InstructionEncoding) bool {
@@ -58,44 +58,74 @@ pub fn getInstructionLength(self: InstructionEncoding) u3 {
     return len;
 }
 
-pub fn print(self: InstructionEncoding, writer: anytype, indent: []const u8) !void {
-    if (self.opcodes.min == self.opcodes.max) {
-        try writer.print("{s}{X:0>4} ", .{ indent, self.opcodes.min });
-    } else {
-        try writer.print("{s}{X:0>4}-{X:0>4} ", .{ indent, self.opcodes.min, self.opcodes.max });
+// Note this doesn't print the entire state of an InstructionEncoding object, only the parts
+// that make up the "signature", i.e. what affects Instruction.matches().
+// For debugging consider using isa_encoding.data.writeInstructionEncoding().
+pub fn print(self: InstructionEncoding, writer: anytype) !void {
+    var len = try isa.printMnemonicAndSuffix(writer, self.mnemonic, self.suffix);
+    if (len < 5) {
+        try writer.writeByteNTimes(' ', 5 - len);
     }
 
-    if (self.opcode_base != self.opcodes.min) {
-        try writer.print("base {X:0>4} ", .{ self.opcode_base });
-    }
+    const placeholders = "abcdefghijklmnopqrstuvwxyz";
+    var placeholder_map = std.EnumMap(ParameterEncoding.Source, u8) {};
 
-    try writer.writeAll(@tagName(self.mnemonic));
-    if (self.suffix != .none) {
-        try writer.print(".{s}", .{ @tagName(self.suffix) });
-    }
-    try writer.writeAll("\n");
-
-    var sources_used = std.EnumSet(ParameterEncoding.Source).initEmpty();
-    var sources_double_used = std.EnumMap(ParameterEncoding.Source, u8);
-
+    var num_placeholders: usize = 0;
     for (self.params) |param| {
-        if (sources_used.contains(param.base_src)) {
-            sources_double_used.put(param.base_src, "abcdefghijklmnopqrstuvwxyz"[sources_double_used.count()]);
-        } else {
-            sources_used.insert(param.base_src);
+        if (param.base_src != .implicit and !placeholder_map.contains(param.base_src) and num_placeholders < placeholders.len) {
+            placeholder_map.put(param.base_src, placeholders[num_placeholders]);
+            num_placeholders += 1;
         }
-        if (sources_used.contains(param.offset_src)) {
-            sources_double_used.put(param.offset_src, "abcdefghijklmnopqrstuvwxyz"[sources_double_used.count()]);
-        } else {
-            sources_used.insert(param.offset_src);
+
+        if (param.offset_src != .implicit and !placeholder_map.contains(param.offset_src) and num_placeholders < placeholders.len) {
+            placeholder_map.put(param.offset_src, placeholders[num_placeholders]);
+            num_placeholders += 1;
         }
     }
 
+    var first = true;
     for (self.params) |param| {
-        try writer.print("{s}   ", .{ indent });
-        try param.print(writer, sources_double_used);
-        try writer.writeAll("\n");
+        if (first) {
+            first = false;
+        } else if (!param.arrow) {
+            try writer.writeByte(',');
+        }
+        try writer.writeByte(' ');
+        try param.print(writer, placeholder_map);
     }
 
-    //var iter = sources_double_used
+    if (num_placeholders == 0) return;
+
+    try writer.writeAll(" \t\t;");
+
+    first = true;
+    for (0..num_placeholders) |i| {
+        const placeholder = placeholders[i];
+        var iter = placeholder_map.iterator();
+        const source = while (iter.next()) |entry| {
+            if (entry.value.* == placeholder) {
+                break entry.key;
+            }
+        } else unreachable;
+
+        if (first) {
+            first = false;
+        } else {
+            try writer.writeByte(',');
+        }
+        try writer.writeByte(' ');
+        try writer.writeByte(placeholder);
+        try writer.writeAll(" in ");
+
+        for (self.params) |param| {
+            if (param.base_src == source) {
+                try param.base.printRange(writer);
+                break;
+            }
+            if (param.offset_src == source) {
+                try param.offset.printRange(writer);
+                break;
+            }
+        } else try writer.writeAll("?");
+    }
 }

@@ -18,17 +18,7 @@ suffix: MnemonicSuffix,
 params: []const Parameter,
 
 pub fn print(self: Instruction, writer: anytype, address: u32) !void {
-    const mnemonic_str = @tagName(self.mnemonic);
-    var len = mnemonic_str.len;
-    try writer.writeAll(mnemonic_str);
-    if (self.suffix != .none) {
-        const suffix_str = @tagName(self.suffix);
-        try writer.writeByte('.');
-        for (suffix_str) |b| {
-            try writer.writeByte(if (b == '_') '.' else b);
-        }
-        len += suffix_str.len + 1;
-    }
+    var len = try isa.printMnemonicAndSuffix(writer, self.mnemonic, self.suffix);
     if (len < 5) {
         try writer.writeByteNTimes(' ', 5 - len);
     }
@@ -43,7 +33,6 @@ pub fn print(self: Instruction, writer: anytype, address: u32) !void {
         try param.print(writer, address);
     }
 }
-
 
 pub fn matches(self: Instruction, encoding: InstructionEncoding) bool {
     if (self.mnemonic != encoding.mnemonic) return false;

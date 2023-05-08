@@ -33,185 +33,23 @@ pub fn print(self: InsnEncodingError, assembler: *Assembler, writer: anytype) !v
         else => unreachable,
     };
 
-    const insn = assembler.buildInstruction(s, s.insn.items(.address)[self.insn], mn.mnemonic, mn.suffix, s.insn.items(.params)[self.insn], false).?;
+    const address = s.insn.items(.address)[self.insn];
+    const params = s.insn.items(.params)[self.insn];
+    const insn = assembler.buildInstruction(s, address, mn.mnemonic, mn.suffix, params, false).?;
 
     try writer.print("\n{s}: No encodings found matching instruction signature: ", .{ file.name });
-    try printInsnSignature(writer, insn);
+    try insn.print(writer, address);
+    try writer.writeByte('\n');
 
     if (assembler.edb.mnemonic_to_encoding.get(insn.mnemonic)) |encodings| {
         try writer.print("Possible encodings for {s} are:\n", .{ @tagName(insn.mnemonic) });
         for (encodings) |enc| {
-            try printInsnEncoding(writer, enc);
+            try enc.print(writer);
+            try writer.writeByte('\n');
         }
     }
 
     const token_handle = file.instructions.items(.token)[self.insn];
     const token = file.tokens.get(token_handle);
     try token.printContext(file.source, writer, 160);
-}
-
-fn printInsnSignature(writer: anytype, insn: ie.Instruction) !void {
-    try writer.print("{s}", .{ @tagName(insn.mnemonic) });
-    if (insn.suffix != .none) try writer.print(".{s}", .{ @tagName(insn.suffix) });
-
-    var first = true;
-    for (insn.params) |param| {
-        if (param.arrow) {
-            try writer.writeAll(" -> ");
-            first = false;
-        } else if (first) {
-            try writer.writeAll(" ");
-            first = false;
-        } else {
-            try writer.writeAll(", ");
-        }
-        switch (param.expr_type) {
-            .unknown => try writer.print(".unknown({})", .{ param.constant }),
-            .poison => try writer.print(".poison({})", .{ param.constant }),
-            .symbol_def => try writer.print(".symbol_def({})", .{ param.constant }),
-            .constant => try writer.print("{}", .{ param.constant }),
-            .reg8 => |reg| try printReg(writer, "B", reg),
-            .reg16 => |reg| try printReg(writer, "R", reg),
-            .reg32 => |reg| try printReg(writer, "X", reg),
-            .sr => |reg| try printSR(writer, reg),
-            .raw_base_offset => |bo| try printBO(writer, "", bo, param.constant),
-            .data_address => |bo| try printBO(writer, ".d ", bo, param.constant),
-            .insn_address => |bo| try printBO(writer, ".i ", bo, param.constant),
-            .stack_address => |bo| try printBO(writer, ".s ", bo, param.constant),
-        }
-    }
-    try writer.writeAll("\n");
-}
-
-fn printInsnEncoding(writer: anytype, encoding: ie.InstructionEncoding) !void {
-     try writer.print("{s}", .{ @tagName(encoding.mnemonic) });
-    if (encoding.suffix != .none) try writer.print(".{s}", .{ @tagName(encoding.suffix) });
-
-    var first = true;
-    for (encoding.params) |param| {
-        if (param.arrow) {
-            try writer.writeAll(" -> ");
-            first = false;
-        } else if (first) {
-            try writer.writeAll(" ");
-            first = false;
-        } else {
-            try writer.writeAll(", ");
-        }
-        if (param.address_space) |as| {
-            try writer.writeAll(switch (as) {
-                .data => ".d ",
-                .insn => ".i ",
-                .stack => ".s ",
-            });
-        }
-
-        try printParamEncodingBaseType(writer, param.base, param.base);
-        if (param.offset != .none) {
-            try writer.writeAll(" + ");
-            try printParamEncodingBaseType(writer, param.offset, param.offset);
-        }
-    }
-    try writer.writeAll("\n");
-}
-
-fn printParamEncodingBaseType(writer: anytype, t: ie.ParameterEncoding.BaseOffsetEncoding, param: ie.ParameterEncoding.BaseOffsetEncoding) !void {
-    switch (t) {
-        .none => try writer.writeAll(".none"),
-        .constant => try printConstantRanges(writer, param.constant),
-        .reg8 => |reg| try printRegRange(writer, "B", reg),
-        .reg16 => |reg| try printRegRange(writer, "R", reg),
-        .reg32 => |reg| try printRegRange(writer, "X", reg),
-        .sr => |reg| try printSR(writer, reg),
-    }
-}
-
-fn printConstantRanges(writer: anytype, param: ie.ParameterEncoding.ConstantEncoding) !void {
-    if (param.ranges.len == 0) {
-        try writer.writeAll("0");
-        return;
-    }
-    try writer.writeAll("(");
-    var first = true;
-    for (param.ranges) |range| {
-        if (first) {
-            first = false;
-        } else {
-            try writer.writeAll(", ");
-        }
-        if (range.min == range.max) {
-            try writer.print("{}", .{ range.min });
-        } else {
-            try writer.print("[{},{}]", .{ range.min, range.max });
-        }
-    }
-    if (param.alt_ranges.len > 0) {
-        try writer.writeAll(" | ");
-        first = true;
-        for (param.alt_ranges) |range| {
-            if (first) {
-                first = false;
-            } else {
-                try writer.writeAll(", ");
-            }
-            if (range.min == range.max) {
-                try writer.print("{}", .{ range.min });
-            } else {
-                try writer.print("[{},{}]", .{ range.min, range.max });
-            }
-        }
-    }
-    if (param.granularity != 1) {
-        try writer.print(" .granularity {}", .{ param.granularity });
-    }
-    try writer.writeAll(")");
-}
-
-fn printReg(writer: anytype, prefix: []const u8, reg: isa.IndexedRegister) !void {
-    try writer.print("{s}{}", .{ prefix, reg.index });
-    if (reg.signedness) |s| {
-        try writer.print(" .{s}", .{ @tagName(s) });
-    }
-}
-fn printRegRange(writer: anytype, prefix: []const u8, reg: isa.IndexedRegisterRange) !void {
-    try writer.print("{s}{}", .{ prefix, reg.min });
-    if (reg.max != reg.min) {
-        try writer.print("-{s}{}", .{ prefix, reg.max });
-    }
-    if (reg.signedness) |s| {
-        try writer.print(" .{s}", .{ @tagName(s) });
-    }
-}
-
-fn printSR(writer: anytype, reg: isa.SpecialRegister) !void {
-    try writer.writeAll(switch (reg) {
-        .IP => "IP",
-        .SP => "SP",
-        .RP => "RP",
-        .BP => "BP",
-        .UXP => "UXP",
-        .KXP => "KXP",
-        .ASN => "ASN",
-        .STAT => "STAT",
-    });
-}
-
-fn printBO(writer: anytype, prefix: []const u8, bo: ExpressionType.BaseOffset, constant: i64) !void {
-    try writer.writeAll(prefix);
-    try printInnerType(writer, bo.base, constant);
-    if (bo.offset != .none) {
-        try writer.writeAll(" + ");
-        try printInnerType(writer, bo.offset, constant);
-    }
-}
-
-fn printInnerType(writer: anytype, t: ExpressionType.BaseOffset.Type, constant: i64) !void {
-    switch (t) {
-        .none => try writer.print(".none({})", .{ constant }),
-        .constant => try writer.print("{}", .{ constant }),
-        .reg8 => |reg| try printReg(writer, "B", reg),
-        .reg16 => |reg| try printReg(writer, "R", reg),
-        .reg32 => |reg| try printReg(writer, "X", reg),
-        .sr => |reg| try printSR(writer, reg),
-    }
 }

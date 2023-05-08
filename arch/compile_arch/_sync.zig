@@ -502,6 +502,7 @@ pub fn _3C30_3C3F() void {
     D_to_OB_OA();
     next_cycle();
 
+    // TODO why am I doing this now?  Seems like a cycle could be saved in some cases by moving it to the end
     load_next_insn(3);
     next_cycle();
 

@@ -15,7 +15,6 @@ arrow: bool = false,
 expr_type: ExpressionType,
 constant: i64,
 
-
 pub const ExpressionType = union(enum) {
     unknown,    // Used internally by the assembler; never part of any instruction encodings
     poison,     // Used internally by the assembler; never part of any instruction encodings
@@ -291,45 +290,27 @@ pub const ExpressionType = union(enum) {
     };
 };
 
-
 pub fn print(self: Parameter, writer: anytype, address: u32) !void {
     if (self.arrow) {
         try writer.writeAll("-> ");
     }
     switch (self.expr_type) {
-        .unknown, .poison, .symbol_def => {
-            try writer.writeAll(@tagName(self.expr_type));
-        },
-        .constant => {
-            try writer.print("{}", .{ self.constant });
-        },
-        .reg8, .reg16, .reg32 => |reg| {
-            try writer.writeAll(switch (self.expr_type) {
-                .reg8 => "B",
-                .reg16 => "R",
-                .reg32 => "X",
-                else => unreachable,
-            });
-            try writer.print("{}", .{ reg.index });
-            if (reg.signedness) |s| {
-                try writer.writeAll(switch (s) {
-                    .unsigned => " .unsigned",
-                    .signed => " .signed",
-                });
-            }
-        },
-        .sr => |reg| {
-            var buf: [4]u8 = .{ 0 } ** 4;
-            try writer.writeAll(std.ascii.upperString(&buf, @tagName(reg)));
-        },
+        .unknown, .poison, .symbol_def => try writer.writeAll(@tagName(self.expr_type)),
+        .constant => try writer.print("{}", .{ self.constant }),
+        .reg8, .reg16, .reg32 => |reg| try printGPR(self.expr_type, reg, writer),
+        .sr => |reg| try writer.writeAll(@tagName(reg)),
         .raw_base_offset, .data_address, .insn_address, .stack_address => |info| {
-            try writer.writeAll(switch (self.expr_type) {
-                .raw_base_offset => "",
-                .data_address => ".d ",
-                .insn_address => ".i ",
-                .stack_address => ".s ",
+            const maybe_as: ?AddressSpace = switch (self.expr_type) {
+                .raw_base_offset => null,
+                .data_address => .data,
+                .insn_address => .insn,
+                .stack_address => .stack,
                 else => unreachable,
-            });
+            };
+            if (maybe_as) |as| {
+                try writer.writeAll(as.getDirectiveName());
+                try writer.writeByte(' ');
+            }
             switch (info.base) {
                 .none => {},
                 .constant => if (self.constant < 0) {
@@ -337,25 +318,8 @@ pub fn print(self: Parameter, writer: anytype, address: u32) !void {
                 } else {
                     try writer.print("0x{X}", .{ self.constant });
                 },
-                .reg8, .reg16, .reg32 => |reg| {
-                    try writer.writeAll(switch (info.base) {
-                        .reg8 => "B",
-                        .reg16 => "R",
-                        .reg32 => "X",
-                        else => unreachable,
-                    });
-                    try writer.print("{}", .{ reg.index });
-                    if (reg.signedness) |s| {
-                        try writer.writeAll(switch (s) {
-                            .unsigned => " .unsigned",
-                            .signed => " .signed",
-                        });
-                    }
-                },
-                .sr => |reg| {
-                    var buf: [4]u8 = .{ 0 } ** 4;
-                    try writer.writeAll(std.ascii.upperString(&buf, @tagName(reg)));
-                },
+                .reg8, .reg16, .reg32 => |reg| try printGPR(info.base, reg, writer),
+                .sr => |reg| try writer.writeAll(@tagName(reg)),
             }
             switch (info.offset) {
                 .none => {},
@@ -370,27 +334,31 @@ pub fn print(self: Parameter, writer: anytype, address: u32) !void {
                     }
                 },
                 .reg8, .reg16, .reg32 => |reg| {
-                    try writer.writeAll(switch (info.offset) {
-                        .reg8 => " + B",
-                        .reg16 => " + R",
-                        .reg32 => " + X",
-                        else => unreachable,
-                    });
-                    try writer.print("{}", .{ reg.index });
-                    if (reg.signedness) |s| {
-                        try writer.writeAll(switch (s) {
-                            .unsigned => " .unsigned",
-                            .signed => " .signed",
-                        });
-                    }
+                    try writer.writeAll(" + ");
+                    try printGPR(info.offset, reg, writer);
                 },
                 .sr => |reg| {
                     try writer.writeAll(" + ");
-                    var buf: [4]u8 = .{ 0 } ** 4;
-                    try writer.writeAll(std.ascii.upperString(&buf, @tagName(reg)));
+                    try writer.writeAll(@tagName(reg));
                 },
             }
         },
+    }
+}
+
+fn printGPR(reg_type: anytype, reg: IndexedRegister, writer: anytype) !void {
+    try writer.writeAll(switch (reg_type) {
+        .reg8 => "B",
+        .reg16 => "R",
+        .reg32 => "X",
+        else => unreachable,
+    });
+    try writer.print("{}", .{ reg.index });
+    if (reg.signedness) |s| {
+        try writer.writeAll(switch (s) {
+            .signed => ".SIGNED",
+            .unsigned => ".UNSIGNED",
+        });
     }
 }
 
@@ -680,10 +648,6 @@ pub fn readOpcode(buf: []const u8) Opcode {
         buf[1],
     });
 }
-
-
-
-
 
 pub fn writeRaw(buf: []u8, val: i64, src: ParameterEncoding.Source, opcode_base: Opcode) void {
     const uval = @bitCast(u64, val);

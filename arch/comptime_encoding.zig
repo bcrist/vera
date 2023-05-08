@@ -58,6 +58,16 @@ pub fn parameterEncodings(comptime args: anytype) []const ParameterEncoding {
             }
         }
 
+        for (params, 0..) |param, i| {
+            validateRangesSharingSource(param.base, param.base_src, param.offset, param.offset_src);
+            for (i + 1 .. params.len) |j| {
+                validateRangesSharingSource(param.base, param.base_src, params[j].base, params[j].base_src);
+                validateRangesSharingSource(param.base, param.base_src, params[j].offset, params[j].offset_src);
+                validateRangesSharingSource(param.offset, param.offset_src, params[j].base, params[j].base_src);
+                validateRangesSharingSource(param.offset, param.offset_src, params[j].offset, params[j].offset_src);
+            }
+        }
+
         if (arrow_on_next_param) {
             @compileError("Expected a parameter after .to");
         }
@@ -445,6 +455,45 @@ fn validateConstantEncoding(comptime encoding: ParameterEncoding.ConstantEncodin
             } else {
                 @compileError(std.fmt.comptimePrint("Expected between {} and {} constant values for parameter encoding, but found {}", .{ min_total_values, max_total_values, total_values }));
             }
+        }
+    }
+}
+
+fn validateRangesSharingSource(
+    comptime a: ParameterEncoding.BaseOffsetEncoding, comptime a_src: ParameterEncoding.Source,
+    comptime b: ParameterEncoding.BaseOffsetEncoding, comptime b_src: ParameterEncoding.Source
+) void {
+    comptime {
+        if (a_src != b_src) return;
+        if (a_src == .implicit or b_src == .implicit) return;
+
+        switch (a) {
+            .none, .sr => return,
+            .constant => |a_ce| {
+                const b_ce = switch (b) {
+                    .constant => |ce| ce,
+                    .reg8, .reg16, .reg32 => @compileError("A register parameter can't share the same source as a constant parameter"),
+                    .none, .sr => return,
+                };
+                if (a_ce.ranges.len != b_ce.ranges.len or a_ce.granularity != b_ce.granularity or a_ce.reverse != b_ce.reverse) {
+                    @compileError("Constant parameters that share the same source must have the same ConstantEncoding");
+                }
+                for (a_ce.ranges, b_ce.ranges) |ar, br| {
+                    if (!std.meta.eql(ar, br)) {
+                        @compileError("Constant parameters that share the same source must have the same ConstantEncoding");
+                    }
+                }
+            },
+            .reg8, .reg16, .reg32 => |a_irr| {
+                const b_irr = switch (b) {
+                    .reg8, .reg16, .reg32 => |irr| irr,
+                    .constant => @compileError("A register parameter can't share the same source as a constant parameter"),
+                    .none, .sr => return,
+                };
+                if (a_irr.min != b_irr.min or a_irr.max != b_irr.max) {
+                    @compileError("Register parameters that share the same source must have the same range");
+                }
+            },
         }
     }
 }

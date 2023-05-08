@@ -72,6 +72,21 @@ pub const MnemonicSuffix = enum {
     R, // data-read
 };
 
+pub fn printMnemonicAndSuffix(writer: anytype, mnemonic: Mnemonic, suffix: MnemonicSuffix) !usize {
+    const mnemonic_str = @tagName(mnemonic);
+    var len = mnemonic_str.len;
+    try writer.writeAll(mnemonic_str);
+    if (suffix != .none) {
+        const suffix_str = @tagName(suffix);
+        try writer.writeByte('.');
+        for (suffix_str) |b| {
+            try writer.writeByte(if (b == '_') '.' else b);
+        }
+        len += suffix_str.len + 1;
+    }
+    return len;
+}
+
 pub const Opcode = u16;
 
 pub const SpecialRegister = enum {
@@ -91,11 +106,11 @@ pub const AddressSpace = enum {
     stack,
 
     pub fn getDirectiveName(self: ?AddressSpace) []const u8 {
-        return if (self) switch (self) {
-            .data => ".d",
-            .insn => ".i",
-            .stack => ".s",
-        } else ".raw";
+        return if (self) |s| switch (s) {
+            .data => ".D",
+            .insn => ".I",
+            .stack => ".S",
+        } else ".RAW";
     }
 };
 

@@ -16,6 +16,7 @@ loop:
 _end:
     c   last -> r0
     ret
+    axe
 
 .const x
 .keep

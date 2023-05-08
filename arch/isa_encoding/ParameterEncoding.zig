@@ -1,3 +1,4 @@
+const std = @import("std");
 const isa = @import("isa_types");
 const AddressSpace = isa.AddressSpace;
 const SpecialRegister = isa.SpecialRegister;
@@ -13,10 +14,6 @@ base: BaseOffsetEncoding = .{ .none = {} },
 offset: BaseOffsetEncoding = .{ .none = {} },
 base_src: Source = .implicit,
 offset_src: Source = .implicit,
-// TODO allow restricting encoding to matching a subset of the full ConstantRanges that can be encoded.
-// that way e.g. in addition to C .imm16u -> RaU and C .imm16s -> RaS, we can also have C .imm15u -> Ra.
-// So the .signed/.unsigned suffix can be omitted for numbers that are the same regardless of
-// signed/unsigned interpretation
 
 pub const BaseOffsetEncoding = union(enum) {
     none,
@@ -26,35 +23,79 @@ pub const BaseOffsetEncoding = union(enum) {
     reg32: IndexedRegisterRange,
     sr: SpecialRegister,
 
-    pub fn print(self: BaseOffsetEncoding, writer: anytype) !void {
+    pub fn print(self: BaseOffsetEncoding, writer: anytype, maybe_placeholder: ?u8) !void {
         switch (self) {
             .none => {
-                try writer.writeAll("none");
+                try writer.writeAll(".none");
             },
             .constant => {
-                try writer.writeAll(@tagName(self));
+                if (maybe_placeholder) |placeholder| {
+                    try writer.writeByte(placeholder);
+                } else try self.printRange(writer);
             },
             .reg8, .reg16, .reg32 => |irr| {
-                try writer.writeAll(switch (self) {
+                const prefix = switch (self) {
                     .reg8 => "B",
                     .reg16 => "R",
                     .reg32 => "X",
                     else => unreachable,
-                });
+                };
+
                 if (irr.min == irr.max) {
-                    try writer.print("{}", .{ irr.min });
+                    try writer.print("{s}{}", .{ prefix, irr.min });
+                } else if (maybe_placeholder) |placeholder| {
+                    try writer.writeAll(prefix);
+                    try writer.writeByte(placeholder);
                 } else {
-                    try writer.print("{}-{}", .{ irr.min, irr.max });
+                    try writer.print("{s}{}-{s}{}", .{ prefix, irr.min, prefix, irr.max });
                 }
                 if (irr.signedness) |s| {
                     try writer.writeAll(switch (s) {
-                        .unsigned => "U",
-                        .signed => "S",
+                        .unsigned => ".UNSIGNED",
+                        .signed => ".SIGNED",
                     });
                 }
             },
             .sr => |sr| {
                 try writer.writeAll(@tagName(sr));
+            },
+        }
+    }
+
+    pub fn printRange(self: BaseOffsetEncoding, writer: anytype) !void {
+        switch (self) {
+            .none, .sr => try writer.writeAll("(0)"),
+            .constant => |ce| {
+                if (ce.ranges.len == 0) {
+                    try writer.writeAll("(0)");
+                } else {
+                    if (ce.ranges.len > 1) {
+                        try writer.writeAll("(");
+                    }
+                    var first = true;
+                    for (ce.ranges) |range| {
+                        if (first) {
+                            first = false;
+                        } else {
+                            try writer.writeAll(", ");
+                        }
+                        if (range.min == range.max) {
+                            try writer.print("{}", .{ range.min });
+                        } else {
+                            try writer.print("[{},{}]", .{ range.min, range.max });
+                        }
+                    }
+                    if (ce.ranges.len > 1) {
+                        try writer.writeAll(")");
+                    }
+                }
+            },
+            .reg8, .reg16, .reg32 => |irr| {
+                if (irr.min == irr.max) {
+                    try writer.print("{}", .{ irr.min });
+                } else {
+                    try writer.print("[{},{}]", .{ irr.min, irr.max });
+                }
             },
         }
     }
@@ -64,7 +105,12 @@ pub const ConstantEncoding = struct {
     reverse: bool = false, // store constant as `N - value` instead of `value`
     granularity: u3 = 1,
     ranges: []const ConstantRange = &.{},
-    alt_ranges: []const ConstantRange = &.{},
+    alt_ranges: []const ConstantRange = &.{}, // TODO remove alt_ranges; use aliases instead
+
+    // TODO allow restricting encoding to matching a subset of the full ConstantRanges that can be encoded.
+    // that way e.g. in addition to C .imm16u -> RaU and C .imm16s -> RaS, we can also have C .imm15u -> Ra.
+    // So the .signed/.unsigned suffix can be omitted for numbers that are the same regardless of
+    // signed/unsigned interpretation
 
     // Transforms a constant value to get the raw number that's embedded in the instruction bytes
     // to represent it (but the exact location depends on base_src/offset_src)
@@ -155,47 +201,20 @@ pub const Source = enum {
     }
 };
 
-pub fn print(self: ParameterEncoding, writer: anytype) !void {
+pub fn print(self: ParameterEncoding, writer: anytype, placeholders: std.EnumMap(Source, u8)) !void {
     if (self.arrow) {
         try writer.writeAll("-> ");
     }
 
     if (self.address_space) |as| {
-        try writer.print("[{s}] ", .{ @tagName(as) });
+        try writer.writeAll(as.getDirectiveName());
+        try writer.writeByte(' ');
     }
 
-    try self.base.print(writer);
-    if (self.base_src != .implicit) {
-        try writer.print(" ({s})", .{ @tagName(self.base_src) });
-    }
+    try self.base.print(writer, placeholders.get(self.base_src));
 
     if (self.offset != .none or self.offset_src != .implicit) {
         try writer.writeAll(" + ");
-        try self.offset.print(writer);
-        if (self.offset_src != .implicit) {
-            try writer.print(" ({s})", .{ @tagName(self.offset_src) });
-        }
-    }
-
-    if (self.constant_reverse) {
-        try writer.writeAll(" rev");
-    }
-
-    if (self.constant_align != 1) {
-        try writer.print(" align {}", .{ self.constant_align });
-    }
-
-    if (self.constant_ranges.len > 0) {
-        try writer.writeAll(" ranges:");
-        for (self.constant_ranges) |range| {
-            try writer.print(" [{}, {}]", .{ range.min, range.max });
-        }
-    }
-
-    if (self.alt_constant_ranges.len > 0) {
-        try writer.writeAll(" alt_ranges:");
-        for (self.alt_constant_ranges) |range| {
-            try writer.print(" [{}, {}]", .{ range.min, range.max });
-        }
+        try self.offset.print(writer, placeholders.get(self.offset_src));
     }
 }
