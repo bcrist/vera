@@ -235,11 +235,19 @@ Change the bit-width of a constant to `w`
 Overflowing bits are ignored.
 If the new size is larger than the old, sign extension is used.
 
-    x .signed
-    x .unsigned
-    x .maybe_signed
-Change the signedness of a GPR expression.
-`maybe_signed` means unspecified signedness.  An instruction that takes an unspecified signedness register as a parameter will also accept either a signed or unsigned version, but an instruction that requires a signed or unsigned register parameter will not take an expression with unspecified signedness.
+```
+x .signed
+x .unsigned
+``` 
+Change a GPR or constant expression's signedness.  Note this can change the value of a constant:
+ * Negative values will become positive with `.unsigned`
+ * Positive values without a 0 in the MSB will become negative with `.signed`
+
+
+```
+x .without_signedness
+```
+Remove the signedness flag from a GPR expression.  An instruction that takes an unspecified signedness register as a parameter will also accept either a signed or unsigned version, but an instruction that requires a signed or unsigned register parameter will not take an expression with unspecified signedness.
 
     @x
 Convert an IP-relative address into an absolute address.

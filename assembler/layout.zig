@@ -685,7 +685,7 @@ pub fn resolveExpressionConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, e
             const result = constant.cloneWithSignedness(a.gpa, &a.constant_temp, .unsigned);
             expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
         },
-        .maybe_signed_cast, .data_address_cast, .insn_address_cast, .stack_address_cast, .remove_address_cast,
+        .remove_signedness_cast, .data_address_cast, .insn_address_cast, .stack_address_cast, .remove_address_cast,
          => |inner_expr| {
             expr_resolved_constants[expr_handle] = resolveExpressionConstant(a, s, ip, inner_expr);
         },

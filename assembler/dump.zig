@@ -99,7 +99,7 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
                 },
 
                 .directive_symbol_def, .directive_symbol_ref,
-                .signed_cast, .unsigned_cast, .maybe_signed_cast,
+                .signed_cast, .unsigned_cast, .remove_signedness_cast,
                 .negate, .complement, .absolute_address_cast,
                 .data_address_cast, .insn_address_cast, .stack_address_cast, .remove_address_cast,
                 .reg_to_index, .index_to_reg8, .index_to_reg16, .index_to_reg32,

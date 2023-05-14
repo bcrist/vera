@@ -368,18 +368,22 @@ fn tryResolveExpressionType(a: *Assembler, s: SourceFile.Slices, expr_handle: Ex
             };
             resolveConstantDependsOnLayoutBinary(s, expr_handle, bin);
         },
-        .signed_cast, .unsigned_cast, .maybe_signed_cast => |inner_expr| {
+        .signed_cast, .unsigned_cast, .remove_signedness_cast => |inner_expr| {
             const inner_type = expr_resolved_types[inner_expr];
             expr_resolved_types[expr_handle] = switch (inner_type) {
                 .unknown => return false,
                 .poison => .{ .poison = {} },
-                .constant => .{ .constant = {} },
+                .constant => if (info == .remove_signedness_cast) t: {
+                    const token = s.expr.items(.token)[expr_handle];
+                    a.recordError(s.file.handle, token, "Operand must be a GPR expression", .{});
+                    break :t .{ .poison = {} };
+                } else .{ .constant = {} },
                 .reg8, .reg16, .reg32 => |reg| t: {
                     var new_reg = reg;
                     new_reg.signedness = switch (info) {
                         .signed_cast => .signed,
                         .unsigned_cast => .unsigned,
-                        .maybe_signed_cast => null,
+                        .remove_signedness_cast => null,
                         else => unreachable,
                     };
 

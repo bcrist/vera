@@ -767,8 +767,8 @@ const Parser = struct {
                     break :info .{ .token = t, .left_bp = 50, .right_bp = null, .expr = .signed_cast };
                 } else if (self.tryKeyword("unsigned")) {
                     break :info .{ .token = t, .left_bp = 50, .right_bp = null, .expr = .unsigned_cast };
-                } else if (self.tryKeyword("maybe_signed")) {
-                    break :info .{ .token = t, .left_bp = 50, .right_bp = null, .expr = .maybe_signed_cast };
+                } else if (self.tryKeyword("without_signedness")) {
+                    break :info .{ .token = t, .left_bp = 50, .right_bp = null, .expr = .remove_signedness_cast };
                 } else {
                     t = begin;
                     return null;
@@ -1078,7 +1078,7 @@ const Parser = struct {
             .truncate,
             .signed_cast,
             .unsigned_cast,
-            .maybe_signed_cast,
+            .remove_signedness_cast,
             .absolute_address_cast,
             .data_address_cast,
             .insn_address_cast,
@@ -1100,7 +1100,7 @@ const Parser = struct {
             .complement => .{ .complement = inner },
             .signed_cast => .{ .signed_cast = inner },
             .unsigned_cast => .{ .unsigned_cast = inner },
-            .maybe_signed_cast => .{ .maybe_signed_cast = inner },
+            .remove_signedness_cast => .{ .remove_signedness_cast = inner },
             .absolute_address_cast => .{ .absolute_address_cast = inner },
             .data_address_cast => .{ .data_address_cast = inner },
             .insn_address_cast => .{ .insn_address_cast = inner },
@@ -1166,7 +1166,7 @@ const Parser = struct {
             .complement,
             .signed_cast,
             .unsigned_cast,
-            .maybe_signed_cast,
+            .remove_signedness_cast,
             .literal_int,
             .literal_str,
             .literal_reg,
