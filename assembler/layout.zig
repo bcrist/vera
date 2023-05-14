@@ -37,12 +37,7 @@ fn resolveFixedOrgAddress(a: *Assembler, chunk: SourceFile.Chunk) u32 {
             initial_address = s.insn.items(.address)[insn_handle];
             if (s.insn.items(.params)[insn_handle]) |expr_handle| {
                 if (resolveExpressionConstant(a, s, initial_address, expr_handle)) |constant| {
-                    const address_i64 = constant.asInt() catch {
-                        a.recordExpressionLayoutError(chunk.file, expr_handle, expr_handle, ".org address too large", .{});
-                        break;
-                    };
-
-                    initial_address = std.math.cast(u32, address_i64) orelse {
+                    initial_address = constant.asInt(u32) catch {
                         a.recordExpressionLayoutError(chunk.file, expr_handle, expr_handle, ".org address too large", .{});
                         break;
                     };
@@ -305,32 +300,31 @@ pub fn getResolvedAlignment(s: SourceFile.Slices, maybe_align_expr: ?Expression.
 
     const expr_constants = s.expr.items(.resolved_constant);
 
-    var alignment: i64 = 0;
-    var offset: i64 = 0;
+    var alignment = Assembler.Alignment{
+        .modulo = 0,
+        .offset = 0,
+    };
     switch (s.expr.items(.info)[align_expr]) {
         .list => |bin| {
             if (expr_constants[bin.left]) |constant| {
-                alignment = constant.asInt() catch return null;
+                alignment.modulo = constant.asInt(u32) catch return null;
             }
             if (expr_constants[bin.right]) |constant| {
-                offset = constant.asInt() catch return null;
+                alignment.offset = constant.asInt(u32) catch return null;
             }
         },
         else => {
             if (expr_constants[align_expr]) |constant| {
-                alignment = constant.asInt() catch return null;
+                alignment.modulo = constant.asInt(u32) catch return null;
             }
         }
     }
 
-    if (alignment <= 1 or offset >= alignment or offset < 0 or @popCount(alignment) != 1) {
+    if (alignment.modulo <= 1 or alignment.offset >= alignment.modulo or @popCount(alignment.modulo) != 1) {
         return null;
     }
 
-    return .{
-        .modulo = std.math.cast(u32, alignment) orelse return null,
-        .offset = std.math.cast(u32, offset) orelse return null,
-    };
+    return alignment;
 }
 
 fn resolveAndApplyAlignment(
@@ -344,27 +338,27 @@ fn resolveAndApplyAlignment(
     section_handle: ?Section.Handle
 ) u32 {
     var alignment_expr: Expression.Handle = align_expr;
-    var alignment: i64 = 0;
-    var offset: i64 = 0;
+    var alignment: u32 = 0;
+    var offset: u32 = 0;
     switch (s.expr.items(.info)[align_expr]) {
         .list => |bin| {
             alignment_expr = bin.left;
             if (resolveExpressionConstant(a, s, address, bin.left)) |constant| {
-                alignment = constant.asInt() catch {
+                alignment = constant.asInt(u32) catch {
                     if (report_errors) {
                         const token = s.expr.items(.token)[bin.left];
                         const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
-                        a.recordError(s.file.handle, token, "Overflow (alignment too large)", err_flags);
+                        a.recordError(s.file.handle, token, "Overflow (alignment must fit in u32)", err_flags);
                     }
                     return address;
                 };
             }
             if (resolveExpressionConstant(a, s, address, bin.right)) |constant| {
-                offset = constant.asInt() catch {
+                offset = constant.asInt(u32) catch {
                     if (report_errors) {
                         const token = s.expr.items(.token)[bin.right];
                         const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
-                        a.recordError(s.file.handle, token, "Overflow (offset too large)", err_flags);
+                        a.recordError(s.file.handle, token, "Overflow (offset must fit in u32)", err_flags);
                     }
                     return address;
                 };
@@ -380,11 +374,11 @@ fn resolveAndApplyAlignment(
         },
         else => {
             if (resolveExpressionConstant(a, s, address, align_expr)) |constant| {
-                alignment = constant.asInt() catch {
+                alignment = constant.asInt(u32) catch {
                     if (report_errors) {
                         const token = s.expr.items(.token)[align_expr];
                         const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
-                        a.recordError(s.file.handle, token, "Overflow (alignment too large)", err_flags);
+                        a.recordError(s.file.handle, token, "Overflow (alignment too must fit in u32)", err_flags);
                     }
                     return address;
                 };
@@ -405,16 +399,7 @@ fn resolveAndApplyAlignment(
         return address;
     }
 
-    const alignment_u32 = std.math.cast(u32, alignment) orelse {
-        if (report_errors) {
-            const token = s.expr.items(.token)[alignment_expr];
-            const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
-            a.recordError(s.file.handle, token, "Overflow (alignment must fit in u32)", err_flags);
-        }
-        return address;
-    };
-
-    return applyAlignment(a, s, address, alignment_u32, @intCast(u32, offset), report_errors, check_for_alignment_holes, insn_handle, section_handle);
+    return applyAlignment(a, s, address, alignment, @intCast(u32, offset), report_errors, check_for_alignment_holes, insn_handle, section_handle);
 }
 
 fn applyAlignment(
@@ -489,8 +474,21 @@ fn resolveDataDirectiveLength(a: *Assembler, s: SourceFile.Slices, ip: u32, insn
 }
 fn resolveDataExpressionLength(a: *Assembler, s: SourceFile.Slices, ip: u32, expr_handle: Expression.Handle, granularity_bytes: u8) u32 {
     if (resolveExpressionConstant(a, s, ip, expr_handle)) |constant| {
-        return @intCast(u32, std.mem.alignForward(constant.bit_count, granularity_bytes * 8) / 8);
+        return @intCast(u32, std.mem.alignForward(constant.getBitCount(), granularity_bytes * 8) / 8);
     } else return 0;
+}
+
+pub fn resolveExpressionConstantOrDefault(a: *Assembler, s: SourceFile.Slices, ip: u32, expr_handle: Expression.Handle, default: anytype) Constant {
+    const resolved = resolveExpressionConstant(a, s, ip, expr_handle);
+    if (resolved) |constant| return constant.*;
+
+    return switch (@typeInfo(@TypeOf(default))) {
+        .Int => Constant.initInt(default),
+        .ComptimeInt => Constant.initInt(@as(i64, default)),
+        .Pointer => |ptr_info| if(ptr_info.size == .Slice) Constant.initString(default) else default.*,
+        .Struct => default,
+        else => @compileError("Unsupported default value"),
+    };
 }
 
 pub fn resolveExpressionConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, expr_handle: Expression.Handle) ?*const Constant {
@@ -520,7 +518,7 @@ pub fn resolveExpressionConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, e
                 },
                 else => {},
             }
-            const constant = Constant.initInt(value, null);
+            const constant = Constant.initInt(value);
             expr_resolved_constants[expr_handle] = constant.intern(a.arena, a.gpa, &a.constants);
         },
 
@@ -538,11 +536,11 @@ pub fn resolveExpressionConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, e
 
         .negate => |inner_expr| {
             const inner_constant = resolveExpressionConstant(a, s, ip, inner_expr) orelse return null;
-            const value = inner_constant.asIntNegated() catch {
+            const value = inner_constant.asIntNegated(i64) catch {
                 a.recordExpressionLayoutError(s.file.handle, expr_handle, expr_handle, "Overflow (constant too large)", .{});
                 return null;
             };
-            const new_constant = Constant.initInt(value, null);
+            const new_constant = Constant.initInt(value);
             expr_resolved_constants[expr_handle] = new_constant.intern(a.arena, a.gpa, &a.constants);
         },
         .complement => |inner_expr| {
@@ -550,27 +548,39 @@ pub fn resolveExpressionConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, e
             const result = inner.complement(a.gpa, &a.constant_temp);
             expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
         },
-        .plus, .minus, .multiply, .shl, .shr, => |bin| {
-            const left = resolveExpressionConstant(a, s, ip, bin.left) orelse {
-                const right = resolveExpressionConstant(a, s, ip, bin.right) orelse return null;
-                const value = right.asIntNegated() catch {
-                    a.recordExpressionLayoutError(s.file.handle, expr_handle, expr_handle, "Overflow (constant too large)", .{});
-                    return null;
-                };
-                const new_constant = Constant.initInt(value, null);
-                expr_resolved_constants[expr_handle] = new_constant.intern(a.arena, a.gpa, &a.constants);
-                return expr_resolved_constants[expr_handle];
-            };
-            const right = resolveExpressionConstant(a, s, ip, bin.right) orelse {
-                expr_resolved_constants[expr_handle] = left;
-                return expr_resolved_constants[expr_handle];
-            };
+        .plus, .minus => |bin| {
+            const left = resolveExpressionConstantOrDefault(a, s, ip, bin.left, 0);
+            const right = resolveExpressionConstantOrDefault(a, s, ip, bin.right, 0);
 
-            const lv = left.asInt() catch {
+            const lv = left.asInt(i64) catch {
                 a.recordExpressionLayoutError(s.file.handle, expr_handle, bin.left, "Overflow (constant too large)", .{});
                 return null;
             };
-            const rv = right.asInt() catch {
+            const rv = right.asInt(i64) catch {
+                a.recordExpressionLayoutError(s.file.handle, expr_handle, bin.right, "Overflow (constant too large)", .{});
+                return null;
+            };
+
+            const value = switch (info) {
+                .plus => std.math.add(i64, lv, rv),
+                .minus => std.math.sub(i64, lv, rv),
+                else => unreachable,
+            } catch {
+                a.recordExpressionLayoutError(s.file.handle, expr_handle, expr_handle, "Overflow (constant too large)", .{});
+                return null;
+            };
+            const new_constant = Constant.initInt(value);
+            expr_resolved_constants[expr_handle] = new_constant.intern(a.arena, a.gpa, &a.constants);
+        },
+        .multiply, .shl, .shr, => |bin| {
+            const left = resolveExpressionConstantOrDefault(a, s, ip, bin.left, 0);
+            const right = resolveExpressionConstantOrDefault(a, s, ip, bin.right, 0);
+
+            const lv = left.asInt(i64) catch {
+                a.recordExpressionLayoutError(s.file.handle, expr_handle, bin.left, "Overflow (constant too large)", .{});
+                return null;
+            };
+            const rv = right.asInt(i64) catch {
                 a.recordExpressionLayoutError(s.file.handle, expr_handle, bin.right, "Overflow (constant too large)", .{});
                 return null;
             };
@@ -582,8 +592,6 @@ pub fn resolveExpressionConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, e
             }
 
             const value = switch (info) {
-                .plus => std.math.add(i64, lv, rv),
-                .minus => std.math.sub(i64, lv, rv),
                 .multiply => std.math.mul(i64, lv, rv),
                 .shl => std.math.shlExact(i64, lv, @intCast(u6, rv)),
                 .shr => lv >> @intCast(u6, rv),
@@ -592,7 +600,7 @@ pub fn resolveExpressionConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, e
                 a.recordExpressionLayoutError(s.file.handle, expr_handle, expr_handle, "Overflow (constant too large)", .{});
                 return null;
             };
-            const new_constant = Constant.initInt(value, null);
+            const new_constant = Constant.initInt(value);
             expr_resolved_constants[expr_handle] = new_constant.intern(a.arena, a.gpa, &a.constants);
         },
         .concat, .bitwise_or, .bitwise_xor, .bitwise_and => |bin| {
@@ -600,9 +608,9 @@ pub fn resolveExpressionConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, e
             const right = resolveExpressionConstant(a, s, ip, bin.right) orelse return null;
             const result = switch (info) {
                 .concat => left.concat(a.gpa, &a.constant_temp, right.*),
-                .bitwise_or => left.bitwiseOr(a.gpa, &a.constant_temp, right.*),
-                .bitwise_xor => left.bitwiseXor(a.gpa, &a.constant_temp, right.*),
-                .bitwise_and => left.bitwiseAnd(a.gpa, &a.constant_temp, right.*),
+                .bitwise_or => left.bitwise(a.gpa, &a.constant_temp, right.*, .bitwise_or),
+                .bitwise_xor => left.bitwise(a.gpa, &a.constant_temp, right.*, .bitwise_xor),
+                .bitwise_and => left.bitwise(a.gpa, &a.constant_temp, right.*, .bitwise_and),
                 else => unreachable,
             };
             expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
@@ -610,56 +618,80 @@ pub fn resolveExpressionConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, e
         .concat_repeat => |bin| {
             const left = resolveExpressionConstant(a, s, ip, bin.left) orelse return null;
             const right = resolveExpressionConstant(a, s, ip, bin.right) orelse return null;
-            const times = right.asInt() catch {
-                a.recordExpressionLayoutError(s.file.handle, expr_handle, bin.right, "Overflow (constant too large)", .{});
+            const times = right.asInt(u63) catch {
+                a.recordExpressionLayoutError(s.file.handle, expr_handle, bin.right, "Overflow (repeat count must fit in u63)", .{});
                 return null;
             };
             const result = left.repeat(a.gpa, &a.constant_temp, times);
             expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
         },
-        .length_cast, .truncate, .sign_extend, .zero_extend => |bin| {
+        .length_cast => |bin| {
             const left = resolveExpressionConstant(a, s, ip, bin.left) orelse return null;
             const right = resolveExpressionConstant(a, s, ip, bin.right) orelse return null;
-            const width = right.asInt() catch {
-                a.recordExpressionLayoutError(s.file.handle, expr_handle, bin.right, "Overflow (constant too large)", .{});
+            const width = right.asInt(u63) catch {
+                a.recordExpressionLayoutError(s.file.handle, expr_handle, bin.right, "Overflow (constant width must fit in u63)", .{});
                 return null;
             };
-            if (width < 0) {
-                a.recordExpressionLayoutError(s.file.handle, expr_handle, bin.right, "Width must not be negative", .{});
+            const result = left.cloneWithLength(a.gpa, &a.constant_temp, width) catch {
+                a.recordExpressionLayoutError(s.file.handle, expr_handle, bin.right, "Truncation would change constant value (consider using .trunc instead)", .{});
                 return null;
-            }
-            var signedness = std.builtin.Signedness.signed;
-            switch (info) {
-                .length_cast => {
-                    if (left.requiredBits() > width) {
-                        a.recordExpressionLayoutError(s.file.handle, expr_handle, expr_handle, "Cast changes constant value, use .trunc instead", .{});
-                    }
-                },
-                .truncate => {},
-                .sign_extend => {
-                    if (left.bit_count >= width) {
-                        a.recordExpressionLayoutError(s.file.handle, expr_handle, bin.right, "Expected new width to be larger", .{});
-                    }
-                },
-                .zero_extend => {
-                    if (left.bit_count >= width) {
-                        a.recordExpressionLayoutError(s.file.handle, expr_handle, bin.right, "Expected new width to be larger", .{});
-                    }
-                    signedness = .unsigned;
-                },
-                else => unreachable,
-            }
-            const result = left.cloneWithLength(a.gpa, &a.constant_temp, @intCast(u64, width), signedness);
+            };
             expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
         },
-        .signed_cast, .unsigned_cast, .maybe_signed_cast,
-        .data_address_cast, .insn_address_cast, .stack_address_cast, .remove_address_cast,
+        .truncate => |bin| {
+            const left = resolveExpressionConstant(a, s, ip, bin.left) orelse return null;
+            const right = resolveExpressionConstant(a, s, ip, bin.right) orelse return null;
+            const width = right.asInt(u63) catch {
+                a.recordExpressionLayoutError(s.file.handle, expr_handle, bin.right, "Overflow (constant width must fit in u63)", .{});
+                return null;
+            };
+            const result = left.truncate(width);
+            expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
+        },
+        .sign_extend => |bin| {
+            const left = resolveExpressionConstant(a, s, ip, bin.left) orelse return null;
+            const right = resolveExpressionConstant(a, s, ip, bin.right) orelse return null;
+            const width = right.asInt(u63) catch {
+                a.recordExpressionLayoutError(s.file.handle, expr_handle, bin.right, "Overflow (constant width must fit in u63)", .{});
+                return null;
+            };
+            const result = left.extend(a.gpa, &a.constant_temp, width, .signed) catch {
+                a.recordExpressionLayoutError(s.file.handle, expr_handle, bin.right, "Constant is already wider than requested (consider using .trunc instead)", .{});
+                return null;
+            };
+            expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
+        },
+        .zero_extend => |bin| {
+            const left = resolveExpressionConstant(a, s, ip, bin.left) orelse return null;
+            const right = resolveExpressionConstant(a, s, ip, bin.right) orelse return null;
+            const width = right.asInt(u63) catch {
+                a.recordExpressionLayoutError(s.file.handle, expr_handle, bin.right, "Overflow (constant width must fit in u63)", .{});
+                return null;
+            };
+            const result = left.extend(a.gpa, &a.constant_temp, width, .unsigned) catch {
+                a.recordExpressionLayoutError(s.file.handle, expr_handle, bin.right, "Constant is already wider than requested (consider using .trunc instead)", .{});
+                return null;
+            };
+            expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
+        },
+
+        .signed_cast => |inner_expr| {
+            const constant = resolveExpressionConstant(a, s, ip, inner_expr) orelse return null;
+            const result = constant.cloneWithSignedness(.signed);
+            expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
+        },
+        .unsigned_cast => |inner_expr| {
+            const constant = resolveExpressionConstant(a, s, ip, inner_expr) orelse return null;
+            const result = constant.cloneWithSignedness(.unsigned);
+            expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
+        },
+        .maybe_signed_cast, .data_address_cast, .insn_address_cast, .stack_address_cast, .remove_address_cast,
          => |inner_expr| {
             expr_resolved_constants[expr_handle] = resolveExpressionConstant(a, s, ip, inner_expr);
         },
         .absolute_address_cast => |inner_expr| {
             const inner = resolveExpressionConstant(a, s, ip, inner_expr) orelse return null;
-            const relative = inner.asInt() catch {
+            const relative = inner.asInt(i64) catch {
                 a.recordExpressionLayoutError(s.file.handle, expr_handle, inner_expr, "Relative address too large", .{});
                 return null;
             };
@@ -671,7 +703,7 @@ pub fn resolveExpressionConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, e
                 a.recordExpressionLayoutError(s.file.handle, expr_handle, inner_expr, "Absolute address overflows u32", .{});
                 return null;
             };
-            const result = Constant.initInt(absolute_u32, null);
+            const result = Constant.initInt(absolute_u32);
             expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
         },
     }
@@ -696,7 +728,7 @@ fn resolveSymbolRefExprConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, ex
                     },
                     else => {},
                 }
-                const constant = Constant.initInt(value, null);
+                const constant = Constant.initInt(value);
                 s.expr.items(.resolved_constant)[expr_handle] = constant.intern(a.arena, a.gpa, &a.constants);
             },
             .not_found => {
@@ -893,12 +925,12 @@ fn encodeDataDirective(s: SourceFile.Slices, params_expr_handle: Expression.Hand
     };
 }
 fn encodeDataExpression(expr_constant: *const Constant, granularity_bytes: u8, skip_bytes: usize, out: []u8) usize {
-    var constant_bytes = std.mem.alignForward(expr_constant.bit_count, granularity_bytes * 8) / 8;
+    var constant_bytes = std.mem.alignForward(expr_constant.getBitCount(), granularity_bytes * 8) / 8;
     if (skip_bytes >= constant_bytes) {
         return constant_bytes;
     }
 
-    var iter = expr_constant.byteIterator(.signed);
+    var iter = expr_constant.byteIterator(null);
     iter.skip(skip_bytes);
     constant_bytes -= skip_bytes;
 

@@ -1,3 +1,6 @@
+[assembler] .unsigned, .signed on constants
+[assembler] arbitrary precision arithmetic
+[assembler] rename .maybe_signed => .without_signedness
 [assembler] output files
 [assembler] refactor Constant to keep track of signedness instead of assuming everything is signed
 [assembler] add cycle counts to listing output

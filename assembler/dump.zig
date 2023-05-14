@@ -142,13 +142,13 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
     while (constant_iter.next()) |k| {
         const ptr = k.*;
         try writer.print("   {X:0>16}:{:>4}b: ", .{ @ptrToInt(ptr), ptr.bit_count });
-        if (ptr.asInt()) |int_value| {
+        if (ptr.asInt(i64) catch null) |int_value| {
             var uint_value = @bitCast(u64, int_value);
-            if (ptr.bit_count < 64) {
-                uint_value &= (@as(u64, 1) << @intCast(u6, ptr.bit_count)) - 1;
+            if (ptr.getBitCount() < 64) {
+                uint_value &= (@as(u64, 1) << @intCast(u6, ptr.getBitCount())) - 1;
             }
             try writer.print("0x{X} {} ", .{ uint_value, int_value });
-        } else |_| {}
+        }
         try writer.print("'{s}'\n", .{ std.fmt.fmtSliceEscapeUpper(ptr.asString()) });
     }
 

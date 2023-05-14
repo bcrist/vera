@@ -311,19 +311,14 @@ fn tryResolveExpressionType(a: *Assembler, s: SourceFile.Slices, expr_handle: Ex
                     const constant = layout.resolveExpressionConstant(a, s, 0, inner_expr) orelse {
                         break :t .{ .poison = {} };
                     };
-                    const index = constant.asInt() catch {
+                    const index = constant.asInt(u4) catch {
                         const token = s.expr.items(.token)[expr_handle];
                         a.recordError(s.file.handle, token, "Operand out of range", .{});
                         break :t .{ .poison = {} };
                     };
-                    if (index < 0 or index > 15) {
-                        const token = s.expr.items(.token)[expr_handle];
-                        a.recordError(s.file.handle, token, "Operand out of range", .{});
-                        break :t .{ .poison = {} };
-                    }
 
                     const reg = isa.IndexedRegister{
-                        .index = @intCast(u4, index),
+                        .index = index,
                         .signedness = null,
                     };
 
@@ -347,7 +342,7 @@ fn tryResolveExpressionType(a: *Assembler, s: SourceFile.Slices, expr_handle: Ex
                 .unknown => return false,
                 .poison => .{ .poison = {} },
                 .reg8, .reg16, .reg32 => |reg| t: {
-                    const constant = Constant.initInt(reg.index, null);
+                    const constant = Constant.initInt(reg.index);
                     s.expr.items(.resolved_constant)[expr_handle] = constant.intern(a.arena, a.gpa, &a.constants);
                     break :t .{ .constant = {} };
                 },

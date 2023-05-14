@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    //[[!! include 'build' !! 264 ]]
+    //[[!! include 'build' !! 238 ]]
     //[[ ################# !! GENERATED CODE -- DO NOT MODIFY !! ################# ]]
 
     const bits = b.createModule(.{
@@ -173,7 +173,7 @@ pub fn build(b: *std.Build) void {
     assemble_exe.addModule("isa_encoding", isa_encoding);
     assemble_exe.addModule("isa_types", isa_types);
     b.installArtifact(assemble_exe);
-    _ = makeRunStep(b, assemble_exe, "assemble", "run assemble");
+    _ = makeRunStep(b, assemble_exe, "assemble", "Run assemble");
 
     const compile_arch = b.addExecutable(.{
         .name = "compile_arch",
@@ -194,7 +194,7 @@ pub fn build(b: *std.Build) void {
     compile_arch.addModule("sx", sx);
     compile_arch.addModule("temp_allocator", temp_allocator);
     b.installArtifact(compile_arch);
-    _ = makeRunStep(b, compile_arch, "uc", "run compile_arch");
+    _ = makeRunStep(b, compile_arch, "uc", "Run compile_arch");
 
     const microsim = b.addExecutable(.{
         .name = "microsim",
@@ -218,69 +218,43 @@ pub fn build(b: *std.Build) void {
     zgui_pkg.link(microsim);
     microsim.want_lto = false;
     b.installArtifact(microsim);
-    _ = makeRunStep(b, microsim, "usim", "run microsim");
+    _ = makeRunStep(b, microsim, "usim", "Run microsim");
 
     const tests1 = b.addTest(.{
-        .root_source_file = .{ .path = "arch/test_instruction_behavior.zig"},
-        .target = target,
-        .optimize = mode,
-    });
-    tests1.addModule("ControlSignals", ControlSignals);
-    tests1.addModule("Simulator", Simulator);
-    tests1.addModule("isa_encoding", isa_encoding);
-    tests1.addModule("microcode_roms", microcode_roms);
-    tests1.addModule("misc", misc);
-
-    const tests2 = b.addTest(.{
-        .root_source_file = .{ .path = "arch/test_instruction_encoding.zig"},
-        .target = target,
-        .optimize = mode,
-    });
-    tests2.addModule("isa_encoding", isa_encoding);
-
-    const tests3 = b.addTest(.{
-        .root_source_file = .{ .path = "arch/test_misc.zig"},
-        .target = target,
-        .optimize = mode,
-    });
-    tests3.addModule("ControlSignals", ControlSignals);
-    tests3.addModule("bus_types", bus_types);
-    tests3.addModule("misc", misc);
-
-    const tests4 = b.addTest(.{
         .root_source_file = .{ .path = "assembler/Constant.zig"},
         .target = target,
         .optimize = mode,
     });
+    const run_tests1 = b.addRunArtifact(tests1);
 
-    const tests5 = b.addTest(.{
+    const tests2 = b.addTest(.{
         .root_source_file = .{ .path = "assembler/lex.zig"},
         .target = target,
         .optimize = mode,
     });
+    const run_tests2 = b.addRunArtifact(tests2);
 
-    const tests6 = b.addTest(.{
+    const tests3 = b.addTest(.{
         .root_source_file = .{ .path = "pkg/bits.zig"},
         .target = target,
         .optimize = mode,
     });
+    const run_tests3 = b.addRunArtifact(tests3);
 
-    const tests7 = b.addTest(.{
+    const tests4 = b.addTest(.{
         .root_source_file = .{ .path = "pkg/rom_decompress.zig"},
         .target = target,
         .optimize = mode,
     });
-    tests7.addModule("bits", bits);
-    tests7.addModule("rom_compress", rom_compress);
+    tests4.addModule("bits", bits);
+    tests4.addModule("rom_compress", rom_compress);
+    const run_tests4 = b.addRunArtifact(tests4);
 
     const test_step = b.step("test", "Run all tests");
-    test_step.dependOn(&tests1.step);
-    test_step.dependOn(&tests2.step);
-    test_step.dependOn(&tests3.step);
-    test_step.dependOn(&tests4.step);
-    test_step.dependOn(&tests5.step);
-    test_step.dependOn(&tests6.step);
-    test_step.dependOn(&tests7.step);
+    test_step.dependOn(&run_tests1.step);
+    test_step.dependOn(&run_tests2.step);
+    test_step.dependOn(&run_tests3.step);
+    test_step.dependOn(&run_tests4.step);
 
     _ = assemble;
     //[[ ######################### END OF GENERATED CODE ######################### ]]

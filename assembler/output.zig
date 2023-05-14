@@ -149,7 +149,7 @@ fn writeListingForChunk(a: *Assembler, writer: anytype, chunk: SourceFile.Chunk,
                     if (s.expr.items(.resolved_constant)[expr_handle]) |constant| {
                         a.constant_temp.clearRetainingCapacity();
                         var temp_writer = a.constant_temp.writer(a.gpa);
-                        try temp_writer.print(".org 0x{X}", .{ constant.asInt() catch 0 });
+                        try temp_writer.print(".org 0x{X}", .{ constant.asInt(u32) catch 0 });
                         try writer.writeAll(a.constant_temp.items);
                         try writer.writeByteNTimes(' ', listing_width - a.constant_temp.items.len);
                         try writer.print("// {s}\n", .{ line } );

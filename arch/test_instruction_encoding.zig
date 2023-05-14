@@ -6,8 +6,8 @@ test "Instruction encoding" {
     defer arena.deinit();
 
     var temp = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    const edb = try ie.EncoderDatabase.init(arena.allocator(), ie_data, temp.allocator());
-    const ddb = try ie.DecoderDatabase.init(arena.allocator(), ie_data, temp.allocator());
+    const edb = try ie.EncoderDatabase.init(arena.allocator(), temp.allocator());
+    const ddb = try ie.DecoderDatabase.init(arena.allocator(), temp.allocator());
     temp.deinit();
 
     try ie.testIdempotence(&ddb, &edb, 2, .{

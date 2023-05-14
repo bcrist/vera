@@ -25,7 +25,7 @@
     (safe_name zglfw_pkg.zglfw)
     (func zglfw_pkg.link)
 )
-(dir arch
+(dir arch (notest)
     (pkg ControlSignals)
     (pkg microcode)
     (pkg misc)

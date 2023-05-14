@@ -281,7 +281,7 @@ for _, fun in ipairs(pass_exe_to) do
     writeln(nl, fun, '(', safe_name, ');')
 end`
 b.installArtifact(`safe_name`);
-_ = makeRunStep(b, `safe_name`, "`run_step`", "run `name`");
+_ = makeRunStep(b, `safe_name`, "`run_step`", "Run `name`");
 ]]
 
 for _, exe in spairs(exes) do
@@ -304,7 +304,7 @@ for test in spairs(tests) do
     for dep in spairs(deps) do
         write(nl, 'tests', i, '.addModule("', dep, '", ', packages[dep].safe_name, ');')
     end
-    nl()
+    write(nl, 'const run_tests', i, ' = b.addRunArtifact(tests', i, ');', nl)
     i = i + 1
 end
 
@@ -314,7 +314,7 @@ if i > 1 then
 
     local i = 1
     for test in spairs(tests) do
-        write(nl, 'test_step.dependOn(&tests', i, '.step);')
+        write(nl, 'test_step.dependOn(&run_tests', i, '.step);')
         i = i + 1
     end
 

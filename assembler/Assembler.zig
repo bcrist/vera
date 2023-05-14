@@ -449,7 +449,7 @@ fn buildInstructionParameter(
     }
     const constant_value = v: {
         const constant = layout.resolveExpressionConstant(self, s, ip, expr_handle) orelse break :v 0;
-        break :v constant.asInt() catch {
+        break :v constant.asInt(i64) catch {
             if (record_errors) {
                 const expr_token = s.expr.items(.token)[expr_handle];
                 const expr_flags = s.expr.items(.flags)[expr_handle];

@@ -18,8 +18,8 @@ var globals_loaded = false;
 fn initSimulator(program: []const ie.Instruction) !Simulator {
     if (!globals_loaded) {
         arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-        ddb = try ie.DecoderDatabase.init(arena.allocator(), ie_data, std.testing.allocator);
-        edb = try ie.EncoderDatabase.init(arena.allocator(), ie_data, std.testing.allocator);
+        ddb = try ie.DecoderDatabase.init(arena.allocator(), std.testing.allocator);
+        edb = try ie.EncoderDatabase.init(arena.allocator(), std.testing.allocator);
         var new_microcode = try arena.allocator().create([misc.microcode_length]ControlSignals);
         uc_roms.readCompressedRoms(@import("microcode_roms").compressed_data, new_microcode);
         microcode = new_microcode;
