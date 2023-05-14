@@ -99,19 +99,14 @@ pub fn initStringBits(value: []const u8, bits: u63, signedness: std.builtin.Sign
     return init(value.ptr, bits, signedness);
 }
 
-// Store an integer using the fewest bits possible, preserving the signedness of the integer type used.
+// Store an integer using the fewest bits possible, while ensuring that the MSB is always 0 for unsigned integers.
+// This ensures that cloneWithSignedness won't change the value
 pub fn initInt(value: anytype) Constant {
     const T = @TypeOf(value);
     const signedness = @typeInfo(T).Int.signedness;
     const T8 = std.meta.Int(signedness, @sizeOf(T) * 8);
-
     const ext_value = @as(T8, value);
-
-    const bits = @max(1, @bitSizeOf(T) - switch (signedness) {
-        .signed => if (value < 0) @clz(~value) - 1 else @clz(value) - 1,
-        .unsigned => @clz(value),
-    });
-
+    const bits = @bitSizeOf(T) + @as(u63, 1) - if (value < 0) @clz(~value) else @clz(value);
     return init(std.mem.asBytes(&ext_value), bits, signedness);
 }
 
@@ -123,7 +118,7 @@ test "initInt" {
     }
     {
         var constant = initInt(@as(u1, 1));
-        try std.testing.expectEqual(@as(i64, 1), constant.bit_count);
+        try std.testing.expectEqual(@as(i64, 2), constant.bit_count);
         try std.testing.expectEqualSlices(u8, "\x01", constant.asString());
     }
     {
@@ -143,7 +138,7 @@ test "initInt" {
     }
     {
         var constant = initInt(@as(u7, 127));
-        try std.testing.expectEqual(@as(i64, 7), constant.bit_count);
+        try std.testing.expectEqual(@as(i64, 8), constant.bit_count);
         try std.testing.expectEqualSlices(u8, "\x7F", constant.asString());
     }
     {
@@ -351,7 +346,7 @@ pub fn initIntLiteral(allocator: std.mem.Allocator, storage: *std.ArrayListUnman
         var value = try std.fmt.parseUnsigned(u64, remaining, radix);
 
         if (radix == 10) {
-            storage_bit_count = 64 - @clz(value);
+            storage_bit_count = 65 - @clz(value);
         }
 
         const bit_count = maybe_bit_count orelse storage_bit_count;
@@ -400,11 +395,11 @@ test "initIntLiteral" {
     defer temp.deinit(std.testing.allocator);
 
     var constant = try initIntLiteral(std.testing.allocator, &temp, "0");
-    try std.testing.expectEqual(@as(i64, 0), constant.bit_count);
+    try std.testing.expectEqual(@as(i64, 1), constant.bit_count);
     try std.testing.expectEqual(@as(i64, 0), try constant.asInt(i64));
 
     constant = try initIntLiteral(std.testing.allocator, &temp, "13");
-    try std.testing.expectEqual(@as(i64, 4), constant.bit_count);
+    try std.testing.expectEqual(@as(i64, 5), constant.bit_count);
     try std.testing.expectEqual(@as(i64, 13), try constant.asInt(i64));
 
     constant = try initIntLiteral(std.testing.allocator, &temp, "0xFF");
@@ -548,8 +543,40 @@ pub fn cloneWithLength(self: Constant, allocator: std.mem.Allocator, storage: *s
     return init(result.ptr, result_bit_count, self.getSignedness());
 }
 
-pub fn cloneWithSignedness(self: Constant, signedness: std.builtin.Signedness) Constant {
-    return init(self.asString().ptr, self.getBitCount(), signedness);
+pub fn cloneWithSignedness(self: Constant, allocator: std.mem.Allocator, storage: *std.ArrayListUnmanaged(u8), signedness: std.builtin.Signedness) Constant {
+    const bits = self.getBitCount();
+
+    var small_buf: [8]u8 = undefined;
+    var result = getResultBuffer(allocator, storage, &small_buf, bits);
+
+    var iter = self.byteIterator(signedness);
+    for (result) |*b| {
+        b.* = iter.next();
+    }
+
+    return init(result.ptr, bits, signedness);
+}
+
+test "cloneWithSignedness" {
+    var temp = std.ArrayListUnmanaged(u8) {};
+    defer temp.deinit(std.testing.allocator);
+    var temp2 = std.ArrayListUnmanaged(u8) {};
+    defer temp2.deinit(std.testing.allocator);
+
+    {
+        var constant = try initIntLiteral(std.testing.allocator, &temp, "255");
+        var clone_constant = constant.cloneWithSignedness(std.testing.allocator, &temp2, .signed);
+        try std.testing.expectEqual(@as(i64, -9), clone_constant.bit_count);
+        try std.testing.expectEqual(@as(i64, 255), try clone_constant.asInt(i64));
+    }
+    {
+        var constant = try initIntLiteral(std.testing.allocator, &temp, "0xFF");
+        try std.testing.expectEqual(@as(i64, 8), constant.bit_count);
+        try std.testing.expectEqual(@as(i64, 0xFF), try constant.asInt(i64));
+        var clone_constant = constant.cloneWithSignedness(std.testing.allocator, &temp2, .signed);
+        try std.testing.expectEqual(@as(i64, -8), clone_constant.bit_count);
+        try std.testing.expectEqual(@as(i64, -1), try clone_constant.asInt(i64));
+    }
 }
 
 pub fn truncate(self: Constant, result_bit_count: u63) Constant {

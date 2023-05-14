@@ -24,7 +24,7 @@ _end:
 .align 4096, (.raw @loop) .trunc 12 // essentially says 'put this at the same page offset as loop has in its page'
 str: .db 1,2,3,4,"Hellorld!" ** 9
 str: .dw 1,2,3,4,"Hellorld!" ** 9
-str: .dd 1,2,3,4,"Hellorld!"
+str: .dd 1,2,3,4,"Hellorld!", 0xF .signed'40, 255 .signed'40, -1 .unsigned'40
 .db "go"
 .const
 .align 128

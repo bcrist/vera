@@ -373,6 +373,7 @@ fn tryResolveExpressionType(a: *Assembler, s: SourceFile.Slices, expr_handle: Ex
             expr_resolved_types[expr_handle] = switch (inner_type) {
                 .unknown => return false,
                 .poison => .{ .poison = {} },
+                .constant => .{ .constant = {} },
                 .reg8, .reg16, .reg32 => |reg| t: {
                     var new_reg = reg;
                     new_reg.signedness = switch (info) {
@@ -389,10 +390,9 @@ fn tryResolveExpressionType(a: *Assembler, s: SourceFile.Slices, expr_handle: Ex
                         else => unreachable,
                     };
                 },
-                .raw_base_offset, .data_address, .insn_address, .stack_address,
-                .constant, .symbol_def, .sr => t: {
+                .raw_base_offset, .data_address, .insn_address, .stack_address, .symbol_def, .sr => t: {
                     const token = s.expr.items(.token)[expr_handle];
-                    a.recordError(s.file.handle, token, "Operand must be a GPR expression", .{});
+                    a.recordError(s.file.handle, token, "Operand must be a constant or GPR expression", .{});
                     break :t .{ .poison = {} };
                 },
             };

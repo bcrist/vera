@@ -677,12 +677,12 @@ pub fn resolveExpressionConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, e
 
         .signed_cast => |inner_expr| {
             const constant = resolveExpressionConstant(a, s, ip, inner_expr) orelse return null;
-            const result = constant.cloneWithSignedness(.signed);
+            const result = constant.cloneWithSignedness(a.gpa, &a.constant_temp, .signed);
             expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
         },
         .unsigned_cast => |inner_expr| {
             const constant = resolveExpressionConstant(a, s, ip, inner_expr) orelse return null;
-            const result = constant.cloneWithSignedness(.unsigned);
+            const result = constant.cloneWithSignedness(a.gpa, &a.constant_temp, .unsigned);
             expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
         },
         .maybe_signed_cast, .data_address_cast, .insn_address_cast, .stack_address_cast, .remove_address_cast,
