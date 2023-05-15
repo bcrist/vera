@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    //[[!! include 'build' !! 238 ]]
+    //[[!! include 'build' !! 246 ]]
     //[[ ################# !! GENERATED CODE -- DO NOT MODIFY !! ################# ]]
 
     const bits = b.createModule(.{
@@ -91,6 +91,10 @@ pub fn build(b: *std.Build) void {
     Simulator.dependencies.put("misc", misc) catch unreachable;
     Simulator.dependencies.put("physical_address", physical_address) catch unreachable;
 
+    const ihex = b.createModule(.{
+        .source_file = .{ .path = "pkg/ihex.zig" },
+    });
+
     const deep_hash_map = b.createModule(.{
         .source_file = .{ .path = "pkg/deep_hash_map.zig" },
     });
@@ -110,12 +114,18 @@ pub fn build(b: *std.Build) void {
         },
     });
 
+    const srec = b.createModule(.{
+        .source_file = .{ .path = "pkg/srec.zig" },
+    });
+
     const assemble = b.createModule(.{
         .source_file = .{ .path = "assembler/assemble.zig" },
         .dependencies = &.{
             .{ .name = "bus_types", .module = bus_types },
+            .{ .name = "ihex", .module = ihex },
             .{ .name = "isa_encoding", .module = isa_encoding },
             .{ .name = "isa_types", .module = isa_types },
+            .{ .name = "srec", .module = srec },
         },
     });
 
@@ -143,10 +153,6 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    const srec = b.createModule(.{
-        .source_file = .{ .path = "pkg/srec.zig" },
-    });
-
     const microcode_roms = b.createModule(.{
         .source_file = .{ .path = "arch/microcode_roms/microcode_roms.zig" },
         .dependencies = &.{
@@ -170,8 +176,10 @@ pub fn build(b: *std.Build) void {
         .optimize = mode,
     });
     assemble_exe.addModule("bus_types", bus_types);
+    assemble_exe.addModule("ihex", ihex);
     assemble_exe.addModule("isa_encoding", isa_encoding);
     assemble_exe.addModule("isa_types", isa_types);
+    assemble_exe.addModule("srec", srec);
     b.installArtifact(assemble_exe);
     _ = makeRunStep(b, assemble_exe, "assemble", "Run assemble");
 

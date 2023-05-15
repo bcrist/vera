@@ -16,6 +16,8 @@ loop:
 _end:
     c   last -> r0
     ret
+something:
+    ret
 //    axe
 
 .const x

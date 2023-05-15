@@ -232,15 +232,16 @@ fn convertMicrocodeToSRec(comptime RomData: type, microcode: *const [misc.microc
         rom_name = rom_name[index + 1 ..];
     }
 
-    var encoder = try srec.Encoder(u24).init(temp_allocator, rom_name);
-    defer encoder.deinit();
-
-    encoder.pretty = true;
-
-    var start: u24 = undefined;
     var temp = std.ArrayList(u8).init(temp_allocator);
     defer temp.deinit();
 
+    var encoded_data = std.ArrayList(u8).init(temp_allocator);
+    defer encoded_data.deinit();
+
+    var writer = try srec.writer(u24, encoded_data.writer(), rom_name, true);
+    writer.pretty = true;
+
+    var start: u24 = undefined;
     for (microcode, 0..) |optional_cs, ua| {
         if (optional_cs) |cs| {
             const data = @bitCast(u16, RomData.init(cs.*));
@@ -252,18 +253,18 @@ fn convertMicrocodeToSRec(comptime RomData: type, microcode: *const [misc.microc
             try temp.append(@truncate(u8, data));
             try temp.append(@intCast(u8, data >> 8));
         } else if (temp.items.len > 0) {
-            try encoder.encode(start, temp.items);
+            try writer.write(start, temp.items);
             temp.clearRetainingCapacity();
         }
     }
 
     if (temp.items.len > 0) {
-        try encoder.encode(start, temp.items);
+        try writer.write(start, temp.items);
     }
 
-    try encoder.finish(0);
+    try writer.finish(0);
 
-    return result_allocator.dupe(u8, encoder.data.items);
+    return result_allocator.dupe(u8, encoded_data.items);
 }
 
 pub fn writeSRecRoms(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, microcode: *const [misc.microcode_length]?*ControlSignals) !CompressedRomData {

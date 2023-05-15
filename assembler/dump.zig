@@ -27,12 +27,11 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
         try writer.print("      Instructions:\n", .{});
         for (0..,
             file.instructions.items(.label),
-            file.instructions.items(.token),
             file.instructions.items(.operation),
             file.instructions.items(.params),
             file.instructions.items(.address),
             file.instructions.items(.flags),
-        ) |handle, label_handle, token_handle, operation, params_handle, address, flags| {
+        ) |handle, label_handle, operation, params_handle, address, flags| {
             try writer.print("         #{}:", .{ handle });
             if (address != 0) {
                 try writer.print(" {X:0>8}", .{ address });
@@ -57,8 +56,6 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
             if (params_handle) |params| {
                 try writer.print(" #{}", .{ params });
             }
-            const token = file.tokens.get(token_handle);
-            try writer.print(" '{s}'", .{ token.location(file.source) });
 
             var flags_iter = flags.iterator();
             while (flags_iter.next()) |f| {

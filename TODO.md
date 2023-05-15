@@ -1,17 +1,17 @@
 [assembler] output files
-[assembler] add cycle counts to listing output
+[assembler] check for shadowed symbols
+[assembler] Warn on multiple files with same name
 [assembler] add line numbers to listing output (maybe need to check lexer - can newlines be escaped?)
 [assembler] .local defs
-[assembler] check for shadowed symbols
 [assembler] Usage of a label that's fixed by an .org directive should not cause the expression to be marked .constant_depends_on_layout
 [assembler] Multi-line string literals
-[assembler] Warn on multiple files with same name
 [assembler] .stack sections, .push, .pop
 [assembler] Consider having stack sections use a different namespace from other section types, and make them local to the file they're defined in.
 [assembler] .kentry label alignment
 [assembler] section allowed page .range
 [assembler] initial arrow (nil first parameter)
 [assembler] Create disassembler
+[assembler] add cycle counts to listing output
 [assembler] .str/.kstr "whatever" - creates a ptr+len data declaration - creates a new block in the `.const strings` section with the data (.kconst for .kstr) - may dedup data (enable with global assembler flag?)
 [assembler] arbitrary precision shifts
 [assembler] arbitrary precision multiply

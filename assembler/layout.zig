@@ -775,6 +775,10 @@ pub fn populatePageChunks(a: *Assembler, chunks: []const SourceFile.Chunk) void 
             last_page = (addresses.end - 1) >> @bitSizeOf(bus.PageOffset);
         }
 
+        if (chunk.section) |section_handle| {
+            a.sections.values()[section_handle].has_chunks = true;
+        }
+
         a.chunks.append(a.gpa, .{
             .chunk = chunk,
             .address = addresses.begin,

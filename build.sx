@@ -9,6 +9,7 @@
 (dir pkg
     (pkg bits)
     (pkg srec)
+    (pkg ihex)
     (pkg rom_compress)
     (pkg rom_decompress)
     (pkg deep_hash_map)

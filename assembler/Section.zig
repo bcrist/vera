@@ -26,3 +26,4 @@ pub const Handle = u31;
 
 name: []const u8,
 kind: Kind,
+has_chunks: bool,

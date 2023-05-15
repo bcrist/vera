@@ -13,11 +13,19 @@ pub fn main() !void {
 
     var a = Assembler.init(gpa.allocator(), arena.allocator(), edb);
 
+    var output_file = std.ArrayList(u8).init(gpa.allocator());
+
     var arg_iter = try std.process.ArgIterator.initWithAllocator(temp.allocator());
     _ = arg_iter.next(); // ignore assemble command name
     while (arg_iter.next()) |arg| {
         const source = try std.fs.cwd().readFileAlloc(arena.allocator(), arg, 100_000_000);
         _ = a.adoptSource(try arena.allocator().dupe(u8, arg), source);
+        if (output_file.items.len == 0) {
+            try output_file.appendSlice(arg);
+        } else {
+            output_file.clearRetainingCapacity();
+            try output_file.appendSlice("a.out");
+        }
     }
     temp.deinit();
 
@@ -28,5 +36,10 @@ pub fn main() !void {
     try dump.dump(&a, std.io.getStdOut().writer());
 
     //try a.printErrors(std.io.getStdErr().writer());
+
+    try output.writeHex(&a, std.fs.cwd(), output_file.items, .{
+        .merge_all_sections = false,
+        .num_roms = 4,
+    });
 
 }

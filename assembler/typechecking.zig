@@ -68,6 +68,7 @@ pub fn processLabelsAndSections(a: *Assembler, file: *SourceFile) void {
             const entry = a.sections.getOrPutValue(a.gpa, section_name, .{
                 .name = section_name,
                 .kind = kind,
+                .has_chunks = false,
             }) catch @panic("OOM");
             const found_kind = entry.value_ptr.kind;
             if (found_kind != kind) switch (found_kind) {
