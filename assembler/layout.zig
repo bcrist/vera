@@ -535,46 +535,31 @@ pub fn resolveExpressionConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, e
         },
 
         .negate => |inner_expr| {
-            const inner_constant = resolveExpressionConstant(a, s, ip, inner_expr) orelse return null;
-            const value = inner_constant.asIntNegated(i64) catch {
-                a.recordExpressionLayoutError(s.file.handle, expr_handle, expr_handle, "Overflow (constant too large)", .{});
-                return null;
-            };
-            const new_constant = Constant.initInt(value);
-            expr_resolved_constants[expr_handle] = new_constant.intern(a.arena, a.gpa, &a.constants);
+            const right = resolveExpressionConstant(a, s, ip, inner_expr) orelse return null;
+            const zero = Constant.initInt(@as(u1, 0));
+            const result = zero.binaryOp(a.gpa, &a.constant_temp, right.*, .subtract);
+            expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
         },
         .complement => |inner_expr| {
             const inner = resolveExpressionConstant(a, s, ip, inner_expr) orelse return null;
             const result = inner.complement(a.gpa, &a.constant_temp);
             expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
         },
-        .plus, .minus => |bin| {
+        .plus => |bin| {
             const left = resolveExpressionConstantOrDefault(a, s, ip, bin.left, 0);
             const right = resolveExpressionConstantOrDefault(a, s, ip, bin.right, 0);
-
-            const lv = left.asInt(i64) catch {
-                a.recordExpressionLayoutError(s.file.handle, expr_handle, bin.left, "Overflow (constant too large)", .{});
-                return null;
-            };
-            const rv = right.asInt(i64) catch {
-                a.recordExpressionLayoutError(s.file.handle, expr_handle, bin.right, "Overflow (constant too large)", .{});
-                return null;
-            };
-
-            const value = switch (info) {
-                .plus => std.math.add(i64, lv, rv),
-                .minus => std.math.sub(i64, lv, rv),
-                else => unreachable,
-            } catch {
-                a.recordExpressionLayoutError(s.file.handle, expr_handle, expr_handle, "Overflow (constant too large)", .{});
-                return null;
-            };
-            const new_constant = Constant.initInt(value);
-            expr_resolved_constants[expr_handle] = new_constant.intern(a.arena, a.gpa, &a.constants);
+            const result = left.binaryOp(a.gpa, &a.constant_temp, right, .add);
+            expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
+        },
+        .minus => |bin| {
+            const left = resolveExpressionConstantOrDefault(a, s, ip, bin.left, 0);
+            const right = resolveExpressionConstantOrDefault(a, s, ip, bin.right, 0);
+            const result = left.binaryOp(a.gpa, &a.constant_temp, right, .subtract);
+            expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
         },
         .multiply, .shl, .shr, => |bin| {
-            const left = resolveExpressionConstantOrDefault(a, s, ip, bin.left, 0);
-            const right = resolveExpressionConstantOrDefault(a, s, ip, bin.right, 0);
+            const left = resolveExpressionConstant(a, s, ip, bin.left) orelse return null;
+            const right = resolveExpressionConstant(a, s, ip, bin.right) orelse return null;
 
             const lv = left.asInt(i64) catch {
                 a.recordExpressionLayoutError(s.file.handle, expr_handle, bin.left, "Overflow (constant too large)", .{});
@@ -603,16 +588,28 @@ pub fn resolveExpressionConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, e
             const new_constant = Constant.initInt(value);
             expr_resolved_constants[expr_handle] = new_constant.intern(a.arena, a.gpa, &a.constants);
         },
-        .concat, .bitwise_or, .bitwise_xor, .bitwise_and => |bin| {
+        .concat => |bin| {
             const left = resolveExpressionConstant(a, s, ip, bin.left) orelse return null;
             const right = resolveExpressionConstant(a, s, ip, bin.right) orelse return null;
-            const result = switch (info) {
-                .concat => left.concat(a.gpa, &a.constant_temp, right.*),
-                .bitwise_or => left.bitwise(a.gpa, &a.constant_temp, right.*, .bitwise_or),
-                .bitwise_xor => left.bitwise(a.gpa, &a.constant_temp, right.*, .bitwise_xor),
-                .bitwise_and => left.bitwise(a.gpa, &a.constant_temp, right.*, .bitwise_and),
-                else => unreachable,
-            };
+            const result = left.concat(a.gpa, &a.constant_temp, right.*);
+            expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
+        },
+        .bitwise_or => |bin| {
+            const left = resolveExpressionConstant(a, s, ip, bin.left) orelse return null;
+            const right = resolveExpressionConstant(a, s, ip, bin.right) orelse return null;
+            const result = left.binaryOp(a.gpa, &a.constant_temp, right.*, .bitwise_or);
+            expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
+        },
+        .bitwise_xor => |bin| {
+            const left = resolveExpressionConstant(a, s, ip, bin.left) orelse return null;
+            const right = resolveExpressionConstant(a, s, ip, bin.right) orelse return null;
+            const result = left.binaryOp(a.gpa, &a.constant_temp, right.*, .bitwise_xor);
+            expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
+        },
+        .bitwise_and => |bin| {
+            const left = resolveExpressionConstant(a, s, ip, bin.left) orelse return null;
+            const right = resolveExpressionConstant(a, s, ip, bin.right) orelse return null;
+            const result = left.binaryOp(a.gpa, &a.constant_temp, right.*, .bitwise_and);
             expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
         },
         .concat_repeat => |bin| {

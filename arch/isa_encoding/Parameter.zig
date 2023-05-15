@@ -136,6 +136,45 @@ pub const ExpressionType = union(enum) {
         });
     }
 
+    pub fn print(self: ExpressionType, writer: anytype) !void {
+        switch (self) {
+            .constant, .unknown, .poison, .symbol_def => try writer.writeAll(@tagName(self)),
+            .reg8, .reg16, .reg32 => |r| try printGPR(self, r, writer),
+            .sr => |r| try writer.writeAll(@tagName(r)),
+            .raw_base_offset, .data_address, .insn_address, .stack_address => |info| {
+                const maybe_as: ?AddressSpace = switch (self) {
+                    .raw_base_offset => null,
+                    .data_address => .data,
+                    .insn_address => .insn,
+                    .stack_address => .stack,
+                    else => unreachable,
+                };
+                if (maybe_as) |as| {
+                    try writer.writeAll(as.getDirectiveName());
+                    try writer.writeByte(' ');
+                }
+                switch (info.base) {
+                    .none => {},
+                    .constant => try writer.writeAll("constant"),
+                    .reg8, .reg16, .reg32 => |r| try printGPR(info.base, r, writer),
+                    .sr => |r| try writer.writeAll(@tagName(r)),
+                }
+                switch (info.offset) {
+                    .none => {},
+                    .constant => try writer.writeAll(" + constant"),
+                    .reg8, .reg16, .reg32 => |r| {
+                        try writer.writeAll(" + ");
+                        try printGPR(info.offset, r, writer);
+                    },
+                    .sr => |r| {
+                        try writer.writeAll(" + ");
+                        try writer.writeAll(@tagName(r));
+                    },
+                }
+            },
+        }
+    }
+
     pub const Builder = struct {
         invalid: bool = false,
         unknown: bool = false,

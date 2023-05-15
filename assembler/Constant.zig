@@ -170,7 +170,7 @@ pub fn initIntBits(value: anytype, bits: u63) !Constant {
 
     const unsigned = @bitCast(U, value);
     switch (int_info.signedness) {
-        .unsigned => {
+        .unsigned => if (bits < @bitSizeOf(T)) {
             if (0 != (unsigned >> @intCast(B, bits))) {
                 return error.Overflow;
             }
@@ -425,7 +425,7 @@ test "initIntLiteral" {
 }
 
 pub fn deinit(self: Constant, allocator: std.mem.Allocator) void {
-    if (self.bit_count > 64) {
+    if (self.getBitCount() > 64) {
         allocator.free(self.asString());
     }
 }
@@ -434,16 +434,12 @@ pub fn getBitCount(self: Constant) u63 {
     return @intCast(u63, std.math.absCast(self.bit_count));
 }
 
-fn getFinalBitIndexInFinalByte(self: Constant) u3 {
-    return @intCast(u3, (self.getBitCount() - 1) & 0x7);
-}
-
 pub fn getSignedness(self: Constant) std.builtin.Signedness {
     return if (self.bit_count < 0) .signed else .unsigned;
 }
 
 // Computes the minimum number of bits needed to represent the constant's numeric value; truncation smaller than this results in overflow.
-pub fn countRequiredBits(self: Constant) u64 {
+pub fn countRequiredBits(self: Constant) u63 {
     const bits = self.getBitCount();
     const signedness = self.getSignedness();
     if (bits <= 64) {
@@ -454,12 +450,14 @@ pub fn countRequiredBits(self: Constant) u64 {
             .signed => 65 - @clz(if (value < 0) ~value else value),
         };
     }
+    return countRequiredBitsInBuf(self.asString(), bits, signedness);
+}
 
-    const buf = self.asString();
+fn countRequiredBitsInBuf(buf: []const u8, bit_count: u63, signedness: std.builtin.Signedness) u63 {
     var byte_index = buf.len - 1;
-    var bit_index = self.getFinalBitIndexInFinalByte();
+    var bit_index = @intCast(u3, (bit_count - 1) & 0x7);
     var byte = buf[byte_index];
-    var useless_bits: u64 = 0;
+    var useless_bits: u63 = 0;
 
     var sign = @truncate(u1, byte >> bit_index);
 
@@ -467,7 +465,7 @@ pub fn countRequiredBits(self: Constant) u64 {
         if (sign == 0) {
             useless_bits += 1;
         } else {
-            return bits;
+            return bit_count;
         }
     }
 
@@ -490,7 +488,7 @@ pub fn countRequiredBits(self: Constant) u64 {
         useless_bits += 1;
     }
 
-    return bits - useless_bits;
+    return bit_count - useless_bits;
 }
 
 pub fn getSign(self: Constant) u1 {
@@ -514,7 +512,7 @@ fn getMSB1(data: []const u8, leftover_bits: u3) u1 {
 }
 
 pub fn clone(self: Constant, allocator: std.mem.Allocator) Constant {
-    if (self.bit_count > 64) {
+    if (self.getBitCount() > 64) {
         const buf = allocator.dupe(u8, self.asString()) catch @panic("OOM");
         return .{
             .bit_count = self.bit_count,
@@ -606,6 +604,14 @@ pub fn extend(self: Constant, allocator: std.mem.Allocator, storage: *std.ArrayL
 
 pub fn byteIterator(self: *const Constant, extension: ?std.builtin.Signedness) ByteIterator {
     var str = self.asString();
+    if (str.len == 0) {
+        return .{
+            .remaining = &.{},
+            .final_byte = 0,
+            .ext_byte = 0,
+        };
+    }
+
     var iter = ByteIterator{
         .remaining = str,
         .final_byte = str[str.len - 1],
@@ -698,25 +704,27 @@ pub fn asInt(self: Constant, comptime T: type) !T {
     for (std.mem.asBytes(&value)) |*b| {
         b.* = iter.next();
     }
-    const ext: u8 = if (value >= 0) 0 else 0xFF;
+    const ext: u8 = if (value >= 0 or self.getSignedness() == .unsigned) 0 else 0xFF;
     while (iter.remaining.len > 0) {
         if (iter.next() != ext) return error.Overflow;
     }
 
     return std.math.cast(T, value) orelse error.Overflow;
 }
-pub fn asIntNegated(self: Constant, comptime T: type) !T {
-    return std.math.negateCast(try self.asInt(T));
-}
 
 test "asInt" {
+    var alloc = std.testing.allocator;
+    var temp = std.ArrayListUnmanaged(u8) {};
+    defer temp.deinit(alloc);
+
     try std.testing.expectEqual(@as(i64, 0), try Constant.initInt(@as(i7, 0)).asInt(i64));
     try std.testing.expectEqual(@as(i64, 0), try (try Constant.initIntBits(@as(i64, 0), 64)).asInt(i64));
     try std.testing.expectEqual(@as(i64, 1234), try Constant.initInt(@as(u16, 1234)).asInt(i64));
     try std.testing.expectEqual(@as(i64, -1), try Constant.initInt(@as(i1, -1)).asInt(i64));
     try std.testing.expectEqual(@as(i64, -1), try (try Constant.initIntBits(@as(i64, -1), 64)).asInt(i64));
     try std.testing.expectEqual(@as(i64, -1234), try Constant.initInt(@as(i16, -1234)).asInt(i64));
-    try std.testing.expectEqual(@as(anyerror!i64, error.Overflow), Constant.initString("abcdefghijklmnopqrstuvwxyz").asInt(i64));
+    try std.testing.expectError(error.Overflow, Constant.initString("abcdefghijklmnopqrstuvwxyz").asInt(i64));
+    try std.testing.expectError(error.Overflow, (try Constant.initIntLiteral(alloc, &temp, "0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF")).asInt(i64));
 }
 
 pub fn concat(self: Constant, allocator: std.mem.Allocator, storage: *std.ArrayListUnmanaged(u8), other: Constant) Constant {
@@ -877,23 +885,34 @@ fn encodeShiftedByteNext(b: u8, shift_amount: u3) u8 {
     return b >> shift_amount;
 }
 
-pub const BitwiseOp = enum {
+pub const BinaryOp = enum {
     bitwise_or,
     bitwise_xor,
     bitwise_and,
+    add,
+    subtract,
 };
-pub fn bitwise(self: Constant, allocator: std.mem.Allocator, storage: *std.ArrayListUnmanaged(u8), other: Constant, op: BitwiseOp) Constant {
+pub fn binaryOp(self: Constant, allocator: std.mem.Allocator, storage: *std.ArrayListUnmanaged(u8), other: Constant, comptime op: BinaryOp) Constant {
     const self_bits = self.getBitCount();
     const other_bits = other.getBitCount();
 
     var result_bits: u63 = undefined;
     var result_signedness: std.builtin.Signedness = undefined;
-    if (self_bits >= other_bits) {
-        result_bits = self_bits;
-        result_signedness = self.getSignedness();
-    } else {
-        result_bits = other_bits;
-        result_signedness = other.getSignedness();
+
+    switch (op) {
+        .bitwise_or, .bitwise_xor, .bitwise_and => {
+            if (self_bits >= other_bits) {
+                result_bits = self_bits;
+                result_signedness = self.getSignedness();
+            } else {
+                result_bits = other_bits;
+                result_signedness = other.getSignedness();
+            }
+        },
+        .add, .subtract => {
+            result_signedness = .signed;
+            result_bits = @max(self_bits, other_bits) + 2;
+        },
     }
 
     var small_buf: [8]u8 = undefined;
@@ -902,21 +921,71 @@ pub fn bitwise(self: Constant, allocator: std.mem.Allocator, storage: *std.Array
     var self_iter = self.byteIterator(null);
     var other_iter = other.byteIterator(null);
     switch (op) {
-        .bitwise_or =>
+        .bitwise_or => {
             for (result) |*b| {
                 b.* = self_iter.next() | other_iter.next();
-            },
-        .bitwise_xor =>
+            }
+        },
+        .bitwise_xor => {
             for (result) |*b| {
                 b.* = self_iter.next() ^ other_iter.next();
-            },
-        .bitwise_and =>
+            }
+        },
+        .bitwise_and => {
             for (result) |*b| {
                 b.* = self_iter.next() & other_iter.next();
-            },
+            }
+        },
+        .add => {
+            var carry: u1 = 0;
+            for (result) |*b| {
+                var sum: u9 = @as(u9, self_iter.next()) + @as(u9, other_iter.next()) + carry;
+                b.* = @truncate(u8, sum);
+                carry = @truncate(u1, sum >> 8);
+            }
+            result_bits = countRequiredBitsInBuf(result, result_bits, .signed);
+        },
+        .subtract => {
+            var carry: u1 = 1;
+            for (result) |*b| {
+                var sum: u9 = @as(u9, self_iter.next()) + @as(u9, ~other_iter.next()) + carry;
+                b.* = @truncate(u8, sum);
+                carry = @truncate(u1, sum >> 8);
+            }
+            result_bits = countRequiredBitsInBuf(result, result_bits, .signed);
+        },
     }
 
     return init(result.ptr, result_bits, result_signedness);
+}
+
+test "binaryOp" {
+    var alloc = std.testing.allocator;
+    var temp = std.ArrayListUnmanaged(u8) {};
+    defer temp.deinit(alloc);
+
+    const one = Constant.initInt(@as(i64, 1));
+    const neg1 = Constant.initInt(@as(i64, -1));
+    const hex7FF = Constant.initInt(@as(u64, 0x7FF));
+    const neg1_12 = try Constant.initIntBits(@as(i64, -1), 12);
+
+    const long = Constant.initString("\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF");
+
+    try std.testing.expectEqual(@as(i64, 12), hex7FF.bit_count);
+    try std.testing.expectEqual(@as(i64, -12), hex7FF.binaryOp(alloc, &temp, neg1, .add).bit_count);
+    try std.testing.expectEqual(@as(i64, 0x7FE), try hex7FF.binaryOp(alloc, &temp, neg1, .add).asInt(i64));
+
+    try std.testing.expectEqual(@as(i64, 12), hex7FF.bit_count);
+    try std.testing.expectEqual(@as(i64, -13), hex7FF.binaryOp(alloc, &temp, neg1, .subtract).bit_count);
+    try std.testing.expectEqual(@as(i64, 0x800), try hex7FF.binaryOp(alloc, &temp, neg1, .subtract).asInt(i64));
+
+    try std.testing.expectEqual(@as(i64, -2), neg1_12.binaryOp(alloc, &temp, neg1_12, .add).bit_count);
+    try std.testing.expectEqual(@as(i64, -2), try neg1_12.binaryOp(alloc, &temp, neg1_12, .add).asInt(i64));
+
+    try std.testing.expectEqual(@as(i64, -1), neg1_12.binaryOp(alloc, &temp, neg1_12, .subtract).bit_count);
+    try std.testing.expectEqual(@as(i64, 0), try neg1_12.binaryOp(alloc, &temp, neg1_12, .subtract).asInt(i64));
+
+    try std.testing.expectEqualSlices(u8, "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01", long.binaryOp(alloc, &temp, one, .add).asString());
 }
 
 pub fn complement(self: Constant, allocator: std.mem.Allocator, storage: *std.ArrayListUnmanaged(u8)) Constant {

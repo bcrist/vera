@@ -181,21 +181,29 @@ Symbol references are resolved from a number of potential sources (in order of d
 - Public labels defined in any file
 
 ## Operators
-    (x)
+```
+(x)
+```
 Grouping
 
-    x + y
-    x - y
+```
+x + y
+x - y
+```
 Add or subtract two constants or registers.
-Constants larger than 64b are not supported.  The result will have the minimum number of bits required to represent the number in 2's complement.
+The result will always be signed, and will have the minimum number of bits required to represent the number in 2's complement.
 The symbolic sum of two registers or a register and constant may be represented, but not more than two registers, or more than one register with a constant offset.
 Subtracting a register is only valid if the same register exists in the type of the left side.  This can be used to, e.g. subtract two addresses to get the distance between them as a raw constant.
 
-    -x
+```
+-x
+```
 2's complement negation on constants.
-Constants larger than 64b are not supported.  The result will have the minimum number of bits required to represent the number in 2's complement.
+The result will have the minimum number of bits required to represent the number in 2's complement.
 
-    x * y
+```
+x * y
+```
 Multiply two constants.
 Constants larger than 64b are not supported.  The result will have the minimum number of bits required to represent the number in 2's complement.
 

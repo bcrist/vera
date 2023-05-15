@@ -1,6 +1,7 @@
 const std = @import("std");
 const ie = @import("isa_encoding");
 const Assembler = @import("Assembler.zig");
+const Constant = @import("Constant.zig");
 const ExpressionType = ie.Parameter.ExpressionType;
 
 pub fn dump(self: *Assembler, writer: anytype) !void {
@@ -64,31 +65,24 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
                 try writer.print(" .{s}", .{ @tagName(f) });
             }
 
-            try writer.writeAll("\n");
             switch (operation) {
                 .bound_insn => |encoding| {
-                    try encoding.print(writer, "            ");
+                    try writer.writeByte('\t');
+                    try encoding.print(writer);
                 },
                 else => {},
             }
+            try writer.writeAll("\n");
         }
         try writer.print("      Expressions:\n", .{});
         for (0..,
-            file.expressions.items(.token),
             file.expressions.items(.resolved_type),
             file.expressions.items(.resolved_constant),
             file.expressions.items(.info),
             file.expressions.items(.flags),
-        ) |handle, token_handle, expr_type, maybe_constant, info, flags| {
+        ) |handle, expr_type, maybe_constant, info, flags| {
             try writer.print("         #{:0>5}:", .{ handle });
-            if (maybe_constant) |constant| {
-                try writer.print(" {X:0>16}", .{ @ptrToInt(constant) });
-            }
-            if (expr_type != .unknown) {
-                try dumpType(writer, expr_type, " ");
-            }
-
-            try writer.print("   {s}", .{ @tagName(info) });
+            try writer.print(" {s}", .{ @tagName(info) });
              switch (info) {
                 .list, .arrow_list,
                 .plus, .minus, .multiply, .shl, .shr, .concat, .concat_repeat,
@@ -110,8 +104,15 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
                 .literal_int, .literal_str, .literal_reg, .literal_symbol_def, .literal_symbol_ref, .literal_current_address,
                 => {},
             }
-            const token = file.tokens.get(token_handle);
-            try writer.print(" '{s}'", .{ token.location(file.source) });
+
+            if (expr_type != .unknown) {
+                try writer.writeByte(' ');
+                try expr_type.print(writer);
+            }
+            if (maybe_constant) |constant| {
+                try writer.writeByte(' ');
+                try printConstant(writer, constant);
+            }
 
             var flags_iter = flags.iterator();
             while (flags_iter.next()) |f| {
@@ -135,21 +136,6 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
     try writer.writeAll("Sections:\n");
     for (0.., self.sections.entries.items(.value)) |section_handle, section| {
         try writer.print("   #{}: {s} : {s}\n", .{ section_handle, section.name, @tagName(section.kind) });
-    }
-
-    try writer.writeAll("Constants:\n");
-    var constant_iter = self.constants.keyIterator();
-    while (constant_iter.next()) |k| {
-        const ptr = k.*;
-        try writer.print("   {X:0>16}:{:>4}b: ", .{ @ptrToInt(ptr), ptr.bit_count });
-        if (ptr.asInt(i64) catch null) |int_value| {
-            var uint_value = @bitCast(u64, int_value);
-            if (ptr.getBitCount() < 64) {
-                uint_value &= (@as(u64, 1) << @intCast(u6, ptr.getBitCount())) - 1;
-            }
-            try writer.print("0x{X} {} ", .{ uint_value, int_value });
-        }
-        try writer.print("'{s}'\n", .{ std.fmt.fmtSliceEscapeUpper(ptr.asString()) });
     }
 
     try writer.writeAll("Pages:\n");
@@ -186,7 +172,16 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
     try self.printErrors(writer);
 }
 
-pub fn fmtSliceReplaceNonAscii(bytes: []const u8) std.fmt.Formatter(formatSliceReplaceNonAsciiImpl) {
+fn printConstant(writer: anytype, constant: *const Constant) !void {
+    try writer.print("{:>4}b: ", .{ constant.bit_count });
+    if (constant.asInt(i64) catch null) |int_value| {
+        var uint_value = constant.asInt(u64) catch unreachable;
+        try writer.print("0x{X} {} ", .{ uint_value, int_value });
+    }
+    try writer.print("'{s}'", .{ std.fmt.fmtSliceEscapeUpper(constant.asString()) });
+}
+
+fn fmtSliceReplaceNonAscii(bytes: []const u8) std.fmt.Formatter(formatSliceReplaceNonAsciiImpl) {
     return .{ .data = bytes };
 }
 
@@ -207,42 +202,5 @@ fn formatSliceReplaceNonAsciiImpl(
         } else {
             try writer.writeByte('?');
         }
-    }
-}
-
-fn dumpType(writer: anytype, expr_type: ExpressionType, prefix: []const u8) !void {
-    try writer.print("{s}{s}", .{ prefix, @tagName(expr_type) });
-    switch (expr_type) {
-        .unknown, .poison, .symbol_def, .constant => {},
-        .reg8, .reg16, .reg32 => |reg| {
-            try writer.print(" #{}", .{ reg.index });
-            if (reg.signedness) |sign| {
-                try writer.print(" .{s}", .{ @tagName(sign) });
-            }
-        },
-        .sr => |sr| {
-            try writer.print(" {s}", .{ @tagName(sr) });
-        },
-        .raw_base_offset, .data_address, .insn_address, .stack_address => |info| {
-            try dumpInnerType(writer, info.base, " ");
-            try dumpInnerType(writer, info.offset, " + ");
-        },
-    }
-}
-
-fn dumpInnerType(writer: anytype, inner_type: ie.BaseOffsetType.InnerType, prefix: []const u8) !void {
-try writer.print("{s}{s}", .{ prefix, @tagName(inner_type) });
-    switch (inner_type) {
-        .none => {},
-        .constant => {},
-        .reg8, .reg16, .reg32 => |reg| {
-            try writer.print(" #{}", .{ reg.index });
-            if (reg.signedness) |sign| {
-                try writer.print(" .{s}", .{ @tagName(sign) });
-            }
-        },
-        .sr => |sr| {
-            try writer.print(" {s}", .{ @tagName(sr) });
-        },
     }
 }

@@ -1,7 +1,4 @@
-[assembler] rename .maybe_signed => .without_signedness
-[assembler] arbitrary precision arithmetic
 [assembler] output files
-[assembler] refactor Constant to keep track of signedness instead of assuming everything is signed
 [assembler] add cycle counts to listing output
 [assembler] add line numbers to listing output (maybe need to check lexer - can newlines be escaped?)
 [assembler] .local defs
@@ -16,6 +13,8 @@
 [assembler] initial arrow (nil first parameter)
 [assembler] Create disassembler
 [assembler] .str/.kstr "whatever" - creates a ptr+len data declaration - creates a new block in the `.const strings` section with the data (.kconst for .kstr) - may dedup data (enable with global assembler flag?)
+[assembler] arbitrary precision shifts
+[assembler] arbitrary precision multiply
 [assembler] improve vscode plugin
 
 [test] Use assembler for test_instruction_behavior

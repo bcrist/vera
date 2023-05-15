@@ -25,8 +25,8 @@ pub fn main() !void {
 
     try output.writeListing(&a, std.io.getStdOut().writer(), .{ .ordering = .address });
 
-    //try dump.dump(&a, std.io.getStdOut().writer());
+    try dump.dump(&a, std.io.getStdOut().writer());
 
-    try a.printErrors(std.io.getStdErr().writer());
+    //try a.printErrors(std.io.getStdErr().writer());
 
 }
