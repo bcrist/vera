@@ -1,7 +1,7 @@
-[assembler] output files
+[assembler] SimSx output files
+[assembler] Improve error context printing
 [assembler] check for shadowed symbols
 [assembler] Warn on multiple files with same name
-[assembler] add line numbers to listing output (maybe need to check lexer - can newlines be escaped?)
 [assembler] .local defs
 [assembler] Usage of a label that's fixed by an .org directive should not cause the expression to be marked .constant_depends_on_layout
 [assembler] Multi-line string literals

@@ -10,6 +10,7 @@ token: lex.Token.Handle,
 operation: Operation,
 params: ?Expression.Handle,
 flags: FlagSet = .{},
+line_number: u32,
 address: u32 = 0,
 length: u32 = 0,
 

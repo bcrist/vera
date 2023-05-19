@@ -161,6 +161,95 @@ pub const Token = struct {
         }
     }
 
+    pub fn countNewlines(self: Token, source: []const u8) u32 {
+        var remaining = source[self.offset..];
+        return switch (self.kind) {
+            .newline => 1,
+
+            .reserved,
+            .dot,
+            .comma,
+            .colon,
+            .paren_open,
+            .paren_close,
+            .plus,
+            .minus,
+            .star,
+            .amp,
+            .bar,
+            .caret,
+            .tilde,
+            .apostrophe,
+            .at,
+            .money,
+            .arrow,
+            .shl,
+            .shr,
+            .plus_plus,
+            .star_star,
+            .eof,
+            .id,
+            .comment,
+            .int_literal,
+            => 0,
+
+            .linespace => blk: {
+                var newlines: u32 = 0;
+                var consume_newline = remaining[0] == '\\';
+                var end: usize = 1;
+                while (end < remaining.len) : (end += 1) {
+                    switch (remaining[end]) {
+                        0...9, 11...' ', 127 => {},
+                        '\\' => {
+                            consume_newline = true;
+                        },
+                        '\n' => {
+                            if (consume_newline) {
+                                consume_newline = false;
+                                newlines += 1;
+                            } else {
+                                break;
+                            }
+                        },
+                        else => break,
+                    }
+                }
+                break :blk newlines;
+            },
+
+            .str_literal => blk: {
+                var newlines: u32 = 0;
+                var end: usize = 1;
+                var escape: u8 = 0;
+                while (end < remaining.len) : (end += 1) {
+                    const ch = remaining[end];
+                    switch (escape) {
+                        0 => switch (ch) {
+                            '"' => break :blk newlines,
+                            '\\' => escape = 1,
+                            '\n' => newlines += 1,
+                            else => {},
+                        },
+                        1 => switch (ch) {
+                            '(' => escape = 2,
+                            '\n' => {
+                                newlines += 1;
+                                escape = 0;
+                            },
+                            else => escape = 0,
+                        },
+                        else => switch (ch) {
+                            ')' => escape = 0,
+                            '\n' => newlines += 1,
+                            else => {},
+                        },
+                    }
+                }
+                break :blk newlines;
+            },
+        };
+    }
+
     pub fn location(self: Token, source: []const u8) []const u8 {
         var remaining = source[self.offset..];
         var token_len = switch (self.kind) {

@@ -332,6 +332,7 @@ const Parser = struct {
     next_token: Token.Handle,
     sync_to_end_of_line: bool,
     token_kinds: []TokenKind,
+    token_offsets: []u32,
 
     mnemonic_map: std.StringHashMapUnmanaged(Mnemonic),
     suffix_map: std.StringHashMapUnmanaged(MnemonicSuffix),
@@ -422,6 +423,7 @@ const Parser = struct {
             .next_token = 0,
             .sync_to_end_of_line = false,
             .token_kinds = out.tokens.items(.kind),
+            .token_offsets = out.tokens.items(.offset),
             .mnemonic_map = mnemonic_map,
             .suffix_map = suffix_map,
             .directive_map = directive_map,
@@ -440,12 +442,7 @@ const Parser = struct {
                 if (self.parseSymbolDef()) |symbol| {
                     if (self.parseExpr()) |expr| {
                         const params = self.addBinaryExpression(.list, directive_token, symbol, expr);
-                        self.out.instructions.append(self.gpa, .{
-                            .label = label,
-                            .token = directive_token,
-                            .operation = .{ .def = {} },
-                            .params = params,
-                        }) catch @panic("OOM");
+                        self.addInstruction(label, directive_token, .{ .def = {} }, params);
                     } else {
                         self.recordError("Expected expression for symbol definition");
                     }
@@ -454,23 +451,13 @@ const Parser = struct {
                 }
             } else if (directive == .undef) {
                 const params = self.parseSymbolDefList();
-                self.out.instructions.append(self.gpa, .{
-                    .label = label,
-                    .token = directive_token,
-                    .operation = .{ .undef = {} },
-                    .params = params,
-                }) catch @panic("OOM");
+                self.addInstruction(label, directive_token, .{ .undef = {} }, params);
             } else {
                 const params = if (Instruction.isSectionDirective(directive)) self.parseSymbolDef() else self.parseExprList(false);
                 switch (directive) {
                     .none, .insn, .bound_insn => unreachable,
                     inline else => |d| {
-                        self.out.instructions.append(self.gpa, .{
-                            .label = label,
-                            .token = directive_token,
-                            .operation = @unionInit(Instruction.Operation, @tagName(d), {}),
-                            .params = params,
-                        }) catch @panic("OOM");
+                        self.addInstruction(label, directive_token, @unionInit(Instruction.Operation, @tagName(d), {}), params);
                     },
                 }
             }
@@ -479,31 +466,12 @@ const Parser = struct {
             var swap_params = false;
             const suffix = self.parseSuffix(&swap_params);
             const params = self.parseExprList(swap_params);
-
-            self.out.instructions.append(self.gpa, .{
-                .label = label,
-                .token = mnemonic_token,
-                .operation = .{ .insn = .{
-                    .mnemonic = mnemonic,
-                    .suffix = suffix,
-                }},
-                .params = params,
-            }) catch @panic("OOM");
+            self.addInstruction(label, mnemonic_token, .{ .insn = .{
+                .mnemonic = mnemonic,
+                .suffix = suffix,
+            }}, params);
         } else if (label) |_| {
-            self.out.instructions.append(self.gpa, .{
-                .label = label,
-                .token = label_token,
-                .operation = .{ .none = {} },
-                .params = null,
-            }) catch @panic("OOM");
-        } else {
-            // Add a meaningless instruction to ensure that instruction handles directly correspond to line numbers (minus one)
-            self.out.instructions.append(self.gpa, .{
-                .label = null,
-                .token = self.next_token,
-                .operation = .{ .none = {} },
-                .params = null,
-            }) catch @panic("OOM");
+            self.addInstruction(label, label_token, .{ .none = {} }, null);
         }
         self.skipLinespace();
         _ = self.tryToken(.comment);
@@ -516,6 +484,31 @@ const Parser = struct {
             }
             self.next_token += 1;
         }
+    }
+
+    fn addInstruction(self: *Parser, label: ?Expression.Handle, token: Token.Handle, op: Instruction.Operation, params: ?Expression.Handle) void {
+        var instructions = &self.out.instructions;
+        var start_token: Token.Handle = 0;
+        var start_line: u32 = 1;
+        if (instructions.len > 0) {
+            const prev_insn = instructions.get(instructions.len - 1);
+            start_token = prev_insn.token;
+            start_line = prev_insn.line_number;
+        }
+        while (start_token < token) : (start_token += 1) {
+            const t = Token{
+                .offset = self.token_offsets[start_token],
+                .kind = self.token_kinds[start_token],
+            };
+            start_line += t.countNewlines(self.out.source);
+        }
+        instructions.append(self.gpa, .{
+            .label = label,
+            .token = token,
+            .operation = op,
+            .params = params,
+            .line_number = start_line,
+        }) catch @panic("OOM");
     }
 
     fn trySuffix(self: *Parser) MnemonicSuffix {

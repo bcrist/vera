@@ -5,8 +5,6 @@ const Instruction = @import("Instruction.zig");
 const Expression = @import("Expression.zig");
 const Assembler = @import("Assembler.zig");
 
-const PageInfo = Assembler.PageInfo;
-
 const Section = @This();
 
 pub const Kind = enum {

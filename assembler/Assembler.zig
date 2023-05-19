@@ -279,6 +279,12 @@ pub fn findOrCreatePage(self: *Assembler, page: bus.Page, section: Section.Handl
     return handle;
 }
 
+pub fn readByte(self: *Assembler, address: u32, address_space: isa.AddressSpace) u8 {
+    _ = address_space;
+    var iter = PageData.DataIterator.init(self, address);
+    return iter.next();
+}
+
 pub fn recordError(self: *Assembler, file_handle: SourceFile.Handle, token: lex.Token.Handle, desc: []const u8, flags: Error.FlagSet) void {
     self.errors.append(self.gpa, .{
         .file = file_handle,

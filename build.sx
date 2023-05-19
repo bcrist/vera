@@ -55,6 +55,6 @@
 (dir microsim/devices)
 (dir microsim/gui)
 (dir assembler
-    (pkg assemble)
+    (pkg assembler_lib)
     (exe assemble (safe_name assemble_exe))
 )

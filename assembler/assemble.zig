@@ -31,15 +31,19 @@ pub fn main() !void {
 
     a.assemble();
 
-    try output.writeListing(&a, std.io.getStdOut().writer(), .{ .ordering = .address });
+    var list = output.createListing(&a, gpa.allocator(), .{});
+    defer list.deinit();
 
-    try dump.dump(&a, std.io.getStdOut().writer());
+    try list.writeAll(*Assembler, &a, std.io.getStdOut().writer());
 
-    //try a.printErrors(std.io.getStdErr().writer());
+    //try output.writeListing(&a, std.io.getStdOut().writer(), .{ .ordering = .address });
 
-    try output.writeHex(&a, std.fs.cwd(), output_file.items, .{
-        .merge_all_sections = false,
-        .num_roms = 4,
-    });
+    // try dump.dump(&a, std.io.getStdOut().writer());
+
+    try a.printErrors(std.io.getStdErr().writer());
+
+    // try output.writeHex(&a, std.fs.cwd(), output_file.items, .{
+    //     .merge_all_sections = true,
+    // });
 
 }

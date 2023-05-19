@@ -12,6 +12,7 @@ pub const Handle = u31;
 pub const UsageBitmap = std.StaticBitSet(page_size);
 
 page: bus.Page,
+// TODO add kind: Section.Kind,
 section: Section.Handle,
 usage: UsageBitmap,
 data: [page_size]u8,

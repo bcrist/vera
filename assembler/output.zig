@@ -9,6 +9,7 @@ const SourceFile = @import("SourceFile.zig");
 const PageData = @import("PageData.zig");
 const Instruction = @import("Instruction.zig");
 const Section = @import("Section.zig");
+const Listing = @import("Listing.zig");
 
 pub const HexOptions = struct {
     format: enum {
@@ -19,6 +20,10 @@ pub const HexOptions = struct {
     num_roms: u8 = 1,           // e.g. 4 for boot rom
     rom_width_bytes: u8 = 2,    // e.g. 2 for boot rom
     address_offset: i64 = 0,    // added to addresses before being placed in roms
+    address_range: Assembler.AddressRange = .{
+        .begin = 0,
+        .end = 0xFFFF_FFFF,
+    },
     merge_all_sections: bool = true,
     add_spaces: bool = true,    // add spaces between fields in the hex records, making them more readable, but longer
 };
@@ -102,7 +107,10 @@ fn writeHexForSectionInner(a: *const Assembler, maybe_section_handle: ?Section.H
             if (!std.meta.eql(maybe_section_handle, chunk.section)) continue;
         }
 
-        const address_range = chunk.getAddressRange(a);
+        const address_range = chunk.getAddressRange(a).intersectionWith(options.address_range);
+        if (address_range.begin >= address_range.end) {
+            continue;
+        }
 
         var begin = address_range.begin;
         while (begin < address_range.end) {
@@ -171,8 +179,10 @@ pub const ListOptions = struct {
         file,
         address,
     } = .address,
+    clone_source_strings: bool = false,
 };
-pub fn writeListing(a: *Assembler, writer: anytype, options: ListOptions) !void {
+pub fn createListing(a: *Assembler, gpa: std.mem.Allocator, options: ListOptions) Listing {
+    var listing = Listing.init(gpa);
     switch (options.ordering) {
         .file => {
             var last_file: ?SourceFile.Handle = null;
@@ -183,14 +193,14 @@ pub fn writeListing(a: *Assembler, writer: anytype, options: ListOptions) !void 
                     blocks.items(.section),
                     blocks.items(.keep),
                 ) |begin, end, section, keep| {
-                    try writeListingForChunk(a, writer, .{
+                    addListingForChunk(a, &listing, .{
                         .section = section,
                         .file = file.handle,
                         .instructions = .{
                             .begin = begin,
                             .end = end,
                         },
-                    }, keep, last_file);
+                    }, keep, last_file, options);
                     last_file = file.handle;
                 }
             }
@@ -198,16 +208,17 @@ pub fn writeListing(a: *Assembler, writer: anytype, options: ListOptions) !void 
         .address => {
             var last_file: ?SourceFile.Handle = null;
             for (a.chunks.items) |chunk_and_address| {
-                try writeListingForChunk(a, writer, chunk_and_address.chunk, true, last_file);
+                addListingForChunk(a, &listing, chunk_and_address.chunk, true, last_file, options);
                 last_file = chunk_and_address.chunk.file;
             }
         },
     }
+    return listing;
 }
 
-const listing_width = 80;
+fn addListingForChunk(a: *Assembler, listing: *Listing, chunk: SourceFile.Chunk, keep: bool, last_file: ?SourceFile.Handle, options: ListOptions) void {
+    const arena = listing.arena.allocator();
 
-fn writeListingForChunk(a: *Assembler, writer: anytype, chunk: SourceFile.Chunk, keep: bool, last_file: ?SourceFile.Handle) !void {
     const file = a.getSource(chunk.file);
     const s = file.slices();
 
@@ -216,13 +227,21 @@ fn writeListingForChunk(a: *Assembler, writer: anytype, chunk: SourceFile.Chunk,
     const insn_operations = s.insn.items(.operation);
     const insn_addresses = s.insn.items(.address);
     const insn_lengths = s.insn.items(.length);
+    const insn_line_numbers = s.insn.items(.line_number);
 
     const tokens = file.tokens.slice();
     const token_kinds = tokens.items(.kind);
     const token_offsets = tokens.items(.offset);
 
     if (chunk.file != last_file) {
-        try writer.print(".source {s}\n", .{ file.name });
+        listing.lines.append(listing.gpa, .{
+            .kind = .filename,
+            .address = 0,
+            .length = 0,
+            .line_number = 0,
+            .source = if (options.clone_source_strings) arena.dupe(u8, file.name) catch @panic("OOM") else file.name,
+            .insn_index = null,
+        }) catch @panic("OOM");
     }
 
     var iter = chunk.instructions;
@@ -236,25 +255,83 @@ fn writeListingForChunk(a: *Assembler, writer: anytype, chunk: SourceFile.Chunk,
             end_of_line += 1;
             std.debug.assert(end_of_line <= file.tokens.len);
         }
-        const line = file.source[token_offsets[start_of_line] .. token_offsets[end_of_line]];
+        const file_line = file.source[token_offsets[start_of_line] .. token_offsets[end_of_line]];
+        const line = if (options.clone_source_strings) arena.dupe(u8, file_line) catch @panic("OOM") else file_line;
 
         if (!keep) {
-            try writer.writeByteNTimes(' ', listing_width);
-            try writer.print("// {s}\n", .{ line } );
+            listing.lines.append(listing.gpa, .{
+                .kind = .empty,
+                .address = 0,
+                .length = 0,
+                .line_number = insn_line_numbers[insn_handle],
+                .source = line,
+                .insn_index = null,
+            }) catch @panic("OOM");
             continue;
         }
 
         switch (insn_operations[insn_handle]) {
-            .section, .code, .kcode, .entry, .kentry,
-            .data, .kdata, .@"const", .kconst, .stack,
-            .none, .insn, .keep, .def, .undef,
-            => {
-                try writer.writeByteNTimes(' ', listing_width);
-                try writer.print("// {s}\n", .{ line } );
+            .code, .kcode, .entry, .kentry => {
+                listing.lines.append(listing.gpa, .{
+                    .kind = .insn_space,
+                    .address = 0,
+                    .length = 0,
+                    .line_number = insn_line_numbers[insn_handle],
+                    .source = line,
+                    .insn_index = null,
+                }) catch @panic("OOM");
+            },
+            .data, .kdata, .@"const", .kconst, .section => {
+                listing.lines.append(listing.gpa, .{
+                    .kind = .data_space,
+                    .address = 0,
+                    .length = 0,
+                    .line_number = insn_line_numbers[insn_handle],
+                    .source = line,
+                    .insn_index = null,
+                }) catch @panic("OOM");
+            },
+            .stack => {
+                listing.lines.append(listing.gpa, .{
+                    .kind = .stack_space,
+                    .address = 0,
+                    .length = 0,
+                    .line_number = insn_line_numbers[insn_handle],
+                    .source = line,
+                    .insn_index = null,
+                }) catch @panic("OOM");
+            },
+            .none, .insn, .keep, .def, .undef, .org => {
+                listing.lines.append(listing.gpa, .{
+                    .kind = .empty,
+                    .address = 0,
+                    .length = 0,
+                    .line_number = insn_line_numbers[insn_handle],
+                    .source = line,
+                    .insn_index = null,
+                }) catch @panic("OOM");
             },
 
             .bound_insn => |encoding| {
-                try writeInstructionListing(a, s, insn_handle, encoding.*, line, writer);
+                const address = insn_addresses[insn_handle];
+                const insn = Listing.Instruction {
+                    .encoding = encoding.*,
+                    .params = arena.dupe(ie.Parameter, 
+                        a.buildInstruction(s, address, encoding.mnemonic, encoding.suffix, insn_params[insn_handle], false).?.params
+                    ) catch @panic("OOM"),
+                };
+
+                const insn_index = listing.insns.items.len;
+                listing.insns.append(listing.gpa, insn) catch @panic("OOM");
+
+                listing.lines.append(listing.gpa, .{
+                    .kind = .instruction,
+                    .address = address,
+                    .length = insn_lengths[insn_handle],
+                    .line_number = insn_line_numbers[insn_handle],
+                    .source = line,
+                    .insn_index = @intCast(u31, insn_index),
+                }) catch @panic("OOM");
             },
 
             .push => {
@@ -265,285 +342,58 @@ fn writeListingForChunk(a: *Assembler, writer: anytype, chunk: SourceFile.Chunk,
                 // TODO stack sections
             },
 
-            .org => {
-                if (insn_params[insn_handle]) |expr_handle| {
-                    if (s.expr.items(.resolved_constant)[expr_handle]) |constant| {
-                        a.constant_temp.clearRetainingCapacity();
-                        var temp_writer = a.constant_temp.writer(a.gpa);
-                        try temp_writer.print(".org 0x{X}", .{ constant.asInt(u32) catch 0 });
-                        try writer.writeAll(a.constant_temp.items);
-                        try writer.writeByteNTimes(' ', listing_width - a.constant_temp.items.len);
-                        try writer.print("// {s}\n", .{ line } );
-                        a.constant_temp.clearRetainingCapacity();
-                    }
-                }
-            },
-
             .@"align" => {
                 if (layout.getResolvedAlignment(s, insn_params[insn_handle])) |alignment| {
-                    a.constant_temp.clearRetainingCapacity();
-                    var temp_writer = a.constant_temp.writer(a.gpa);
-                    try temp_writer.print(".align {}", .{ alignment.modulo });
-                    if (alignment.offset > 0) {
-                        try temp_writer.print(", {}", .{ alignment.offset });
-                    }
-                    try writer.writeAll(a.constant_temp.items);
-                    try writer.writeByteNTimes(' ', listing_width - a.constant_temp.items.len);
-                    a.constant_temp.clearRetainingCapacity();
+                    listing.lines.append(listing.gpa, .{
+                        .kind = .alignment,
+                        .address = alignment.modulo,
+                        .length = alignment.offset,
+                        .line_number = insn_line_numbers[insn_handle],
+                        .source = line,
+                        .insn_index = null,
+                    }) catch @panic("OOM");
                 } else {
-                    try writer.writeByteNTimes(' ', 80);
+                    listing.lines.append(listing.gpa, .{
+                        .kind = .empty,
+                        .address = 0,
+                        .length = 0,
+                        .line_number = insn_line_numbers[insn_handle],
+                        .source = line,
+                        .insn_index = null,
+                    }) catch @panic("OOM");
                 }
-                try writer.print("// {s}\n", .{ line } );
             },
 
-            .db => try writeDataListing(u8, a, insn_addresses[insn_handle], insn_lengths[insn_handle], line, writer),
-            .dw => try writeDataListing(u16, a, insn_addresses[insn_handle], insn_lengths[insn_handle], line, writer),
-            .dd => try writeDataListing(u32, a, insn_addresses[insn_handle], insn_lengths[insn_handle], line, writer),
+            .db => {
+                listing.lines.append(listing.gpa, .{
+                    .kind = .data8,
+                    .address = insn_addresses[insn_handle],
+                    .length = insn_lengths[insn_handle],
+                    .line_number = insn_line_numbers[insn_handle],
+                    .source = line,
+                    .insn_index = null,
+                }) catch @panic("OOM");
+            },
+            .dw => {
+                listing.lines.append(listing.gpa, .{
+                    .kind = .data16,
+                    .address = insn_addresses[insn_handle],
+                    .length = insn_lengths[insn_handle],
+                    .line_number = insn_line_numbers[insn_handle],
+                    .source = line,
+                    .insn_index = null,
+                }) catch @panic("OOM");
+            },
+            .dd => {
+                listing.lines.append(listing.gpa, .{
+                    .kind = .data32,
+                    .address = insn_addresses[insn_handle],
+                    .length = insn_lengths[insn_handle],
+                    .line_number = insn_line_numbers[insn_handle],
+                    .source = line,
+                    .insn_index = null,
+                }) catch @panic("OOM");
+            },
         }
     }
-}
-
-fn writeDataListing(comptime W: type, a: *Assembler, initial_address: u32, length: u32, line: []const u8, writer: anytype) !void {
-    var address = initial_address;
-    var remaining = length;
-    var write_line = true;
-    var data_iter = PageData.DataIterator.init(a, address);
-
-    const word_size = @sizeOf(W);
-    const chars_per_word = word_size * 2 + 1;
-    const max_words_per_line = comptime wpl: {
-        const available_chars = listing_width - 8 - 3;
-        break :wpl available_chars / chars_per_word;
-    };
-    const max_bytes_per_line = max_words_per_line * word_size;
-
-    var temp = [_]u8{0} ** max_bytes_per_line;
-    while (remaining > max_bytes_per_line) {
-        try writer.print("{X:0>8}", .{ address });
-        try writer.writeByteNTimes(' ', listing_width - 8 - 1 - max_words_per_line * chars_per_word - 1);
-        try writer.writeAll("!");
-        for (0..max_bytes_per_line) |i| {
-            temp[max_bytes_per_line - 1 - i] = data_iter.next();
-        }
-        address += max_bytes_per_line;
-        remaining -= max_bytes_per_line;
-
-        for (temp, 0..) |b, i| {
-            if (i % word_size == 0) {
-                try writer.writeByte(' ');
-            }
-            try writer.print("{X:0>2}", .{ b });
-        }
-
-        if (write_line) {
-            try writer.print(" // {s}\n", .{ line } );
-            write_line = false;
-        } else try writer.writeAll("\n");
-    }
-
-    a.constant_temp.clearRetainingCapacity();
-    const words_remaining = (remaining + word_size - 1) / word_size;
-    const bytes_remaining = words_remaining * word_size;
-    for (0..bytes_remaining) |i| {
-        temp[bytes_remaining - 1 - i] = data_iter.next();
-    }
-
-    var temp_writer = a.constant_temp.writer(a.gpa);
-    try temp_writer.writeAll("!");
-    for (temp[0..bytes_remaining], 0..) |b, i| {
-        if (i % word_size == 0) {
-            try temp_writer.writeByte(' ');
-        }
-        try temp_writer.print("{X:0>2}", .{ b });
-    }
-
-    try writer.print("{X:0>8}", .{ address });
-    try writer.writeByteNTimes(' ', listing_width - 8 - a.constant_temp.items.len - 1);
-    try writer.writeAll(a.constant_temp.items);
-    a.constant_temp.clearRetainingCapacity();
-
-    if (write_line) {
-        try writer.print(" // {s}\n", .{ line } );
-    } else {
-        try writer.writeAll("\n");
-    }
-}
-
-fn writeInstructionListing(a: *Assembler, s: SourceFile.Slices, insn_handle: Instruction.Handle, encoding: ie.InstructionEncoding, line: []const u8, writer: anytype) !void {
-    const address = s.insn.items(.address)[insn_handle];
-    const params = s.insn.items(.params)[insn_handle];
-
-    a.constant_temp.clearRetainingCapacity();
-    var temp_writer = a.constant_temp.writer(a.gpa);
-
-    const insn = a.buildInstruction(s, address, encoding.mnemonic, encoding.suffix, params, false).?;
-    try insn.print(temp_writer, address);
-    try writer.print("{X:0>8} ", .{ address });
-    try writer.writeAll(a.constant_temp.items);
-    try writer.writeByte(' ');
-
-    var line_cursor = 9 + a.constant_temp.items.len + 1;
-    a.constant_temp.clearRetainingCapacity();
-
-    var d = [_]u8{0}**8;
-    _ = insn.write(encoding, &d);
-
-    var needs_ip_plus_2_byte = false;
-    var needs_ip_plus_2_word = false;
-    var needs_ip_plus_2_dword = false;
-    var needs_ip_plus_4_word = false;
-
-    for (encoding.params) |param_encoding| {
-        switch (param_encoding.base_src) {
-            .implicit, .opcode, .OA, .OB, .OB_OA => {},
-            .IP_plus_2_OA, .IP_plus_2_OB, .IP_plus_2_8 => needs_ip_plus_2_byte = true,
-            .IP_plus_2_16 => needs_ip_plus_2_word = true,
-            .IP_plus_2_32 => needs_ip_plus_2_dword = true,
-            .IP_plus_4_16 => needs_ip_plus_4_word = true,
-        }
-        switch (param_encoding.offset_src) {
-            .implicit, .opcode, .OA, .OB, .OB_OA => {},
-            .IP_plus_2_OA, .IP_plus_2_OB, .IP_plus_2_8 => needs_ip_plus_2_byte = true,
-            .IP_plus_2_16 => needs_ip_plus_2_word = true,
-            .IP_plus_2_32 => needs_ip_plus_2_dword = true,
-            .IP_plus_4_16 => needs_ip_plus_4_word = true,
-        }
-    }
-
-    if (needs_ip_plus_2_dword) {
-        const cursor_with_pad = line_cursor + 3;
-
-        var end = cursor_with_pad + 8 + 1 + 4;
-        if (end <= listing_width) {
-            try writer.writeByteNTimes(' ', listing_width - end);
-            try writer.print("! {X:0>2}{X:0>2}{X:0>2}{X:0>2} {X:0>2}{X:0>2} // {s}\n", .{
-                d[5], d[4], d[3], d[2], d[1], d[0], line
-            });
-            return;
-        }
-
-        end = cursor_with_pad + 4;
-        if (end <= listing_width) {
-            try writer.writeByteNTimes(' ', listing_width - end);
-            try writer.print("! {X:0>2}{X:0>2} // {s}\n{X:0>8}", .{ d[1], d[0], line, address + 2 });
-            try writer.writeByteNTimes(' ', listing_width - 8 - 3 - 8);
-            try writer.print("! {X:0>2}{X:0>2}{X:0>2}{X:0>2}\n", .{ d[5], d[4], d[3], d[2] });
-            return;
-        }
-
-        try writer.writeByteNTimes(' ', listing_width - line_cursor);
-        try writer.print("// {s}\n", .{ line });
-        try writer.writeByteNTimes(' ', listing_width - 3 - 8 - 1 - 4);
-        try writer.print("! {X:0>2}{X:0>2}{X:0>2}{X:0>2} {X:0>2}{X:0>2}\n", .{
-            d[5], d[4], d[3], d[2], d[1], d[0]
-        });
-        return;
-    }
-
-    if (needs_ip_plus_4_word) {
-        const cursor_with_pad = line_cursor + 3;
-
-        var end = cursor_with_pad + 4 + 1 + 4 + 1 + 4;
-        if (end <= listing_width) {
-            try writer.writeByteNTimes(' ', listing_width - end);
-            try writer.print("! {X:0>2}{X:0>2} {X:0>2}{X:0>2} {X:0>2}{X:0>2} // {s}\n", .{
-                d[5], d[4], d[3], d[2], d[1], d[0], line
-            });
-            return;
-        }
-
-        end = cursor_with_pad + 4 + 1 + 4;
-        if (end <= listing_width) {
-            try writer.writeByteNTimes(' ', listing_width - end);
-            try writer.print("! {X:0>2}{X:0>2} {X:0>2}{X:0>2} // {s}\n{X:0>8}", .{
-                d[3], d[2], d[1], d[0], line, address + 4
-            });
-            try writer.writeByteNTimes(' ', listing_width - 8 - 3 - 4);
-            try writer.print("! {X:0>2}{X:0>2}\n", .{ d[5], d[4] });
-            return;
-        }
-
-        end = cursor_with_pad + 4;
-        if (end <= listing_width) {
-            try writer.writeByteNTimes(' ', listing_width - end);
-            try writer.print("! {X:0>2}{X:0>2} // {s}\n{X:0>8}", .{ d[1], d[0], line, address + 2 });
-            try writer.writeByteNTimes(' ', listing_width - 8 - 3 - 4 - 1 - 4);
-            try writer.print("! {X:0>2}{X:0>2} {X:0>2}{X:0>2}\n", .{ d[5], d[4], d[3], d[2] });
-            return;
-        }
-
-        try writer.writeByteNTimes(' ', listing_width - line_cursor);
-        try writer.print("// {s}\n", .{ line });
-        try writer.writeByteNTimes(' ', listing_width - 3 - 4 - 1 - 4 - 1 - 4);
-        try writer.print("! {X:0>2}{X:0>2} {X:0>2}{X:0>2} {X:0>2}{X:0>2}\n", .{
-            d[5], d[4], d[3], d[2], d[1], d[0]
-        });
-        return;
-    }
-
-    if (needs_ip_plus_2_word) {
-        const cursor_with_pad = line_cursor + 3;
-
-        var end = cursor_with_pad + 4 + 1 + 4;
-        if (end <= listing_width) {
-            try writer.writeByteNTimes(' ', listing_width - end);
-            try writer.print("! {X:0>2}{X:0>2} {X:0>2}{X:0>2} // {s}\n", .{ d[3], d[2], d[1], d[0], line });
-            return;
-        }
-
-        end = cursor_with_pad + 4;
-        if (end <= listing_width) {
-            try writer.writeByteNTimes(' ', listing_width - end);
-            try writer.print("! {X:0>2}{X:0>2} // {s}\n{X:0>8}", .{ d[1], d[0], line, address + 2 });
-            try writer.writeByteNTimes(' ', listing_width - 8 - 3 - 4);
-            try writer.print("! {X:0>2}{X:0>2}\n", .{ d[3], d[2] });
-            return;
-        }
-
-        try writer.writeByteNTimes(' ', listing_width - line_cursor);
-        try writer.print("// {s}\n", .{ line });
-        try writer.writeByteNTimes(' ', listing_width - 3 - 4 - 1 - 4);
-        try writer.print("! {X:0>2}{X:0>2} {X:0>2}{X:0>2}\n", .{ d[3], d[2], d[1], d[0] });
-        return;
-    }
-
-    if (needs_ip_plus_2_byte) {
-        const cursor_with_pad = line_cursor + 3;
-
-        var end = cursor_with_pad + 2 + 1 + 4;
-        if (end <= listing_width) {
-            try writer.writeByteNTimes(' ', listing_width - end);
-            try writer.print("! {X:0>2} {X:0>2}{X:0>2} // {s}\n", .{ d[2], d[1], d[0], line });
-            return;
-        }
-
-        end = cursor_with_pad + 4;
-        if (end <= listing_width) {
-            try writer.writeByteNTimes(' ', listing_width - end);
-            try writer.print("! {X:0>2}{X:0>2} // {s}\n{X:0>8}", .{ d[1], d[0], line, address + 2 });
-            try writer.writeByteNTimes(' ', listing_width - 8 - 3 - 2);
-            try writer.print("! {X:0>2}\n", .{ d[2] });
-            return;
-        }
-
-        try writer.writeByteNTimes(' ', listing_width - line_cursor);
-        try writer.print("// {s}\n", .{ line });
-        try writer.writeByteNTimes(' ', listing_width - 3 - 2 - 1 - 4);
-        try writer.print("! {X:0>2} {X:0>2}{X:0>2}\n", .{ d[2], d[1], d[0] });
-        return;
-    }
-
-    const cursor_with_pad = line_cursor + 3;
-
-    var end = cursor_with_pad + 4;
-    if (end <= listing_width) {
-        try writer.writeByteNTimes(' ', listing_width - end);
-        try writer.print("! {X:0>2}{X:0>2} // {s}\n", .{ d[1], d[0], line });
-        return;
-    }
-
-    try writer.writeByteNTimes(' ', listing_width - line_cursor);
-    try writer.print("// {s}\n", .{ line });
-    try writer.writeByteNTimes(' ', listing_width - 3 - 4);
-    try writer.print("! {X:0>2}{X:0>2}\n", .{ d[1], d[0] });
 }
