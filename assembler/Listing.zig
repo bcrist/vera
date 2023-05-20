@@ -161,7 +161,7 @@ pub fn write(lines: Lines.Slice, insns: []const Instruction, comptime MemoryCont
             .empty => {
                 const line_number = line_numbers[line_index];
                 const src = source[line_index];
-                try writeEmptyLine(line_number, src, writer);
+                try writeEmptyLine(line_number, src, writer, false);
             },
             .alignment => {
                 const modulo = addresses[line_index];
@@ -223,25 +223,35 @@ pub fn write(lines: Lines.Slice, insns: []const Instruction, comptime MemoryCont
 }
 
 pub fn writeAllSource(self: *Listing, comptime MemoryContext: type, ctx: MemoryContext, writer: anytype) !void {
-    try writeSource(self.lines.slice(), self.insns.slice(), MemoryContext, ctx, 0, @intCast(LineIndex, self.lines.len), writer);
+    try writeSource(self.lines.slice(), self.insns.items, MemoryContext, ctx, 0, @intCast(LineIndex, self.lines.len), writer);
 }
 
-pub fn writeSource(lines: Lines.Slice, insns: Instructions.Slice, comptime MemoryContext: type, ctx: MemoryContext, begin: LineIndex, end: LineIndex, writer: anytype) !void {
+pub fn writeSource(lines: Lines.Slice, insns: []const Instruction, comptime MemoryContext: type, ctx: MemoryContext, begin: LineIndex, end: LineIndex, writer: anytype) !void {
     _ = ctx;
-    _ = writer;
-    _ = end;
-    _ = begin;
     _ = insns;
-    _ = lines;
-    // TODO
+    const line_numbers = lines.items(.line_number);
+    const source = lines.items(.source);
+    for (begin.., lines.items(.kind)[begin..end]) |line_index, line_kind| {
+        switch (line_kind) {
+            .filename => {
+                const src = source[line_index];
+                try writeFilenameLine(src, writer);
+            },
+            .empty, .alignment, .instruction, .data8, .data16, .data32, .data_space, .stack_space, .insn_space => {
+                const line_number = line_numbers[line_index];
+                const src = source[line_index];
+                try writeEmptyLine(line_number, src, writer, true);
+            },
+        }
+    }
 }
 
 fn writeFilenameLine(filename: []const u8, writer: anytype) !void {
     try writer.print(".source {s}\n", .{ std.fmt.fmtSliceEscapeUpper(filename) });
 }
 
-fn writeEmptyLine(line_number: u32, source: []const u8, writer: anytype) !void {
-    try writeRemainingSourceLines(0, line_number, std.mem.split(u8, source, "\n"), writer);
+fn writeEmptyLine(line_number: u32, source: []const u8, writer: anytype, source_only: bool) !void {
+    try writeRemainingSourceLines(0, line_number, std.mem.split(u8, source, "\n"), writer, source_only);
 }
 
 fn writeAddressSpaceLine(address_space: isa.AddressSpace, line_number: u32, source: []const u8, writer: anytype) !void {
@@ -250,7 +260,7 @@ fn writeAddressSpaceLine(address_space: isa.AddressSpace, line_number: u32, sour
         .stack => try writer.writeAll(".sspace"),
         .insn => try writer.writeAll(".ispace"),
     }
-    try writeRemainingSourceLines(7, line_number, std.mem.split(u8, source, "\n"), writer);
+    try writeRemainingSourceLines(7, line_number, std.mem.split(u8, source, "\n"), writer, false);
 }
 
 fn writeAlignmentLine(modulo: u32, offset: u32, line_number: u32, source: []const u8, writer: anytype) !void {
@@ -263,7 +273,7 @@ fn writeAlignmentLine(modulo: u32, offset: u32, line_number: u32, source: []cons
     }
 
     try writer.writeAll(align_text);
-    try writeRemainingSourceLines(@intCast(u32, align_text.len), line_number, std.mem.split(u8, source, "\n"), writer);
+    try writeRemainingSourceLines(@intCast(u32, align_text.len), line_number, std.mem.split(u8, source, "\n"), writer, false);
 }
 
 fn writeInstructionLine(
@@ -383,13 +393,13 @@ fn writeDataLine(
 
         try writer.writeByte(' ');
 
-        try writeSourceForLine(cur_line_number, source_iter.next() orelse "", writer);
+        try writeSourceForLine(cur_line_number, source_iter.next() orelse "", writer, false);
         cur_line_number += 1;
         address += bytes_on_line;
         remaining -= bytes_on_line;
     }
 
-    try writeRemainingSourceLines(0, cur_line_number, source_iter, writer);
+    try writeRemainingSourceLines(0, cur_line_number, source_iter, writer, false);
 }
 
 fn writeGroupedDataAndSource(address: u32, line_cursor: u32, data: []const u8, groups: []const u8, line_number: u32, source: []const u8, writer: anytype) !void {
@@ -458,7 +468,7 @@ fn writeGroupedDataAndSource(address: u32, line_cursor: u32, data: []const u8, g
             try writer.writeByteNTimes(' ', listing_width - cursor);
         }
 
-        try writeSourceForLine(cur_line_number, source_iter.next() orelse "", writer);
+        try writeSourceForLine(cur_line_number, source_iter.next() orelse "", writer, false);
 
         cur_address += @intCast(u32, num_bytes_for_this_line);
         remaining_data = remaining_data[num_bytes_for_this_line..];
@@ -467,34 +477,43 @@ fn writeGroupedDataAndSource(address: u32, line_cursor: u32, data: []const u8, g
         cursor = 0;
     }
 
-    try writeRemainingSourceLines(cursor, cur_line_number, source_iter, writer);
+    try writeRemainingSourceLines(cursor, cur_line_number, source_iter, writer, false);
 }
 
-fn writeRemainingSourceLines(line_cursor: u32, line_number: u32, line_iter: std.mem.SplitIterator(u8), writer: anytype) !void {
+fn writeRemainingSourceLines(line_cursor: u32, line_number: u32, line_iter: std.mem.SplitIterator(u8), writer: anytype, source_only: bool) !void {
     var iter = line_iter;
     var first_line = iter.next() orelse return;
     var i = line_number;
     if (first_line.len > 0) {
-        if (line_cursor < listing_width) {
+        if (!source_only and line_cursor < listing_width) {
             try writer.writeByteNTimes(' ', listing_width - line_cursor);
         }
-        try writeSourceForLine(i, first_line, writer);
+        try writeSourceForLine(i, first_line, writer, source_only);
         i += 1;
         while (iter.next()) |line| {
-            try writer.writeByteNTimes(' ', listing_width);
-            try writeSourceForLine(i, line, writer);
-            i += 1;
+            if (!source_only) {
+                try writer.writeByteNTimes(' ', listing_width);
+            }
+            try writeSourceForLine(i, line, writer, source_only);
+            if (i != 0) i += 1;
         }
     } else {
         try writer.writeByte('\n');
     }
 }
 
-fn writeSourceForLine(line_number: u32, line_source: []const u8, writer: anytype) !void {
+fn writeSourceForLine(line_number: u32, line_source: []const u8, writer: anytype, source_only: bool) !void {
     const source = if (std.mem.endsWith(u8, line_source, "\r")) line_source[0..line_source.len - 1] else line_source;
     if (source.len == 0) {
         try writer.writeByte('\n');
     } else {
-        try writer.print("//{:>5} | {s}\n", .{ line_number, std.fmt.fmtSliceEscapeUpper(source) } );
+        if (!source_only) {
+            try writer.writeAll("//");
+        }
+        if (line_number == 0) {
+            try writer.print("{s}\n", .{ std.fmt.fmtSliceEscapeUpper(source) } );
+        } else {
+            try writer.print("{:>5} | {s}\n", .{ line_number, std.fmt.fmtSliceEscapeUpper(source) } );
+        }
     }
 }

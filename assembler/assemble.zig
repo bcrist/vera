@@ -34,7 +34,7 @@ pub fn main() !void {
     var list = output.createListing(&a, gpa.allocator(), .{});
     defer list.deinit();
 
-    try list.writeAll(*Assembler, &a, std.io.getStdOut().writer());
+    try list.writeAllSource(*Assembler, &a, std.io.getStdOut().writer());
 
     //try output.writeListing(&a, std.io.getStdOut().writer(), .{ .ordering = .address });
 

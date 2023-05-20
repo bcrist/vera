@@ -1,5 +1,4 @@
 [assembler] SimSx output files
-[assembler] source-only listing output
 [assembler] Improve error context printing
 [assembler] check for shadowed symbols
 [assembler] Warn on multiple files with same name
