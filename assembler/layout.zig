@@ -100,7 +100,7 @@ fn resolveAutoOrgAddress(a: *Assembler, chunk: SourceFile.Chunk) u32 {
                         .end = unused_range_begin,
                     }, false);
 
-                    const unused_range_end = @intCast(bus.Page, used.findFirstSet() orelse PageData.page_size);
+                    const unused_range_end = used.findFirstSet() orelse PageData.page_size;
                     const range_size = unused_range_end - unused_range_begin;
                     if (range_size >= chunk_size) {
                         const page = pages[page_data_handle];
@@ -175,7 +175,7 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
         var new_insn_address = address;
         switch (insn_operations[insn_handle]) {
             .none, .org, .keep, .def, .undef,
-            .section, .code, .kcode, .entry, .kentry,
+            .section, .boot, .code, .kcode, .entry, .kentry,
             .data, .kdata, .@"const", .kconst, .stack => {
                 // Look forwards to see if an .align, etc. is coming up
                 var iter2 = chunk.instructions;
@@ -437,6 +437,7 @@ fn applyAlignment(
             .stack,
             => {},
 
+            .boot,
             .code_user,
             .code_kernel,
             .entry_user,
@@ -829,7 +830,7 @@ pub fn encodePageData(a: *Assembler, file: *SourceFile) void {
     for (0.., s.insn.items(.operation)) |insn_handle, op| {
         switch (op) {
             .none, .insn, .org, .@"align", .keep, .def, .undef,
-            .section, .code, .kcode, .entry, .kentry, .data, .kdata, .@"const", .kconst, .stack,
+            .section, .boot, .code, .kcode, .entry, .kentry, .data, .kdata, .@"const", .kconst, .stack,
             => {},
 
             .bound_insn => |encoding| {

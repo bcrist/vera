@@ -466,12 +466,12 @@ pub fn writeInstructionEncodings(inner_writer: anytype) !void {
     for (instructions, descriptions, 0..) |maybe_insn, maybe_desc, opcode| {
         if (maybe_insn) |i| {
             if (i.opcodes.min == opcode) {
-                try ie.data.writeInstructionEncoding(InnerWriter, &writer, i.*, maybe_desc);
+                try ie.data.writeInstructionEncoding(InnerWriter, &writer, i.*, maybe_desc, false);
             }
         }
     }
     for (aliases.items) |alias| {
-        try ie.data.writeInstructionEncoding(InnerWriter, &writer, alias.encoding, alias.desc);
+        try ie.data.writeInstructionEncoding(InnerWriter, &writer, alias.encoding, alias.desc, false);
     }
 
     try writer.done();

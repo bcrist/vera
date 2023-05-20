@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    //[[!! include 'build' !! 246 ]]
+    //[[!! include 'build' !! 245 ]]
     //[[ ################# !! GENERATED CODE -- DO NOT MODIFY !! ################# ]]
 
     const bits = b.createModule(.{
@@ -91,10 +91,6 @@ pub fn build(b: *std.Build) void {
     Simulator.dependencies.put("misc", misc) catch unreachable;
     Simulator.dependencies.put("physical_address", physical_address) catch unreachable;
 
-    const ihex = b.createModule(.{
-        .source_file = .{ .path = "pkg/ihex.zig" },
-    });
-
     const deep_hash_map = b.createModule(.{
         .source_file = .{ .path = "pkg/deep_hash_map.zig" },
     });
@@ -114,18 +110,12 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    const srec = b.createModule(.{
-        .source_file = .{ .path = "pkg/srec.zig" },
-    });
-
-    const assemble = b.createModule(.{
-        .source_file = .{ .path = "assembler/assemble.zig" },
+    const assembler_lib = b.createModule(.{
+        .source_file = .{ .path = "assembler/assembler_lib.zig" },
         .dependencies = &.{
             .{ .name = "bus_types", .module = bus_types },
-            .{ .name = "ihex", .module = ihex },
             .{ .name = "isa_encoding", .module = isa_encoding },
             .{ .name = "isa_types", .module = isa_types },
-            .{ .name = "srec", .module = srec },
         },
     });
 
@@ -136,6 +126,10 @@ pub fn build(b: *std.Build) void {
             .{ .name = "isa_encoding", .module = isa_encoding },
             .{ .name = "isa_types", .module = isa_types },
         },
+    });
+
+    const ihex = b.createModule(.{
+        .source_file = .{ .path = "pkg/ihex.zig" },
     });
 
     const rom_compress = b.createModule(.{
@@ -151,6 +145,10 @@ pub fn build(b: *std.Build) void {
             .{ .name = "bits", .module = bits },
             .{ .name = "rom_compress", .module = rom_compress },
         },
+    });
+
+    const srec = b.createModule(.{
+        .source_file = .{ .path = "pkg/srec.zig" },
     });
 
     const microcode_roms = b.createModule(.{
@@ -180,6 +178,7 @@ pub fn build(b: *std.Build) void {
     assemble_exe.addModule("isa_encoding", isa_encoding);
     assemble_exe.addModule("isa_types", isa_types);
     assemble_exe.addModule("srec", srec);
+    assemble_exe.addModule("sx", sx);
     b.installArtifact(assemble_exe);
     _ = makeRunStep(b, assemble_exe, "assemble", "Run assemble");
 
@@ -264,7 +263,7 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_tests3.step);
     test_step.dependOn(&run_tests4.step);
 
-    _ = assemble;
+    _ = assembler_lib;
     //[[ ######################### END OF GENERATED CODE ######################### ]]
 }
 

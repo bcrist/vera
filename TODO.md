@@ -1,4 +1,3 @@
-[assembler] SimSx output files
 [assembler] Improve error context printing
 [assembler] check for shadowed symbols
 [assembler] Warn on multiple files with same name
@@ -9,6 +8,7 @@
 [assembler] Consider having stack sections use a different namespace from other section types, and make them local to the file they're defined in.
 [assembler] .kentry label alignment
 [assembler] section allowed page .range
+[assembler] .boot section has default .range of 0 - 0x8000
 [assembler] initial arrow (nil first parameter)
 [assembler] Create disassembler
 [assembler] add cycle counts to listing output

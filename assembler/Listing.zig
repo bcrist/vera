@@ -146,77 +146,60 @@ pub fn writeAll(self: *const Listing, comptime MemoryContext: type, ctx: MemoryC
 pub fn write(lines: Lines.Slice, insns: []const Instruction, comptime MemoryContext: type, ctx: MemoryContext, begin: LineIndex, end: LineIndex, writer: anytype) !void {
     const addresses = lines.items(.address);
     const lengths = lines.items(.length);
-    const line_numbers = lines.items(.line_number);
-    const source = lines.items(.source);
     const insn_indices = lines.items(.insn_index);
 
     var address_space = isa.AddressSpace.data;
 
-    for (begin.., lines.items(.kind)[begin..end]) |line_index, line_kind| {
+    for (begin..,
+        lines.items(.kind)[begin..end],
+        lines.items(.line_number)[begin..end],
+        lines.items(.source)
+    ) |line_index, line_kind, line_number, source| {
         switch (line_kind) {
             .filename => {
-                const src = source[line_index];
-                try writeFilenameLine(src, writer);
+                try writeFilenameLine(source, writer);
             },
             .empty => {
-                const line_number = line_numbers[line_index];
-                const src = source[line_index];
-                try writeEmptyLine(line_number, src, writer, false);
+                try writeEmptyLine(line_number, source, writer, false);
             },
             .alignment => {
                 const modulo = addresses[line_index];
                 const offset = lengths[line_index];
-                const line_number = line_numbers[line_index];
-                const src = source[line_index];
-                try writeAlignmentLine(modulo, offset, line_number, src, writer);
+                try writeAlignmentLine(modulo, offset, line_number, source, writer);
             },
             .instruction => {
                 const address = addresses[line_index];
                 const length = lengths[line_index];
                 const insn = insns[insn_indices[line_index].?];
-                const line_number = line_numbers[line_index];
-                const src = source[line_index];
-                try writeInstructionLine(address, length, address_space, MemoryContext, ctx, insn, line_number, src, writer);
+                try writeInstructionLine(address, length, address_space, MemoryContext, ctx, insn, line_number, source, writer);
             },
             .data8 => {
                 const address = addresses[line_index];
                 const length = lengths[line_index];
-                const line_number = line_numbers[line_index];
-                const src = source[line_index];
-                try writeDataLine(u8, address, length, address_space, MemoryContext, ctx, line_number, src, writer);
+                try writeDataLine(u8, address, length, address_space, MemoryContext, ctx, line_number, source, writer);
             },
             .data16 => {
                 const address = addresses[line_index];
                 const length = lengths[line_index];
-                const line_number = line_numbers[line_index];
-                const src = source[line_index];
-                try writeDataLine(u16, address, length, address_space, MemoryContext, ctx, line_number, src, writer);
+                try writeDataLine(u16, address, length, address_space, MemoryContext, ctx, line_number, source, writer);
             },
             .data32 => {
                 const address = addresses[line_index];
                 const length = lengths[line_index];
-                const line_number = line_numbers[line_index];
-                const src = source[line_index];
-                try writeDataLine(u32, address, length, address_space, MemoryContext, ctx, line_number, src, writer);
+                try writeDataLine(u32, address, length, address_space, MemoryContext, ctx, line_number, source, writer);
             },
             .data_space => {
                 address_space = .data;
-                const line_number = line_numbers[line_index];
-                const src = source[line_index];
-                try writeAddressSpaceLine(address_space, line_number, src, writer);
+                try writeAddressSpaceLine(address_space, line_number, source, writer);
             },
             .stack_space => {
                 address_space = .stack;
-                const line_number = line_numbers[line_index];
-                const src = source[line_index];
-                try writeAddressSpaceLine(address_space, line_number, src, writer);
+                try writeAddressSpaceLine(address_space, line_number, source, writer);
             },
 
             .insn_space => {
                 address_space = .insn;
-                const line_number = line_numbers[line_index];
-                const src = source[line_index];
-                try writeAddressSpaceLine(address_space, line_number, src, writer);
+                try writeAddressSpaceLine(address_space, line_number, source, writer);
             },
         }
     }

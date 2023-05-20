@@ -20,7 +20,7 @@ pub fn markBlocksToKeep(a: *Assembler, file: *SourceFile) void {
         };
         while (iter.next()) |insn_handle| {
             switch (operations[insn_handle]) {
-                .keep, .entry, .kentry => {
+                .keep, .entry, .kentry, .boot => {
                     keep.* = true;
                     traceReferencesInBlock(a, s, begin, end);
                     break;

@@ -29,6 +29,7 @@ pub fn processLabelsAndSections(a: *Assembler, file: *SourceFile) void {
 
             const kind: Section.Kind = switch (op) {
                 .section => .info,
+                .boot => .boot,
                 .code => .code_user,
                 .kcode => .code_kernel,
                 .entry => .entry_user,
@@ -50,6 +51,7 @@ pub fn processLabelsAndSections(a: *Assembler, file: *SourceFile) void {
             } else {
                 section_name = switch (kind) {
                     .info => "default_info",
+                    .boot => "default_boot",
                     .code_user => "default_code",
                     .code_kernel => "kernel_code",
                     .entry_user => "entry_code",
@@ -232,7 +234,7 @@ fn tryResolveExpressionType(a: *Assembler, s: SourceFile.Slices, expr_handle: Ex
             const block_handle = s.file.findBlockByToken(token_handle);
             if (s.block.items(.section)[block_handle]) |section_handle| {
                 expr_resolved_types[expr_handle] = switch (a.getSection(section_handle).kind) {
-                    .code_user, .code_kernel, .entry_user, .entry_kernel => ExpressionType.relativeAddress(.insn, .{ .sr = .IP }),
+                    .boot, .code_user, .code_kernel, .entry_user, .entry_kernel => ExpressionType.relativeAddress(.insn, .{ .sr = .IP }),
                     .data_user, .data_kernel, .constant_user, .constant_kernel => ExpressionType.relativeAddress(.data, .{ .sr = .IP }),
                     .stack => ExpressionType.relativeAddress(.stack, .{ .sr = .SP }),
                     .info => ExpressionType.absoluteAddress(.data),
@@ -532,7 +534,7 @@ fn tryResolveSymbolType(a: *Assembler, s: SourceFile.Slices, expr_handle: Expres
             const block_handle = sym_file.findBlockByInstruction(insn_ref.instruction);
             if (sym_file.blocks.items(.section)[block_handle]) |section_handle| {
                 expr_resolved_types[expr_handle] = switch (a.getSection(section_handle).kind) {
-                    .code_user, .code_kernel, .entry_user, .entry_kernel => ExpressionType.relativeAddress(.insn, .{ .sr = .IP }),
+                    .boot, .code_user, .code_kernel, .entry_user, .entry_kernel => ExpressionType.relativeAddress(.insn, .{ .sr = .IP }),
                     .data_user, .data_kernel, .constant_user, .constant_kernel => ExpressionType.relativeAddress(.data, .{ .sr = .IP }),
                     .stack => ExpressionType.relativeAddress(.stack, .{ .sr = .SP }),
                     .info => ExpressionType.absoluteAddress(.data),
@@ -679,7 +681,7 @@ fn checkInstructionsAndDirectivesInFile(a: *Assembler, s: SourceFile.Slices) voi
             },
 
             .def => {},
-            .section => {
+            .section, .boot => {
                 allow_code = true;
                 allow_data = true;
             },

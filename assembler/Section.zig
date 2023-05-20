@@ -9,6 +9,7 @@ const Section = @This();
 
 pub const Kind = enum {
     info,
+    boot,
     code_user,
     code_kernel,
     entry_user,

@@ -18,7 +18,7 @@ const IndexedRegisterRange = isa.IndexedRegisterRange;
 
 const sx_data = @embedFile("isa.sx");
 
-pub fn writeInstructionEncoding(comptime W: type, writer: *sx.Writer(W), encoding: InstructionEncoding, maybe_desc: ?[]const u8) !void {
+pub fn writeInstructionEncoding(comptime W: type, writer: *sx.Writer(W), encoding: InstructionEncoding, maybe_desc: ?[]const u8, compact: bool) !void {
     try writer.open();
     try writer.printValue("{X:0>4}", .{ encoding.opcodes.min });
     try writer.printValue("{X:0>4}", .{ encoding.opcodes.max });
@@ -26,7 +26,9 @@ pub fn writeInstructionEncoding(comptime W: type, writer: *sx.Writer(W), encodin
     if (encoding.suffix != .none) {
         try writer.tag(encoding.suffix);
     }
-    writer.setCompact(false);
+    if (maybe_desc != null or encoding.params.len > 0) {
+        writer.setCompact(compact);
+    }
     if (maybe_desc) |desc| {
         try writer.expression("desc");
         try writer.string(desc);

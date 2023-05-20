@@ -40,8 +40,14 @@ pub fn main() !void {
 
     try a.printErrors(std.io.getStdErr().writer());
 
-    try output.writeHex(&a, std.fs.cwd(), output_file.items, .{
-        .merge_all_sections = true,
-    });
+    // try output.writeHex(&a, std.fs.cwd(), output_file.items, .{
+    //     .merge_all_sections = true,
+    // });
+
+    const simsx_filename = try std.fmt.allocPrint(arena.allocator(), "{s}.ssx", .{ output_file.items });
+    var f = try std.fs.cwd().createFile(simsx_filename, .{});
+    defer f.close();
+    var writer = f.writer();
+    try output.writeSimSx(&a, gpa.allocator(), writer, .{});
 
 }

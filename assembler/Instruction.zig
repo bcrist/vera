@@ -33,6 +33,7 @@ pub const Operation = union(enum) {
     dw,
     dd,
     section,
+    boot,
     code,
     kcode,
     entry,
@@ -75,6 +76,7 @@ pub const Iterator = struct {
 pub fn isSectionDirective(op: OperationType) bool {
     return switch (op) {
         .section,
+        .boot,
         .code,
         .kcode,
         .entry,
@@ -108,6 +110,7 @@ pub fn isOrgHeader(op: OperationType) bool {
     // See SourceFile.collectChunks and SourceFile.backtrackOrgHeaders
     return switch (op) {
         .section,
+        .boot,
         .code,
         .kcode,
         .entry,

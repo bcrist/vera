@@ -2,6 +2,7 @@ const std = @import("std");
 const ie = @import("isa_encoding");
 const srec = @import("srec");
 const ihex = @import("ihex");
+const sx = @import("sx");
 const bus = @import("bus_types");
 const layout = @import("layout.zig");
 const Assembler = @import("Assembler.zig");
@@ -169,15 +170,171 @@ fn writeHexForSectionInner(a: *const Assembler, maybe_section_handle: ?Section.H
 }
 
 pub const SimSxOptions = struct {
-    address_offset: i64 = 0,    // added to addresses before being placed in roms
-    address_range: Assembler.AddressRange = .{
-        .first = 0,
-        .len = 0x1_0000_0000,
-    },
     include_listing: bool = true,
 };
-pub fn writeSimSx() !void {
-    // TODO
+pub fn writeSimSx(a: *Assembler, temp_alloc: std.mem.Allocator, writer: anytype, options: SimSxOptions) !void {
+    var sx_writer = sx.writer(temp_alloc, writer);
+    defer sx_writer.deinit();
+
+    try sx_writer.openExpanded();
+
+    try writeSimSxPage(a, 0, &sx_writer);
+    var last_page_written: bus.Page = 0;
+
+    for (a.chunks.items) |chunk_and_address| {
+        const address_range = chunk_and_address.chunk.getAddressRange(a);
+        if (address_range.len == 0) {
+            continue;
+        }
+        const first_page = address_range.first >> @bitSizeOf(bus.PageOffset);
+        const last_page = (address_range.first + @intCast(u32, address_range.len - 1)) >> @bitSizeOf(bus.PageOffset);
+
+        for (first_page..last_page + 1) |page_usize| {
+            const page = @intCast(bus.Page, page_usize);
+            if (page > last_page_written) {
+                try writeSimSxPage(a, page, &sx_writer);
+                last_page_written = page;
+            }
+        }
+    }
+
+    if (options.include_listing) {
+        var listing = createListing(a, temp_alloc, .{});
+        defer listing.deinit();
+
+        const lines_slice = listing.lines.slice();
+        const addresses = lines_slice.items(.address);
+        const lengths = lines_slice.items(.length);
+        const insn_indices = lines_slice.items(.insn_index);
+
+        try sx_writer.expressionExpanded("listing");
+        for (0.., lines_slice.items(.kind), lines_slice.items(.line_number), lines_slice.items(.source)) |l, kind, line_number, source| {
+            switch (kind) {
+                .filename => {
+                    try sx_writer.expression("source");
+                    try sx_writer.string(source);
+                    try sx_writer.close();
+                },
+                .empty, .data_space, .stack_space, .insn_space => {
+                    try sx_writer.expression(switch (kind) {
+                        .empty => "_",
+                        .data_space => "dspace",
+                        .stack_space => "sspace",
+                        .insn_space => "ispace",
+                        else => unreachable,
+                    });
+                    try writeListingSxLineAndSource(line_number, source, &sx_writer);
+                    try sx_writer.close();
+                },
+                .instruction => {
+                    const insn = listing.insns.items[insn_indices[l].?];
+                    try sx_writer.expression("insn");
+                    try sx_writer.printValue("{X:0>8}", .{ addresses[l] });
+                    try sx_writer.int(lengths[l], 10);
+                    try ie.data.writeInstructionEncoding(@TypeOf(writer), &sx_writer, insn.encoding, null, true);
+                    try writeListingSxLineAndSource(line_number, source, &sx_writer);
+                    try sx_writer.close();
+                },
+                .data8, .data16, .data32 => {
+                    try sx_writer.expression(switch (kind) {
+                        .data8 => "db",
+                        .data16 => "dw",
+                        .data32 => "dd",
+                        else => unreachable,
+                    });
+                    try sx_writer.printValue("{X:0>8}", .{ addresses[l] });
+                    try sx_writer.int(lengths[l], 10);
+                    try writeListingSxLineAndSource(line_number, source, &sx_writer);
+                    try sx_writer.close();
+                },
+                .alignment => {
+                    try sx_writer.expression("align");
+                    try sx_writer.int(addresses[l], 10);
+                    const offset = lengths[l];
+                    if (offset > 0) {
+                        try sx_writer.int(offset, 10);
+                    }
+                    try writeListingSxLineAndSource(line_number, source, &sx_writer);
+                    try sx_writer.close();
+                },
+            }
+        }
+        try sx_writer.close();
+    }
+
+    try sx_writer.done();
+}
+
+fn writeListingSxLineAndSource(line_number: u32, source: []const u8, sx_writer: anytype) !void {
+    if (line_number > 0) {
+        try sx_writer.expression("line");
+        try sx_writer.int(line_number, 10);
+        try sx_writer.close();
+    }
+    if (source.len > 0) {
+        try sx_writer.expression("src");
+        try sx_writer.string(source);
+        try sx_writer.close();
+    }
+}
+
+pub fn writeSimSxPage(a: *const Assembler, page: bus.Page, sx_writer: anytype) !void {
+    if (a.page_lookup.get(page)) |page_data_handle| {
+        const pages_slice = a.pages.slice();
+        const page_data = pages_slice.items(.data);
+        const page_usage = pages_slice.items(.usage);
+        const page_sections = pages_slice.items(.section);
+
+        const section = a.sections.values()[page_sections[page_data_handle]];
+        const full_page_data = &page_data[page_data_handle];
+
+        try sx_writer.expression("page");
+        if (section.kind == .boot) {
+            try sx_writer.string("flash");
+            try sx_writer.printValue("{X:0>3}", .{ page + 1008 });
+        } else {
+            try sx_writer.string("ram");
+            try sx_writer.printValue("{X:0>5}", .{ page });
+        }
+        sx_writer.setCompact(false);
+
+        var used = page_usage[page_data_handle];
+        var unused = used;
+        unused.toggleAll();
+
+        var begin: usize = 0;
+        while (used.findFirstSet()) |used_range_begin| {
+            unused.setRangeValue(.{
+                .start = begin,
+                .end = used_range_begin,
+            }, false);
+
+            const max_bytes_per_line = 64;
+            const max_base64_length = comptime std.base64.standard.Encoder.calcSize(max_bytes_per_line);
+
+            var used_range_end = unused.findFirstSet() orelse PageData.page_size;
+            if (used_range_end - used_range_begin > max_bytes_per_line) {
+                used_range_end = used_range_begin + max_bytes_per_line;
+            }
+
+            const data = full_page_data[used_range_begin..used_range_end];
+            var buf: [max_base64_length]u8 = undefined;
+            const encoded = std.base64.standard.Encoder.encode(&buf, data);
+
+            try sx_writer.open();
+            try sx_writer.printValue("{X:0>3}", .{ used_range_begin });
+            try sx_writer.string(encoded);
+            try sx_writer.close();
+
+            used.setRangeValue(.{
+                .start = begin,
+                .end = used_range_end,
+            }, false);
+            begin = used_range_end;
+        }
+
+        try sx_writer.close();
+    }
 }
 
 pub const ListOptions = struct {
@@ -252,7 +409,10 @@ fn addListingForChunk(a: *Assembler, listing: *Listing, chunk: SourceFile.Chunk,
             end_of_line += 1;
             std.debug.assert(end_of_line <= file.tokens.len);
         }
-        const line_source = file.source[token_offsets[start_of_line] .. token_offsets[end_of_line]];
+        var line_source = file.source[token_offsets[start_of_line] .. token_offsets[end_of_line]];
+        if (line_source.len > 0 and line_source[line_source.len - 1] == '\r') {
+            line_source.len -= 1;
+        }
 
         if (!keep) {
             listing.addNonOutputLine(.empty, line_numbers[i], line_source, options.clone_source_strings);
@@ -260,7 +420,7 @@ fn addListingForChunk(a: *Assembler, listing: *Listing, chunk: SourceFile.Chunk,
         }
 
         switch (operations[i]) {
-            .code, .kcode, .entry, .kentry => {
+            .boot, .code, .kcode, .entry, .kentry => {
                 listing.addNonOutputLine(.insn_space, line_numbers[i], line_source, options.clone_source_strings);
             },
             .data, .kdata, .@"const", .kconst, .section => {
