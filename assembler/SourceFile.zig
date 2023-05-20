@@ -140,11 +140,11 @@ pub const Chunk = struct {
         const lengths = file.instructions.items(.length);
 
         const begin = addresses[self.instructions.begin];
-        const end = addresses[self.instructions.end - 1] + lengths[self.instructions.end - 1];
+        const end = @as(usize, addresses[self.instructions.end - 1]) + lengths[self.instructions.end - 1];
 
         return .{
-            .begin = begin,
-            .end = end,
+            .first = begin,
+            .len = end - begin,
         };
     }
 

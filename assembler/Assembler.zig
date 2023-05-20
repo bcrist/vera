@@ -56,14 +56,19 @@ pub const Alignment = struct {
 };
 
 pub const AddressRange = struct {
-    begin: u32,
-    end: u32,
+    first: u32,
+    len: usize,
+
+    pub fn last(self: AddressRange) u32 {
+        return self.first + @intCast(u32, self.len - 1);
+    }
 
     pub fn intersectionWith(self: AddressRange, other: AddressRange) AddressRange {
-        const begin = @max(self.begin, other.begin);
+        const begin = @max(self.first, other.first);
+        const end = @max(begin, @min(self.first + self.len, other.first + other.len));
         return .{
-            .begin = begin,
-            .end = @max(begin, @min(self.end, other.end)),
+            .first = begin,
+            .len = end - begin,
         };
     }
 };
@@ -215,7 +220,7 @@ pub fn printErrors(self: *Assembler, writer: anytype) !void {
         const intersection = a_range.intersectionWith(b_range);
 
         try writer.print("Found chunks overlapping on address range [{X:0>16},{X:0>16}]\n", .{
-            intersection.begin, intersection.end - 1,
+            intersection.first, intersection.last(),
         });
     }
 }

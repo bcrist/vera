@@ -21,8 +21,8 @@ pub const HexOptions = struct {
     rom_width_bytes: u8 = 2,    // e.g. 2 for boot rom
     address_offset: i64 = 0,    // added to addresses before being placed in roms
     address_range: Assembler.AddressRange = .{
-        .begin = 0,
-        .end = 0xFFFF_FFFF,
+        .first = 0,
+        .len = 0x1_0000_0000,
     },
     merge_all_sections: bool = true,
     add_spaces: bool = true,    // add spaces between fields in the hex records, making them more readable, but longer
@@ -108,18 +108,19 @@ fn writeHexForSectionInner(a: *const Assembler, maybe_section_handle: ?Section.H
         }
 
         const address_range = chunk.getAddressRange(a).intersectionWith(options.address_range);
-        if (address_range.begin >= address_range.end) {
+        if (address_range.len == 0) {
             continue;
         }
 
-        var begin = address_range.begin;
-        while (begin < address_range.end) {
-            const page = @truncate(bus.Page, begin >> @bitSizeOf(bus.PageOffset));
+        var address: usize = address_range.first;
+        const last_address = address_range.last();
+        while (address < last_address) {
+            const page = @truncate(bus.Page, address >> @bitSizeOf(bus.PageOffset));
             const page_end = (@as(u64, page) + 1) << @bitSizeOf(bus.PageOffset);
-            const end = @intCast(u32, @min(page_end, address_range.end));
+            const end = @intCast(u32, @min(page_end, last_address + 1));
 
             if (a.page_lookup.get(page)) |page_data_handle| {
-                const begin_offset = @truncate(bus.PageOffset, begin);
+                const begin_offset = @truncate(bus.PageOffset, address);
                 const end_offset = @truncate(bus.PageOffset, end);
 
                 var data: []const u8 = &page_data[page_data_handle];
@@ -129,7 +130,7 @@ fn writeHexForSectionInner(a: *const Assembler, maybe_section_handle: ?Section.H
                     data = data[begin_offset..end_offset];
                 }
 
-                const offset_address = @bitCast(u32, @truncate(i32, options.address_offset +% begin));
+                const offset_address = @bitCast(u32, @truncate(i32, options.address_offset +% @intCast(i64, address)));
 
                 if (options.num_roms <= 1) {
                     try writer.write(offset_address, data);
@@ -162,13 +163,18 @@ fn writeHexForSectionInner(a: *const Assembler, maybe_section_handle: ?Section.H
                 }
             }
 
-            begin = end;
+            address = end;
         }
     }
 }
 
 pub const SimSxOptions = struct {
     address_offset: i64 = 0,    // added to addresses before being placed in roms
+    address_range: Assembler.AddressRange = .{
+        .first = 0,
+        .len = 0x1_0000_0000,
+    },
+    include_listing: bool = true,
 };
 pub fn writeSimSx() !void {
     // TODO
@@ -217,9 +223,6 @@ pub fn createListing(a: *Assembler, gpa: std.mem.Allocator, options: ListOptions
 }
 
 fn addListingForChunk(a: *Assembler, listing: *Listing, chunk: SourceFile.Chunk, keep: bool, last_file: ?SourceFile.Handle, options: ListOptions) void {
-    const arena = listing.arena.allocator();
-    _ = arena;
-
     const file = a.getSource(chunk.file);
     const s = file.slices();
 

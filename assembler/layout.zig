@@ -75,7 +75,7 @@ fn resolveAutoOrgAddress(a: *Assembler, chunk: SourceFile.Chunk) u32 {
     const chunk_section_handle = chunk.section orelse return 0;
 
     const address_range = chunk.getAddressRange(a);
-    const chunk_size = @max(1, address_range.end - address_range.begin);
+    const chunk_size = @max(1, address_range.len);
 
     const pages = a.pages.items(.page);
     const page_sections = a.pages.items(.section);
@@ -769,10 +769,10 @@ pub fn populatePageChunks(a: *Assembler, chunks: []const SourceFile.Chunk) void 
     var page_sections = a.pages.items(.section);
     for (chunks) |chunk| {
         const addresses = chunk.getAddressRange(a);
-        const first_page = addresses.begin >> @bitSizeOf(bus.PageOffset);
+        const first_page = addresses.first >> @bitSizeOf(bus.PageOffset);
         var last_page = first_page;
-        if (addresses.end != addresses.begin) {
-            last_page = (addresses.end - 1) >> @bitSizeOf(bus.PageOffset);
+        if (addresses.len > 0) {
+            last_page = addresses.last() >> @bitSizeOf(bus.PageOffset);
         }
 
         if (chunk.section) |section_handle| {
@@ -781,7 +781,7 @@ pub fn populatePageChunks(a: *Assembler, chunks: []const SourceFile.Chunk) void 
 
         a.chunks.append(a.gpa, .{
             .chunk = chunk,
-            .address = addresses.begin,
+            .address = addresses.first,
         }) catch @panic("OOM");
 
         for (first_page .. last_page + 1) |page| {
@@ -811,7 +811,7 @@ pub fn findOverlappingChunks(a: *Assembler, chunks: []const SourceFile.Chunk) vo
         const check_against = chunks[i + 1 ..];
         for (check_against) |other_chunk| {
             const other_range = other_chunk.getAddressRange(a);
-            if (chunk_range.begin >= other_range.end or chunk_range.end <= other_range.begin) continue;
+            if (chunk_range.first > other_range.last() or chunk_range.last() < other_range.first) continue;
             a.overlapping_chunks.put(a.gpa, SourceFile.ChunkPair.init(chunk, other_chunk), {}) catch @panic("OOM");
             if (a.overlapping_chunks.count() >= 10) return;
         }
