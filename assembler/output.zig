@@ -218,35 +218,29 @@ pub fn createListing(a: *Assembler, gpa: std.mem.Allocator, options: ListOptions
 
 fn addListingForChunk(a: *Assembler, listing: *Listing, chunk: SourceFile.Chunk, keep: bool, last_file: ?SourceFile.Handle, options: ListOptions) void {
     const arena = listing.arena.allocator();
+    _ = arena;
 
     const file = a.getSource(chunk.file);
     const s = file.slices();
 
-    const insn_tokens = s.insn.items(.token);
-    const insn_params = s.insn.items(.params);
-    const insn_operations = s.insn.items(.operation);
-    const insn_addresses = s.insn.items(.address);
-    const insn_lengths = s.insn.items(.length);
-    const insn_line_numbers = s.insn.items(.line_number);
+    const tokens = s.insn.items(.token);
+    const params = s.insn.items(.params);
+    const operations = s.insn.items(.operation);
+    const addresses = s.insn.items(.address);
+    const lengths = s.insn.items(.length);
+    const line_numbers = s.insn.items(.line_number);
 
-    const tokens = file.tokens.slice();
-    const token_kinds = tokens.items(.kind);
-    const token_offsets = tokens.items(.offset);
+    const token_slice = file.tokens.slice();
+    const token_kinds = token_slice.items(.kind);
+    const token_offsets = token_slice.items(.offset);
 
     if (chunk.file != last_file) {
-        listing.lines.append(listing.gpa, .{
-            .kind = .filename,
-            .address = 0,
-            .length = 0,
-            .line_number = 0,
-            .source = if (options.clone_source_strings) arena.dupe(u8, file.name) catch @panic("OOM") else file.name,
-            .insn_index = null,
-        }) catch @panic("OOM");
+        listing.addFilenameLine(file.name, options.clone_source_strings);
     }
 
     var iter = chunk.instructions;
-    while (iter.next()) |insn_handle| {
-        var start_of_line = insn_tokens[insn_handle];
+    while (iter.next()) |i| {
+        var start_of_line = tokens[i];
         var end_of_line = start_of_line;
         while (start_of_line > 0 and token_kinds[start_of_line - 1] != .newline) {
             start_of_line -= 1;
@@ -255,83 +249,33 @@ fn addListingForChunk(a: *Assembler, listing: *Listing, chunk: SourceFile.Chunk,
             end_of_line += 1;
             std.debug.assert(end_of_line <= file.tokens.len);
         }
-        const file_line = file.source[token_offsets[start_of_line] .. token_offsets[end_of_line]];
-        const line = if (options.clone_source_strings) arena.dupe(u8, file_line) catch @panic("OOM") else file_line;
+        const line_source = file.source[token_offsets[start_of_line] .. token_offsets[end_of_line]];
 
         if (!keep) {
-            listing.lines.append(listing.gpa, .{
-                .kind = .empty,
-                .address = 0,
-                .length = 0,
-                .line_number = insn_line_numbers[insn_handle],
-                .source = line,
-                .insn_index = null,
-            }) catch @panic("OOM");
+            listing.addNonOutputLine(.empty, line_numbers[i], line_source, options.clone_source_strings);
             continue;
         }
 
-        switch (insn_operations[insn_handle]) {
+        switch (operations[i]) {
             .code, .kcode, .entry, .kentry => {
-                listing.lines.append(listing.gpa, .{
-                    .kind = .insn_space,
-                    .address = 0,
-                    .length = 0,
-                    .line_number = insn_line_numbers[insn_handle],
-                    .source = line,
-                    .insn_index = null,
-                }) catch @panic("OOM");
+                listing.addNonOutputLine(.insn_space, line_numbers[i], line_source, options.clone_source_strings);
             },
             .data, .kdata, .@"const", .kconst, .section => {
-                listing.lines.append(listing.gpa, .{
-                    .kind = .data_space,
-                    .address = 0,
-                    .length = 0,
-                    .line_number = insn_line_numbers[insn_handle],
-                    .source = line,
-                    .insn_index = null,
-                }) catch @panic("OOM");
+                listing.addNonOutputLine(.data_space, line_numbers[i], line_source, options.clone_source_strings);
             },
             .stack => {
-                listing.lines.append(listing.gpa, .{
-                    .kind = .stack_space,
-                    .address = 0,
-                    .length = 0,
-                    .line_number = insn_line_numbers[insn_handle],
-                    .source = line,
-                    .insn_index = null,
-                }) catch @panic("OOM");
+                listing.addNonOutputLine(.stack_space, line_numbers[i], line_source, options.clone_source_strings);
             },
             .none, .insn, .keep, .def, .undef, .org => {
-                listing.lines.append(listing.gpa, .{
-                    .kind = .empty,
-                    .address = 0,
-                    .length = 0,
-                    .line_number = insn_line_numbers[insn_handle],
-                    .source = line,
-                    .insn_index = null,
-                }) catch @panic("OOM");
+                listing.addNonOutputLine(.empty, line_numbers[i], line_source, options.clone_source_strings);
             },
 
             .bound_insn => |encoding| {
-                const address = insn_addresses[insn_handle];
-                const insn = Listing.Instruction {
+                const insn = a.buildInstruction(s, addresses[i], encoding.mnemonic, encoding.suffix, params[i], false).?;
+                listing.addInstructionLine(addresses[i], lengths[i], .{
                     .encoding = encoding.*,
-                    .params = arena.dupe(ie.Parameter, 
-                        a.buildInstruction(s, address, encoding.mnemonic, encoding.suffix, insn_params[insn_handle], false).?.params
-                    ) catch @panic("OOM"),
-                };
-
-                const insn_index = listing.insns.items.len;
-                listing.insns.append(listing.gpa, insn) catch @panic("OOM");
-
-                listing.lines.append(listing.gpa, .{
-                    .kind = .instruction,
-                    .address = address,
-                    .length = insn_lengths[insn_handle],
-                    .line_number = insn_line_numbers[insn_handle],
-                    .source = line,
-                    .insn_index = @intCast(u31, insn_index),
-                }) catch @panic("OOM");
+                    .params = insn.params,
+                }, line_numbers[i], line_source, options.clone_source_strings);
             },
 
             .push => {
@@ -343,57 +287,16 @@ fn addListingForChunk(a: *Assembler, listing: *Listing, chunk: SourceFile.Chunk,
             },
 
             .@"align" => {
-                if (layout.getResolvedAlignment(s, insn_params[insn_handle])) |alignment| {
-                    listing.lines.append(listing.gpa, .{
-                        .kind = .alignment,
-                        .address = alignment.modulo,
-                        .length = alignment.offset,
-                        .line_number = insn_line_numbers[insn_handle],
-                        .source = line,
-                        .insn_index = null,
-                    }) catch @panic("OOM");
+                if (layout.getResolvedAlignment(s, params[i])) |alignment| {
+                    listing.addAlignmentLine(alignment, line_numbers[i], line_source, options.clone_source_strings);
                 } else {
-                    listing.lines.append(listing.gpa, .{
-                        .kind = .empty,
-                        .address = 0,
-                        .length = 0,
-                        .line_number = insn_line_numbers[insn_handle],
-                        .source = line,
-                        .insn_index = null,
-                    }) catch @panic("OOM");
+                    listing.addNonOutputLine(.empty, line_numbers[i], line_source, options.clone_source_strings);
                 }
             },
 
-            .db => {
-                listing.lines.append(listing.gpa, .{
-                    .kind = .data8,
-                    .address = insn_addresses[insn_handle],
-                    .length = insn_lengths[insn_handle],
-                    .line_number = insn_line_numbers[insn_handle],
-                    .source = line,
-                    .insn_index = null,
-                }) catch @panic("OOM");
-            },
-            .dw => {
-                listing.lines.append(listing.gpa, .{
-                    .kind = .data16,
-                    .address = insn_addresses[insn_handle],
-                    .length = insn_lengths[insn_handle],
-                    .line_number = insn_line_numbers[insn_handle],
-                    .source = line,
-                    .insn_index = null,
-                }) catch @panic("OOM");
-            },
-            .dd => {
-                listing.lines.append(listing.gpa, .{
-                    .kind = .data32,
-                    .address = insn_addresses[insn_handle],
-                    .length = insn_lengths[insn_handle],
-                    .line_number = insn_line_numbers[insn_handle],
-                    .source = line,
-                    .insn_index = null,
-                }) catch @panic("OOM");
-            },
+            .db => listing.addDataLine(addresses[i], lengths[i], .data8, line_numbers[i], line_source, options.clone_source_strings),
+            .dw => listing.addDataLine(addresses[i], lengths[i], .data16, line_numbers[i], line_source, options.clone_source_strings),
+            .dd => listing.addDataLine(addresses[i], lengths[i], .data32, line_numbers[i], line_source, options.clone_source_strings),
         }
     }
 }

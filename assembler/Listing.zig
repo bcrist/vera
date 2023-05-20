@@ -1,6 +1,7 @@
 const std = @import("std");
 const isa = @import("isa_types");
 const ie = @import("isa_encoding");
+const Assembler = @import("Assembler.zig");
 
 gpa: std.mem.Allocator,
 arena: std.heap.ArenaAllocator,
@@ -41,7 +42,7 @@ pub const Line = struct {
 
 pub const Instruction = struct {
     encoding: ie.InstructionEncoding,
-    params: []ie.Parameter,
+    params: []const ie.Parameter,
 };
 
 pub fn init(gpa: std.mem.Allocator) Listing {
@@ -59,6 +60,84 @@ pub fn deinit(self: *Listing) void {
     self.insns.deinit(self.gpa);
 }
 
+fn maybeDupeString(self: *Listing, str: []const u8, dupe: bool) []const u8 {
+    if (dupe) {
+        return self.arena.allocator().dupe(u8, str) catch @panic("OOM");
+    } else {
+        return str;
+    }
+}
+
+pub fn addFilenameLine(self: *Listing, filename: []const u8, copy_to_arena: bool) void {
+    self.lines.append(self.gpa, .{
+        .kind = .filename,
+        .address = 0,
+        .length = 0,
+        .line_number = 0,
+        .source = self.maybeDupeString(filename, copy_to_arena),
+        .insn_index = null,
+    }) catch @panic("OOM");
+}
+
+pub fn addNonOutputLine(self: *Listing, kind: Line.Kind, line_number: u32, source: []const u8, copy_source_to_arena: bool) void {
+    switch (kind) {
+        .empty, .insn_space, .data_space, .stack_space => {},
+        else => unreachable,
+    }
+
+    self.lines.append(self.gpa, .{
+        .kind = kind,
+        .address = 0,
+        .length = 0,
+        .line_number = line_number,
+        .source = self.maybeDupeString(source, copy_source_to_arena),
+        .insn_index = null,
+    }) catch @panic("OOM");
+}
+
+pub fn addInstructionLine(self: *Listing, address: u32, length: u32, insn: Instruction, line_number: u32, source: []const u8, copy_source_to_arena: bool) void {
+    var final_insn = insn;
+    final_insn.params = self.arena.allocator().dupe(ie.Parameter, insn.params) catch @panic("OOM");
+
+    const insn_index = self.insns.items.len;
+    self.insns.append(self.gpa, final_insn) catch @panic("OOM");
+
+    self.lines.append(self.gpa, .{
+        .kind = .instruction,
+        .address = address,
+        .length = length,
+        .line_number = line_number,
+        .source = self.maybeDupeString(source, copy_source_to_arena),
+        .insn_index = @intCast(u31, insn_index),
+    }) catch @panic("OOM");
+}
+
+pub fn addDataLine(self: *Listing, address: u32, length: u32, kind: Line.Kind, line_number: u32, source: []const u8, copy_source_to_arena: bool) void {
+    switch (kind) {
+        .data8, .data16, .data32 => {},
+        else => unreachable,
+    }
+
+    self.lines.append(self.gpa, .{
+        .kind = kind,
+        .address = address,
+        .length = length,
+        .line_number = line_number,
+        .source = self.maybeDupeString(source, copy_source_to_arena),
+        .insn_index = null,
+    }) catch @panic("OOM");
+}
+
+pub fn addAlignmentLine(self: *Listing, alignment: Assembler.Alignment, line_number: u32, source: []const u8, copy_source_to_arena: bool) void {
+    self.lines.append(self.gpa, .{
+        .kind = .alignment,
+        .address = alignment.modulo,
+        .length = alignment.offset,
+        .line_number = line_number,
+        .source = self.maybeDupeString(source, copy_source_to_arena),
+        .insn_index = null,
+    }) catch @panic("OOM");
+}
 
 pub fn writeAll(self: *const Listing, comptime MemoryContext: type, ctx: MemoryContext, writer: anytype) !void {
     try write(self.lines.slice(), self.insns.items, MemoryContext, ctx, 0, @intCast(LineIndex, self.lines.len), writer);
