@@ -624,7 +624,7 @@ fn checkInstructionsAndDirectivesInFile(a: *Assembler, s: SourceFile.Slices) voi
                     const token = s.expr.items(.token)[label_expr];
                     const target_file = a.getSource(insn_ref.file);
                     const target_line_number = target_file.instructions.items(.line_number)[insn_ref.instruction];
-                    a.recordErrorFmt(s.file.handle, token, "Duplicate label (canonical label is at line {} in {s}", .{ target_line_number, target_file.name }, .{});
+                    a.recordErrorFmt(s.file.handle, token, "Duplicate label (canonical label is at line {} in {s})", .{ target_line_number, target_file.name }, .{});
                 }
             }
         }
