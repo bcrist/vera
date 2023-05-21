@@ -76,14 +76,12 @@ fn resolveAutoOrgAddress(a: *Assembler, chunk: SourceFile.Chunk) u32 {
     //      So there's really 2 different kinds of pages for each named .kentry section
     // TODO add a kentry output mode to write a "header" file that exports the addresses of kentry labels
 
-    // TODO check for an initial .align directive in the chunk and try to satisfy it
-
     const chunk_section_handle = chunk.section orelse return 0;
-
-    const allowed_range = a.getSection(chunk_section_handle).getRange();
 
     const address_range = chunk.getAddressRange(a);
     const chunk_size = @max(1, address_range.len);
+
+    const alignment = getAlignmentForChunk(a, chunk);
 
     const pages = a.pages.items(.page);
     const page_sections = a.pages.items(.section);
@@ -92,12 +90,14 @@ fn resolveAutoOrgAddress(a: *Assembler, chunk: SourceFile.Chunk) u32 {
     if (chunk_size < PageData.page_size) {
         // See if there's an existing semi-full chunk that we can reuse
         // TODO it might make sense to add an acceleration structure for this inside Section
-        //      e.g. list of non-full pages for that section, sorted by size of largest free span.
+        //      e.g. list of non-full pages for that section, sorted by size of largest free span (or maybe last used?).
         //      But need to ensure that the upkeep cost doesn't exceed the gains here.
         for (0.., page_sections) |page_data_handle, section_handle| {
             if (section_handle != chunk_section_handle) {
                 continue;
             }
+
+            const page = pages[page_data_handle];
 
             // std.debug.print("Checking page data handle {}\n", .{ page_data_handle });
             var used = page_usages[page_data_handle];
@@ -105,7 +105,13 @@ fn resolveAutoOrgAddress(a: *Assembler, chunk: SourceFile.Chunk) u32 {
             unused.toggleAll();
 
             var begin: usize = 0;
-            while (unused.findFirstSet()) |unused_range_begin| {
+            while (unused.findFirstSet()) |raw_unused_range_begin| {
+                const address = bits.concat2(@intCast(bus.PageOffset, raw_unused_range_begin), page);
+                const aligned_address = applyAlignment(address, alignment.modulo, alignment.offset);
+
+                if (@intCast(bus.Page, aligned_address >> @bitSizeOf(bus.PageOffset)) != page) break;
+                const unused_range_begin = @truncate(bus.PageOffset, aligned_address);
+
                 used.setRangeValue(.{
                     .start = begin,
                     .end = unused_range_begin,
@@ -114,15 +120,15 @@ fn resolveAutoOrgAddress(a: *Assembler, chunk: SourceFile.Chunk) u32 {
                 const unused_range_end = used.findFirstSet() orelse PageData.page_size;
                 const range_size = unused_range_end - unused_range_begin;
                 if (range_size >= chunk_size) {
-                    const page = pages[page_data_handle];
                     // std.debug.print("Using existing page\n", .{ });
-                    return bits.concat2(@intCast(bus.PageOffset, unused_range_begin), page);
+                    return aligned_address;
                 }
 
                 unused.setRangeValue(.{
                     .start = begin,
                     .end = unused_range_end,
                 }, false);
+
                 begin = unused_range_end;
             }
         }
@@ -133,6 +139,8 @@ fn resolveAutoOrgAddress(a: *Assembler, chunk: SourceFile.Chunk) u32 {
     const final_page_bytes_needed = chunk_size - (full_pages_needed * PageData.page_size);
 
     // std.debug.print("Need {} full pages and {} extra bytes\n", .{ full_pages_needed, final_page_bytes_needed });
+
+    const allowed_range = a.getSection(chunk_section_handle).getRange();
 
     const search_range_begin: usize = allowed_range.first >> @bitSizeOf(bus.PageOffset);
     const search_range_end: usize = (allowed_range.first + allowed_range.len) >> @bitSizeOf(bus.PageOffset);
@@ -165,6 +173,42 @@ fn resolveAutoOrgAddress(a: *Assembler, chunk: SourceFile.Chunk) u32 {
     return @intCast(u32, initial_page) << @bitSizeOf(bus.PageOffset);
 }
 
+fn getAlignmentForChunk(a: *Assembler, chunk: SourceFile.Chunk) Assembler.Alignment {
+    var file = a.getSource(chunk.file);
+    const s = file.slices();
+    const insn_operations = s.insn.items(.operation);
+    const insn_params = s.insn.items(.params);
+
+    var alignment = Assembler.Alignment{
+        .modulo = 1,
+        .offset = 0,
+    };
+
+    var iter = chunk.instructions;
+    while (iter.next()) |insn_handle| {
+        switch (insn_operations[insn_handle]) {
+            .none, .org, .keep, .def, .undef, .range,
+            .section, .boot, .code, .kcode, .entry, .kentry,
+            .data, .kdata, .@"const", .kconst, .stack,
+            => {},
+            .@"align" => if (getResolvedAlignment(s, insn_params[insn_handle])) |resolved_align| {
+                alignment = resolved_align;
+            },
+            .db, .push, .pop, .insn, .bound_insn => break,
+            .dw, .dd => {
+                if ((alignment.modulo & 1) != 0) {
+                    alignment.modulo *= 2;
+                }
+                if ((alignment.offset & 1) != 0) {
+                    alignment.offset = (alignment.offset + 1) % alignment.modulo;
+                }
+                break;
+            },
+        }
+    }
+    return alignment;
+}
+
 fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) bool {
     var file = a.getSource(chunk.file);
     const s = file.slices();
@@ -185,27 +229,30 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
         switch (insn_operations[insn_handle]) {
             .none, .org, .keep, .def, .undef, .range,
             .section, .boot, .code, .kcode, .entry, .kentry,
-            .data, .kdata, .@"const", .kconst, .stack => {
-                // Look forwards to see if an .align, etc. is coming up
+            .data, .kdata, .@"const", .kconst, .stack,
+            .@"align" => {
+                // Look forwards to see if another .align, etc. is coming up
                 var iter2 = chunk.instructions;
-                iter2.begin = insn_handle + 1;
+                var first = true;
                 while (iter2.next()) |insn2| {
+                    if (first) {
+                        first = false;
+                    }
                     switch (insn_operations[insn2]) {
-                        .none, .org, .keep, .def, .undef,
-                        .section, .code, .kcode, .entry, .kentry,
+                        .none, .org, .keep, .def, .undef, .range,
+                        .section, .boot, .code, .kcode, .entry, .kentry,
                         .data, .kdata, .@"const", .kconst, .stack => {},
 
                         .@"align" => {
                             if (insn_params[insn2]) |align_expr| {
-                                address = resolveAndApplyAlignment(a, s, address, align_expr, false, check_for_alignment_holes, insn2, chunk.section);
+                                address = resolveAndApplyAlignment(a, s, address, align_expr, first, check_for_alignment_holes, insn2, chunk.section);
                             }
-                            break;
                         },
                         .dw, .dd => {
-                            address = applyAlignment(a, s, address, 2, 0, false, check_for_alignment_holes, insn2, chunk.section);
+                            address = applyAlignment(address, 2, 0);
                             break;
                         },
-                        else => break,
+                        .insn, .bound_insn, .push, .pop, .db => break,
                     }
                 }
             },
@@ -239,11 +286,6 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
                 }
                 check_for_alignment_holes = true;
             },
-            .@"align" => {
-                if (insn_params[insn_handle]) |align_expr| {
-                    address = resolveAndApplyAlignment(a, s, address, align_expr, true, check_for_alignment_holes, insn_handle, chunk.section);
-                }
-            },
             .db => {
                 if (insn_params[insn_handle]) |expr_handle| {
                     address += resolveDataDirectiveLength(a, s, address, insn_handle, expr_handle, 1);
@@ -251,14 +293,14 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
                 check_for_alignment_holes = true;
             },
             .dw => {
-                address = applyAlignment(a, s, address, 2, 0, true, check_for_alignment_holes, insn_handle, chunk.section);
+                address = checkAndApplyAlignment(a, s, address, 2, 0, check_for_alignment_holes, insn_handle, chunk.section);
                 if (insn_params[insn_handle]) |expr_handle| {
                     address += resolveDataDirectiveLength(a, s, address, insn_handle, expr_handle, 2);
                 }
                 check_for_alignment_holes = true;
             },
             .dd => {
-                address = applyAlignment(a, s, address, 2, 0, true, check_for_alignment_holes, insn_handle, chunk.section);
+                address = checkAndApplyAlignment(a, s, address, 2, 0, check_for_alignment_holes, insn_handle, chunk.section);
                 if (insn_params[insn_handle]) |expr_handle| {
                     address += resolveDataDirectiveLength(a, s, address, insn_handle, expr_handle, 4);
                 }
@@ -408,16 +450,28 @@ fn resolveAndApplyAlignment(
         return address;
     }
 
-    return applyAlignment(a, s, address, alignment, @intCast(u32, offset), report_errors, check_for_alignment_holes, insn_handle, section_handle);
+    if (report_errors) {
+        return checkAndApplyAlignment(a, s, address, alignment, @intCast(u32, offset), check_for_alignment_holes, insn_handle, section_handle);
+    } else {
+        return applyAlignment(address, alignment, @intCast(u32, offset));
+    }
 }
 
-fn applyAlignment(
+fn applyAlignment(address: u32, alignment: u32, offset: u32) u32 {
+    var new_address_usize = std.mem.alignBackward(address, alignment) + offset;
+    if (new_address_usize < address) {
+        new_address_usize += alignment;
+    }
+
+    return std.math.cast(u32, new_address_usize) orelse address;
+}
+
+fn checkAndApplyAlignment(
     a: *Assembler,
     s: SourceFile.Slices,
     address: u32,
     alignment: u32,
     offset: u32,
-    report_errors: bool,
     check_for_alignment_holes: bool,
     insn_handle: Instruction.Handle,
     section_handle: ?Section.Handle
@@ -428,11 +482,9 @@ fn applyAlignment(
     }
 
     const new_address = std.math.cast(u32, new_address_usize) orelse {
-        if (report_errors) {
-            const token = s.insn.items(.token)[insn_handle];
-            const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
-            a.recordError(s.file.handle, token, "Aligned address overflow", err_flags);
-        }
+        const token = s.insn.items(.token)[insn_handle];
+        const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
+        a.recordError(s.file.handle, token, "Aligned address overflow", err_flags);
         return address;
     };
 
