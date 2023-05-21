@@ -440,20 +440,22 @@ const Parser = struct {
             const directive_token = self.next_token - 1;
             if (directive == .def) {
                 if (self.parseSymbolDef()) |symbol| {
-                    if (self.parseExpr()) |expr| {
+                    if (self.parseExpr(false)) |expr| {
                         const params = self.addBinaryExpression(.list, directive_token, symbol, expr);
                         self.addInstruction(label, directive_token, .{ .def = {} }, params);
                     } else {
                         self.recordError("Expected expression for symbol definition");
+                        self.sync_to_end_of_line = true;
                     }
                 } else {
                     self.recordError("Expected symbol name");
+                    self.sync_to_end_of_line = true;
                 }
             } else if (directive == .undef) {
                 const params = self.parseSymbolDefList();
                 self.addInstruction(label, directive_token, .{ .undef = {} }, params);
             } else {
-                const params = if (Instruction.isSectionDirective(directive)) self.parseSymbolDef() else self.parseExprList(false);
+                const params = if (Instruction.isSectionDirective(directive)) self.parseSymbolDef() else self.parseExprList(true, false);
                 switch (directive) {
                     .none, .insn, .bound_insn => unreachable,
                     inline else => |d| {
@@ -465,7 +467,7 @@ const Parser = struct {
             const mnemonic_token = self.next_token - 1;
             var swap_params = false;
             const suffix = self.parseSuffix(&swap_params);
-            const params = self.parseExprList(swap_params);
+            const params = self.parseExprList(true, swap_params);
             self.addInstruction(label, mnemonic_token, .{ .insn = .{
                 .mnemonic = mnemonic,
                 .suffix = suffix,
@@ -639,13 +641,13 @@ const Parser = struct {
         };
     }
 
-    fn parseExprList(self: *Parser, swap_params: bool) ?Expression.Handle {
+    fn parseExprList(self: *Parser, first: bool, swap_params: bool) ?Expression.Handle {
         const begin = self.next_token;
-        if (self.parseExpr()) |lhs| {
+        if (self.parseExpr(first)) |lhs| {
             self.skipLinespace();
             if (self.tryToken(.comma) or self.tryToken(.arrow)) {
                 const token = self.next_token - 1;
-                if (self.parseExprList(false)) |rhs| {
+                if (self.parseExprList(false, false)) |rhs| {
                     switch (self.token_kinds[token]) {
                         .comma => if (swap_params) {
                             return self.addBinaryExpression(.list, token, rhs, lhs);
@@ -674,8 +676,8 @@ const Parser = struct {
         return null;
     }
 
-    fn parseExpr(self: *Parser) ?Expression.Handle {
-        return self.parseExprPratt(0);
+    fn parseExpr(self: *Parser, allow_arrow_prefix: bool) ?Expression.Handle {
+        return self.parseExprPratt(if (allow_arrow_prefix) 0 else 1);
     }
 
     const OperatorInfo = struct {
@@ -684,39 +686,35 @@ const Parser = struct {
         right_bp: ?u8, // null for postfix operators
         expr: Expression.Kind,
     };
-    const PrefixOperatorInfo = struct {
-        token: Token.Handle,
-        right_bp: u8,
-        expr: Expression.Kind,
-    };
-    fn parsePrefixOperator(self: *Parser) ?PrefixOperatorInfo {
+    fn parsePrefixOperator(self: *Parser) ?OperatorInfo {
         const begin = self.next_token;
         self.skipLinespace();
         var t = self.next_token;
-        const info: PrefixOperatorInfo = switch (self.token_kinds[t]) {
-            .minus => .{ .token = t, .right_bp = 0xFF, .expr = .negate },
-            .tilde => .{ .token = t, .right_bp = 0xFF, .expr = .complement },
-            .at    => .{ .token = t, .right_bp = 0xFF, .expr = .absolute_address_cast },
+        const info: OperatorInfo = switch (self.token_kinds[t]) {
+            .arrow => .{ .token = t, .left_bp = 0, .right_bp = 1, .expr = .arrow_prefix },
+            .minus => .{ .token = t, .left_bp = 1, .right_bp = 0xFF, .expr = .negate },
+            .tilde => .{ .token = t, .left_bp = 1, .right_bp = 0xFF, .expr = .complement },
+            .at    => .{ .token = t, .left_bp = 1, .right_bp = 0xFF, .expr = .absolute_address_cast },
             .dot => info: {
                 t += 1;
                 self.next_token = t;
                 defer self.next_token = t;
                 if (self.tryKeyword("d")) {
-                    break :info .{ .token = t, .right_bp = 0, .expr = .data_address_cast };
+                    break :info .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .data_address_cast };
                 } else if (self.tryKeyword("i")) {
-                    break :info .{ .token = t, .right_bp = 0, .expr = .insn_address_cast };
+                    break :info .{ .token = t, .left_bp = 1,  .right_bp = 1, .expr = .insn_address_cast };
                 } else if (self.tryKeyword("s")) {
-                    break :info .{ .token = t, .right_bp = 0, .expr = .stack_address_cast };
+                    break :info .{ .token = t, .left_bp = 1,  .right_bp = 1, .expr = .stack_address_cast };
                 } else if (self.tryKeyword("raw")) {
-                    break :info .{ .token = t, .right_bp = 0, .expr = .remove_address_cast };
+                    break :info .{ .token = t, .left_bp = 1,  .right_bp = 1, .expr = .remove_address_cast };
                 } else if (self.tryKeyword("r")) {
-                    break :info .{ .token = t, .right_bp = 0xFF, .expr = .index_to_reg16 };
+                    break :info .{ .token = t, .left_bp = 1,  .right_bp = 0xFF, .expr = .index_to_reg16 };
                 } else if (self.tryKeyword("rx")) {
-                    break :info .{ .token = t, .right_bp = 0xFF, .expr = .index_to_reg32 };
+                    break :info .{ .token = t, .left_bp = 1,  .right_bp = 0xFF, .expr = .index_to_reg32 };
                 } else if (self.tryKeyword("rb")) {
-                    break :info .{ .token = t, .right_bp = 0xFF, .expr = .index_to_reg8 };
+                    break :info .{ .token = t, .left_bp = 1,  .right_bp = 0xFF, .expr = .index_to_reg8 };
                 } else if (self.tryKeyword("idx")) {
-                    break :info .{ .token = t, .right_bp = 0xFF, .expr = .reg_to_index };
+                    break :info .{ .token = t, .left_bp = 1,  .right_bp = 0xFF, .expr = .reg_to_index };
                 } else {
                     t = begin;
                     return null;
@@ -779,8 +777,13 @@ const Parser = struct {
     fn parseExprPratt(self: *Parser, min_binding_power: u8) ?Expression.Handle {
         if (self.sync_to_end_of_line) return null;
 
+        const before_prefix_operator = self.next_token;
         var expr = if (self.parsePrefixOperator()) |operator| e: {
-            if (self.parseExprPratt(operator.right_bp)) |right| {
+            if (operator.left_bp < min_binding_power) {
+                self.next_token = before_prefix_operator;
+                return null;
+            }
+            if (self.parseExprPratt(operator.right_bp.?)) |right| {
                 break :e self.addUnaryExpression(operator.expr, operator.token, right);
             } else if (!self.sync_to_end_of_line) {
                 self.recordError("Expected expression");
@@ -828,7 +831,7 @@ const Parser = struct {
         const begin = self.next_token;
         self.skipLinespace();
         if (self.tryToken(.paren_open)) {
-            if (self.parseExpr()) |expr| {
+            if (self.parseExpr(false)) |expr| {
                 if (!self.tryToken(.paren_close)) {
                     if (!self.sync_to_end_of_line) {
                         self.recordError("Expected ')'");
@@ -1051,6 +1054,7 @@ const Parser = struct {
 
             .list,
             .arrow_list,
+            .arrow_prefix,
             .directive_symbol_def,
             .directive_symbol_ref,
             .plus,
@@ -1087,6 +1091,7 @@ const Parser = struct {
 
     fn addUnaryExpression(self: *Parser,  kind: Expression.Kind, token: Token.Handle, inner: Expression.Handle) Expression.Handle {
         return self.addExpressionInfo(token, switch (kind) {
+            .arrow_prefix => .{ .arrow_prefix = inner },
             .directive_symbol_def => .{ .directive_symbol_def = inner },
             .directive_symbol_ref => .{ .directive_symbol_ref = inner },
             .negate => .{ .negate = inner },
@@ -1153,6 +1158,7 @@ const Parser = struct {
             .zero_extend => .{ .zero_extend = bin },
             .truncate => .{ .truncate = bin },
 
+            .arrow_prefix,
             .directive_symbol_def,
             .directive_symbol_ref,
             .negate,

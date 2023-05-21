@@ -169,7 +169,7 @@ pub fn tryResolveExpressionType(a: *Assembler, s: SourceFile.Slices, expr_handle
 
     const info = expr_infos[expr_handle];
     switch (info) {
-        .list, .arrow_list => {
+        .list, .arrow_list, .arrow_prefix => {
             expr_resolved_types[expr_handle] = .{ .poison = {} };
         },
         .literal_int, .literal_str => {
@@ -555,7 +555,19 @@ fn checkInstructionsAndDirectivesInFile(a: *Assembler, s: SourceFile.Slices) voi
     var allow_code = true;
     var allow_data = true;
 
-    for (s.insn.items(.operation), s.insn.items(.params), 0..) |op, maybe_params, insn_handle| {
+    for (0.., s.insn.items(.operation), s.insn.items(.params), s.insn.items(.label)) |insn_handle, op, maybe_params, maybe_label_expr| {
+        if (maybe_label_expr) |label_expr| {
+            const label_name = a.parseSymbol(s, label_expr).asString();
+            if (a.symbols.get(label_name) orelse Assembler.findPrivateLabel(s, s.file.findBlockByInstruction(@intCast(Instruction.Handle, insn_handle)), label_name)) |insn_ref| {
+                if (insn_ref.instruction != insn_handle or insn_ref.file != s.file.handle) {
+                    const token = s.expr.items(.token)[label_expr];
+                    const target_file = a.getSource(insn_ref.file);
+                    const target_line_number = target_file.instructions.items(.line_number)[insn_ref.instruction];
+                    a.recordErrorFmt(s.file.handle, token, "Duplicate label (canonical label is at line {} in {s}", .{ target_line_number, target_file.name }, .{});
+                }
+            }
+        }
+
         switch (op) {
             .none => std.debug.assert(maybe_params == null),
             .bound_insn => unreachable,

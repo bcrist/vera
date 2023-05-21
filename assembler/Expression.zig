@@ -26,6 +26,7 @@ pub const Kind = std.meta.Tag(Info);
 pub const Info = union(enum) {
     list: Binary,
     arrow_list: Binary,
+    arrow_prefix: Unary,
     literal_int,
     literal_str,
     literal_reg,

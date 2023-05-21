@@ -505,7 +505,7 @@ pub fn resolveExpressionConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, e
         .literal_int, .literal_str, .reg_to_index,
         => return null,
 
-        .list, .arrow_list, .literal_reg,
+        .list, .arrow_list, .arrow_prefix, .literal_reg,
         .index_to_reg8, .index_to_reg16, .index_to_reg32,
         => return null,
 

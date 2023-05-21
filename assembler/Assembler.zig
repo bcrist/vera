@@ -458,17 +458,25 @@ pub fn buildInstruction(self: *Assembler, s: SourceFile.Slices, ip: u32, mnemoni
         const expr_resolved_types = s.expr.items(.resolved_type);
 
         var expr_handle = base_expr_handle;
-        var is_arrow = false; // TODO want a way to have is_arrow on the first parameter
+        var is_arrow = false;
         while (true) {
             const info = expr_infos[expr_handle];
             switch (info) {
                 .list, .arrow_list => |bin| {
-                    const expr_type = expr_resolved_types[bin.left];
-                    if (!self.buildInstructionParameter(s, ip, bin.left, is_arrow, expr_type, record_errors)) {
+                    const param_expr_handle = switch (expr_infos[bin.left]) {
+                        .arrow_prefix => |inner| inner,
+                        else => bin.left,
+                    };
+                    const expr_type = expr_resolved_types[param_expr_handle];
+                    if (!self.buildInstructionParameter(s, ip, param_expr_handle, is_arrow, expr_type, record_errors)) {
                         return null;
                     }
                     is_arrow = info == .arrow_list;
                     expr_handle = bin.right;
+                },
+                .arrow_prefix => |inner| {
+                    is_arrow = true;
+                    expr_handle = inner;
                 },
                 else => {
                     const expr_type = expr_resolved_types[expr_handle];

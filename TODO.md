@@ -1,6 +1,3 @@
-
-[assembler] check for shadowed symbols
-[assembler] Warn on multiple files with same name
 [assembler] .local defs
 [assembler] Usage of a label that's fixed by an .org directive should not cause the expression to be marked .constant_depends_on_layout
 [assembler] Multi-line string literals
@@ -9,7 +6,6 @@
 [assembler] .kentry label alignment
 [assembler] section allowed page .range
 [assembler] .boot section has default .range of 0 - 0x8000
-[assembler] initial arrow (nil first parameter)
 [assembler] Create disassembler
 [assembler] add cycle counts to listing output
 [assembler] arbitrary precision shifts
