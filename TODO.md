@@ -1,4 +1,4 @@
-[assembler] Improve error context printing
+
 [assembler] check for shadowed symbols
 [assembler] Warn on multiple files with same name
 [assembler] .local defs
@@ -12,9 +12,9 @@
 [assembler] initial arrow (nil first parameter)
 [assembler] Create disassembler
 [assembler] add cycle counts to listing output
-[assembler] .str/.kstr "whatever" - creates a ptr+len data declaration - creates a new block in the `.const strings` section with the data (.kconst for .kstr) - may dedup data (enable with global assembler flag?)
 [assembler] arbitrary precision shifts
 [assembler] arbitrary precision multiply
+[assembler] Improve error context printing
 [assembler] improve vscode plugin
 
 [test] Use assembler for test_instruction_behavior

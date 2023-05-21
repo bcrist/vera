@@ -299,6 +299,18 @@ pub fn recordError(self: *Assembler, file_handle: SourceFile.Handle, token: lex.
     }) catch @panic("OOM");
 }
 
+pub fn recordErrorFmt(self: *Assembler, file_handle: SourceFile.Handle, token: lex.Token.Handle, comptime fmt: []const u8, args: anytype, flags: Error.FlagSet) void {
+    const desc = std.fmt.allocPrint(self.gpa, fmt, args) catch @panic("OOM");
+    var mutable_flags = flags;
+    mutable_flags.insert(.desc_is_allocated);
+    self.errors.append(self.gpa, .{
+        .file = file_handle,
+        .token = token,
+        .desc = desc,
+        .flags = mutable_flags,
+    }) catch @panic("OOM");
+}
+
 pub fn recordExpressionLayoutError(self: *Assembler, file_handle: SourceFile.Handle, ctx_expr_handle: Expression.Handle, token_expr_handle: Expression.Handle, desc: []const u8, flags: Error.FlagSet) void {
     var mutable_flags = flags;
     const file = self.files.items[file_handle];
@@ -316,6 +328,27 @@ pub fn recordInsnEncodingError(self: *Assembler, file_handle: SourceFile.Handle,
         .insn = insn_handle,
         .flags = flags,
     }) catch @panic("OOM");
+}
+
+pub fn parseSymbol(self: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle) *const Constant {
+    switch (s.expr.items(.info)[expr_handle]) {
+        .literal_symbol_def, .literal_symbol_ref => {
+            const file = s.file;
+            const token_handle = s.expr.items(.token)[expr_handle];
+            const literal = file.tokens.get(token_handle).location(file.source);
+            const constant = Constant.initSymbolLiteral(self.gpa, &self.constant_temp, literal);
+            return constant.intern(self.arena, self.gpa, &self.constants);
+        },
+        .directive_symbol_def, .directive_symbol_ref => |inner_expr| {
+            var expr_resolved_constants = s.expr.items(.resolved_constant);
+            if (expr_resolved_constants[inner_expr]) |interned_symbol_name| {
+                return interned_symbol_name;
+            } else if (typechecking.tryResolveExpressionType(self, s, inner_expr)) {
+                return expr_resolved_constants[inner_expr].?;
+            } else unreachable;
+        },
+        else => unreachable,
+    }
 }
 
 pub const SymbolTarget = union(enum) {
@@ -362,20 +395,8 @@ pub fn lookupSymbol(self: *Assembler, s: SourceFile.Slices, symbol_token_handle:
     }
 
     // 2. private labels
-    if (std.mem.startsWith(u8, symbol, "_")) {
-        const labels = s.insn.items(.label);
-        block_iter = file.blockInstructions(block_handle);
-        while (block_iter.next()) |insn_handle| {
-            if (labels[insn_handle]) |label_expr| {
-                const label_constant = resolved_constants[label_expr] orelse unreachable;
-                if (std.mem.eql(u8, symbol, label_constant.asString())) {
-                    return .{ .instruction = .{
-                        .file = file.handle,
-                        .instruction = insn_handle,
-                    }};
-                }
-            }
-        }
+    if (findPrivateLabel(s, block_handle, symbol)) |insn_ref| {
+        return .{ .instruction = insn_ref };
     }
 
     // 3. stack labels from .pushed contexts
@@ -387,6 +408,27 @@ pub fn lookupSymbol(self: *Assembler, s: SourceFile.Slices, symbol_token_handle:
     }
 
     return .{ .not_found = {} };
+}
+
+pub fn findPrivateLabel(s: SourceFile.Slices, block_handle: SourceFile.SectionBlock.Handle, symbol: []const u8) ?InstructionRef {
+    if (!std.mem.startsWith(u8, symbol, "_")) {
+        return null;
+    }
+    const labels = s.insn.items(.label);
+    const resolved_constants = s.expr.items(.resolved_constant);
+    var block_iter = s.file.blockInstructions(block_handle);
+    while (block_iter.next()) |insn_handle| {
+        if (labels[insn_handle]) |label_expr| {
+            const label_constant = resolved_constants[label_expr] orelse unreachable;
+            if (std.mem.eql(u8, symbol, label_constant.asString())) {
+                return .{
+                    .file = s.file.handle,
+                    .instruction = insn_handle,
+                };
+            }
+        }
+    }
+    return null;
 }
 
 fn undefListContainsSymbol(self: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle, symbol: []const u8) bool {

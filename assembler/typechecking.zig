@@ -87,7 +87,7 @@ pub fn processLabelsAndSections(a: *Assembler, file: *SourceFile) void {
             _ = resolveSymbolDefExpr(a, s, symbol_expr);
         } else if (op == .undef) {
             if (insn_params[insn_handle]) |params| {
-                _ = resolveSymbolDefExpr(a, s, params);
+                _ = resolveSymbolDefExprList(a, s, params);
             }
         }
 
@@ -104,37 +104,22 @@ pub fn processLabelsAndSections(a: *Assembler, file: *SourceFile) void {
     }
 }
 
-fn resolveSymbolDefExpr(a: *Assembler, s: SourceFile.Slices, symbol_def_expr: Expression.Handle) *const Constant {
-    var token_handle = s.expr.items(.token)[symbol_def_expr];
-    switch (s.expr.items(.info)[symbol_def_expr]) {
-        .list => |bin| {
-            _ = resolveSymbolDefExpr(a, s, bin.left);
-            return resolveSymbolDefExpr(a, s, bin.right);
-        },
-        .literal_symbol_def => {
-            const file = s.file;
-            const literal = file.tokens.get(token_handle).location(file.source);
-            const constant = Constant.initSymbolLiteral(a.gpa, &a.constant_temp, literal);
-            const interned_symbol_name = constant.intern(a.arena, a.gpa, &a.constants);
-            s.expr.items(.resolved_constant)[symbol_def_expr] = interned_symbol_name;
-            s.expr.items(.resolved_type)[symbol_def_expr] = .{ .symbol_def = {} };
-            return interned_symbol_name;
-        },
-        .directive_symbol_def => |inner_expr| {
-            var expr_resolved_constants = s.expr.items(.resolved_constant);
-            if (expr_resolved_constants[inner_expr]) |interned_symbol_name| {
-                expr_resolved_constants[symbol_def_expr] = interned_symbol_name;
-                s.expr.items(.resolved_type)[symbol_def_expr] = .{ .symbol_def = {} };
-                return interned_symbol_name;
-            } else if (tryResolveExpressionType(a, s, inner_expr)) {
-                const interned_symbol_name = expr_resolved_constants[inner_expr].?;
-                expr_resolved_constants[symbol_def_expr] = interned_symbol_name;
-                s.expr.items(.resolved_type)[symbol_def_expr] = .{ .symbol_def = {} };
-                return interned_symbol_name;
-            } else unreachable;
-        },
-        else => unreachable,
+fn resolveSymbolDefExprList(a: *Assembler, s: SourceFile.Slices, symbol_def_expr: Expression.Handle) void {
+    const infos = s.expr.items(.info);
+    var expr = symbol_def_expr;
+    while (infos[expr] == .list) {
+        const bin = infos[expr].list;
+        _ = resolveSymbolDefExpr(a, s, bin.left);
+        expr = bin.right;
     }
+    _ = resolveSymbolDefExpr(a, s, expr);
+}
+
+fn resolveSymbolDefExpr(a: *Assembler, s: SourceFile.Slices, symbol_def_expr: Expression.Handle) *const Constant {
+    const symbol_name = a.parseSymbol(s, symbol_def_expr);
+    s.expr.items(.resolved_constant)[symbol_def_expr] = symbol_name;
+    s.expr.items(.resolved_type)[symbol_def_expr] = .{ .symbol_def = {} };
+    return symbol_name;
 }
 
 pub fn resolveExpressionTypes(a: *Assembler) bool {
@@ -176,7 +161,7 @@ pub fn resolveExpressionTypes(a: *Assembler) bool {
     return true;
 }
 
-fn tryResolveExpressionType(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle) bool {
+pub fn tryResolveExpressionType(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle) bool {
     const expr_infos = s.expr.items(.info);
     var expr_resolved_types = s.expr.items(.resolved_type);
 
@@ -645,8 +630,26 @@ fn checkInstructionsAndDirectivesInFile(a: *Assembler, s: SourceFile.Slices) voi
                     }
                 }
             },
+
+            .def => if (maybe_params) |params_expr| {
+                const bin = s.expr.items(.info)[params_expr].list;
+                const token = s.expr.items(.token)[bin.left];
+                const symbol_name = a.parseSymbol(s, bin.left).asString();
+                const block_handle = s.file.findBlockByToken(token);
+                if (Assembler.findPrivateLabel(s, block_handle, symbol_name)) |insn_ref| {
+                    const line_number = s.insn.items(.line_number)[insn_ref.instruction];
+                    a.recordErrorFmt(s.file.handle, token, "Symbol hides private label at line {}", .{ line_number }, .{});
+                }
+                // TODO stack sections
+                if (a.symbols.get(symbol_name)) |insn_ref| {
+                    const file = a.getSource(insn_ref.file);
+                    const line_number = file.instructions.items(.line_number)[insn_ref.instruction];
+                    a.recordErrorFmt(s.file.handle, token, "Symbol hides label at line {} in {s}", .{ line_number, file.name }, .{});
+                }
+            },
+
             .undef => if (maybe_params) |params_expr| {
-                checkUndefExpr(a, s, params_expr);
+                checkUndefExprList(a, s, params_expr);
             } else {
                 const token = s.insn.items(.token)[insn_handle];
                 a.recordError(s.file.handle, token, "Expected at least one .def symbol name", .{});
@@ -658,7 +661,7 @@ fn checkInstructionsAndDirectivesInFile(a: *Assembler, s: SourceFile.Slices) voi
                     a.recordError(s.file.handle, token, "Data directives are not allowed in .entry/.kentry/.code/.kcode sections", .{});
                 }
                 if (maybe_params) |params_expr| {
-                    checkDataDirectiveExpr(a, s, params_expr);
+                    checkDataDirectiveExprList(a, s, params_expr);
                 } else {
                     const token = s.insn.items(.token)[insn_handle];
                     a.recordError(s.file.handle, token, "Expected at least one data expression", .{});
@@ -680,7 +683,6 @@ fn checkInstructionsAndDirectivesInFile(a: *Assembler, s: SourceFile.Slices) voi
                 // TODO .pop
             },
 
-            .def => {},
             .section, .boot => {
                 allow_code = true;
                 allow_data = true;
@@ -712,24 +714,21 @@ fn instructionHasLayoutDependentParams(s: SourceFile.Slices, params_handle: Expr
     return false;
 }
 
-fn checkUndefExpr(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle) void {
-    const token = s.expr.items(.token)[expr_handle];
-    const constant = switch (s.expr.items(.info)[expr_handle]) {
-        .list => |bin| {
-            checkUndefExpr(a, s, bin.left);
-            checkUndefExpr(a, s, bin.right);
-            return;
-        },
-        .literal_symbol_def => c: {
-            const file = s.file;
-            const raw_symbol = file.tokens.get(token).location(file.source);
-            break :c Constant.initSymbolLiteral(a.gpa, &a.constant_temp, raw_symbol);
-        },
-        .directive_symbol_def => |literal_expr| s.expr.items(.resolved_constant)[literal_expr].?.*,
-        else => unreachable,
-    };
+fn checkUndefExprList(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle) void {
+    const infos = s.expr.items(.info);
+    var expr = expr_handle;
+    while (infos[expr] == .list) {
+        const bin = infos[expr].list;
+        _ = checkUndefExpr(a, s, bin.left);
+        expr = bin.right;
+    }
+    _ = checkUndefExpr(a, s, expr);
+}
 
-    if (a.lookupSymbol(s, token, constant.asString())) |target| switch (target) {
+fn checkUndefExpr(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle) void {
+    const symbol_name = a.parseSymbol(s, expr_handle);
+    const token = s.expr.items(.token)[expr_handle];
+    if (a.lookupSymbol(s, token, symbol_name.asString())) |target| switch (target) {
         .expression => {},
         .not_found => {
             a.recordError(s.file.handle, token, "Symbol must be defined before it can be un-defined", .{});
@@ -740,27 +739,35 @@ fn checkUndefExpr(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression.H
     };
 }
 
-fn checkDataDirectiveExpr(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle) void {
-    switch (s.expr.items(.info)[expr_handle]) {
-        .list => |bin| {
-            checkDataDirectiveExpr(a, s, bin.left);
-            checkDataDirectiveExpr(a, s, bin.right);
-            return;
-        },
-        .arrow_list => |bin| {
-            checkDataDirectiveExpr(a, s, bin.left);
-
-            const token = s.expr.items(.token)[expr_handle];
-            a.recordError(s.file.handle, token, "Expected ','", .{});
-        },
-        else => switch (s.expr.items(.resolved_type)[expr_handle]) {
-            .unknown, .poison, .constant => {},
-            .symbol_def => unreachable,
-            .raw_base_offset, .data_address, .insn_address, .stack_address,
-            .reg8, .reg16, .reg32, .sr => {
-                const token = s.expr.items(.token)[expr_handle];
-                a.recordError(s.file.handle, token, "Expected constant expression", .{});
+fn checkDataDirectiveExprList(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle) void {
+    const infos = s.expr.items(.info);
+    var expr = expr_handle;
+    while (true) {
+        switch (infos[expr]) {
+            .list => |bin| {
+                _ = checkDataDirectiveExpr(a, s, bin.left);
+                expr = bin.right;
             },
+            .arrow_list => |bin| {
+                _ = checkDataDirectiveExpr(a, s, bin.left);
+                const token = s.expr.items(.token)[expr];
+                a.recordError(s.file.handle, token, "Expected ','", .{});
+                expr = bin.right;
+            },
+            else => break,
+        }
+    }
+    _ = checkDataDirectiveExpr(a, s, expr);
+}
+
+fn checkDataDirectiveExpr(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle) void {
+    switch (s.expr.items(.resolved_type)[expr_handle]) {
+        .unknown, .poison, .constant => {},
+        .symbol_def => unreachable,
+        .raw_base_offset, .data_address, .insn_address, .stack_address,
+        .reg8, .reg16, .reg32, .sr => {
+            const token = s.expr.items(.token)[expr_handle];
+            a.recordError(s.file.handle, token, "Expected constant expression", .{});
         },
     }
 }

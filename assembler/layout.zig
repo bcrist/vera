@@ -791,9 +791,7 @@ pub fn populatePageChunks(a: *Assembler, chunks: []const SourceFile.Chunk) void 
             if (chunk.section) |section| {
                 if (page_sections[page_data_handle] != section) {
                     const token = a.getSource(chunk.file).instructions.items(.token)[chunk.instructions.begin];
-                    a.errors.append(a.gpa, Error.init(a.gpa, chunk.file, token,
-                        "Chunk starting here was allocated to page 0x{X:0>5}, but that page is in use by another section", .{ page }, .{})
-                    ) catch @panic("OOM");
+                    a.recordErrorFmt(chunk.file, token, "Chunk starting here was allocated to page 0x{X:0>5}, but that page is in use by another section", .{ page }, .{});
                 }
             }
         }
