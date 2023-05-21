@@ -73,7 +73,7 @@ pub fn processLabelsAndSections(a: *Assembler, file: *SourceFile) void {
             if (kind == .boot) {
                 range = .{
                     .first = 0,
-                    .len = 0x8000,
+                    .len = 0x10000,
                 };
             }
 
