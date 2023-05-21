@@ -1,10 +1,10 @@
+[assembler] Multi-line string literals
+[assembler] .kentry label alignment
 [assembler] .local defs
 [assembler] Usage of a label that's fixed by an .org directive should not cause the expression to be marked .constant_depends_on_layout
-[assembler] Multi-line string literals
 [assembler] .stack sections, .push, .pop
 [assembler] Consider having stack sections use a different namespace from other section types, and make them local to the file they're defined in.
 [assembler] Don't allow branches across .push/.pop boundaries
-[assembler] .kentry label alignment
 [assembler] Create disassembler
 [assembler] add cycle counts to listing output
 [assembler] arbitrary precision shifts

@@ -190,16 +190,23 @@ pub fn tryResolveExpressionType(a: *Assembler, s: SourceFile.Slices, expr_handle
             if (Constant.initLiteral(a.gpa, &a.constant_temp, token, s.file.source)) |constant| {
                 expr_resolved_types[expr_handle] = .{ .constant = {} };
                 s.expr.items(.resolved_constant)[expr_handle] = constant.intern(a.arena, a.gpa, &a.constants);
-            } else |err| switch (err) {
-                error.Overflow => {
-                    a.recordError(s.file.handle, token_handle, "Integer literal too large", .{});
-                    expr_resolved_types[expr_handle] = .{ .poison = {} };
-                },
-                error.InvalidCharacter => {
-                    a.recordError(s.file.handle, token_handle, "Invalid character in literal", .{});
-                    expr_resolved_types[expr_handle] = .{ .poison = {} };
-                },
-                error.InvalidToken => unreachable,
+            } else |err| {
+                switch (err) {
+                    error.Overflow => {
+                        if (info == .literal_str) {
+                            a.recordError(s.file.handle, token_handle, "Invalid decimal byte in string literal escape sequence", .{});
+                        } else {
+                            a.recordError(s.file.handle, token_handle, "Integer literal too large", .{});
+                        }
+                    },
+                    error.InvalidCharacter => a.recordError(s.file.handle, token_handle, "Invalid character in literal", .{}),
+                    error.InvalidCodepoint => a.recordError(s.file.handle, token_handle, "Invalid codepoint in string literal escape sequence", .{}),
+                    error.InvalidBase64    => a.recordError(s.file.handle, token_handle, "Invalid base64 in string literal escape sequence", .{}),
+                    error.UnclosedLiteral  => a.recordError(s.file.handle, token_handle, "String literal is missing closing '\"' character", .{}),
+                    error.IncompleteEscape => a.recordError(s.file.handle, token_handle, "String literal contains an incomplete escape sequence", .{}),
+                    error.InvalidToken => unreachable,
+                }
+                expr_resolved_types[expr_handle] = .{ .poison = {} };
             }
         },
         .literal_reg => {

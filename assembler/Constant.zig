@@ -222,57 +222,118 @@ pub fn initSymbolLiteral(allocator: std.mem.Allocator, storage: *std.ArrayListUn
 
 pub fn initStringLiteral(allocator: std.mem.Allocator, storage: *std.ArrayListUnmanaged(u8), location: []const u8) !Constant {
     std.debug.assert(location[0] == '"');
+    if (location[location.len - 1] != '"') {
+        return error.UnclosedLiteral;
+    }
 
     if (location.len >= 2 and location[location.len - 1] == '"' and std.mem.indexOfScalar(u8, location, '\\') == null) {
         return initString(location[1..location.len - 1]);
     }
 
     storage.clearRetainingCapacity();
-    var escape: usize = 0;
-    for (location[1..]) |ch| {
+    var paren_escape_begin: usize = 0;
+    var escape: enum {
+        none,
+        single,
+        paren,
+    } = .none;
+    for (location[1..], 1..) |ch, i| {
         switch (escape) {
-            0 => switch (ch) {
-                '"' => break,
-                '\\' => escape = 1,
-                else => storage.append(allocator, ch) catch @panic("OOM"),
+            .none => switch (ch) {
+                '"' => {
+                    if (i != location.len - 1) {
+                        return error.InvalidCharacter;
+                    }
+                    break;
+                },
+                '\\' => {
+                    escape = .single;
+                },
+                ' ', '!', '#'...'[', ']'...'~' => {
+                    storage.append(allocator, ch) catch @panic("OOM");
+                },
+                else => return error.InvalidCharacter,
             },
-            1 => switch (ch) {
-                '(' => escape = 2,
+            .single => switch (ch) {
+                '(' => {
+                    escape = .paren;
+                    paren_escape_begin = i + 1;
+                },
                 't' => {
-                    escape = 0;
+                    escape = .none;
                     storage.append(allocator, '\t') catch @panic("OOM");
                 },
                 'n' => {
-                    escape = 0;
+                    escape = .none;
                     storage.append(allocator, '\n') catch @panic("OOM");
                 },
                 'r' => {
-                    escape = 0;
+                    escape = .none;
                     storage.append(allocator, '\r') catch @panic("OOM");
                 },
                 'q', '"' => {
-                    escape = 0;
+                    escape = .none;
                     storage.append(allocator, '"') catch @panic("OOM");
                 },
                 'b', '\\' => {
-                    escape = 0;
+                    escape = .none;
                     storage.append(allocator, '\\') catch @panic("OOM");
                 },
                 else => return error.InvalidCharacter,
             },
-            else => switch (ch) {
-                ')' => escape = 0,
-                else => {
-                    // TODO parenthesized escape sequences
+            .paren => switch (ch) {
+                ')' => {
+                    const paren_text = location[paren_escape_begin..i];
+                    var iter = std.mem.tokenize(u8, paren_text, " ");
+                    while (iter.next()) |token| switch (token[0]) {
+                        '=' => {
+                            var decoder = std.base64.standard_no_pad.Decoder;
+                            decoder.char_to_index['-'] = 62;
+                            decoder.char_to_index['_'] = 63;
+                            decoder.char_to_index[','] = 63;
+
+                            const trimmed = std.mem.trim(u8, token, "=");
+                            const dest_len = decoder.calcSizeUpperBound(trimmed.len) catch return error.InvalidBase64;
+                            const old_len = storage.items.len;
+                            storage.ensureUnusedCapacity(allocator, dest_len) catch @panic("OOM");
+                            storage.items.len = old_len + dest_len;
+                            const dest = storage.items[old_len..];
+                            decoder.decode(dest, trimmed) catch return error.InvalidBase64;
+                        },
+                        'U' => {
+                            if (token.len < 3 or token[1] != '+') {
+                                return error.InvalidCodepoint;
+                            }
+                            const codepoint = std.fmt.parseUnsigned(u21, token[2..], 16) catch return error.InvalidCodepoint;
+                            var buf: [4]u8 = undefined;
+                            const bytes = std.unicode.utf8Encode(codepoint, &buf) catch return error.InvalidCodepoint;
+                            storage.appendSlice(allocator, buf[0..bytes]) catch @panic("OOM");
+                        },
+                        else => {
+                            _ = try parseIntLiteral(allocator, storage, token, true);
+                        },
+                    };
+                    escape = .none;
                 },
+                else => {},
             },
         }
     }
 
-    return initString(storage.items);
+    if (escape != .none) {
+        return error.IncompleteEscape;
+    } else {
+        return initString(storage.items);
+    }
 }
 
 pub fn initIntLiteral(allocator: std.mem.Allocator, storage: *std.ArrayListUnmanaged(u8), location: []const u8) !Constant {
+    storage.clearRetainingCapacity();
+    const bit_count = try parseIntLiteral(allocator, storage, location, false);
+    return init(storage.items.ptr, bit_count, .unsigned);
+}
+
+fn parseIntLiteral(allocator: std.mem.Allocator, storage: *std.ArrayListUnmanaged(u8), location: []const u8, single_byte_decimal: bool) !u63 {
     var remaining = location;
     std.debug.assert(remaining.len > 0);
 
@@ -287,7 +348,7 @@ pub fn initIntLiteral(allocator: std.mem.Allocator, storage: *std.ArrayListUnman
                 radix = 2;
                 remaining = remaining[2..];
             },
-            'n', 'N' => {
+            'q', 'Q' => {
                 radix = 4;
                 remaining = remaining[2..];
             },
@@ -308,62 +369,44 @@ pub fn initIntLiteral(allocator: std.mem.Allocator, storage: *std.ArrayListUnman
         8 => 3,
         4 => 2,
         2 => 1,
-        else => 0,
+        else => {
+            //trim leading zeroes and underscores
+            for (remaining, 0..) |ch, i| {
+                if (ch == '0' or ch == '_') continue;
+                remaining = remaining[i..];
+                break;
+            } else {
+                remaining = "0";
+            }
+
+            var value: u64 = undefined;
+            var bit_count: u63 = undefined;
+            if (single_byte_decimal) {
+                value = try std.fmt.parseUnsigned(u8, remaining, radix);
+                bit_count = 8;
+            } else {
+                value = try std.fmt.parseUnsigned(u64, remaining, radix);
+                bit_count = 65 - @clz(value);
+            }
+            const byte_count = (bit_count + 7) / 8;
+
+            storage.ensureUnusedCapacity(allocator, byte_count) catch @panic("OOM");
+            for (0..byte_count) |_| {
+                storage.appendAssumeCapacity(@truncate(u8, value));
+                value >>= 8;
+            }
+            return bit_count;
+        },
     };
 
-    var maybe_bit_count: ?u63 = null;
-    if (bits_per_digit > 0) {
-        var bit_count: u63 = 0;
-        for (remaining) |ch| {
-            switch (ch) {
-                '_' => continue,
-                else => bit_count += bits_per_digit,
-            }
-        }
-        maybe_bit_count = bit_count;
-    }
-
-    //trim leading zeroes and underscores
-    for (remaining, 0..) |ch, i| {
-        if (ch == '0' or ch == '_') continue;
-        remaining = remaining[i..];
-        break;
-    } else {
-        remaining = "0";
-    }
-
-    var storage_bit_count: u63 = 0;
-    if (bits_per_digit > 0) {
-        for (remaining) |ch| {
-            switch (ch) {
-                '_' => continue,
-                else => storage_bit_count += bits_per_digit,
-            }
+    var bit_count: u63 = 0;
+    for (remaining) |ch| {
+        switch (ch) {
+            '_' => continue,
+            else => bit_count += bits_per_digit,
         }
     }
 
-    if (storage_bit_count <= 64) {
-        var value = try std.fmt.parseUnsigned(u64, remaining, radix);
-
-        if (radix == 10) {
-            storage_bit_count = 65 - @clz(value);
-        }
-
-        const bit_count = maybe_bit_count orelse storage_bit_count;
-        if (bit_count <= 64) {
-            return initIntBits(value, bit_count) catch unreachable;
-        } else {
-            storage.resize(allocator, (bit_count + 7) / 8) catch @panic("OOM");
-            std.mem.set(u8, storage.items[@sizeOf(u64)..], 0);
-            std.mem.copy(u8, storage.items, std.mem.asBytes(&value));
-            return init(storage.items.ptr, bit_count, .unsigned);
-        }
-    }
-
-    std.debug.assert(radix != 10);
-    const bit_count = maybe_bit_count.?;
-
-    storage.clearRetainingCapacity();
     storage.ensureUnusedCapacity(allocator, (bit_count + 7) / 8) catch @panic("OOM");
 
     var accumulator: u64 = 0;
@@ -387,7 +430,7 @@ pub fn initIntLiteral(allocator: std.mem.Allocator, storage: *std.ArrayListUnman
         storage.appendAssumeCapacity(@truncate(u8, accumulator));
     }
 
-    return init(storage.items.ptr, bit_count, .unsigned);
+    return bit_count;
 }
 
 test "initIntLiteral" {

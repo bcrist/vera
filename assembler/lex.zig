@@ -191,6 +191,7 @@ pub const Token = struct {
             .id,
             .comment,
             .int_literal,
+            .str_literal,
             => 0,
 
             .linespace => blk: {
@@ -212,37 +213,6 @@ pub const Token = struct {
                             }
                         },
                         else => break,
-                    }
-                }
-                break :blk newlines;
-            },
-
-            .str_literal => blk: {
-                var newlines: u32 = 0;
-                var end: usize = 1;
-                var escape: u8 = 0;
-                while (end < remaining.len) : (end += 1) {
-                    const ch = remaining[end];
-                    switch (escape) {
-                        0 => switch (ch) {
-                            '"' => break :blk newlines,
-                            '\\' => escape = 1,
-                            '\n' => newlines += 1,
-                            else => {},
-                        },
-                        1 => switch (ch) {
-                            '(' => escape = 2,
-                            '\n' => {
-                                newlines += 1;
-                                escape = 0;
-                            },
-                            else => escape = 0,
-                        },
-                        else => switch (ch) {
-                            ')' => escape = 0,
-                            '\n' => newlines += 1,
-                            else => {},
-                        },
                     }
                 }
                 break :blk newlines;
@@ -345,21 +315,29 @@ pub const Token = struct {
 
             .str_literal => blk: {
                 var end: usize = 1;
-                var escape: u8 = 0;
+                var escape: enum {
+                    none,
+                    single,
+                    paren,
+                } = .none;
                 while (end < remaining.len) : (end += 1) {
                     const ch = remaining[end];
                     switch (escape) {
-                        0 => switch (ch) {
+                        .none => switch (ch) {
                             '"' => break :blk end + 1,
-                            '\\' => escape = 1,
+                            '\n' => break :blk end,
+                            '\\' => escape = .single,
                             else => {},
                         },
-                        1 => switch (ch) {
-                            '(' => escape = 2,
-                            else => escape = 0,
+                        .single => switch (ch) {
+                            '(' => escape = .paren,
+                            '\n' => break :blk end,
+                            else => escape = .none,
                         },
-                        else => switch (ch) {
-                            ')' => escape = 0,
+                        .paren => switch (ch) {
+                            '"' => break :blk end + 1,
+                            ')' => escape = .none,
+                            '\n' => break :blk end,
                             else => {},
                         },
                     }

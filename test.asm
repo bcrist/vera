@@ -33,7 +33,12 @@ str: .db 1,2,3,4
     1111, \
     123
     .dd 1,2,3,4,"Hellorld!", 0xF .signed'40, 255 .signed'40, -1 .unsigned'40
-.db "go"
+    .db "\(U+12345)"
+    .db "\(=AA++128)"
+    .db "\()\(   )"
+    .db "\(  1   0d11  0b1100 0q1122 0o1122 0x1122   )"
+    .db "\(  235 )"
+    .db "\(13 10)\r\n"
 .const
 .align 128
 str2: .db -1 ' 1
