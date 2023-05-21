@@ -1,4 +1,3 @@
-[assembler] Multi-line string literals
 [assembler] .kentry label alignment
 [assembler] .local defs
 [assembler] Usage of a label that's fixed by an .org directive should not cause the expression to be marked .constant_depends_on_layout

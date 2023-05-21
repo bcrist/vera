@@ -488,7 +488,14 @@ fn writeRemainingSourceLines(line_cursor: u32, line_number: u32, line_iter: std.
 fn writeSourceForLine(line_number: u32, line_source: []const u8, writer: anytype, source_only: bool) !void {
     const source = if (std.mem.endsWith(u8, line_source, "\r")) line_source[0..line_source.len - 1] else line_source;
     if (source.len == 0) {
-        try writer.writeByte('\n');
+        if (line_number == 0) {
+            try writer.writeByte('\n');
+        } else {
+            if (!source_only) {
+                try writer.writeAll("//");
+            }
+            try writer.print("{:>5} |\n", .{ line_number } );
+        }
     } else {
         if (!source_only) {
             try writer.writeAll("//");

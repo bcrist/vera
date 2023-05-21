@@ -8,6 +8,7 @@ pub const TokenKind = enum(u8) {
     comment,
     int_literal,
     str_literal,
+    str_literal_raw,
     id,
     dot,
     comma,
@@ -194,6 +195,17 @@ pub const Token = struct {
             .str_literal,
             => 0,
 
+            .str_literal_raw => blk: {
+                var end: usize = 2;
+                while (end < remaining.len) : (end += 1) {
+                    switch (remaining[end]) {
+                        '\n' => break :blk 1,
+                        else => {},
+                    }
+                }
+                break :blk 0;
+            },
+
             .linespace => blk: {
                 var newlines: u32 = 0;
                 var consume_newline = remaining[0] == '\\';
@@ -202,6 +214,9 @@ pub const Token = struct {
                     switch (remaining[end]) {
                         0...9, 11...' ', 127 => {},
                         '\\' => {
+                            if (remaining[end - 1] == '\\') {
+                                break;
+                            }
                             consume_newline = true;
                         },
                         '\n' => {
@@ -276,6 +291,9 @@ pub const Token = struct {
                     switch (remaining[end]) {
                         0...9, 11...' ', 127 => {},
                         '\\' => {
+                            if (remaining[end - 1] == '\\') {
+                                break :blk end - 1;
+                            }
                             consume_newline = true;
                         },
                         '\n' => {
@@ -296,6 +314,17 @@ pub const Token = struct {
                 while (end < remaining.len) : (end += 1) {
                     switch (remaining[end]) {
                         '\n' => break,
+                        else => {},
+                    }
+                }
+                break :blk end;
+            },
+
+            .str_literal_raw => blk: {
+                var end: usize = 2;
+                while (end < remaining.len) : (end += 1) {
+                    switch (remaining[end]) {
+                        '\n' => break :blk end + 1,
                         else => {},
                     }
                 }
@@ -402,7 +431,11 @@ pub fn lex(allocator: std.mem.Allocator, source: []const u8) TokenList {
                 '>' => .shr,
                 else => .reserved,
             },
-            0...9, 11...' ', '\\', 127 => .linespace,
+            '\\' => if (source.len <= i + 1) .linespace else switch (source[i + 1]) {
+                '\\' => .str_literal_raw,
+                else => .linespace,
+            },
+            0...9, 11...' ', 127 => .linespace,
             else => .reserved,
         };
 
@@ -424,6 +457,7 @@ pub fn lex(allocator: std.mem.Allocator, source: []const u8) TokenList {
 }
 
 fn testLex(src: []const u8, expected_tokens: []const TokenKind) !void {
+    // try std.io.getStdOut().writer().print("Testing lex of '{s}'\n", .{ src });
     var tokens = lex(std.testing.allocator, src);
     defer tokens.deinit(std.testing.allocator);
     try std.testing.expectEqualSlices(TokenKind, expected_tokens, tokens.items(.kind));
@@ -463,6 +497,24 @@ test "Lexer comments" {
         \\//aasdf
         \\//asdf asdf a;sdlfkjasdf@#$%&^#@()(*&)
     , &.{ .comment, .newline, .comment, .eof });
+}
+
+test "Lexer strings" {
+    try testLex("\"abc\"", &.{ .str_literal, .eof });
+    try testLex("\"\\\"\"", &.{ .str_literal, .eof });
+    try testLex("\"\\( U+123 0x55 0b1010 =0123 )\"", &.{ .str_literal, .eof });
+
+    try testLex(
+        \\    \\
+        \\    \\
+        \\\\
+        , &.{ .linespace, .str_literal_raw, .linespace, .str_literal_raw, .str_literal_raw, .eof });
+
+    try testLex(
+        \\\\
+        \\\\
+        \\
+        , &.{ .str_literal_raw, .str_literal_raw, .eof });
 }
 
 test "Lexer operators" {

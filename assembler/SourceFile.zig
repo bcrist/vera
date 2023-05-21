@@ -865,8 +865,19 @@ const Parser = struct {
     fn parseStringLiteral(self: *Parser) ?Expression.Handle {
         const begin = self.next_token;
         self.skipLinespace();
+        const literal_token = self.next_token;
         if (self.tryToken(.str_literal)) {
-            return self.addTerminalExpression(.literal_str, self.next_token - 1);
+            return self.addTerminalExpression(.literal_str, literal_token);
+        } else if (self.tryToken(.str_literal_raw)) {
+            while (true) {
+                const end = self.next_token;
+                self.skipLinespace();
+                if (self.tryToken(.str_literal_raw)) continue;
+
+                self.next_token = end;
+                break;
+            }
+            return self.addTerminalExpression(.literal_str, literal_token);
         }
         self.next_token = begin;
         return null;

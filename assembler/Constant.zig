@@ -194,15 +194,6 @@ test "initIntBits" {
     try std.testing.expectEqualSlices(u8, "\xFE\xFF\xFF\xFF\xFF\xFF\xFF\xFF", (try Constant.initIntBits(@as(i64, -2), 64)).asString());
 }
 
-pub fn initLiteral(allocator: std.mem.Allocator, storage: *std.ArrayListUnmanaged(u8), token: lex.Token, source: []const u8) !Constant {
-    return switch (token.kind) {
-        .id => initSymbolLiteral(allocator, storage, token.location(source)),
-        .int_literal => initIntLiteral(allocator, storage, token.location(source)),
-        .str_literal => initStringLiteral(allocator, storage, token.location(source)),
-        else => error.InvalidToken,
-    };
-}
-
 pub fn initSymbolLiteral(allocator: std.mem.Allocator, storage: *std.ArrayListUnmanaged(u8), location: []const u8) Constant {
     if (std.mem.indexOfScalar(u8, location, '\\')) |_| {
         storage.clearRetainingCapacity();

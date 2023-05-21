@@ -184,27 +184,68 @@ pub fn tryResolveExpressionType(a: *Assembler, s: SourceFile.Slices, expr_handle
         .list, .arrow_list, .arrow_prefix => {
             expr_resolved_types[expr_handle] = .{ .poison = {} };
         },
-        .literal_int, .literal_str => {
+        .literal_int => {
             const token_handle = s.expr.items(.token)[expr_handle];
             const token = s.file.tokens.get(token_handle);
-            if (Constant.initLiteral(a.gpa, &a.constant_temp, token, s.file.source)) |constant| {
+            if (Constant.initIntLiteral(a.gpa, &a.constant_temp, token.location(s.file.source))) |constant| {
                 expr_resolved_types[expr_handle] = .{ .constant = {} };
                 s.expr.items(.resolved_constant)[expr_handle] = constant.intern(a.arena, a.gpa, &a.constants);
             } else |err| {
                 switch (err) {
-                    error.Overflow => {
-                        if (info == .literal_str) {
-                            a.recordError(s.file.handle, token_handle, "Invalid decimal byte in string literal escape sequence", .{});
-                        } else {
-                            a.recordError(s.file.handle, token_handle, "Integer literal too large", .{});
-                        }
-                    },
-                    error.InvalidCharacter => a.recordError(s.file.handle, token_handle, "Invalid character in literal", .{}),
+                    error.Overflow         => a.recordError(s.file.handle, token_handle, "Integer literal too large", .{}),
+                    error.InvalidCharacter => a.recordError(s.file.handle, token_handle, "Invalid character in integer literal", .{}),
+                }
+                expr_resolved_types[expr_handle] = .{ .poison = {} };
+            }
+        },
+         .literal_str => {
+            var token_handle = s.expr.items(.token)[expr_handle];
+            var token = s.file.tokens.get(token_handle);
+            if (token.kind == .str_literal_raw) {
+                const token_kinds = s.file.tokens.items(.kind);
+                a.constant_temp.clearRetainingCapacity();
+                var raw = token.location(s.file.source);
+                if (raw[raw.len - 1] == '\n') {
+                    raw.len -= 1;
+                }
+                if (raw[raw.len - 1] == '\r') {
+                    raw.len -= 1;
+                }
+                a.constant_temp.appendSlice(a.gpa, raw[2..]) catch @panic("OOM");
+                token_handle += 1;
+                while (true) {
+                    switch (token_kinds[token_handle]) {
+                        .str_literal_raw => {
+                            token = s.file.tokens.get(token_handle);
+                            raw = token.location(s.file.source);
+                            if (raw[raw.len - 1] == '\n') {
+                                raw.len -= 1;
+                            }
+                            if (raw[raw.len - 1] == '\r') {
+                                raw.len -= 1;
+                            }
+                            a.constant_temp.append(a.gpa, '\n') catch @panic("OOM");
+                            a.constant_temp.appendSlice(a.gpa, raw[2..]) catch @panic("OOM");
+                        },
+                        .linespace => {},
+                        else => break,
+                    }
+                    token_handle += 1;
+                }
+                const constant = Constant.initString(a.constant_temp.items);
+                expr_resolved_types[expr_handle] = .{ .constant = {} };
+                s.expr.items(.resolved_constant)[expr_handle] = constant.intern(a.arena, a.gpa, &a.constants);
+            } else if (Constant.initStringLiteral(a.gpa, &a.constant_temp, token.location(s.file.source))) |constant| {
+                expr_resolved_types[expr_handle] = .{ .constant = {} };
+                s.expr.items(.resolved_constant)[expr_handle] = constant.intern(a.arena, a.gpa, &a.constants);
+            } else |err| {
+                switch (err) {
+                    error.Overflow         => a.recordError(s.file.handle, token_handle, "Invalid decimal byte in string literal escape sequence", .{}),
+                    error.InvalidCharacter => a.recordError(s.file.handle, token_handle, "Invalid character in string literal", .{}),
                     error.InvalidCodepoint => a.recordError(s.file.handle, token_handle, "Invalid codepoint in string literal escape sequence", .{}),
                     error.InvalidBase64    => a.recordError(s.file.handle, token_handle, "Invalid base64 in string literal escape sequence", .{}),
                     error.UnclosedLiteral  => a.recordError(s.file.handle, token_handle, "String literal is missing closing '\"' character", .{}),
                     error.IncompleteEscape => a.recordError(s.file.handle, token_handle, "String literal contains an incomplete escape sequence", .{}),
-                    error.InvalidToken => unreachable,
                 }
                 expr_resolved_types[expr_handle] = .{ .poison = {} };
             }
