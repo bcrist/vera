@@ -69,23 +69,32 @@ pub fn doAutoOrgLayout(a: *Assembler, chunks: []SourceFile.Chunk) bool {
 }
 
 fn resolveAutoOrgAddress(a: *Assembler, chunk: SourceFile.Chunk) u32 {
-    // TODO add special logic for .kentry sections:
-    //      Public labels must be at the start of a chunk (error otherwise).
-    //      Chunks with a public label are allocated to pages where that label can be called from user code.
-    //      Chunks without a public label are allocated to fully protected pages (i.e. same as kcode) or in areas of kentry pages where they don't overlap the entry addresses.
-    //      So there's really 2 different kinds of pages for each named .kentry section
-    // TODO add a kentry output mode to write a "header" file that exports the addresses of kentry labels
-
     const chunk_section_handle = chunk.section orelse return 0;
+    const section = a.getSection(chunk_section_handle);
 
     const address_range = chunk.getAddressRange(a);
     const chunk_size = @max(1, address_range.len);
 
-    const alignment = getAlignmentForChunk(a, chunk);
+    const desired_access = section.kind.accessPolicies(chunk_size);
 
-    const pages = a.pages.items(.page);
-    const page_sections = a.pages.items(.section);
-    const page_usages = a.pages.items(.usage);
+    var alignment = getAlignmentForChunk(a, chunk);
+    if (desired_access.execute) |access| switch (access) {
+        .kernel_entry_256 => if (alignment.modulo < 256) {
+            alignment.modulo = 256;
+            alignment.offset = 0;
+        },
+        .kernel_entry_4096 => if (alignment.modulo < 4096) {
+            alignment.modulo = 4096;
+            alignment.offset = 0;
+        },
+        else => {},
+    };
+
+    const page_data_slice = a.pages.slice();
+    const pages = page_data_slice.items(.page);
+    const page_sections = page_data_slice.items(.section);
+    const page_access = page_data_slice.items(.access);
+    const page_usages = page_data_slice.items(.usage);
 
     if (chunk_size < PageData.page_size) {
         // See if there's an existing semi-full chunk that we can reuse
@@ -94,6 +103,9 @@ fn resolveAutoOrgAddress(a: *Assembler, chunk: SourceFile.Chunk) u32 {
         //      But need to ensure that the upkeep cost doesn't exceed the gains here.
         for (0.., page_sections) |page_data_handle, section_handle| {
             if (section_handle != chunk_section_handle) {
+                continue;
+            }
+            if (!std.meta.eql(page_access[page_data_handle], desired_access)) {
                 continue;
             }
 
@@ -152,7 +164,10 @@ fn resolveAutoOrgAddress(a: *Assembler, chunk: SourceFile.Chunk) u32 {
             if (final_page_bytes_needed == 0) {
                 break;
             } else if (a.page_lookup.get(page)) |page_data_handle| {
-                if (page_sections[page_data_handle] == chunk_section_handle) {
+                // Currently we never accept a partially filled last page for .entry_kernel sections since the
+                // access policies might be wrong.  Theoretically this may result in slightly more fragmentation in
+                // corner cases, but it's not worth the extra complexity to handle it IMO.
+                if (section.kind != .entry_kernel and page_sections[page_data_handle] == chunk_section_handle) {
                     const final_page_free_bytes = page_usages[page_data_handle].findFirstSet() orelse PageData.page_size;
                     if (final_page_free_bytes >= final_page_bytes_needed) {
                         break;
@@ -323,11 +338,15 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
     }
 
     if (chunk.section) |section_handle| {
+        const chunk_bytes = address - initial_address;
         const initial_page = initial_address >> @bitSizeOf(bus.PageOffset);
         const final_page = if (address == initial_address) initial_page else (address - 1) >> @bitSizeOf(bus.PageOffset);
 
+        const section = a.getSection(section_handle);
+        var access = section.kind.accessPolicies(chunk_bytes);
+
         for (initial_page .. final_page + 1) |page| {
-            const page_data_handle = a.findOrCreatePage(@intCast(bus.Page, page), section_handle);
+            const page_data_handle = a.findOrCreatePage(@intCast(bus.Page, page), access, section_handle);
             var page_usage = a.pages.items(.usage);
             if (page == initial_page or page == final_page) {
                 const range = std.bit_set.Range{
@@ -339,6 +358,10 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
             } else {
                 // std.debug.print("{X:0>13}: ({}) Marking page fully used\n", .{ page, page_data_handle });
                 page_usage[page_data_handle] = PageData.UsageBitmap.initFull();
+            }
+            if (page == initial_page and section.kind == .entry_kernel) {
+                // only the first page of an entry_kernel chunk should be (partially) callable
+                access = Section.Kind.code_kernel.accessPolicies(chunk_bytes);
             }
         }
     }

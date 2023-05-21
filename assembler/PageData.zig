@@ -12,7 +12,7 @@ pub const Handle = u31;
 pub const UsageBitmap = std.StaticBitSet(page_size);
 
 page: bus.Page,
-// TODO add kind: Section.Kind,
+access: Section.AccessPolicies,
 section: Section.Handle,
 usage: UsageBitmap,
 data: [page_size]u8,
@@ -20,9 +20,10 @@ chunks: std.ArrayListUnmanaged(SourceFile.Chunk),
 
 const PageData = @This();
 
-pub fn init(page: bus.Page, section: Section.Handle) PageData {
+pub fn init(page: bus.Page, access: Section.AccessPolicies, section: Section.Handle) PageData {
     return .{
         .page = page,
+        .access = access,
         .section = section,
         .usage = UsageBitmap.initEmpty(),
         .data = [_]u8{0}**page_size,

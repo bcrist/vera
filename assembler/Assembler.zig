@@ -269,20 +269,20 @@ pub fn getSource(self: *Assembler, handle: SourceFile.Handle) *SourceFile {
     return &self.files.items[handle];
 }
 
-pub fn getSection(self: *Assembler, handle: Section.Handle) Section {
-    return self.sections.entries.items(.value)[handle];
+pub fn getSection(self: *const Assembler, handle: Section.Handle) Section {
+    return self.sections.values()[handle];
 }
 
 pub fn getSectionPtr(self: *Assembler, handle: Section.Handle) *Section {
-    return &self.sections.entries.items(.value)[handle];
+    return &self.sections.values()[handle];
 }
 
-pub fn findOrCreatePage(self: *Assembler, page: bus.Page, section: Section.Handle) PageData.Handle {
+pub fn findOrCreatePage(self: *Assembler, page: bus.Page, access: Section.AccessPolicies, section: Section.Handle) PageData.Handle {
     if (self.page_lookup.get(page)) |handle| return handle;
 
     const handle = @intCast(PageData.Handle, self.pages.len);
     self.page_lookup.ensureUnusedCapacity(self.gpa, 1) catch @panic("OOM");
-    self.pages.append(self.gpa, PageData.init(page, section)) catch @panic("OOM");
+    self.pages.append(self.gpa, PageData.init(page, access, section)) catch @panic("OOM");
     self.page_lookup.putAssumeCapacity(page, handle);
     // std.debug.print("{X:0>13}: Created page for section {}\n", .{ page, section });
     return handle;

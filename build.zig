@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    //[[!! include 'build' !! 247 ]]
+    //[[!! include 'build' !! 249 ]]
     //[[ ################# !! GENERATED CODE -- DO NOT MODIFY !! ################# ]]
 
     const bits = b.createModule(.{
@@ -113,6 +113,7 @@ pub fn build(b: *std.Build) void {
     const assembler_lib = b.createModule(.{
         .source_file = .{ .path = "assembler/assembler_lib.zig" },
         .dependencies = &.{
+            .{ .name = "address_translator_types", .module = address_translator_types },
             .{ .name = "bits", .module = bits },
             .{ .name = "bus_types", .module = bus_types },
             .{ .name = "isa_encoding", .module = isa_encoding },
@@ -174,6 +175,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = mode,
     });
+    assemble_exe.addModule("address_translator_types", address_translator_types);
     assemble_exe.addModule("bits", bits);
     assemble_exe.addModule("bus_types", bus_types);
     assemble_exe.addModule("ihex", ihex);

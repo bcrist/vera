@@ -284,8 +284,9 @@ pub fn writeSimSxPage(a: *const Assembler, page: bus.Page, sx_writer: anytype) !
         const page_data = pages_slice.items(.data);
         const page_usage = pages_slice.items(.usage);
         const page_sections = pages_slice.items(.section);
+        const page_access = pages_slice.items(.access);
 
-        const section = a.sections.values()[page_sections[page_data_handle]];
+        const section = a.getSection(page_sections[page_data_handle]);
         const full_page_data = &page_data[page_data_handle];
 
         try sx_writer.expression("page");
@@ -296,6 +297,38 @@ pub fn writeSimSxPage(a: *const Assembler, page: bus.Page, sx_writer: anytype) !
             try sx_writer.string("ram");
             try sx_writer.printValue("{X:0>5}", .{ page });
         }
+
+        try sx_writer.open();
+        try sx_writer.tag(section.kind);
+        try sx_writer.string(section.name);
+        try sx_writer.close();
+
+        const access = page_access[page_data_handle];
+
+        try sx_writer.expression("read");
+        if (access.read) |read| {
+            try sx_writer.tag(read);
+        } else {
+            try sx_writer.string("none");
+        }
+        try sx_writer.close();
+
+        try sx_writer.expression("write");
+        if (access.write) |write| {
+            try sx_writer.tag(write);
+        } else {
+            try sx_writer.string("none");
+        }
+        try sx_writer.close();
+
+        try sx_writer.expression("exec");
+        if (access.execute) |exec| {
+            try sx_writer.tag(exec);
+        } else {
+            try sx_writer.string("none");
+        }
+        try sx_writer.close();
+
         sx_writer.setCompact(false);
 
         var used = page_usage[page_data_handle];

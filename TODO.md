@@ -1,10 +1,9 @@
-[assembler] .kentry label alignment
 [assembler] .local defs
-[assembler] Usage of a label that's fixed by an .org directive should not cause the expression to be marked .constant_depends_on_layout
 [assembler] .stack sections, .push, .pop
-[assembler] Consider having stack sections use a different namespace from other section types, and make them local to the file they're defined in.
+[assembler] Consider having stack sections use a different namespace from other section types, (local to the file)
 [assembler] Don't allow branches across .push/.pop boundaries
 [assembler] Create disassembler
+[assembler] add a kentry output mode to write a "header" file that exports the addresses of kentry labels
 [assembler] add cycle counts to listing output
 [assembler] arbitrary precision shifts
 [assembler] arbitrary precision multiply
