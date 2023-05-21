@@ -429,7 +429,7 @@ fn addListingForChunk(a: *Assembler, listing: *Listing, chunk: SourceFile.Chunk,
             .stack => {
                 listing.addNonOutputLine(.stack_space, line_numbers[i], line_source, options.clone_source_strings);
             },
-            .none, .insn, .keep, .def, .undef, .org => {
+            .none, .insn, .keep, .def, .undef, .org, .range => {
                 listing.addNonOutputLine(.empty, line_numbers[i], line_source, options.clone_source_strings);
             },
 

@@ -3,9 +3,8 @@
 [assembler] Multi-line string literals
 [assembler] .stack sections, .push, .pop
 [assembler] Consider having stack sections use a different namespace from other section types, and make them local to the file they're defined in.
+[assembler] Don't allow branches across .push/.pop boundaries
 [assembler] .kentry label alignment
-[assembler] section allowed page .range
-[assembler] .boot section has default .range of 0 - 0x8000
 [assembler] Create disassembler
 [assembler] add cycle counts to listing output
 [assembler] arbitrary precision shifts

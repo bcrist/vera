@@ -26,3 +26,11 @@ pub const Handle = u31;
 name: []const u8,
 kind: Kind,
 has_chunks: bool,
+range: ?Assembler.AddressRange,
+
+pub fn getRange(self: Section) Assembler.AddressRange {
+    return self.range orelse .{
+        .first = 0x1000,
+        .len = 0x1_0000_0000 - 0x1000,
+    };
+}

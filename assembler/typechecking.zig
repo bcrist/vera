@@ -1,4 +1,5 @@
 const std = @import("std");
+const bus = @import("bus_types");
 const lex = @import("lex.zig");
 const isa = @import("isa_types");
 const ie = @import("isa_encoding");
@@ -40,7 +41,7 @@ pub fn processLabelsAndSections(a: *Assembler, file: *SourceFile) void {
                 .kconst => .constant_kernel,
                 .stack => .stack,
 
-                .none, .insn, .bound_insn, .org, .@"align", .keep, .def, .undef, .db, .dw, .dd, .push, .pop,
+                .none, .insn, .bound_insn, .org, .@"align", .keep, .def, .undef, .db, .dw, .dd, .push, .pop, .range,
                 => unreachable,
             };
 
@@ -67,11 +68,22 @@ pub fn processLabelsAndSections(a: *Assembler, file: *SourceFile) void {
                     a.recordError(file.handle, token, "Stack sections must be named.", .{});
                 }
             }
+
+            var range: ?Assembler.AddressRange = null;
+            if (kind == .boot) {
+                range = .{
+                    .first = 0,
+                    .len = 0x8000,
+                };
+            }
+
             const entry = a.sections.getOrPutValue(a.gpa, section_name, .{
                 .name = section_name,
                 .kind = kind,
                 .has_chunks = false,
+                .range = range,
             }) catch @panic("OOM");
+
             const found_kind = entry.value_ptr.kind;
             if (found_kind != kind) switch (found_kind) {
                 inline else => |k| {
@@ -554,6 +566,7 @@ fn checkInstructionsAndDirectivesInFile(a: *Assembler, s: SourceFile.Slices) voi
 
     var allow_code = true;
     var allow_data = true;
+    var allow_range = false;
 
     for (0.., s.insn.items(.operation), s.insn.items(.params), s.insn.items(.label)) |insn_handle, op, maybe_params, maybe_label_expr| {
         if (maybe_label_expr) |label_expr| {
@@ -585,6 +598,86 @@ fn checkInstructionsAndDirectivesInFile(a: *Assembler, s: SourceFile.Slices) voi
             .keep => if (maybe_params) |params_expr| {
                 const token = s.expr.items(.token)[params_expr];
                 a.recordError(s.file.handle, token, "Expected no parameters", .{});
+            },
+            .range => {
+                if (!allow_range) {
+                    const token = s.insn.items(.token)[insn_handle];
+                    a.recordError(s.file.handle, token, ".range directive is only allowed in non-boot sections", .{});
+                } else {
+                    const expr_flags = s.expr.items(.flags);
+                    var params = [_]?Expression.Handle{null} ** 2;
+                    getParamHandles(a, s, maybe_params, &params);
+                    var range = Assembler.AddressRange{
+                        .first = 0,
+                        .len = 0,
+                    };
+                    if (params[0]) |expr| {
+                        switch (expr_resolved_types[expr]) {
+                            .unknown, .symbol_def => unreachable,
+                            .poison, .constant => {},
+                            .raw_base_offset, .data_address, .insn_address, .stack_address,
+                            .reg8, .reg16, .reg32, .sr => {
+                                const token = s.expr.items(.token)[expr];
+                                a.recordError(s.file.handle, token, "Expected minimum address constant", .{});
+                            },
+                        }
+                        if (expr_flags[expr].contains(.constant_depends_on_layout)) {
+                            const token = s.expr.items(.token)[expr];
+                            a.recordError(s.file.handle, token, "Expression cannot depend on layout", .{});
+                        } else {
+                            const constant = layout.resolveExpressionConstantOrDefault(a, s, 0, expr, 0x1000);
+                            range.first = constant.asInt(u32) catch a: {
+                                const token = s.expr.items(.token)[expr];
+                                a.recordError(s.file.handle, token, "Expression must fit in u32", .{});
+                                break :a 0x1000;
+                            };
+                            if (@truncate(bus.PageOffset, range.first) != 0) {
+                                const token = s.expr.items(.token)[expr];
+                                a.recordError(s.file.handle, token, "Expected an address with a page offset of 0", .{});
+                            }
+                        }
+                    }
+                    if (params[1]) |expr| {
+                        switch (expr_resolved_types[expr]) {
+                            .unknown, .symbol_def => unreachable,
+                            .poison, .constant => {},
+                            .raw_base_offset, .data_address, .insn_address, .stack_address,
+                            .reg8, .reg16, .reg32, .sr => {
+                                const token = s.expr.items(.token)[expr];
+                                a.recordError(s.file.handle, token, "Expected maximum address constant", .{});
+                            },
+                        }
+                        if (expr_flags[expr].contains(.constant_depends_on_layout)) {
+                            const token = s.expr.items(.token)[expr];
+                            a.recordError(s.file.handle, token, "Expression cannot depend on layout", .{});
+                        } else {
+                            const constant = layout.resolveExpressionConstantOrDefault(a, s, 0, expr, 0xFFFF_FFFF);
+                            const last = constant.asInt(u32) catch a: {
+                                const token = s.expr.items(.token)[expr];
+                                a.recordError(s.file.handle, token, "Expression must fit in u32", .{});
+                                break :a 0xFFFF_FFFF;
+                            };
+                            if (@truncate(bus.PageOffset, last) != ~@as(bus.PageOffset, 0)) {
+                                const token = s.expr.items(.token)[expr];
+                                a.recordError(s.file.handle, token, "Expected an address with a page offset of 0xFFF", .{});
+                            }
+                            range.len = @as(usize, last - range.first) + 1;
+
+                            const block_handle = s.file.findBlockByInstruction(@intCast(Instruction.Handle, insn_handle));
+                            const section_handle = s.file.blocks.items(.section)[block_handle].?;
+                            const section = a.getSectionPtr(section_handle);
+                            if (section.range) |_| {
+                                const token = s.insn.items(.token)[insn_handle];
+                                a.recordError(s.file.handle, token, "Multiple .range directives found for this section; ignoring this one", .{});
+                            } else {
+                                section.range = range;
+                            }
+                        }
+                    } else {
+                        const token = s.insn.items(.token)[insn_handle];
+                        a.recordError(s.file.handle, token, ".range directive must be followed by <min_address>, <max_address> constant expressions", .{});
+                    }
+                }
             },
             .org => {
                 var params = [_]?Expression.Handle{null};
@@ -695,21 +788,27 @@ fn checkInstructionsAndDirectivesInFile(a: *Assembler, s: SourceFile.Slices) voi
                 // TODO .pop
             },
 
-            .section, .boot => {
+            .boot => {
                 allow_code = true;
                 allow_data = true;
+                allow_range = false;
+            },
+            .section => {
+                allow_code = true;
+                allow_data = true;
+                allow_range = true;
             },
             .code, .kcode, .entry, .kentry => {
                 allow_code = true;
                 allow_data = false;
+                allow_range = true;
             },
             .data, .kdata, .@"const", .kconst, .stack => {
                 allow_code = false;
                 allow_data = true;
+                allow_range = true;
             }
         }
-
-        // TODO check for shadowed symbols
     }
 }
 

@@ -45,6 +45,7 @@ pub const Operation = union(enum) {
     stack,
     push,
     pop,
+    range,
 };
 
 pub const MnemonicAndSuffix = struct {
@@ -101,6 +102,7 @@ pub fn isSectionDirective(op: OperationType) bool {
         .dd,
         .push,
         .pop,
+        .range,
         => false,
     };
 }
@@ -125,6 +127,7 @@ pub fn isOrgHeader(op: OperationType) bool {
         .keep,
         .def,
         .undef,
+        .range,
         => true,
 
         .org,

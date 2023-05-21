@@ -1,4 +1,5 @@
 const std = @import("std");
+const bits = @import("bits");
 const ie = @import("isa_encoding");
 const bus = @import("bus_types");
 const lex = @import("lex.zig");
@@ -30,6 +31,11 @@ fn resolveFixedOrgAddress(a: *Assembler, chunk: SourceFile.Chunk) u32 {
     const operations = s.insn.items(.operation);
 
     var initial_address: u32 = 0;
+
+    if (chunk.section) |section_handle| {
+        const range = a.getSection(section_handle).getRange();
+        initial_address = range.first;
+    }
 
     var iter = chunk.instructions;
     while (iter.next()) |insn_handle| {
@@ -74,6 +80,8 @@ fn resolveAutoOrgAddress(a: *Assembler, chunk: SourceFile.Chunk) u32 {
 
     const chunk_section_handle = chunk.section orelse return 0;
 
+    const allowed_range = a.getSection(chunk_section_handle).getRange();
+
     const address_range = chunk.getAddressRange(a);
     const chunk_size = @max(1, address_range.len);
 
@@ -87,33 +95,35 @@ fn resolveAutoOrgAddress(a: *Assembler, chunk: SourceFile.Chunk) u32 {
         //      e.g. list of non-full pages for that section, sorted by size of largest free span.
         //      But need to ensure that the upkeep cost doesn't exceed the gains here.
         for (0.., page_sections) |page_data_handle, section_handle| {
-            if (section_handle == chunk_section_handle) {
-                // std.debug.print("Checking page data handle {}\n", .{ page_data_handle });
-                var used = page_usages[page_data_handle];
-                var unused = used;
-                unused.toggleAll();
+            if (section_handle != chunk_section_handle) {
+                continue;
+            }
 
-                var begin: usize = 0;
-                while (unused.findFirstSet()) |unused_range_begin| {
-                    used.setRangeValue(.{
-                        .start = begin,
-                        .end = unused_range_begin,
-                    }, false);
+            // std.debug.print("Checking page data handle {}\n", .{ page_data_handle });
+            var used = page_usages[page_data_handle];
+            var unused = used;
+            unused.toggleAll();
 
-                    const unused_range_end = used.findFirstSet() orelse PageData.page_size;
-                    const range_size = unused_range_end - unused_range_begin;
-                    if (range_size >= chunk_size) {
-                        const page = pages[page_data_handle];
-                        // std.debug.print("Using existing page\n", .{ });
-                        return (@as(u32, page) << @bitSizeOf(bus.PageOffset)) | @intCast(bus.PageOffset, unused_range_begin);
-                    }
+            var begin: usize = 0;
+            while (unused.findFirstSet()) |unused_range_begin| {
+                used.setRangeValue(.{
+                    .start = begin,
+                    .end = unused_range_begin,
+                }, false);
 
-                    unused.setRangeValue(.{
-                        .start = begin,
-                        .end = unused_range_end,
-                    }, false);
-                    begin = unused_range_end;
+                const unused_range_end = used.findFirstSet() orelse PageData.page_size;
+                const range_size = unused_range_end - unused_range_begin;
+                if (range_size >= chunk_size) {
+                    const page = pages[page_data_handle];
+                    // std.debug.print("Using existing page\n", .{ });
+                    return bits.concat2(@intCast(bus.PageOffset, unused_range_begin), page);
                 }
+
+                unused.setRangeValue(.{
+                    .start = begin,
+                    .end = unused_range_end,
+                }, false);
+                begin = unused_range_end;
             }
         }
     }
@@ -124,9 +134,8 @@ fn resolveAutoOrgAddress(a: *Assembler, chunk: SourceFile.Chunk) u32 {
 
     // std.debug.print("Need {} full pages and {} extra bytes\n", .{ full_pages_needed, final_page_bytes_needed });
 
-    // TODO allow defining this range per named section using a directive (also use the first page there for fixed org chunks that can't resolve their .org address)
-    const search_range_begin: usize = 1;
-    const search_range_end: usize = PageData.num_pages;
+    const search_range_begin: usize = allowed_range.first >> @bitSizeOf(bus.PageOffset);
+    const search_range_end: usize = (allowed_range.first + allowed_range.len) >> @bitSizeOf(bus.PageOffset);
 
     var initial_page = search_range_begin;
     for (search_range_begin..search_range_end) |page_usize| {
@@ -174,7 +183,7 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
         const old_insn_address = insn_addresses[insn_handle];
         var new_insn_address = address;
         switch (insn_operations[insn_handle]) {
-            .none, .org, .keep, .def, .undef,
+            .none, .org, .keep, .def, .undef, .range,
             .section, .boot, .code, .kcode, .entry, .kentry,
             .data, .kdata, .@"const", .kconst, .stack => {
                 // Look forwards to see if an .align, etc. is coming up
@@ -827,7 +836,7 @@ pub fn encodePageData(a: *Assembler, file: *SourceFile) void {
 
     for (0.., s.insn.items(.operation)) |insn_handle, op| {
         switch (op) {
-            .none, .insn, .org, .@"align", .keep, .def, .undef,
+            .none, .insn, .org, .@"align", .keep, .def, .undef, .range,
             .section, .boot, .code, .kcode, .entry, .kentry, .data, .kdata, .@"const", .kconst, .stack,
             => {},
 

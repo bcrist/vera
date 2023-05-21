@@ -273,6 +273,10 @@ pub fn getSection(self: *Assembler, handle: Section.Handle) Section {
     return self.sections.entries.items(.value)[handle];
 }
 
+pub fn getSectionPtr(self: *Assembler, handle: Section.Handle) *Section {
+    return &self.sections.entries.items(.value)[handle];
+}
+
 pub fn findOrCreatePage(self: *Assembler, page: bus.Page, section: Section.Handle) PageData.Handle {
     if (self.page_lookup.get(page)) |handle| return handle;
 
