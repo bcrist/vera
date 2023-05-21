@@ -168,67 +168,110 @@ pub const ChunkPair = struct {
 
 pub fn collectChunks(
     self: *const SourceFile,
-    gpa: std.mem.Allocator,
+    a: *Assembler,
     fixed_org: *std.ArrayListUnmanaged(Chunk),
     auto_org: *std.ArrayListUnmanaged(Chunk),
 ) void {
+    const ChunkType = enum {
+        data, code,
+    };
+
+    const State = struct {
+        file: *const SourceFile,
+        a: *Assembler,
+        fixed_org_chunks: *std.ArrayListUnmanaged(Chunk),
+        auto_org_chunks: *std.ArrayListUnmanaged(Chunk),
+
+        section_handle: ?Section.Handle = null,
+
+        is_fixed: bool = false,
+        chunk_type: ?ChunkType = null,
+        chunk_begin: Instruction.Handle = undefined,
+
+        fn tryAddChunk(state: *@This(), chunk_end: Instruction.Handle, ended_by_unconditional_control_flow: bool) void {
+            const dest = if (state.is_fixed) state.fixed_org_chunks else state.auto_org_chunks;
+            if (chunk_end > state.chunk_begin) {
+                dest.append(state.a.gpa, .{
+                    .section = state.section_handle,
+                    .file = state.file.handle,
+                    .instructions = .{
+                        .begin = state.chunk_begin,
+                        .end = chunk_end,
+                    },
+                }) catch @panic("OOM");
+
+                if (state.chunk_type) |t| if (t == .code and !ended_by_unconditional_control_flow) {
+                    const token = state.file.instructions.items(.token)[chunk_end - 1];
+                    state.a.recordError(state.file.handle, token, "Expected unconditional control flow to terminate this chunk", .{});
+                };
+            }
+
+            state.is_fixed = false;
+            state.chunk_type = null;
+            state.chunk_begin = chunk_end;
+        }
+
+        fn checkChunkType(state: *@This(), new_type: ChunkType, insn: Instruction.Handle) void {
+            if (state.chunk_type) |t| {
+                if (t != new_type) {
+                    state.tryAddChunk(insn, false);
+                    state.chunk_type = new_type;
+                }
+            } else {
+                state.chunk_type = new_type;
+            }
+        }
+    };
+
+    var state = State{
+        .file = self,
+        .a = a,
+        .fixed_org_chunks = fixed_org,
+        .auto_org_chunks = auto_org,
+    };
+
+    const s = self.blocks.slice();
     const operations = self.instructions.items(.operation);
-    for (self.blocks.items(.keep), self.blocks.items(.section), self.blocks.items(.first_insn), self.blocks.items(.end_insn)) |keep, section, begin, end| {
+    for (s.items(.keep), s.items(.section), s.items(.first_insn), s.items(.end_insn)) |keep, section, begin, end| {
         if (!keep) continue;
+
+        state.section_handle = section;
 
         var block_iter = Instruction.Iterator{
             .begin = begin,
             .end = end,
         };
-        var chunk_begin = begin;
-        var dest = auto_org;
+
+        state.chunk_begin = begin;
         while (block_iter.next()) |insn_handle| {
             switch (operations[insn_handle]) {
                 .org => {
                     const new_chunk_begin = backtrackOrgHeaders(operations, insn_handle);
-                    if (chunk_begin < new_chunk_begin) {
-                        dest.append(gpa, .{
-                            .section = section,
-                            .file = self.handle,
-                            .instructions = .{
-                                .begin = chunk_begin,
-                                .end = new_chunk_begin,
-                            },
-                        }) catch @panic("OOM");
-                    }
-                    chunk_begin = new_chunk_begin;
-                    dest = fixed_org;
+                    state.tryAddChunk(new_chunk_begin, false);
+                    state.is_fixed = true;
                 },
-                .insn => |i| if (isa.getBranchKind(i.mnemonic, i.suffix) == .unconditional) {
-                    // Control will never flow past an unconditional branch, so we can treat anything after as a different chunk
-                    const new_chunk_begin = insn_handle + 1;
-                    if (chunk_begin < new_chunk_begin) {
-                        dest.append(gpa, .{
-                            .section = section,
-                            .file = self.handle,
-                            .instructions = .{
-                                .begin = chunk_begin,
-                                .end = new_chunk_begin,
-                            },
-                        }) catch @panic("OOM");
+                .insn => |i| {
+                    state.checkChunkType(.code, insn_handle);
+                    if (isa.getBranchKind(i.mnemonic, i.suffix) == .unconditional) {
+                        state.tryAddChunk(insn_handle + 1, true);
                     }
-                    chunk_begin = new_chunk_begin;
-                    dest = auto_org;
                 },
                 .bound_insn => unreachable, // instructions should never be bound before we've collected chunks
-                else => {},
+                .push, .pop => {
+                    state.checkChunkType(.code, insn_handle);
+                },
+                .db, .dw, .dd => {
+                    state.checkChunkType(.data, insn_handle);
+                },
+
+                .none, .@"align", .keep, .def, .undef, .range,
+                .section, .boot, .code, .kcode, .entry, .kentry, .data, .kdata, .@"const", .kconst, .stack
+                => {},
             }
         }
 
-        if (chunk_begin < end) {
-            dest.append(gpa, .{
-                .section = section,
-                .file = self.handle,
-                .instructions = .{
-                    .begin = chunk_begin,
-                    .end = end,
-                },
-            }) catch @panic("OOM");
+        if (state.chunk_begin < end) {
+            state.tryAddChunk(end, false);
         }
     }
 }

@@ -1,4 +1,4 @@
-    .boot vector_table
+    .boot
     .org 0
 _double_fault:                  .dw (.raw @halt)'16
 _page_fault:                    .dw (.raw @halt)'16
@@ -8,7 +8,6 @@ _instruction_protection_fault:  .dw (.raw @halt)'16
 _invalid_instruction:           .dw (.raw @halt)'16
 _pipe_0_reset:                  .dw (.raw @reset)'16
 
-    .boot
 reset:
     .def n r0
     .def last r1

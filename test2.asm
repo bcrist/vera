@@ -359,4 +359,7 @@ xyz:
     c r0 -> r0
     c r0 -> r0
     c r0 -> r0
-    ret
+    park
+    
+.data
+    .db 1

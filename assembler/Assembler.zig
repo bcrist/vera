@@ -167,7 +167,7 @@ pub fn assemble(self: *Assembler) void {
     defer fixed_org_chunks.deinit(self.gpa);
     defer auto_org_chunks.deinit(self.gpa);
     for (self.files.items) |*file| {
-        file.collectChunks(self.gpa, &fixed_org_chunks, &auto_org_chunks);
+        file.collectChunks(self, &fixed_org_chunks, &auto_org_chunks);
     }
 
     var attempts: usize = 0;
