@@ -2,6 +2,7 @@ const std = @import("std");
 const lex = @import("lex.zig");
 const isa = @import("isa_types");
 const ie = @import("isa_encoding");
+const symbols = @import("symbols.zig");
 const Assembler = @import("Assembler.zig");
 const Instruction = @import("Instruction.zig");
 const Expression = @import("Expression.zig");
@@ -19,6 +20,7 @@ tokens: lex.TokenList,
 instructions: std.MultiArrayList(Instruction),
 expressions: std.MultiArrayList(Expression),
 blocks: std.MultiArrayList(SectionBlock),
+locals: std.StringHashMapUnmanaged(symbols.SymbolTarget),
 
 pub const Slices = struct {
     file: *SourceFile,
@@ -71,6 +73,7 @@ pub fn parse(gpa: std.mem.Allocator, handle: Handle, name: []const u8, source: [
         .instructions = .{},
         .expressions = .{},
         .blocks = .{},
+        .locals = .{},
     };
 
     var temp = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -116,6 +119,7 @@ pub fn deinit(self: SourceFile, gpa: std.mem.Allocator, maybe_arena: ?std.mem.Al
     self.instructions.deinit(gpa);
     self.expressions.deinit(gpa);
     self.blocks.deinit(gpa);
+    self.locals.deinit(gpa);
     if (maybe_arena) |arena| {
         arena.free(self.name);
         arena.free(self.source);
@@ -264,7 +268,7 @@ pub fn collectChunks(
                     state.checkChunkType(.data, insn_handle);
                 },
 
-                .none, .@"align", .keep, .def, .undef, .range,
+                .none, .@"align", .keep, .def, .undef, .local, .range,
                 .section, .boot, .code, .kcode, .entry, .kentry, .data, .kdata, .@"const", .kconst, .stack
                 => {},
             }
@@ -300,6 +304,13 @@ pub fn findInstructionByToken(self: *const SourceFile, token_handle: Token.Handl
         } else break;
     }
     return @intCast(Instruction.Handle, insn_index orelse unreachable);
+}
+
+// Note this may not work correctly for a needle expression in a label, which preceeds the main Instruction.token.
+// It's meant to be used when you know the expression is from an instruction's parameter or symbol definition expression.
+pub fn findInstructionByExpr(self: *const SourceFile, expr_handle: Expression.Handle) Instruction.Handle {
+    const token_handle = self.expressions.items(.token)[expr_handle];
+    return self.findInstructionByToken(token_handle);
 }
 
 pub fn findBlockByToken(self: *const SourceFile, token_handle: Token.Handle) SectionBlock.Handle {
@@ -481,11 +492,15 @@ const Parser = struct {
 
         if (self.parseDirective()) |directive| {
             const directive_token = self.next_token - 1;
-            if (directive == .def) {
+            if (directive == .def or directive == .local) {
                 if (self.parseSymbolDef()) |symbol| {
                     if (self.parseExpr(false)) |expr| {
                         const params = self.addBinaryExpression(.list, directive_token, symbol, expr);
-                        self.addInstruction(label, directive_token, .{ .def = {} }, params);
+                        self.addInstruction(label, directive_token, switch (directive) {
+                            .def => .{ .def = {} },
+                            .local => .{ .local = {} },
+                            else => unreachable,
+                        }, params);
                     } else {
                         self.recordError("Expected expression for symbol definition");
                         self.sync_to_end_of_line = true;

@@ -13,11 +13,15 @@ There are no multi-line comments.  Other common comment characters in assembly (
 # Pseudo-instruction Directives
 
 ## Non-outputting Directives
-    .org <expr>
+```
+.org <expr>
+```
 Forces the address assigned to this line to be the constant expression that follows.
 It is possible to accidentally cause code or data to overlap using this directive, which the assembler will report as an error.
 
-    .align <alignment> [offset]
+```
+.align <alignment> [offset]
+```
 Ensures that the alignment of the address assigned to this line is at least equal to the constant expression that follows
 The alignment must be a power of two > 0 (i.e. popcnt alignment == 1)
 The second parameter allows an offset to be added to the aligned value, and defaults to 0.
@@ -27,14 +31,14 @@ The exact algorithm for modifying the address is as follows:
     while (temp < address) temp += alignment
     address = temp
 
-
-    .keep
+```
+.keep
+```
 Prevents the section containing this directive (or any sections referenced by it) from being removed via dead-code elimination
 
-    .nomove
-Prevents the section from being reordered relative to other sections with the same name that also have .nomove, within the same file.
-
-    .def <symbol> <expr>
+```
+.def <symbol> <expr>
+```
 Creates a named expression.
 The scope of the symbol defined begins on the next line and ends at the first of the following:
     * Another section begins
@@ -42,14 +46,25 @@ The scope of the symbol defined begins on the next line and ends at the first of
     * The symbol is redefined with another `.def` using the same name
     * The end of the file is reached
 
-Note that the expression is evaluated in the context where the symbol is used, not where it is defined.  In particular, `$` does not evaluate to the line containing the `.def` directive.
+Note that symbol resolution in `<expr>` is done based on the scope of the `.def` directive, but when the symbol is referenced, any relative addresses are computed based on the address of the instruction where the expression is being used.  For example:
+```
+.org 1000
+.def a $
+.def b a + 32
+.undef a
 
-If a named expression is created with the same name as a label, the named expression shadows the label during symbol resolution.
+.org 2000
+.dw .raw @b // 2032
+```
 
-    .undef <symbol>
+```
+.undef <symbol>
+```
  Ends the scope of a named expression created with `.def`
 
-    .local <symbol> <expr>
+```
+.local <symbol> <expr>
+```
 Similar to `.def`, but with a few differences:
 * The declaration is visible to the entire file
 * `.undef` has no effect on the symbol
@@ -57,18 +72,18 @@ Similar to `.def`, but with a few differences:
 
 File-local labels can also be defined:
 
-    .local <label>:
-This is equivalent to `.local <label> $` except that it can be used on the same line as another instruction/directive.  This makes it possible to reference private labels in different sections of the same file, without making the label visible globally in other files:
+```
+.local <label>:
+```
+This is equivalent to creating a private label and then aliasing it with a normal `.local` declaration, except without polluting the private label namespace with another name.
 
-    .code
-        ld hidden -> r0   // normally _private wouldn't be in scope here
-	.local hidden: .data
-        .dw 0x1234
+`.local` and `.def` symbols are allowed to shadow public labels defined in other files.  Symbols are never allowed to shadow other symbols defined in the same file (unless they are in different scopes, like private labels in different section blocks)
 
-
-    .db <expr-list>      // "Declare bytes" (8-bit)
-    .dw <expr-list>      // "Declare words" (16-bit, implies .align 2)
-    .dd <expr-list>      // "Declare double words" (32-bit, implies .align 2)
+```
+.db <expr-list>      // "Declare bytes" (8-bit)
+.dw <expr-list>      // "Declare words" (16-bit, implies .align 2)
+.dd <expr-list>      // "Declare double words" (32-bit, implies .align 2)
+```
 Declares one or more bytes, words, or double words of data.
 `.dw` and `.dd` imply `.align 2`.
 

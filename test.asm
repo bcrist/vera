@@ -15,6 +15,7 @@ loop:
     b.p loop
 _end:
     c   last -> r0
+    c asdf -> r0.unsigned
     ret
 something:
     ret
@@ -44,3 +45,5 @@ str: .db 1,2,3,4
         \\
         , 456789
     .db \\
+
+    .local asdf 1234

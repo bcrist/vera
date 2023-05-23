@@ -3,6 +3,7 @@ const bits = @import("bits");
 const ie = @import("isa_encoding");
 const bus = @import("bus_types");
 const lex = @import("lex.zig");
+const symbols = @import("symbols.zig");
 const Assembler = @import("Assembler.zig");
 const SourceFile = @import("SourceFile.zig");
 const Section = @import("Section.zig");
@@ -202,7 +203,7 @@ fn getAlignmentForChunk(a: *Assembler, chunk: SourceFile.Chunk) Assembler.Alignm
     var iter = chunk.instructions;
     while (iter.next()) |insn_handle| {
         switch (insn_operations[insn_handle]) {
-            .none, .org, .keep, .def, .undef, .range,
+            .none, .org, .keep, .def, .undef, .local, .range,
             .section, .boot, .code, .kcode, .entry, .kentry,
             .data, .kdata, .@"const", .kconst, .stack,
             => {},
@@ -242,7 +243,7 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
         const old_insn_address = insn_addresses[insn_handle];
         var new_insn_address = address;
         switch (insn_operations[insn_handle]) {
-            .none, .org, .keep, .def, .undef, .range,
+            .none, .org, .keep, .def, .undef, .local, .range,
             .section, .boot, .code, .kcode, .entry, .kentry,
             .data, .kdata, .@"const", .kconst, .stack,
             .@"align" => {
@@ -254,7 +255,7 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
                         first = false;
                     }
                     switch (insn_operations[insn2]) {
-                        .none, .org, .keep, .def, .undef, .range,
+                        .none, .org, .keep, .def, .undef, .local, .range,
                         .section, .boot, .code, .kcode, .entry, .kentry,
                         .data, .kdata, .@"const", .kconst, .stack => {},
 
@@ -794,30 +795,28 @@ pub fn resolveExpressionConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, e
 }
 
 fn resolveSymbolRefExprConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, expr_handle: Expression.Handle, symbol_token_handle: lex.Token.Handle, symbol_constant: Constant) void {
-    if (a.lookupSymbol(s, symbol_token_handle, symbol_constant.asString())) |target| {
-        switch (target) {
-            .expression => |target_expr_handle| {
-                s.expr.items(.resolved_constant)[expr_handle] = resolveExpressionConstant(a, s, ip, target_expr_handle);
-            },
-            .instruction => |target_insn_ref| {
-                const target_file = a.getSource(target_insn_ref.file);
-                var value: i64 = target_file.instructions.items(.address)[target_insn_ref.instruction];
-                switch (s.expr.items(.resolved_type)[expr_handle]) {
-                    .raw_base_offset, .data_address, .insn_address, .stack_address => |info| {
-                        if (std.meta.eql(info.base, .{ .sr = .IP })) {
-                            value -= ip;
-                        }
-                    },
-                    else => {},
-                }
-                const constant = Constant.initInt(value);
-                s.expr.items(.resolved_constant)[expr_handle] = constant.intern(a.arena, a.gpa, &a.constants);
-            },
-            .not_found => {
-                return;
-            },
-        }
-    } else unreachable;
+    switch (symbols.lookupSymbol(a, s, symbol_token_handle, symbol_constant.asString())) {
+        .expression => |target_expr_handle| {
+            s.expr.items(.resolved_constant)[expr_handle] = resolveExpressionConstant(a, s, ip, target_expr_handle);
+        },
+        .instruction => |target_insn_ref| {
+            const target_file = a.getSource(target_insn_ref.file);
+            var value: i64 = target_file.instructions.items(.address)[target_insn_ref.instruction];
+            switch (s.expr.items(.resolved_type)[expr_handle]) {
+                .raw_base_offset, .data_address, .insn_address, .stack_address => |info| {
+                    if (std.meta.eql(info.base, .{ .sr = .IP })) {
+                        value -= ip;
+                    }
+                },
+                else => {},
+            }
+            const constant = Constant.initInt(value);
+            s.expr.items(.resolved_constant)[expr_handle] = constant.intern(a.arena, a.gpa, &a.constants);
+        },
+        .not_found => {
+            return;
+        },
+    }
 }
 
 fn resolveInstructionEncoding(a: *Assembler, s: SourceFile.Slices, ip: u32, insn_handle: Instruction.Handle, op: *Instruction.Operation, params: ?Expression.Handle) u3 {
@@ -911,7 +910,7 @@ pub fn encodePageData(a: *Assembler, file: *SourceFile) void {
 
     for (0.., s.insn.items(.operation)) |insn_handle, op| {
         switch (op) {
-            .none, .insn, .org, .@"align", .keep, .def, .undef, .range,
+            .none, .insn, .org, .@"align", .keep, .def, .undef, .local, .range,
             .section, .boot, .code, .kcode, .entry, .kentry, .data, .kdata, .@"const", .kconst, .stack,
             => {},
 

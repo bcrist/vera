@@ -29,6 +29,7 @@ pub const Operation = union(enum) {
     keep,
     def,
     undef,
+    local,
     db,
     dw,
     dd,
@@ -95,6 +96,7 @@ pub fn isSectionDirective(op: OperationType) bool {
         .keep,
         .def,
         .undef,
+        .local,
         .insn,
         .bound_insn,
         .db,
@@ -127,6 +129,7 @@ pub fn isOrgHeader(op: OperationType) bool {
         .keep,
         .def,
         .undef,
+        .local,
         .range,
         => true,
 

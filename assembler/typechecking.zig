@@ -3,6 +3,7 @@ const bus = @import("bus_types");
 const lex = @import("lex.zig");
 const isa = @import("isa_types");
 const ie = @import("isa_encoding");
+const symbols = @import("symbols.zig");
 const layout = @import("layout.zig");
 const Assembler = @import("Assembler.zig");
 const SourceFile = @import("SourceFile.zig");
@@ -41,7 +42,9 @@ pub fn processLabelsAndSections(a: *Assembler, file: *SourceFile) void {
                 .kconst => .constant_kernel,
                 .stack => .stack,
 
-                .none, .insn, .bound_insn, .org, .@"align", .keep, .def, .undef, .db, .dw, .dd, .push, .pop, .range,
+                .none, .insn, .bound_insn, .org, .@"align",
+                .keep, .def, .undef, .local,
+                .db, .dw, .dd, .push, .pop, .range,
                 => unreachable,
             };
 
@@ -101,13 +104,20 @@ pub fn processLabelsAndSections(a: *Assembler, file: *SourceFile) void {
             if (insn_params[insn_handle]) |params| {
                 _ = resolveSymbolDefExprList(a, s, params);
             }
+        } else if (op == .local) {
+            const params_expr = insn_params[insn_handle].?;
+            const bin = s.expr.items(.info)[params_expr].list;
+            const symbol_name = resolveSymbolDefExpr(a, s, bin.left).asString();
+            _ = s.file.locals.getOrPutValue(a.gpa, symbol_name, .{
+                .expression = bin.right,
+            }) catch @panic("OOM");
         }
 
         if (maybe_label_expr) |label_expr| {
             const symbol_constant = resolveSymbolDefExpr(a, s, label_expr);
-            const symbol = symbol_constant.asString();
-            if (!in_stack_section and !std.mem.startsWith(u8, symbol, "_")) {
-                a.symbols.put(a.gpa, symbol, .{
+            const symbol_name = symbol_constant.asString();
+            if (!in_stack_section and !std.mem.startsWith(u8, symbol_name, "_")) {
+                _ = a.public_labels.getOrPutValue(a.gpa, symbol_name, .{
                     .file = file.handle,
                     .instruction = @intCast(Instruction.Handle, insn_handle),
                 }) catch @panic("OOM");
@@ -128,7 +138,7 @@ fn resolveSymbolDefExprList(a: *Assembler, s: SourceFile.Slices, symbol_def_expr
 }
 
 fn resolveSymbolDefExpr(a: *Assembler, s: SourceFile.Slices, symbol_def_expr: Expression.Handle) *const Constant {
-    const symbol_name = a.parseSymbol(s, symbol_def_expr);
+    const symbol_name = symbols.parseSymbol(a, s, symbol_def_expr);
     s.expr.items(.resolved_constant)[symbol_def_expr] = symbol_name;
     s.expr.items(.resolved_type)[symbol_def_expr] = .{ .symbol_def = {} };
     return symbol_name;
@@ -563,7 +573,7 @@ fn tryResolveSymbolType(a: *Assembler, s: SourceFile.Slices, expr_handle: Expres
     var expr_resolved_types = s.expr.items(.resolved_type);
     var expr_flags = s.expr.items(.flags);
 
-    if (a.lookupSymbol(s, token_handle, symbol)) |target| switch (target) {
+    switch (symbols.lookupSymbol(a, s, token_handle, symbol)) {
         .expression => |target_expr_handle| {
             const target_type = expr_resolved_types[target_expr_handle];
             if (target_type != .unknown) {
@@ -596,7 +606,7 @@ fn tryResolveSymbolType(a: *Assembler, s: SourceFile.Slices, expr_handle: Expres
             expr_resolved_types[expr_handle] = .{ .poison = {} };
             return true;
         },
-    };
+    }
 
     return false;
 }
@@ -618,15 +628,7 @@ fn checkInstructionsAndDirectivesInFile(a: *Assembler, s: SourceFile.Slices) voi
 
     for (0.., s.insn.items(.operation), s.insn.items(.params), s.insn.items(.label)) |insn_handle, op, maybe_params, maybe_label_expr| {
         if (maybe_label_expr) |label_expr| {
-            const label_name = a.parseSymbol(s, label_expr).asString();
-            if (a.symbols.get(label_name) orelse Assembler.findPrivateLabel(s, s.file.findBlockByInstruction(@intCast(Instruction.Handle, insn_handle)), label_name)) |insn_ref| {
-                if (insn_ref.instruction != insn_handle or insn_ref.file != s.file.handle) {
-                    const token = s.expr.items(.token)[label_expr];
-                    const target_file = a.getSource(insn_ref.file);
-                    const target_line_number = target_file.instructions.items(.line_number)[insn_ref.instruction];
-                    a.recordErrorFmt(s.file.handle, token, "Duplicate label (canonical label is at line {} in {s})", .{ target_line_number, target_file.name }, .{});
-                }
-            }
+            checkLabelShadowing(a, s, @intCast(Instruction.Handle, insn_handle), label_expr);
         }
 
         switch (op) {
@@ -784,21 +786,12 @@ fn checkInstructionsAndDirectivesInFile(a: *Assembler, s: SourceFile.Slices) voi
                 }
             },
 
+            .local => if (maybe_params) |params_expr| {
+                checkLocalSymbolShadowing(a, s, params_expr);
+            },
+
             .def => if (maybe_params) |params_expr| {
-                const bin = s.expr.items(.info)[params_expr].list;
-                const token = s.expr.items(.token)[bin.left];
-                const symbol_name = a.parseSymbol(s, bin.left).asString();
-                const block_handle = s.file.findBlockByToken(token);
-                if (Assembler.findPrivateLabel(s, block_handle, symbol_name)) |insn_ref| {
-                    const line_number = s.insn.items(.line_number)[insn_ref.instruction];
-                    a.recordErrorFmt(s.file.handle, token, "Symbol hides private label at line {}", .{ line_number }, .{});
-                }
-                // TODO stack sections
-                if (a.symbols.get(symbol_name)) |insn_ref| {
-                    const file = a.getSource(insn_ref.file);
-                    const line_number = file.instructions.items(.line_number)[insn_ref.instruction];
-                    a.recordErrorFmt(s.file.handle, token, "Symbol hides label at line {} in {s}", .{ line_number, file.name }, .{});
-                }
+                checkDefSymbolShadowing(a, s, params_expr);
             },
 
             .undef => if (maybe_params) |params_expr| {
@@ -873,6 +866,106 @@ fn instructionHasLayoutDependentParams(s: SourceFile.Slices, params_handle: Expr
     return false;
 }
 
+fn checkLabelShadowing(a: *Assembler, s: SourceFile.Slices, insn_handle: Instruction.Handle, label_expr_handle: Expression.Handle) void {
+    const label_name = symbols.parseSymbol(a, s, label_expr_handle).asString();
+    // TODO .local labels
+
+    if (std.mem.startsWith(u8, label_name, "_")) {
+        const token = s.expr.items(.token)[label_expr_handle];
+        const block_handle = s.file.findBlockByInstruction(@intCast(Instruction.Handle, insn_handle));
+        if (symbols.findPrivateLabel(s, block_handle, label_name)) |target_insn_handle| {
+            if (target_insn_handle != insn_handle) {
+                const target_line_number = s.insn.items(.line_number)[target_insn_handle];
+                a.recordErrorFmt(s.file.handle, token, "Duplicate private label (canonical label is at line {})", .{ target_line_number }, .{});
+            }
+        }
+
+        checkSymbolHidesLocal(a, s, label_name, token, "Private label hides .local at line {} (cannot shadow symbols defined in the same file)");
+
+    } else if (a.public_labels.get(label_name)) |insn_ref| {
+        if (insn_ref.instruction != insn_handle or insn_ref.file != s.file.handle) {
+            const token = s.expr.items(.token)[label_expr_handle];
+            const target_file = a.getSource(insn_ref.file);
+            const target_line_number = target_file.instructions.items(.line_number)[insn_ref.instruction];
+            a.recordErrorFmt(s.file.handle, token, "Duplicate label (canonical label is at line {} in {s})", .{ target_line_number, target_file.name }, .{});
+        }
+    }
+}
+
+fn checkLocalSymbolShadowing(a: *Assembler, s: SourceFile.Slices, params_expr_handle: Expression.Handle) void {
+    const bin = s.expr.items(.info)[params_expr_handle].list;
+    const token = s.expr.items(.token)[bin.left];
+    const symbol_name = symbols.parseSymbol(a, s, bin.left).asString();
+
+    if (s.file.locals.get(symbol_name)) |target| {
+        const wrong_target_insn: ?Instruction.Handle = switch (target) {
+            .expression => |expr_handle| i: {
+                if (expr_handle == bin.right) {
+                    break :i null;
+                 } else {
+                    break :i s.file.findInstructionByExpr(expr_handle);
+                 }
+            },
+            .instruction => |insn_ref| i: {
+                std.debug.assert(insn_ref.file == s.file.handle);
+                break :i insn_ref.instruction;
+            },
+            .not_found => unreachable,
+        };
+        if (wrong_target_insn) |insn_handle| {
+            const line_number = s.insn.items(.line_number)[insn_handle];
+            a.recordErrorFmt(s.file.handle, token, "Duplicate .local name (canonical symbol is at line {})", .{ line_number }, .{});
+        }
+    }
+
+    if (a.public_labels.get(symbol_name)) |insn_ref| {
+        if (insn_ref.file == s.file.handle) {
+            const line_number = s.insn.items(.line_number)[insn_ref.instruction];
+            a.recordErrorFmt(s.file.handle, token, ".local hides label at line {}  (cannot shadow symbols defined in the same file)", .{ line_number }, .{});
+        }
+    }
+}
+
+fn checkDefSymbolShadowing(a: *Assembler, s: SourceFile.Slices, params_expr_handle: Expression.Handle) void {
+    const bin = s.expr.items(.info)[params_expr_handle].list;
+    const token = s.expr.items(.token)[bin.left];
+    const symbol_name = symbols.parseSymbol(a, s, bin.left).asString();
+
+    if (std.mem.startsWith(u8, symbol_name, "_")) {
+        const block_handle = s.file.findBlockByToken(token);
+        if (symbols.findPrivateLabel(s, block_handle, symbol_name)) |insn_handle| {
+            const line_number = s.insn.items(.line_number)[insn_handle];
+            a.recordErrorFmt(s.file.handle, token, ".def hides private label at line {} (cannot shadow symbols defined in the same file)", .{ line_number }, .{});
+        }
+    }
+
+    // TODO stack sections
+
+    checkSymbolHidesLocal(a, s, symbol_name, token, ".def hides .local at line {} (cannot shadow symbols defined in the same file)");
+
+    if (a.public_labels.get(symbol_name)) |insn_ref| {
+        if (insn_ref.file == s.file.handle) {
+            const line_number = s.insn.items(.line_number)[insn_ref.instruction];
+            a.recordErrorFmt(s.file.handle, token, ".def hides label at line {} (cannot shadow symbols defined in the same file)", .{ line_number }, .{});
+        }
+    }
+}
+
+fn checkSymbolHidesLocal(a: *Assembler, s: SourceFile.Slices, symbol_name: []const u8, token: lex.Token.Handle, comptime fmt: []const u8) void {
+    if (s.file.locals.get(symbol_name)) |target| {
+        const target_insn_handle = switch (target) {
+            .expression => |expr_handle| s.file.findInstructionByExpr(expr_handle),
+            .instruction => |insn_ref| i: {
+                std.debug.assert(insn_ref.file == s.file.handle);
+                break :i insn_ref.instruction;
+            },
+            .not_found => unreachable,
+        };
+        const line_number = s.insn.items(.line_number)[target_insn_handle];
+        a.recordErrorFmt(s.file.handle, token, fmt, .{ line_number }, .{});
+    }
+}
+
 fn checkUndefExprList(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle) void {
     const infos = s.expr.items(.info);
     var expr = expr_handle;
@@ -885,9 +978,9 @@ fn checkUndefExprList(a: *Assembler, s: SourceFile.Slices, expr_handle: Expressi
 }
 
 fn checkUndefExpr(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle) void {
-    const symbol_name = a.parseSymbol(s, expr_handle);
+    const symbol_name = symbols.parseSymbol(a, s, expr_handle);
     const token = s.expr.items(.token)[expr_handle];
-    if (a.lookupSymbol(s, token, symbol_name.asString())) |target| switch (target) {
+    switch (symbols.lookupSymbol(a, s, token, symbol_name.asString())) {
         .expression => {},
         .not_found => {
             a.recordError(s.file.handle, token, "Symbol must be defined before it can be un-defined", .{});
@@ -895,7 +988,7 @@ fn checkUndefExpr(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression.H
         .instruction => {
             a.recordError(s.file.handle, token, "Labels cannot be un-defined", .{});
         },
-    };
+    }
 }
 
 fn checkDataDirectiveExprList(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle) void {

@@ -1,5 +1,6 @@
 const std = @import("std");
 const lex = @import("lex.zig");
+const symbols = @import("symbols.zig");
 const Assembler = @import("Assembler.zig");
 const SourceFile = @import("SourceFile.zig");
 const Instruction = @import("Instruction.zig");
@@ -84,7 +85,7 @@ fn traceReferencesInExpr(a: *Assembler, s: SourceFile.Slices, expr_handle: Expre
 }
 
 fn traceSymbol(a: *Assembler, s: SourceFile.Slices, token_handle: lex.Token.Handle, symbol: []const u8) void {
-    if (a.lookupSymbol(s, token_handle, symbol)) |target| switch (target) {
+    switch (symbols.lookupSymbol(a, s, token_handle, symbol)) {
         .expression => |target_expr_handle| {
             const target_token_handle = s.expr.items(.token)[target_expr_handle];
             const block_handle = s.file.findBlockByToken(target_token_handle);
@@ -108,5 +109,5 @@ fn traceSymbol(a: *Assembler, s: SourceFile.Slices, token_handle: lex.Token.Hand
             }
         },
         .not_found => {},
-    };
+    }
 }

@@ -6,6 +6,7 @@ const lex = @import("lex.zig");
 const typechecking = @import("typechecking.zig");
 const dead_code = @import("dead_code.zig");
 const layout = @import("layout.zig");
+const symbols = @import("symbols.zig");
 const Constant = @import("Constant.zig");
 const Section = @import("Section.zig");
 const Instruction = @import("Instruction.zig");
@@ -27,7 +28,7 @@ files: std.ArrayListUnmanaged(SourceFile) = .{},
 errors: std.ArrayListUnmanaged(Error) = .{},
 insn_encoding_errors: std.ArrayListUnmanaged(InsnEncodingError) = .{},
 overlapping_chunks: std.AutoArrayHashMapUnmanaged(SourceFile.ChunkPair, void) = .{},
-symbols: std.StringHashMapUnmanaged(InstructionRef) = .{},
+public_labels: std.StringHashMapUnmanaged(symbols.InstructionRef) = .{},
 sections: std.StringArrayHashMapUnmanaged(Section) = .{},
 chunks: std.ArrayListUnmanaged(ChunkWithAddress) = .{},
 pages: std.MultiArrayList(PageData) = .{},
@@ -35,11 +36,6 @@ page_lookup: std.AutoHashMapUnmanaged(bus.Page, PageData.Handle) = .{},
 constant_temp: std.ArrayListUnmanaged(u8) = .{},
 params_temp: std.ArrayListUnmanaged(ie.Parameter) = .{},
 constants: Constant.InternPool = .{},
-
-pub const InstructionRef = struct {
-    file: SourceFile.Handle,
-    instruction: Instruction.Handle,
-};
 
 pub const ChunkWithAddress = struct {
     chunk: SourceFile.Chunk,
@@ -332,127 +328,6 @@ pub fn recordInsnEncodingError(self: *Assembler, file_handle: SourceFile.Handle,
         .insn = insn_handle,
         .flags = flags,
     }) catch @panic("OOM");
-}
-
-pub fn parseSymbol(self: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle) *const Constant {
-    switch (s.expr.items(.info)[expr_handle]) {
-        .literal_symbol_def, .literal_symbol_ref => {
-            const file = s.file;
-            const token_handle = s.expr.items(.token)[expr_handle];
-            const literal = file.tokens.get(token_handle).location(file.source);
-            const constant = Constant.initSymbolLiteral(self.gpa, &self.constant_temp, literal);
-            return constant.intern(self.arena, self.gpa, &self.constants);
-        },
-        .directive_symbol_def, .directive_symbol_ref => |inner_expr| {
-            var expr_resolved_constants = s.expr.items(.resolved_constant);
-            if (expr_resolved_constants[inner_expr]) |interned_symbol_name| {
-                return interned_symbol_name;
-            } else if (typechecking.tryResolveExpressionType(self, s, inner_expr)) {
-                return expr_resolved_constants[inner_expr].?;
-            } else unreachable;
-        },
-        else => unreachable,
-    }
-}
-
-pub const SymbolTarget = union(enum) {
-    not_found,
-    expression: Expression.Handle, // always in the same file where it's being referenced
-    instruction: InstructionRef,
-};
-pub fn lookupSymbol(self: *Assembler, s: SourceFile.Slices, symbol_token_handle: lex.Token.Handle, symbol: []const u8) ?SymbolTarget {
-    const file = s.file;
-    const operations = s.insn.items(.operation);
-    const resolved_constants = s.expr.items(.resolved_constant);
-
-    const insn_containing_symbol_expression = file.findInstructionByToken(symbol_token_handle);
-
-    // 1. .def symbols
-    var def_symbol_definition: ?Expression.Handle = null;
-    const block_handle = file.findBlockByToken(symbol_token_handle);
-    var block_iter = file.blockInstructions(block_handle);
-    while (block_iter.next()) |insn_handle| {
-        if (insn_handle >= insn_containing_symbol_expression) break;
-
-        switch (operations[insn_handle]) {
-            .def => {
-                const params_expr = s.insn.items(.params)[insn_handle].?;
-                const symbol_and_definition = s.expr.items(.info)[params_expr].list;
-                const def_symbol_expr = symbol_and_definition.left;
-                const def_symbol = resolved_constants[def_symbol_expr].?;
-                if (std.mem.eql(u8, symbol, def_symbol.asString())) {
-                    def_symbol_definition = symbol_and_definition.right;
-                }
-            },
-            .undef => if (def_symbol_definition) |_| {
-                if (s.insn.items(.params)[insn_handle]) |params_expr| {
-                    if (undefListContainsSymbol(self, s, params_expr, symbol)) {
-                        def_symbol_definition = null;
-                    }
-                }
-            },
-            else => {},
-        }
-    }
-    if (def_symbol_definition) |expr_handle| {
-        return .{ .expression = expr_handle };
-    }
-
-    // 2. private labels
-    if (findPrivateLabel(s, block_handle, symbol)) |insn_ref| {
-        return .{ .instruction = insn_ref };
-    }
-
-    // 3. stack labels from .pushed contexts
-    // TODO stack sections
-
-    // 4. global labels
-    if (self.symbols.get(symbol)) |insn_ref| {
-        return .{ .instruction = insn_ref };
-    }
-
-    return .{ .not_found = {} };
-}
-
-pub fn findPrivateLabel(s: SourceFile.Slices, block_handle: SourceFile.SectionBlock.Handle, symbol: []const u8) ?InstructionRef {
-    if (!std.mem.startsWith(u8, symbol, "_")) {
-        return null;
-    }
-    const labels = s.insn.items(.label);
-    const resolved_constants = s.expr.items(.resolved_constant);
-    var block_iter = s.file.blockInstructions(block_handle);
-    while (block_iter.next()) |insn_handle| {
-        if (labels[insn_handle]) |label_expr| {
-            const label_constant = resolved_constants[label_expr] orelse unreachable;
-            if (std.mem.eql(u8, symbol, label_constant.asString())) {
-                return .{
-                    .file = s.file.handle,
-                    .instruction = insn_handle,
-                };
-            }
-        }
-    }
-    return null;
-}
-
-fn undefListContainsSymbol(self: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle, symbol: []const u8) bool {
-    switch (s.expr.items(.info)[expr_handle]) {
-        .list => |bin| {
-            return undefListContainsSymbol(self, s, bin.left, symbol)
-                or undefListContainsSymbol(self, s, bin.right, symbol);
-        },
-        .literal_symbol_def => {
-            const token_handle = s.expr.items(.token)[expr_handle];
-            const raw_symbol = s.file.tokens.get(token_handle).location(s.file.source);
-            const undef_symbol = Constant.initSymbolLiteral(self.gpa, &self.constant_temp, raw_symbol);
-            return std.mem.eql(u8, symbol, undef_symbol.asString());
-        },
-        .directive_symbol_def => |literal_expr| {
-            const undef_symbol = s.expr.items(.resolved_constant)[literal_expr].?;
-            return std.mem.eql(u8, symbol, undef_symbol.asString());
-        },
-        else => unreachable,
-    }
 }
 
 pub fn buildInstruction(self: *Assembler, s: SourceFile.Slices, ip: u32, mnemonic: Mnemonic, suffix: MnemonicSuffix, params: ?Expression.Handle, record_errors: bool) ?ie.Instruction {
