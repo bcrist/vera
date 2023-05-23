@@ -249,6 +249,7 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
             .@"align" => {
                 // Look forwards to see if another .align, etc. is coming up
                 var iter2 = chunk.instructions;
+                iter2.begin = insn_handle;
                 var first = true;
                 while (iter2.next()) |insn2| {
                     if (first) {
@@ -264,10 +265,12 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
                                 address = resolveAndApplyAlignment(a, s, address, align_expr, first, check_for_alignment_holes, insn2, chunk.section);
                             }
                         },
+
                         .dw, .dd => {
                             address = applyAlignment(address, 2, 0);
                             break;
                         },
+
                         .insn, .bound_insn, .push, .pop, .db => break,
                     }
                 }

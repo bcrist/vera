@@ -30,12 +30,15 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
             file.instructions.items(.operation),
             file.instructions.items(.params),
             file.instructions.items(.address),
+            file.instructions.items(.length),
             file.instructions.items(.flags),
-        ) |handle, label_handle, operation, params_handle, address, flags| {
+        ) |handle, label_handle, operation, params_handle, address, length, flags| {
             try writer.print("         #{}:", .{ handle });
             if (address != 0) {
                 try writer.print(" {X:0>8}", .{ address });
             }
+            try writer.print(" (+{})", .{ length });
+
             if (label_handle) |label| {
                 try writer.print(" #{}:", .{ label });
             }
