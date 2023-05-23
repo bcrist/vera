@@ -42,10 +42,7 @@ pub fn matches(self: Instruction, encoding: InstructionEncoding) bool {
     var encoded: [6]u8 = [_]u8{0} ** 6;
     var encoded_sources = std.EnumSet(ParameterEncoding.Source){};
 
-    var i: usize = 0;
-    while (i < encoding.params.len) : (i += 1) {
-        const param = self.params[i];
-        const param_encoding = encoding.params[i];
+    for (self.params, encoding.params) |param, param_encoding| {
         if (!param.matches(param_encoding)) return false;
 
         // The rest of this makes sure that if the encoding has multiple parameters stored in the same

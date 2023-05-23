@@ -365,11 +365,15 @@ pub fn print(self: Parameter, writer: anytype, address: u32) !void {
                 .constant => if (info.base != .constant and self.constant != 0) {
                     if (info.base == .sr and info.base.sr == .IP) {
                         const target = address + self.constant;
-                        try writer.print(" + 0x{X} - 0x{X}", .{ target, address });
+                        if (self.constant < 0) {
+                            try writer.print(" - 0x{X} // 0x{X}", .{ -self.constant, target });
+                        } else {
+                            try writer.print(" + 0x{X} // 0x{X}", .{ self.constant, target });
+                        }
                     } else if (self.constant < 0) {
                         try writer.print(" - 0x{X}", .{ -self.constant });
                     } else {
-                        try writer.print(" + 0x{X}", .{ -self.constant });
+                        try writer.print(" + 0x{X}", .{ self.constant });
                     }
                 },
                 .reg8, .reg16, .reg32 => |reg| {
