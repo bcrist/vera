@@ -56,7 +56,7 @@ fn traceReferencesInExpr(a: *Assembler, s: SourceFile.Slices, expr_handle: Expre
         },
 
         .arrow_prefix, .negate, .complement, .signed_cast, .unsigned_cast, .remove_signedness_cast,
-        .data_address_cast, .insn_address_cast, .stack_address_cast, .remove_address_cast,
+        .data_address_cast, .insn_address_cast, .stack_address_cast, .remove_address_cast, .local_label_def,
         .index_to_reg8, .index_to_reg16, .index_to_reg32, .reg_to_index, .absolute_address_cast => |inner_expr| {
             traceReferencesInExpr(a, s, inner_expr);
         },

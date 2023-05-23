@@ -1,0 +1,3 @@
+.code
+.keep
+    b loop

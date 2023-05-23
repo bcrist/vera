@@ -17,7 +17,7 @@ _end:
     c   last -> r0
     c asdf -> r0.unsigned
     ret
-something:
+.local _something:
     ret
 //    axe
 
@@ -32,7 +32,7 @@ str: .db 1,2,3,4
     4, \
     5, \
     1111, \
-    123
+    .raw @_something
     .dd 1,2,3,4,"Hellorld!", 0xF .signed'40, 255 .signed'40, -1 .unsigned'40
     .db "\(U+12345)"
     .db "\(=AA++128)"

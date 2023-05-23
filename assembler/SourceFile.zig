@@ -1004,15 +1004,29 @@ const Parser = struct {
     fn parseLabel(self: *Parser) ?Expression.Handle {
         const begin = self.next_token;
         const begin_expression_len = self.out.expressions.len;
+
+        const local = self.parseLocalLabelDirective();
         if (self.parseSymbolDef()) |expr| {
             self.skipLinespace();
             if (self.tryToken(.colon)) {
-                return expr;
+                return if (local) self.addUnaryExpression(.local_label_def, begin + 1, expr) else expr;
             }
         }
         self.out.expressions.len = begin_expression_len;
         self.next_token = begin;
         return null;
+    }
+
+    fn parseLocalLabelDirective(self: *Parser) bool {
+        const begin = self.next_token;
+        if (self.tryToken(.dot) and self.tryToken(.id)) {
+            const directive_str = self.tokenLocation(self.next_token - 1);
+            if (std.mem.eql(u8, directive_str, "local")) {
+                return true;
+            }
+        }
+        self.next_token = begin;
+        return false;
     }
 
     fn parseSymbolDefList(self: *Parser) ?Expression.Handle {
@@ -1126,6 +1140,7 @@ const Parser = struct {
             .arrow_prefix,
             .directive_symbol_def,
             .directive_symbol_ref,
+            .local_label_def,
             .plus,
             .minus,
             .negate,
@@ -1163,6 +1178,7 @@ const Parser = struct {
             .arrow_prefix => .{ .arrow_prefix = inner },
             .directive_symbol_def => .{ .directive_symbol_def = inner },
             .directive_symbol_ref => .{ .directive_symbol_ref = inner },
+            .local_label_def => .{ .local_label_def = inner },
             .negate => .{ .negate = inner },
             .complement => .{ .complement = inner },
             .signed_cast => .{ .signed_cast = inner },
@@ -1230,6 +1246,7 @@ const Parser = struct {
             .arrow_prefix,
             .directive_symbol_def,
             .directive_symbol_ref,
+            .local_label_def,
             .negate,
             .complement,
             .signed_cast,

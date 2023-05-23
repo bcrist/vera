@@ -1,4 +1,3 @@
-[assembler] .local labels
 [assembler] .stack sections, .push, .pop
 [assembler] Consider having stack sections use a different namespace from other section types, (local to the file)
 [assembler] Don't allow branches across .push/.pop boundaries

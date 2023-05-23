@@ -11,6 +11,18 @@ pub const SymbolTarget = union(enum) {
     not_found,
     expression: Expression.Handle, // always in the same file where it's being referenced
     instruction: InstructionRef,
+
+    // If this is an instruction target, it must be in the same file as `s`
+    pub fn getInstructionHandle(self: SymbolTarget, s: SourceFile.Slices) Instruction.Handle {
+        return switch (self) {
+            .expression => |expr_handle| s.file.findInstructionByExpr(expr_handle),
+            .instruction => |insn_ref| i: {
+                std.debug.assert(insn_ref.file == s.file.handle);
+                break :i insn_ref.instruction;
+            },
+            .not_found => unreachable,
+        };
+    }
 };
 
 pub const InstructionRef = struct {

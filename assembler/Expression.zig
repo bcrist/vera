@@ -35,6 +35,7 @@ pub const Info = union(enum) {
     directive_symbol_def: Unary,
     literal_symbol_ref,
     directive_symbol_ref: Unary,
+    local_label_def: Unary,
     negate: Unary,
     complement: Unary,
     signed_cast: Unary,

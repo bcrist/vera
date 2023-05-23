@@ -586,6 +586,8 @@ pub fn resolveExpressionConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, e
     var expr_infos = s.expr.items(.info);
     const info = expr_infos[expr_handle];
     switch (info) {
+        .local_label_def => unreachable,
+
         .literal_symbol_def, .directive_symbol_def,
         .literal_int, .literal_str, .reg_to_index,
         => return null,

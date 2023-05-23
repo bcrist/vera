@@ -89,9 +89,9 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
                     try writer.print(" #{}, #{}", .{ binary.left, binary.right });
                 },
 
-                .directive_symbol_def, .directive_symbol_ref,
+                .directive_symbol_def, .directive_symbol_ref, .arrow_prefix,
                 .signed_cast, .unsigned_cast, .remove_signedness_cast,
-                .negate, .complement, .absolute_address_cast,
+                .negate, .complement, .absolute_address_cast, .local_label_def,
                 .data_address_cast, .insn_address_cast, .stack_address_cast, .remove_address_cast,
                 .reg_to_index, .index_to_reg8, .index_to_reg16, .index_to_reg32,
                 => |unary| {
@@ -120,8 +120,8 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
         }
     }
 
-    try writer.writeAll("Symbols:\n");
-    var symbol_iter = self.symbols.iterator();
+    try writer.writeAll("Public Labels:\n");
+    var symbol_iter = self.public_labels.iterator();
     while (symbol_iter.next()) |entry| {
         const symbol = entry.key_ptr.*;
         const file_handle = entry.value_ptr.file;
