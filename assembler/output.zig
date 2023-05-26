@@ -257,6 +257,12 @@ pub fn writeSimSx(a: *Assembler, temp_alloc: std.mem.Allocator, writer: anytype,
                     try writeListingSxLineAndSource(line_number, source, &sx_writer);
                     try sx_writer.close();
                 },
+                .org => {
+                    try sx_writer.expression("org");
+                    try sx_writer.int(addresses[l], 10);
+                    try writeListingSxLineAndSource(line_number, source, &sx_writer);
+                    try sx_writer.close();
+                },
             }
         }
         try sx_writer.close();
@@ -462,8 +468,17 @@ fn addListingForChunk(a: *Assembler, listing: *Listing, chunk: SourceFile.Chunk,
             .stack => {
                 listing.addNonOutputLine(.stack_space, line_numbers[i], line_source, options.clone_source_strings);
             },
-            .none, .insn, .keep, .def, .undef, .local, .org, .range => {
+            .none, .insn, .keep, .def, .undef, .local, .range => {
                 listing.addNonOutputLine(.empty, line_numbers[i], line_source, options.clone_source_strings);
+            },
+            .org => {
+                var address = addresses[i];
+                // if (params[i]) |param_expr_handle| {
+                //     if (s.expr.items(.resolved_constant)[param_expr_handle]) |constant| {
+                //         address = constant.asInt(u32) catch address;
+                //     }
+                // }
+                listing.addOrgLine(address, line_numbers[i], line_source, options.clone_source_strings);
             },
 
             .bound_insn => |encoding| {

@@ -8,6 +8,7 @@
 [assembler] arbitrary precision multiply
 [assembler] Improve error context printing
 [assembler] improve vscode plugin
+[assembler] improve auto-placement of chunks
 
 [test] Use assembler for test_instruction_behavior
 [test] Use assembler and disassembler for test_instruction_encoding

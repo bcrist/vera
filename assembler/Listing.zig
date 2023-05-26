@@ -34,6 +34,7 @@ pub const Line = struct {
         data16,
         data32,
         alignment, // address is modulo, length is offset
+        org,
         data_space,
         stack_space,
         insn_space,
@@ -139,6 +140,17 @@ pub fn addAlignmentLine(self: *Listing, alignment: Assembler.Alignment, line_num
     }) catch @panic("OOM");
 }
 
+pub fn addOrgLine(self: *Listing, address: u32, line_number: u32, source: []const u8, copy_source_to_arena: bool) void {
+    self.lines.append(self.gpa, .{
+        .kind = .org,
+        .address = address,
+        .length = 0,
+        .line_number = line_number,
+        .source = self.maybeDupeString(source, copy_source_to_arena),
+        .insn_index = null,
+    }) catch @panic("OOM");
+}
+
 pub fn writeAll(self: *const Listing, comptime MemoryContext: type, ctx: MemoryContext, writer: anytype) !void {
     try write(self.lines.slice(), self.insns.items, MemoryContext, ctx, 0, @intCast(LineIndex, self.lines.len), writer);
 }
@@ -166,6 +178,9 @@ pub fn write(lines: Lines.Slice, insns: []const Instruction, comptime MemoryCont
                 const modulo = addresses[line_index];
                 const offset = lengths[line_index];
                 try writeAlignmentLine(modulo, offset, line_number, source, writer);
+            },
+            .org => {
+                try writeOrgLine(addresses[line_index], line_number, source, writer);
             },
             .instruction => {
                 const address = addresses[line_index];
@@ -205,13 +220,11 @@ pub fn write(lines: Lines.Slice, insns: []const Instruction, comptime MemoryCont
     }
 }
 
-pub fn writeAllSource(self: *Listing, comptime MemoryContext: type, ctx: MemoryContext, writer: anytype) !void {
-    try writeSource(self.lines.slice(), self.insns.items, MemoryContext, ctx, 0, @intCast(LineIndex, self.lines.len), writer);
+pub fn writeAllSource(self: *Listing, writer: anytype) !void {
+    try writeSource(self.lines.slice(), 0, @intCast(LineIndex, self.lines.len), writer);
 }
 
-pub fn writeSource(lines: Lines.Slice, insns: []const Instruction, comptime MemoryContext: type, ctx: MemoryContext, begin: LineIndex, end: LineIndex, writer: anytype) !void {
-    _ = ctx;
-    _ = insns;
+pub fn writeSource(lines: Lines.Slice, begin: LineIndex, end: LineIndex, writer: anytype) !void {
     const line_numbers = lines.items(.line_number);
     const source = lines.items(.source);
     for (begin.., lines.items(.kind)[begin..end]) |line_index, line_kind| {
@@ -220,7 +233,7 @@ pub fn writeSource(lines: Lines.Slice, insns: []const Instruction, comptime Memo
                 const src = source[line_index];
                 try writeFilenameLine(src, writer);
             },
-            .empty, .alignment, .instruction, .data8, .data16, .data32, .data_space, .stack_space, .insn_space => {
+            .empty, .alignment, .org, .instruction, .data8, .data16, .data32, .data_space, .stack_space, .insn_space => {
                 const line_number = line_numbers[line_index];
                 const src = source[line_index];
                 try writeEmptyLine(line_number, src, writer, true);
@@ -255,6 +268,13 @@ fn writeAlignmentLine(modulo: u32, offset: u32, line_number: u32, source: []cons
         align_text = try std.fmt.bufPrint(&buf, ".align {}", .{ modulo });
     }
 
+    try writer.writeAll(align_text);
+    try writeRemainingSourceLines(@intCast(u32, align_text.len), line_number, std.mem.split(u8, source, "\n"), writer, false);
+}
+
+fn writeOrgLine(address: u32, line_number: u32, source: []const u8, writer: anytype) !void {
+    var buf: [listing_width]u8 = undefined;
+    const align_text = try std.fmt.bufPrint(&buf, ".org 0x{X}", .{ address });
     try writer.writeAll(align_text);
     try writeRemainingSourceLines(@intCast(u32, align_text.len), line_number, std.mem.split(u8, source, "\n"), writer, false);
 }
