@@ -19,25 +19,59 @@ pub const Kind = enum {
     data_kernel,
     constant_user,
     constant_kernel,
-    stack,
+
+    pub fn fromDirective(op: Instruction.OperationType) Kind {
+        return switch (op) {
+            .section => .info,
+            .boot => .boot,
+            .code => .code_user,
+            .kcode => .code_kernel,
+            .entry => .entry_user,
+            .kentry => .entry_kernel,
+            .data => .data_user,
+            .kdata => .data_kernel,
+            .@"const" => .constant_user,
+            .kconst => .constant_kernel,
+
+            .stack, .none, .insn, .bound_insn, .org,
+            .keep, .def, .undef, .local, .@"align",
+            .db, .dw, .dd, .push, .pop, .range,
+            => unreachable,
+        };
+    }
+
+    pub fn defaultName(self: Kind) []const u8 {
+        return switch (self) {
+            .info => "default_info",
+            .boot => "default_boot",
+            .code_user => "default_code",
+            .code_kernel => "kernel_code",
+            .entry_user => "entry_code",
+            .entry_kernel => "kernel_entry_code",
+            .data_user => "rwdata",
+            .data_kernel => "kernel_rwdata",
+            .constant_user => "rdata",
+            .constant_kernel => "kernel_rdata",
+        };
+    }
 
     pub fn accessPolicies(self: Kind, chunk_length: usize) AccessPolicies {
         return .{
             .read = switch (self) {
                 .info => null,
                 .boot, .code_kernel, .entry_kernel, .data_kernel, .constant_kernel => .kernel_private,
-                .code_user, .entry_user, .data_user, .constant_user, .stack => .unprivileged,
+                .code_user, .entry_user, .data_user, .constant_user => .unprivileged,
             },
             .write = switch (self) {
                 .boot, .data_kernel => .kernel_private,
-                .data_user, .stack => .unprivileged,
+                .data_user => .unprivileged,
                 .info, .code_user, .code_kernel, .entry_user, .entry_kernel, .constant_user, .constant_kernel => null,
             },
             .execute = switch (self) {
                 .boot, .code_kernel => .kernel_private,
                 .code_user, .entry_user => .unprivileged,
                 .entry_kernel => if (chunk_length < 256) .kernel_entry_256 else .kernel_entry_4096,
-                .info, .data_user, .data_kernel, .constant_user, .constant_kernel, .stack => null,
+                .info, .data_user, .data_kernel, .constant_user, .constant_kernel => null,
             },
         };
     }

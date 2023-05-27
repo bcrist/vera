@@ -132,34 +132,49 @@ pub fn parseInstruction(self: *Parser) bool {
 
     if (self.parseDirective()) |directive| {
         const directive_token = self.next_token - 1;
-        if (directive == .def or directive == .local) {
-            if (self.parseSymbolDef()) |symbol| {
-                if (self.parseExpr(false)) |expr| {
-                    const params = self.addBinaryExpression(.list, directive_token, symbol, expr);
-                    self.addInstruction(label, directive_token, switch (directive) {
-                        .def => .{ .def = {} },
-                        .local => .{ .local = {} },
-                        else => unreachable,
-                    }, params);
+        switch (directive) {
+            .def, .local => {
+                if (self.parseSymbolDef()) |symbol| {
+                    if (self.parseExpr(false)) |expr| {
+                        const params = self.addBinaryExpression(.list, directive_token, symbol, expr);
+                        self.addInstruction(label, directive_token, switch (directive) {
+                            .def => .{ .def = {} },
+                            .local => .{ .local = {} },
+                            else => unreachable,
+                        }, params);
+                    } else {
+                        self.recordError("Expected expression for symbol definition");
+                        self.sync_to_end_of_line = true;
+                    }
                 } else {
-                    self.recordError("Expected expression for symbol definition");
+                    self.recordError("Expected symbol name");
                     self.sync_to_end_of_line = true;
                 }
-            } else {
-                self.recordError("Expected symbol name");
-                self.sync_to_end_of_line = true;
-            }
-        } else if (directive == .undef) {
-            const params = self.parseSymbolDefList();
-            self.addInstruction(label, directive_token, .{ .undef = {} }, params);
-        } else {
-            const params = if (Instruction.isSectionDirective(directive)) self.parseSymbolDef() else self.parseExprList(true, false);
-            switch (directive) {
-                .none, .insn, .bound_insn => unreachable,
-                inline else => |d| {
-                    self.addInstruction(label, directive_token, @unionInit(Instruction.Operation, @tagName(d), {}), params);
-                },
-            }
+            },
+            .undef => self.addInstruction(label, directive_token, .{ .undef = {} }, self.parseSymbolDefList()),
+
+            .push => self.addInstruction(label, directive_token, .{ .push = 0 }, self.parseSymbolDefList()),
+            .pop => self.addInstruction(label, directive_token, .{ .pop = 0 }, self.parseSymbolDefList()),
+
+            .section  => self.addInstruction(label, directive_token, .{ .section = {} }, self.parseSymbolDef()),
+            .boot     => self.addInstruction(label, directive_token, .{ .boot = {} }, self.parseSymbolDef()),
+            .code     => self.addInstruction(label, directive_token, .{ .code = {} }, self.parseSymbolDef()),
+            .kcode,   => self.addInstruction(label, directive_token, .{ .kcode = {} }, self.parseSymbolDef()),
+            .entry    => self.addInstruction(label, directive_token, .{ .entry = {} }, self.parseSymbolDef()),
+            .kentry   => self.addInstruction(label, directive_token, .{ .kentry = {} }, self.parseSymbolDef()),
+            .data     => self.addInstruction(label, directive_token, .{ .data = {} }, self.parseSymbolDef()),
+            .kdata    => self.addInstruction(label, directive_token, .{ .kdata = {} }, self.parseSymbolDef()),
+            .@"const" => self.addInstruction(label, directive_token, .{ .@"const" = {} }, self.parseSymbolDef()),
+            .kconst   => self.addInstruction(label, directive_token, .{ .kconst = {} }, self.parseSymbolDef()),
+            .stack    => self.addInstruction(label, directive_token, .{ .stack = {} }, self.parseSymbolDef()),
+
+            .none, .insn, .bound_insn => unreachable,
+
+            inline else => |d| {
+                const params = self.parseExprList(true, false);
+                const op = @unionInit(Instruction.Operation, @tagName(d), {});
+                self.addInstruction(label, directive_token, op, params);
+            },
         }
     } else if (self.parseMnemonic()) |mnemonic| {
         const mnemonic_token = self.next_token - 1;

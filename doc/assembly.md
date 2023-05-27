@@ -119,24 +119,27 @@ Data sections contain writable or read-only data.
 If a data section contains only zeroes, it won't be stored in the binary, but will be allocated from pre-zeroes memory when first accessed (i.e. BSS segment)
 Data sections and code sections exist in separate address spaces and the assembler may place both a code and data section at the same address.
 
-### Stack Sections
-    .stack [symbol]
-    .push <symbol-list>
-    .pop <symbol-list>
-Stack sections are never loaded into memory directly.
-Addresses within stack sections are relative to the SP just after the stack section has been applied.
-When a code section section begins, the stack is reset and no labels from `.stack` sections are visible.
-The `.push` pseudo-instruction adds a stack context to the current code section, allowing use of the labels within it until the end of the section, or the next `.pop` pseudo-instruction having the same name.
-`.pop` names must appear in the reverse order that they were pushed.
-`.push` and `.pop` may not be used within a loop (ideally assembler should detect this and error).
-The assembler will automatically adjust the SP for .push and .pop
-References to labels within a stack section will automatically resolve with the correct SP offset based on what has been .pushed/.popped
-
 ### Informational Sections
     .section [symbol]
 These sections can be used to include additional information within a binary, which is not mapped into memory at all when the OS loads it.
 This can be used for debugging information, resources, etc.
 Addresses within informational sections exist in their own namespace per section name, which is independent of the code and data address spaces, and any other informational sections.
+
+### Stack Blocks
+    .stack [symbol]
+    .push <symbol-list>
+    .pop <symbol-list>
+The `.stack` directive creates stack blocks.  These work much like `.data` section blocks, but are never included in the output data directly, and all labels within the block are considered private.
+
+The `.push` directive reserves space on the stack for the data from one or more stack blocks.  Labels within those stack blocks then become accessible.  The same stack block may not be pushed multiple times (as this would make labels ambiguous).
+
+The `.pop` directive removes space on the stack reserved by `.push`.  Stack blocks must be popped in the reverse order that they were pushed, and there must be a pop for every push in a block.  Branches (other than CALL) are not allowed to cross a `.push` or `.pop` directive.
+
+Addresses within a `.stack` section always start at 0.  Labels within a stack section are `.s SP + constant` expressions, where the constant is not necessarily the same as the address (it may be different if multiple stack sections are pushed)
+
+When a code section section begins, no labels from `.stack` sections are in scope.
+
+Stack block names are always file-local.
 
 # Labels
     <symbol>:

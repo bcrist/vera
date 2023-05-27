@@ -10,6 +10,7 @@ const Section = @import("Section.zig");
 const Error = @import("Error.zig");
 const Parser = @import("Parser.zig");
 
+const Mnemonic = isa.Mnemonic;
 const SourceFile = @This();
 
 handle: Handle,
@@ -19,38 +20,12 @@ tokens: lex.TokenList,
 instructions: std.MultiArrayList(Instruction),
 expressions: std.MultiArrayList(Expression),
 blocks: std.MultiArrayList(SectionBlock),
+
+// not populated during parsing:
 locals: std.StringHashMapUnmanaged(symbols.SymbolTarget),
+stacks: std.StringHashMapUnmanaged(SectionBlock.Handle),
 
 pub const Handle = u32;
-
-pub const Slices = struct {
-    file: *SourceFile,
-    insn: std.MultiArrayList(Instruction).Slice,
-    expr: std.MultiArrayList(Expression).Slice,
-    block: std.MultiArrayList(SectionBlock).Slice,
-};
-
-pub const SectionBlock = struct {
-    first_token: lex.Token.Handle,
-    first_insn: Instruction.Handle,
-    end_insn: Instruction.Handle,
-    section: ?Section.Handle,
-    keep: bool,
-
-    pub const Handle = u32;
-};
-
-const Mnemonic = isa.Mnemonic;
-const MnemonicSuffix = isa.MnemonicSuffix;
-
-pub fn slices(self: *SourceFile) Slices {
-    return .{
-        .file = self,
-        .insn = self.instructions.slice(),
-        .expr = self.expressions.slice(),
-        .block = self.blocks.slice(),
-    };
-}
 
 pub fn parse(gpa: std.mem.Allocator, handle: Handle, name: []const u8, source: []const u8, errors: *std.ArrayListUnmanaged(Error)) SourceFile {
     const tokens = lex.lex(gpa, source);
@@ -65,6 +40,7 @@ pub fn parse(gpa: std.mem.Allocator, handle: Handle, name: []const u8, source: [
         .expressions = .{},
         .blocks = .{},
         .locals = .{},
+        .stacks = .{},
     };
 
     var temp = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -75,19 +51,50 @@ pub fn parse(gpa: std.mem.Allocator, handle: Handle, name: []const u8, source: [
 
     const operations = file.instructions.items(.operation);
     var block_begin: Instruction.Handle = 0;
-    for (operations, 0..) |op, insn_handle| {
-        if (Instruction.isSectionDirective(op)) {
+    for (operations, 0..) |op, insn_handle| switch (op) {
+        .section, .boot, .code, .kcode, .entry, .kentry,
+        .data, .kdata, .@"const", .kconst, .stack,
+        => {
             const new_block_begin = backtrackLabels(operations, @intCast(Instruction.Handle, insn_handle));
             file.tryAddBlock(gpa, block_begin, new_block_begin);
             block_begin = new_block_begin;
-        }
-    }
+        },
+        .none, .org, .@"align", .keep, .def, .undef,
+        .local, .insn, .bound_insn, .db, .dw, .dd,
+        .push, .pop, .range,
+        => {},
+    };
 
     file.tryAddBlock(gpa, block_begin, @intCast(Instruction.Handle, operations.len));
 
     return file;
 }
 
+pub fn deinit(self: SourceFile, gpa: std.mem.Allocator, maybe_arena: ?std.mem.Allocator) void {
+    self.tokens.deinit(gpa);
+    self.instructions.deinit(gpa);
+    self.expressions.deinit(gpa);
+    self.blocks.deinit(gpa);
+    self.locals.deinit(gpa);
+    self.stacks.deinit(gpa);
+    if (maybe_arena) |arena| {
+        arena.free(self.name);
+        arena.free(self.source);
+    }
+}
+
+pub const SectionBlock = struct {
+    first_token: lex.Token.Handle,
+    first_insn: Instruction.Handle,
+    end_insn: Instruction.Handle,
+
+    // not populated during parsing:
+    block_type: ?Instruction.OperationType,
+    section: ?Section.Handle,
+    keep: bool,
+
+    pub const Handle = u32;
+};
 fn tryAddBlock(self: *SourceFile, gpa: std.mem.Allocator, first_insn: Instruction.Handle, end_insn: Instruction.Handle) void {
     if (first_insn >= end_insn) return;
 
@@ -100,27 +107,31 @@ fn tryAddBlock(self: *SourceFile, gpa: std.mem.Allocator, first_insn: Instructio
         .first_token = first_token,
         .first_insn = first_insn,
         .end_insn = end_insn,
+        .block_type = null,
         .section = null,
         .keep = false,
     }) catch @panic("OOM");
 }
 
-pub fn deinit(self: SourceFile, gpa: std.mem.Allocator, maybe_arena: ?std.mem.Allocator) void {
-    self.tokens.deinit(gpa);
-    self.instructions.deinit(gpa);
-    self.expressions.deinit(gpa);
-    self.blocks.deinit(gpa);
-    self.locals.deinit(gpa);
-    if (maybe_arena) |arena| {
-        arena.free(self.name);
-        arena.free(self.source);
-    }
-}
+pub const Slices = struct {
+    file: *SourceFile,
+    insn: std.MultiArrayList(Instruction).Slice,
+    expr: std.MultiArrayList(Expression).Slice,
+    block: std.MultiArrayList(SectionBlock).Slice,
 
-pub fn blockInstructions(self: *const SourceFile, block_handle: SectionBlock.Handle) Instruction.Iterator {
+    pub fn blockInstructions(self: Slices, block_handle: SectionBlock.Handle) Instruction.Iterator {
+        return .{
+            .begin = self.block.items(.first_insn)[block_handle],
+            .end = self.block.items(.end_insn)[block_handle],
+        };
+    }
+};
+pub fn slices(self: *SourceFile) Slices {
     return .{
-        .begin = self.blocks.items(.first_insn)[block_handle],
-        .end = self.blocks.items(.end_insn)[block_handle],
+        .file = self,
+        .insn = self.instructions.slice(),
+        .expr = self.expressions.slice(),
+        .block = self.blocks.slice(),
     };
 }
 
@@ -184,7 +195,8 @@ pub fn collectChunks(
         chunk_begin: Instruction.Handle = undefined,
 
         fn tryAddChunk(state: *@This(), chunk_end: Instruction.Handle, ended_by_unconditional_control_flow: bool) void {
-            const dest = if (state.is_fixed) state.fixed_org_chunks else state.auto_org_chunks;
+            const is_fixed = state.is_fixed or state.section_handle == null;
+            const dest = if (is_fixed) state.fixed_org_chunks else state.auto_org_chunks;
             if (chunk_end > state.chunk_begin) {
                 dest.append(state.a.gpa, .{
                     .section = state.section_handle,

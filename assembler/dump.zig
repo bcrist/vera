@@ -7,20 +7,25 @@ const ExpressionType = ie.Parameter.ExpressionType;
 pub fn dump(self: *Assembler, writer: anytype) !void {
     try writer.writeAll("Files:\n");
     for (self.files.items) |file| {
+        const block_slice = file.blocks.slice();
         try writer.print("   {s}\n", .{ file.name });
         try writer.print("      Blocks:\n", .{});
         for (0..,
-            file.blocks.items(.first_insn),
-            file.blocks.items(.end_insn),
-            file.blocks.items(.section),
-            file.blocks.items(.keep),
-        ) |handle, begin, end, maybe_section, keep| {
+            block_slice.items(.first_insn),
+            block_slice.items(.end_insn),
+            block_slice.items(.block_type),
+            block_slice.items(.section),
+            block_slice.items(.keep),
+        ) |handle, begin, end, maybe_type, maybe_section, keep| {
             try writer.print("         #{}: #{} - #{}", .{ handle, begin, end });
+            if (maybe_type) |block_type| {
+                try writer.print(" .{s}", .{ @tagName(block_type) });
+            }
             if (maybe_section) |section| {
                 try writer.print(" section#{}", .{ section });
             }
             if (keep) {
-                try writer.writeAll(" keep");
+                try writer.writeAll(" .keep");
             }
             try writer.writeAll("\n");
         }

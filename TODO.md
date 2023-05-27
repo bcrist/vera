@@ -1,6 +1,7 @@
-[assembler] .stack sections, .push, .pop
-[assembler] Consider having stack sections use a different namespace from other section types, (local to the file)
+[assembler] Ensure there is a matching .pop for every .push
 [assembler] Don't allow branches across .push/.pop boundaries
+[assembler] Check name collisions with stack labels
+[assembler] .zb, .zw, .zd directives - take one parameter, N, number of zero bytes/words/dwords to emit - defaults to 1
 [assembler] Create disassembler
 [assembler] add a kentry output mode to write a "header" file that exports the addresses of kentry labels
 [assembler] add cycle counts to listing output

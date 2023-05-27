@@ -27,30 +27,28 @@ pub fn doFixedOrgLayout(a: *Assembler, chunks: []SourceFile.Chunk) bool {
 }
 
 fn resolveFixedOrgAddress(a: *Assembler, chunk: SourceFile.Chunk) u32 {
-    var file = a.getSource(chunk.file);
-    const s = file.slices();
-    const operations = s.insn.items(.operation);
-
     var initial_address: u32 = 0;
-
     if (chunk.section) |section_handle| {
         const range = a.getSection(section_handle).getRange();
         initial_address = range.first;
-    }
 
-    var iter = chunk.instructions;
-    while (iter.next()) |insn_handle| {
-        if (operations[insn_handle] == .org) {
-            initial_address = s.insn.items(.address)[insn_handle];
-            if (s.insn.items(.params)[insn_handle]) |expr_handle| {
-                if (resolveExpressionConstant(a, s, initial_address, expr_handle)) |constant| {
-                    initial_address = constant.asInt(u32) catch {
-                        a.recordExpressionLayoutError(chunk.file, expr_handle, expr_handle, ".org address too large", .{});
-                        break;
-                    };
+        var file = a.getSource(chunk.file);
+        const s = file.slices();
+        const operations = s.insn.items(.operation);
+        var iter = chunk.instructions;
+        while (iter.next()) |insn_handle| {
+            if (operations[insn_handle] == .org) {
+                initial_address = s.insn.items(.address)[insn_handle];
+                if (s.insn.items(.params)[insn_handle]) |expr_handle| {
+                    if (resolveExpressionConstant(a, s, initial_address, expr_handle)) |constant| {
+                        initial_address = constant.asInt(u32) catch {
+                            a.recordExpressionLayoutError(chunk.file, expr_handle, expr_handle, ".org address too large", .{});
+                            break;
+                        };
+                    }
                 }
+                break;
             }
-            break;
         }
     }
 
@@ -283,7 +281,7 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
                 check_for_alignment_holes = true;
             },
             .bound_insn => |encoding| {
-                if (insn_flags[insn_handle].contains(.encoding_depends_on_layout)) {
+                if (insn_flags[insn_handle].contains(.depends_on_layout)) {
                     const old_encoding = encoding;
                     insn_operations[insn_handle] = .{ .insn = .{
                         .mnemonic = old_encoding.mnemonic,
@@ -306,31 +304,25 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
                 check_for_alignment_holes = true;
             },
             .db => {
-                if (insn_params[insn_handle]) |expr_handle| {
-                    address += resolveDataDirectiveLength(a, s, address, insn_handle, expr_handle, 1);
-                }
+                address += resolveDataDirectiveLength(a, s, address, insn_handle, 1);
                 check_for_alignment_holes = true;
             },
             .dw => {
                 address = checkAndApplyAlignment(a, s, address, 2, 0, check_for_alignment_holes, insn_handle, chunk.section);
-                if (insn_params[insn_handle]) |expr_handle| {
-                    address += resolveDataDirectiveLength(a, s, address, insn_handle, expr_handle, 2);
-                }
+                address += resolveDataDirectiveLength(a, s, address, insn_handle, 2);
                 check_for_alignment_holes = true;
             },
             .dd => {
                 address = checkAndApplyAlignment(a, s, address, 2, 0, check_for_alignment_holes, insn_handle, chunk.section);
-                if (insn_params[insn_handle]) |expr_handle| {
-                    address += resolveDataDirectiveLength(a, s, address, insn_handle, expr_handle, 4);
-                }
+                address += resolveDataDirectiveLength(a, s, address, insn_handle, 4);
                 check_for_alignment_holes = true;
             },
             .push => {
-                // TODO synthesize push instruction
+                address += resolvePushPopDirectiveLength(a, s, insn_handle, .push);
                 check_for_alignment_holes = true;
             },
             .pop => {
-                // TODO synthesize pop instruction
+                address += resolvePushPopDirectiveLength(a, s, insn_handle, .pop);
                 check_for_alignment_holes = true;
             },
         }
@@ -522,7 +514,6 @@ fn checkAndApplyAlignment(
             .data_kernel,
             .constant_user,
             .constant_kernel,
-            .stack,
             => {},
 
             .boot,
@@ -541,23 +532,87 @@ fn checkAndApplyAlignment(
     return new_address;
 }
 
-fn resolveDataDirectiveLength(a: *Assembler, s: SourceFile.Slices, ip: u32, insn_handle: Instruction.Handle, params_expr_handle: Expression.Handle, granularity_bytes: u8) u32 {
-    var length: u32 = 0;
+fn resolvePushPopDirectiveLength(a: *Assembler, s: SourceFile.Slices, insn_handle: Instruction.Handle, comptime op: Instruction.OperationType) u32 {
+    const insn_flags = s.insn.items(.flags);
+    const insn_lengths = s.insn.items(.length);
 
-    const expr_infos = s.expr.items(.info);
-    var expr_handle = params_expr_handle;
-    while (true) switch (expr_infos[expr_handle]) {
-        .list => |bin| {
-            length += resolveDataExpressionLength(a, s, ip, bin.left, granularity_bytes);
-            expr_handle = bin.right;
+    const flagset = insn_flags[insn_handle];
+
+    if (flagset.contains(.length_computed)) {
+        return insn_lengths[insn_handle];
+    }
+
+    var stack_size = symbols.computePushOrPopSizeFast(a, s, s.insn.items(.params)[insn_handle]);
+    s.insn.items(.operation)[insn_handle] = @unionInit(Instruction.Operation, @tagName(op), stack_size);
+
+    const insn = ie.Instruction{
+        .mnemonic = switch (op) {
+            .push => .FRAME,
+            .pop => .UNFRAME,
+            else => unreachable,
         },
-        else => {
-            length += resolveDataExpressionLength(a, s, ip, expr_handle, granularity_bytes);
-            break;
+        .suffix = .none,
+        .params = &.{
+            .{
+                .expr_type = .{ .constant = {} },
+                .constant = stack_size,
+            },
         },
     };
+    const maybe_encoding = findBestInstructionEncoding(a, insn);
 
-    s.insn.items(.length)[insn_handle] = length;
+    var length: u32 = 0;
+    if (maybe_encoding) |encoding| {
+        length = encoding.getInstructionLength();
+    } else {
+        var flags = Error.FlagSet.initEmpty();
+        if (flagset.contains(.depends_on_layout)) {
+            flags.insert(.remove_on_layout_reset);
+        }
+        a.recordError(s.file.handle, s.insn.items(.token)[insn_handle], "Stack frame too large", flags);
+    }
+
+    insn_lengths[insn_handle] = length;
+
+    if (!flagset.contains(.depends_on_layout)) {
+        insn_flags[insn_handle].insert(.length_computed);
+    }
+
+    return length;
+}
+
+fn resolveDataDirectiveLength(a: *Assembler, s: SourceFile.Slices, ip: u32, insn_handle: Instruction.Handle, granularity_bytes: u8) u32 {
+    const insn_flags = s.insn.items(.flags);
+    const insn_lengths = s.insn.items(.length);
+
+    const flagset = insn_flags[insn_handle];
+
+    if (flagset.contains(.length_computed)) {
+        return insn_lengths[insn_handle];
+    }
+
+    var length: u32 = 0;
+
+    if (s.insn.items(.params)[insn_handle]) |params_expr_handle| {
+        const expr_infos = s.expr.items(.info);
+        var expr_handle = params_expr_handle;
+        while (true) switch (expr_infos[expr_handle]) {
+            .list => |bin| {
+                length += resolveDataExpressionLength(a, s, ip, bin.left, granularity_bytes);
+                expr_handle = bin.right;
+            },
+            else => {
+                length += resolveDataExpressionLength(a, s, ip, expr_handle, granularity_bytes);
+                break;
+            },
+        };
+    }
+
+    insn_lengths[insn_handle] = length;
+
+    if (!flagset.contains(.depends_on_layout)) {
+        insn_flags[insn_handle].insert(.length_computed);
+    }
 
     return length;
 }
@@ -818,6 +873,12 @@ fn resolveSymbolRefExprConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, ex
             const constant = Constant.initInt(value);
             s.expr.items(.resolved_constant)[expr_handle] = constant.intern(a.arena, a.gpa, &a.constants);
         },
+        .stack => |target_stack_ref| {
+            var value: i64 = s.insn.items(.address)[target_stack_ref.instruction];
+            value += target_stack_ref.additional_sp_offset;
+            const constant = Constant.initInt(value);
+            s.expr.items(.resolved_constant)[expr_handle] = constant.intern(a.arena, a.gpa, &a.constants);
+        },
         .not_found => {
             return;
         },
@@ -826,8 +887,21 @@ fn resolveSymbolRefExprConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, ex
 
 fn resolveInstructionEncoding(a: *Assembler, s: SourceFile.Slices, ip: u32, insn_handle: Instruction.Handle, op: *Instruction.Operation, params: ?Expression.Handle) u3 {
     const insn = a.buildInstruction(s, ip, op.insn.mnemonic, op.insn.suffix, params, true) orelse return 0;
-    var encoding_iter = a.edb.getMatchingEncodings(insn);
+    const best_encoding = findBestInstructionEncoding(a, insn);
     a.params_temp.clearRetainingCapacity();
+
+    if (best_encoding) |enc| {
+        op.* = .{ .bound_insn = enc };
+        return enc.getInstructionLength();
+    } else {
+        var err_flags = InsnEncodingError.FlagSet.initOne(.remove_on_layout_reset);
+        a.recordInsnEncodingError(s.file.handle, insn_handle, err_flags);
+        return 0;
+    }
+}
+
+pub fn findBestInstructionEncoding(a: *Assembler, insn: ie.Instruction) ?*const ie.InstructionEncoding {
+    var encoding_iter = a.edb.getMatchingEncodings(insn);
 
     var best_length: ?u3 = null;
     var best_encoding: ?*const ie.InstructionEncoding = null;
@@ -843,40 +917,32 @@ fn resolveInstructionEncoding(a: *Assembler, s: SourceFile.Slices, ip: u32, insn
             best_length = length;
         }
     }
-    if (best_encoding) |enc| {
-        op.* = .{ .bound_insn = enc };
-        return best_length.?;
-    }
 
-    var err_flags = InsnEncodingError.FlagSet.initOne(.remove_on_layout_reset);
-    a.recordInsnEncodingError(s.file.handle, insn_handle, err_flags);
-    return 0;
+    return best_encoding;
 }
 
 pub fn populatePageChunks(a: *Assembler, chunks: []const SourceFile.Chunk) void {
     var page_chunks = a.pages.items(.chunks);
     var page_sections = a.pages.items(.section);
     for (chunks) |chunk| {
-        const addresses = chunk.getAddressRange(a);
-        const first_page = addresses.first >> @bitSizeOf(bus.PageOffset);
-        var last_page = first_page;
-        if (addresses.len > 0) {
-            last_page = addresses.last() >> @bitSizeOf(bus.PageOffset);
-        }
+        if (chunk.section) |section| {
+            const addresses = chunk.getAddressRange(a);
+            const first_page = addresses.first >> @bitSizeOf(bus.PageOffset);
+            var last_page = first_page;
+            if (addresses.len > 0) {
+                last_page = addresses.last() >> @bitSizeOf(bus.PageOffset);
+            }
 
-        if (chunk.section) |section_handle| {
-            a.sections.values()[section_handle].has_chunks = true;
-        }
+            a.sections.values()[section].has_chunks = true;
 
-        a.chunks.append(a.gpa, .{
-            .chunk = chunk,
-            .address = addresses.first,
-        }) catch @panic("OOM");
+            a.chunks.append(a.gpa, .{
+                .chunk = chunk,
+                .address = addresses.first,
+            }) catch @panic("OOM");
 
-        for (first_page .. last_page + 1) |page| {
-            const page_data_handle = a.page_lookup.get(@intCast(bus.Page, page)) orelse unreachable;
-            page_chunks[page_data_handle].append(a.gpa, chunk) catch @panic("OOM");
-            if (chunk.section) |section| {
+            for (first_page .. last_page + 1) |page| {
+                const page_data_handle = a.page_lookup.get(@intCast(bus.Page, page)) orelse unreachable;
+                page_chunks[page_data_handle].append(a.gpa, chunk) catch @panic("OOM");
                 if (page_sections[page_data_handle] != section) {
                     const token = a.getSource(chunk.file).instructions.items(.token)[chunk.instructions.begin];
                     a.recordErrorFmt(chunk.file, token, "Chunk starting here was allocated to page 0x{X:0>5}, but that page is in use by another section", .{ page }, .{});
@@ -894,9 +960,13 @@ pub fn findOverlappingChunks(a: *Assembler, chunks: []const SourceFile.Chunk) vo
     // overlapping pairs are found.
     if (a.overlapping_chunks.count() >= 10) return;
     for (chunks, 0..) |chunk, i| {
+        if (chunk.section == null) continue;
+
         const chunk_range = chunk.getAddressRange(a);
         const check_against = chunks[i + 1 ..];
         for (check_against) |other_chunk| {
+            if (chunk.section == null) continue;
+
             const other_range = other_chunk.getAddressRange(a);
             if (chunk_range.first > other_range.last() or chunk_range.last() < other_range.first) continue;
             a.overlapping_chunks.put(a.gpa, SourceFile.ChunkPair.init(chunk, other_chunk), {}) catch @panic("OOM");
@@ -913,7 +983,8 @@ pub fn encodePageData(a: *Assembler, file: *SourceFile) void {
 
     const page_datas = a.pages.items(.data);
 
-    for (0.., s.insn.items(.operation)) |insn_handle, op| {
+    for (0.., s.insn.items(.operation)) |insn_handle_usize, op| {
+        const insn_handle = @intCast(Instruction.Handle, insn_handle_usize);
         switch (op) {
             .none, .insn, .org, .@"align", .keep, .def, .undef, .local, .range,
             .section, .boot, .code, .kcode, .entry, .kentry, .data, .kdata, .@"const", .kconst, .stack,
@@ -921,31 +992,9 @@ pub fn encodePageData(a: *Assembler, file: *SourceFile) void {
 
             .bound_insn => |encoding| {
                 const address = insn_addresses[insn_handle];
-                const length = insn_lengths[insn_handle];
                 const params = insn_params[insn_handle];
-                const page = @truncate(bus.Page, address >> @bitSizeOf(bus.PageOffset));
-                const offset = @truncate(bus.PageOffset, address);
-                const page_data_handle = a.page_lookup.get(page) orelse continue;
-                var buffer = page_datas[page_data_handle][offset..];
-
                 const insn = a.buildInstruction(s, address, encoding.mnemonic, encoding.suffix, params, false).?;
-
-                if (length > buffer.len) {
-                    if (@truncate(u1, address) == 1) {
-                        a.recordError(file.handle, file.instructions.items(.token)[insn_handle], "Instruction crosses page boundary and is not word aligned", .{});
-                    }
-                    var temp = [_]u8{0} ** 8;
-                    const temp_insn = insn.write(encoding.*, &temp);
-                    std.mem.copy(u8, buffer, temp_insn[0..buffer.len]);
-
-                    const next_page = page + 1;
-                    _ = next_page;
-                    const next_page_data_handle = a.page_lookup.get(page) orelse unreachable;
-                    const next_page_buf = &page_datas[next_page_data_handle];
-                    std.mem.copy(u8, next_page_buf, temp_insn[buffer.len..]);
-                } else {
-                    _ = insn.write(encoding.*, buffer);
-                }
+                encodeInstruction(a, s, insn_handle, address, insn_lengths[insn_handle], insn, encoding, page_datas);
             },
 
             .db, .dw, .dd => {
@@ -973,13 +1022,61 @@ pub fn encodePageData(a: *Assembler, file: *SourceFile) void {
                 }
                 encodeDataDirective(s, params, granularity_bytes, written, buffer);
             },
-            .push => {
-                // TODO stack sections
-            },
-            .pop => {
-                // TODO stack sections
+            .push, .pop => |stack_size| {
+                const insn = ie.Instruction{
+                    .mnemonic = switch (op) {
+                        .push => .FRAME,
+                        .pop => .UNFRAME,
+                        else => unreachable,
+                    },
+                    .suffix = .none,
+                    .params = &.{
+                        .{
+                            .expr_type = .{ .constant = {} },
+                            .constant = stack_size,
+                        },
+                    },
+                };
+                if (findBestInstructionEncoding(a, insn)) |encoding| {
+                    encodeInstruction(a, s, insn_handle, insn_addresses[insn_handle], insn_lengths[insn_handle], insn, encoding, page_datas);
+                }
             },
         }
+    }
+}
+
+fn encodeInstruction(
+    a: *Assembler,
+    s: SourceFile.Slices,
+    insn_handle: Instruction.Handle,
+    address: u32,
+    length: u32,
+    insn: ie.Instruction,
+    encoding: *const ie.InstructionEncoding,
+    page_datas: [][PageData.page_size]u8
+) void {
+    const page = @truncate(bus.Page, address >> @bitSizeOf(bus.PageOffset));
+    const offset = @truncate(bus.PageOffset, address);
+
+    const page_data_handle = a.page_lookup.get(page) orelse return;
+    var buffer = page_datas[page_data_handle][offset..];
+
+    if (length > buffer.len) {
+        if (@truncate(u1, address) == 1) {
+            a.recordError(s.file.handle, s.insn.items(.token)[insn_handle], "Instruction crosses page boundary and is not word aligned", .{});
+        }
+
+        var temp = [_]u8{0} ** 8;
+        const temp_insn = insn.write(encoding.*, &temp);
+
+        std.mem.copy(u8, buffer, temp_insn[0..buffer.len]);
+
+        const next_page = page + 1;
+        const next_page_data_handle = a.page_lookup.get(next_page) orelse unreachable;
+        const next_page_buf = &page_datas[next_page_data_handle];
+        std.mem.copy(u8, next_page_buf, temp_insn[buffer.len..]);
+    } else {
+        _ = insn.write(encoding.*, buffer);
     }
 }
 

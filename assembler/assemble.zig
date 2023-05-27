@@ -36,7 +36,7 @@ pub fn main() !void {
 
     try list.writeAll(*Assembler, &a, std.io.getStdOut().writer());
 
-    // try dump.dump(&a, std.io.getStdOut().writer());
+    //try dump.dump(&a, std.io.getStdOut().writer());
 
     try a.printErrors(std.io.getStdErr().writer());
 

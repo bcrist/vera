@@ -489,12 +489,29 @@ fn addListingForChunk(a: *Assembler, listing: *Listing, chunk: SourceFile.Chunk,
                 }, line_numbers[i], line_source, options.clone_source_strings);
             },
 
-            .push => {
-                // TODO stack sections
-            },
-
-            .pop => {
-                // TODO stack sections
+            .push, .pop => |stack_size| {
+                const insn = ie.Instruction{
+                    .mnemonic = switch (operations[i]) {
+                        .push => .FRAME,
+                        .pop => .UNFRAME,
+                        else => unreachable,
+                    },
+                    .suffix = .none,
+                    .params = &.{
+                        .{
+                            .expr_type = .{ .constant = {} },
+                            .constant = stack_size,
+                        },
+                    },
+                };
+                if (layout.findBestInstructionEncoding(a, insn)) |encoding| {
+                    listing.addInstructionLine(addresses[i], lengths[i], .{
+                        .encoding = encoding.*,
+                        .params = insn.params,
+                    }, line_numbers[i], line_source, options.clone_source_strings);
+                } else {
+                    listing.addNonOutputLine(.empty, line_numbers[i], line_source, options.clone_source_strings);
+                }
             },
 
             .@"align" => {

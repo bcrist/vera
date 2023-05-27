@@ -31,8 +31,7 @@ str: .db 1,2,3,4
     .dw 1,2,3,4,"Hellorld!" ** 9, \
     4, \
     5, \
-    1111, \
-    .raw @_something
+    1111
     .dd 1,2,3,4,"Hellorld!", 0xF .signed'40, 255 .signed'40, -1 .unsigned'40
     .db "\(U+12345)"
     .db "\(=AA++128)"
@@ -46,5 +45,10 @@ str: .db 1,2,3,4
         , 456789
     .db \\
 
+    // .db xyz
 
     .def asdf 1234
+
+
+.stack asdf
+xyz: .dw 1, 2, 3

@@ -18,21 +18,23 @@ pub const FlagSet = std.EnumSet(Flags);
 
 pub const OperationType = std.meta.Tag(Operation);
 pub const Operation = union(enum) {
-    none,
+    none, // label only
+
+    // .insn are transformed to .bound_insn during the layout process:
     insn: MnemonicAndSuffix,
     bound_insn: *const ie.InstructionEncoding,
-    // TODO bound_push, bound_pop?
 
-    // Directives:
-    org,
-    @"align",
-    keep,
-    def,
-    undef,
-    local,
+    // Data directives:
     db,
     dw,
     dd,
+
+    // Stack control directives:
+    // payload is the size of the stack frame (align 2)
+    push: u32,
+    pop: u32,
+
+    // Section/block directives:
     section,
     boot,
     code,
@@ -44,8 +46,14 @@ pub const Operation = union(enum) {
     @"const",
     kconst,
     stack,
-    push,
-    pop,
+
+    // Misc. directives:
+    org,
+    @"align",
+    keep,
+    def,
+    undef,
+    local,
     range,
 };
 
@@ -55,7 +63,11 @@ pub const MnemonicAndSuffix = struct {
 };
 
 pub const Flags = enum {
-    encoding_depends_on_layout,
+    depends_on_layout,
+
+    // indicates that layout has been done for db/dw/dd/push/pop
+    // and it doesn't need to be done again (implies !depends_on_layout)
+    length_computed, 
 };
 
 pub const Handle = u31;
@@ -74,40 +86,6 @@ pub const Iterator = struct {
         }
     }
 };
-
-pub fn isSectionDirective(op: OperationType) bool {
-    return switch (op) {
-        .section,
-        .boot,
-        .code,
-        .kcode,
-        .entry,
-        .kentry,
-        .data,
-        .kdata,
-        .@"const",
-        .kconst,
-        .stack,
-        => true,
-
-        .none,
-        .org,
-        .@"align",
-        .keep,
-        .def,
-        .undef,
-        .local,
-        .insn,
-        .bound_insn,
-        .db,
-        .dw,
-        .dd,
-        .push,
-        .pop,
-        .range,
-        => false,
-    };
-}
 
 pub fn isOrgHeader(op: OperationType) bool {
     // When these operations appear before a .org directive, they are included in the fixed-org chunk that follows, not the previous chunk (if any)
