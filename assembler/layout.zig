@@ -201,7 +201,7 @@ fn getAlignmentForChunk(a: *Assembler, chunk: SourceFile.Chunk) Assembler.Alignm
     var iter = chunk.instructions;
     while (iter.next()) |insn_handle| {
         switch (insn_operations[insn_handle]) {
-            .none, .org, .keep, .def, .undef, .local, .range,
+            .none, .nil, .org, .keep, .def, .undef, .local, .range,
             .section, .boot, .code, .kcode, .entry, .kentry,
             .data, .kdata, .@"const", .kconst, .stack,
             => {},
@@ -241,7 +241,7 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
         const old_insn_address = insn_addresses[insn_handle];
         var new_insn_address = address;
         switch (insn_operations[insn_handle]) {
-            .none, .org, .keep, .def, .undef, .local, .range,
+            .none, .nil, .org, .keep, .def, .undef, .local, .range,
             .section, .boot, .code, .kcode, .entry, .kentry,
             .data, .kdata, .@"const", .kconst, .stack,
             .@"align" => {
@@ -254,7 +254,7 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
                         first = false;
                     }
                     switch (insn_operations[insn2]) {
-                        .none, .org, .keep, .def, .undef, .local, .range,
+                        .none, .nil, .org, .keep, .def, .undef, .local, .range,
                         .section, .boot, .code, .kcode, .entry, .kentry,
                         .data, .kdata, .@"const", .kconst, .stack => {},
 
@@ -542,7 +542,7 @@ fn resolvePushPopDirectiveLength(a: *Assembler, s: SourceFile.Slices, insn_handl
         return insn_lengths[insn_handle];
     }
 
-    var stack_size = symbols.computePushOrPopSizeFast(a, s, s.insn.items(.params)[insn_handle]);
+    var stack_size = symbols.computePushOrPopSize(a, s, s.insn.items(.params)[insn_handle]);
     s.insn.items(.operation)[insn_handle] = @unionInit(Instruction.Operation, @tagName(op), stack_size);
 
     const insn = ie.Instruction{
@@ -657,8 +657,13 @@ pub fn resolveExpressionConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, e
         .literal_current_address => {
             var value = ip;
             switch (s.expr.items(.resolved_type)[expr_handle]) {
-                .raw_base_offset, .data_address, .insn_address, .stack_address => |bo| {
+                .raw_base_offset, .data_address, .insn_address => |bo| {
                     if (std.meta.eql(bo.base, .{ .sr = .IP })) {
+                        value = 0;
+                    }
+                },
+                .stack_address => |bo| {
+                    if (std.meta.eql(bo.base, .{ .sr = .SP })) {
                         value = 0;
                     }
                 },
@@ -963,12 +968,17 @@ pub fn findOverlappingChunks(a: *Assembler, chunks: []const SourceFile.Chunk) vo
         if (chunk.section == null) continue;
 
         const chunk_range = chunk.getAddressRange(a);
+        if (chunk_range.len == 0) continue;
+
         const check_against = chunks[i + 1 ..];
         for (check_against) |other_chunk| {
             if (chunk.section == null) continue;
 
             const other_range = other_chunk.getAddressRange(a);
+            if (other_range.len == 0) continue;
+
             if (chunk_range.first > other_range.last() or chunk_range.last() < other_range.first) continue;
+
             a.overlapping_chunks.put(a.gpa, SourceFile.ChunkPair.init(chunk, other_chunk), {}) catch @panic("OOM");
             if (a.overlapping_chunks.count() >= 10) return;
         }
@@ -986,7 +996,7 @@ pub fn encodePageData(a: *Assembler, file: *SourceFile) void {
     for (0.., s.insn.items(.operation)) |insn_handle_usize, op| {
         const insn_handle = @intCast(Instruction.Handle, insn_handle_usize);
         switch (op) {
-            .none, .insn, .org, .@"align", .keep, .def, .undef, .local, .range,
+            .none, .nil, .insn, .org, .@"align", .keep, .def, .undef, .local, .range,
             .section, .boot, .code, .kcode, .entry, .kentry, .data, .kdata, .@"const", .kconst, .stack,
             => {},
 

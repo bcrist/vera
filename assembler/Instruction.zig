@@ -19,6 +19,7 @@ pub const FlagSet = std.EnumSet(Flags);
 pub const OperationType = std.meta.Tag(Operation);
 pub const Operation = union(enum) {
     none, // label only
+    nil, // same as none, but blocks wont backtrack over this
 
     // .insn are transformed to .bound_insn during the layout process:
     insn: MnemonicAndSuffix,
@@ -103,6 +104,7 @@ pub fn isOrgHeader(op: OperationType) bool {
         .kconst,
         .stack,
         .none,
+        .nil,
         .@"align",
         .keep,
         .def,

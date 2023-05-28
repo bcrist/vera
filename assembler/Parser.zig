@@ -421,13 +421,13 @@ fn parsePrefixOperator(self: *Parser) ?OperatorInfo {
             } else if (self.tryKeyword("raw")) {
                 break :info .{ .token = t, .left_bp = 1,  .right_bp = 1, .expr = .remove_address_cast };
             } else if (self.tryKeyword("r")) {
-                break :info .{ .token = t, .left_bp = 1,  .right_bp = 0xFF, .expr = .index_to_reg16 };
+                break :info .{ .token = t, .left_bp = 1,  .right_bp = 1, .expr = .index_to_reg16 };
             } else if (self.tryKeyword("rx")) {
-                break :info .{ .token = t, .left_bp = 1,  .right_bp = 0xFF, .expr = .index_to_reg32 };
+                break :info .{ .token = t, .left_bp = 1,  .right_bp = 1, .expr = .index_to_reg32 };
             } else if (self.tryKeyword("rb")) {
-                break :info .{ .token = t, .left_bp = 1,  .right_bp = 0xFF, .expr = .index_to_reg8 };
+                break :info .{ .token = t, .left_bp = 1,  .right_bp = 1, .expr = .index_to_reg8 };
             } else if (self.tryKeyword("idx")) {
-                break :info .{ .token = t, .left_bp = 1,  .right_bp = 0xFF, .expr = .reg_to_index };
+                break :info .{ .token = t, .left_bp = 1,  .right_bp = 1, .expr = .reg_to_index };
             } else {
                 t = begin;
                 return null;

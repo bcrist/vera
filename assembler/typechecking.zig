@@ -14,123 +14,164 @@ const Section = @import("Section.zig");
 const Error = @import("Error.zig");
 const Token = lex.Token;
 const ExpressionType = ie.Parameter.ExpressionType;
-const SectionBlock = SourceFile.SectionBlock;
+const Block = SourceFile.Block;
 
 // Set the resolved type for labels to .symbol_def.
 // The resolved constant for these expressions is the raw symbol name.
 // Any labels which do not begin with `_` and are not in a stack section will be added to the global symbol table.
-// Create Sections for each named section block and set the SectionBlock.section handle to reference it.
+// Create Sections for each named section block and set the Block.section handle to reference it.
 pub fn processLabelsAndSections(a: *Assembler, file: *SourceFile) void {
     const s = file.slices();
+    const insn_operations = s.insn.items(.operation);
+    const insn_labels = s.insn.items(.label);
     const insn_params = s.insn.items(.params);
     const expr_infos = s.expr.items(.info);
+    const block_labels = s.block.items(.labels);
 
-    var in_stack_section = false;
-    for (0.., s.insn.items(.operation), s.insn.items(.label)) |insn_handle, op, maybe_label_expr| {
-        switch (op) {
-            .section, .boot, .code, .kcode, .entry, .kentry,
-            .data, .kdata, .@"const", .kconst, .stack => {
-                const block_handle = file.findBlockByInstruction(@intCast(Instruction.Handle, insn_handle));
-                s.block.items(.block_type)[block_handle] = op;
+    for (0.., s.block.items(.first_insn), s.block.items(.end_insn)) |block_handle_usize, first_insn, end_insn| {
+        const block_handle = @intCast(SourceFile.Block.Handle, block_handle_usize);
+        const private_labels = &block_labels[block_handle];
 
-                var maybe_section_name: ?[]const u8 = null;
-                if (insn_params[insn_handle]) |section_name_expr| {
-                    const symbol_constant = resolveSymbolDefExpr(a, s, section_name_expr);
-                    maybe_section_name = symbol_constant.asString();
-                }
+        var is_stack_block = false;
 
-                if (op == .stack) {
-                    in_stack_section = true;
+        for (first_insn.., insn_operations[first_insn..end_insn]) |insn_handle_usize, op| {
+            const insn_handle = @intCast(Instruction.Handle, insn_handle_usize);
+            switch (op) {
+                .section, .boot, .code, .kcode, .entry, .kentry,
+                .data, .kdata, .@"const", .kconst, .stack => {
+                    s.block.items(.block_type)[block_handle] = op;
 
-                    const section_name = maybe_section_name orelse "";
+                    var maybe_section_name: ?[]const u8 = null;
+                    if (insn_params[insn_handle]) |section_name_expr| {
+                        const symbol_constant = resolveSymbolDefExpr(a, s, section_name_expr);
+                        maybe_section_name = symbol_constant.asString();
+                    }
 
-                    var result = file.stacks.getOrPut(a.gpa, section_name) catch @panic("OOM");
-                    if (result.found_existing) {
-                        const canonical_insn_handle = s.block.items(.first_insn)[result.value_ptr.*];
-                        const canonical_line_number = s.insn.items(.line_number)[canonical_insn_handle];
-
-                        const token = s.insn.items(.token)[insn_handle];
-                        a.recordErrorFmt(file.handle, token, "Ignoring duplicate .stack block; canonical block is at line {}", .{ canonical_line_number }, .{});
+                    if (op == .stack) {
+                        is_stack_block = true;
+                        processStackBlock(a, s, block_handle, insn_handle, maybe_section_name);
                     } else {
-                        result.value_ptr.* = block_handle;
+                        processSectionBlock(a, s, block_handle, insn_handle, Section.Kind.fromDirective(op), maybe_section_name);
                     }
-
-                } else {
-                    in_stack_section = false;
-
-                    const kind = Section.Kind.fromDirective(op);
-                    const section_name = maybe_section_name orelse kind.defaultName();
-
-                    var range: ?Assembler.AddressRange = null;
-                    if (kind == .boot) {
-                        range = .{
-                            .first = 0,
-                            .len = 0x1_0000,
-                        };
+                },
+                .def => {
+                    const params_expr = insn_params[insn_handle].?;
+                    const symbol_expr = s.expr.items(.info)[params_expr].list.left;
+                    _ = resolveSymbolDefExpr(a, s, symbol_expr);
+                },
+                .undef, .push, .pop => {
+                    if (insn_params[insn_handle]) |params| {
+                        _ = resolveSymbolDefExprList(a, s, params);
                     }
-
-                    const entry = a.sections.getOrPutValue(a.gpa, section_name, .{
-                        .name = section_name,
-                        .kind = kind,
-                        .has_chunks = false,
-                        .range = range,
-                    }) catch @panic("OOM");
-
-                    const found_kind = entry.value_ptr.kind;
-                    if (found_kind != kind) switch (found_kind) {
-                        inline else => |k| {
-                            const token = s.insn.items(.token)[insn_handle];
-                            a.recordError(file.handle, token, "Section already exists; expected ." ++ @tagName(k), .{});
-                        },
-                    };
-
-                    s.block.items(.section)[block_handle] = @intCast(Section.Handle, entry.index);
-                }
-            },
-            .def => {
-                const params_expr = insn_params[insn_handle].?;
-                const symbol_expr = s.expr.items(.info)[params_expr].list.left;
-                _ = resolveSymbolDefExpr(a, s, symbol_expr);
-            },
-            .undef, .push, .pop => {
-                if (insn_params[insn_handle]) |params| {
-                    _ = resolveSymbolDefExprList(a, s, params);
-                }
-            },
-            .local => {
-                const params_expr = insn_params[insn_handle].?;
-                const bin = expr_infos[params_expr].list;
-                const symbol_name = resolveSymbolDefExpr(a, s, bin.left).asString();
-                _ = s.file.locals.getOrPutValue(a.gpa, symbol_name, .{
-                    .expression = bin.right,
-                }) catch @panic("OOM");
-            },
-            .none, .org, .@"align", .keep, .insn, .bound_insn, .db, .dw, .dd, .range => {},
+                },
+                .local => {
+                    const params_expr = insn_params[insn_handle].?;
+                    const bin = expr_infos[params_expr].list;
+                    const symbol_name = resolveSymbolDefExpr(a, s, bin.left).asString();
+                    const result = s.file.locals.getOrPut(a.gpa, symbol_name) catch @panic("OOM");
+                    if (result.found_existing) {
+                        const token = s.expr.items(.token)[params_expr];
+                        const target_insn_handle = result.value_ptr.getInstructionHandle(s);
+                        const line_number = s.insn.items(.line_number)[target_insn_handle];
+                        a.recordErrorFmt(s.file.handle, token, "Duplicate .local name (canonical symbol is at line {})", .{ line_number }, .{});
+                    } else {
+                        result.value_ptr.* = .{ .expression = bin.right };
+                    }
+                },
+                .none, .nil, .org, .@"align", .keep, .insn, .bound_insn, .db, .dw, .dd, .range => {},
+            }
         }
 
-        if (maybe_label_expr) |label_expr| switch (expr_infos[label_expr]) {
-            .local_label_def => |inner_label_expr| {
-                const symbol_constant = resolveSymbolDefExpr(a, s, inner_label_expr);
-                const symbol_name = symbol_constant.asString();
-                _ = s.file.locals.getOrPutValue(a.gpa, symbol_name, .{
-                    .instruction = .{
-                        .file = file.handle,
-                        .instruction = @intCast(Instruction.Handle, insn_handle),
-                    },
-                }) catch @panic("OOM");
-            },
-            else => {
-                const symbol_constant = resolveSymbolDefExpr(a, s, label_expr);
-                const symbol_name = symbol_constant.asString();
-                if (!in_stack_section and !std.mem.startsWith(u8, symbol_name, "_")) {
-                    _ = a.public_labels.getOrPutValue(a.gpa, symbol_name, .{
-                        .file = file.handle,
-                        .instruction = @intCast(Instruction.Handle, insn_handle),
-                    }) catch @panic("OOM");
-                }
-            },
+        for (first_insn.., insn_labels[first_insn..end_insn]) |insn_handle_usize, maybe_label_expr| {
+            const insn_handle = @intCast(Instruction.Handle, insn_handle_usize);
+
+            if (maybe_label_expr) |label_expr| switch (expr_infos[label_expr]) {
+                .local_label_def => |inner_label_expr| {
+                    const symbol_constant = resolveSymbolDefExpr(a, s, inner_label_expr);
+                    const symbol_name = symbol_constant.asString();
+                    const result = s.file.locals.getOrPut(a.gpa, symbol_name) catch @panic("OOM");
+                    if (result.found_existing) {
+                        const token = s.expr.items(.token)[label_expr];
+                        const target_insn_handle = result.value_ptr.getInstructionHandle(s);
+                        const line_number = s.insn.items(.line_number)[target_insn_handle];
+                        a.recordErrorFmt(s.file.handle, token, "Duplicate .local name (canonical symbol is at line {})", .{ line_number }, .{});
+                    } else {
+                        result.value_ptr.* = .{ .instruction = .{
+                            .file = file.handle,
+                            .instruction = insn_handle,
+                        }};
+                    }
+                },
+                else => {
+                    const symbol_constant = resolveSymbolDefExpr(a, s, label_expr);
+                    const symbol_name = symbol_constant.asString();
+                    if (is_stack_block or std.mem.startsWith(u8, symbol_name, "_")) {
+                        const result = private_labels.getOrPut(a.gpa, symbol_name) catch @panic("OOM");
+                        if (result.found_existing) {
+                            const token = s.expr.items(.token)[label_expr];
+                            const target_line_number = s.insn.items(.line_number)[result.value_ptr.*];
+                            a.recordErrorFmt(s.file.handle, token, "Duplicate private label (canonical label is at line {})", .{ target_line_number }, .{});
+                        } else {
+                            result.value_ptr.* = insn_handle;
+                        }
+                    } else {
+                        const result = a.public_labels.getOrPut(a.gpa, symbol_name) catch @panic("OOM");
+                        if (result.found_existing) {
+                            const token = s.expr.items(.token)[label_expr];
+                            const target_file = a.getSource(result.value_ptr.file);
+                            const target_line_number = target_file.instructions.items(.line_number)[result.value_ptr.instruction];
+                            a.recordErrorFmt(s.file.handle, token, "Duplicate label (canonical label is at line {} in {s})", .{ target_line_number, target_file.name }, .{});
+                        } else {
+                            result.value_ptr.* = .{
+                                .file = file.handle,
+                                .instruction = insn_handle,
+                            };
+                        }
+                    }
+                },
+            };
+        }
+    }
+}
+
+fn processStackBlock(a: *Assembler, s: SourceFile.Slices, block_handle: SourceFile.Block.Handle, insn_handle: Instruction.Handle, maybe_stack_name: ?[]const u8) void {
+    const name = maybe_stack_name orelse "";
+    var result = s.file.stacks.getOrPut(a.gpa, name) catch @panic("OOM");
+    if (result.found_existing) {
+        const canonical_insn_handle = s.block.items(.first_insn)[result.value_ptr.*];
+        const canonical_line_number = s.insn.items(.line_number)[canonical_insn_handle];
+        const token = s.insn.items(.token)[insn_handle];
+        a.recordErrorFmt(s.file.handle, token, "Ignoring duplicate .stack block; canonical block is at line {}", .{ canonical_line_number }, .{});
+    } else {
+        result.value_ptr.* = block_handle;
+    }
+}
+
+fn processSectionBlock(a: *Assembler, s: SourceFile.Slices, block_handle: SourceFile.Block.Handle, insn_handle: Instruction.Handle, kind: Section.Kind, maybe_section_name: ?[]const u8) void {
+    const section_name = maybe_section_name orelse kind.defaultName();
+
+    var range: ?Assembler.AddressRange = null;
+    if (kind == .boot) {
+        range = .{
+            .first = 0,
+            .len = 0x1_0000,
         };
     }
+
+    const entry = a.sections.getOrPutValue(a.gpa, section_name, .{
+        .name = section_name,
+        .kind = kind,
+        .has_chunks = false,
+        .range = range,
+    }) catch @panic("OOM");
+
+    const found_kind = entry.value_ptr.kind;
+    if (found_kind != kind) {
+        const token = s.insn.items(.token)[insn_handle];
+        a.recordErrorFmt(s.file.handle, token, "Section already exists; expected .{s}", .{ @tagName(found_kind) }, .{});
+    }
+
+    s.block.items(.section)[block_handle] = @intCast(Section.Handle, entry.index);
 }
 
 fn resolveSymbolDefExprList(a: *Assembler, s: SourceFile.Slices, symbol_def_expr: Expression.Handle) void {
@@ -296,7 +337,7 @@ pub fn tryResolveExpressionType(a: *Assembler, s: SourceFile.Slices, expr_handle
             const block_handle = s.file.findBlockByToken(token_handle);
             if (s.block.items(.block_type)[block_handle]) |op| {
                 expr_resolved_types[expr_handle] = switch (op) {
-                    .none, .insn, .bound_insn, .org, .@"align", .keep,
+                    .none, .nil, .insn, .bound_insn, .org, .@"align", .keep,
                     .def, .undef, .local, .db, .dw, .dd, .push, .pop, .range,
                     => unreachable,
 
@@ -605,7 +646,7 @@ fn tryResolveSymbolType(a: *Assembler, s: SourceFile.Slices, expr_handle: Expres
             const block_handle = sym_file.findBlockByInstruction(insn_ref.instruction);
             if (sym_file.blocks.items(.block_type)[block_handle]) |op| {
                 expr_resolved_types[expr_handle] = switch (op) {
-                    .none, .insn, .bound_insn, .org, .@"align", .keep,
+                    .none, .nil, .insn, .bound_insn, .org, .@"align", .keep,
                     .def, .undef, .local, .db, .dw, .dd, .push, .pop, .range,
                     => unreachable,
 
@@ -643,238 +684,117 @@ pub fn checkInstructionsAndDirectives(a: *Assembler) void {
 }
 
 fn checkInstructionsAndDirectivesInFile(a: *Assembler, s: SourceFile.Slices) void {
-    var expr_resolved_types = s.expr.items(.resolved_type);
+    var insn_operations = s.insn.items(.operation);
+    var insn_params = s.insn.items(.params);
+    var insn_labels = s.insn.items(.label);
+    _ = insn_labels;
 
-    var allow_code = true;
-    var allow_data = true;
-    var allow_range = false;
+    var pushed_stacks = std.ArrayList([]const u8).init(a.gpa);
+    defer pushed_stacks.deinit();
 
-    for (0.., s.insn.items(.operation), s.insn.items(.params), s.insn.items(.label)) |insn_handle_usize, op, maybe_params, maybe_label_expr| {
-        const insn_handle = @intCast(Instruction.Handle, insn_handle_usize);
+    for (s.block.items(.first_insn), s.block.items(.end_insn)) |first_insn, end_insn| {
+        var allow_code = false;
+        var allow_data = false;
+        var allow_range = false;
 
-        if (maybe_label_expr) |label_expr| {
-            checkLabelShadowing(a, s, insn_handle, label_expr);
-        }
+        for (first_insn.., insn_operations[first_insn..end_insn], insn_params[first_insn..end_insn]) |insn_handle_usize, op, maybe_params| {
+            const insn_handle = @intCast(Instruction.Handle, insn_handle_usize);
+            switch (op) {
+                .boot => {
+                    allow_code = true;
+                    allow_data = true;
+                    allow_range = false;
+                },
+                .section => {
+                    allow_code = true;
+                    allow_data = true;
+                    allow_range = true;
+                },
+                .code, .kcode, .entry, .kentry => {
+                    allow_code = true;
+                    allow_data = false;
+                    allow_range = true;
+                },
+                .data, .kdata, .@"const", .kconst => {
+                    allow_code = false;
+                    allow_data = true;
+                    allow_range = true;
+                },
+                .stack => {
+                    allow_code = false;
+                    allow_data = true;
+                    allow_range = false;
+                },
 
-        switch (op) {
-            .none => std.debug.assert(maybe_params == null),
-            .bound_insn => unreachable,
-            .insn => {
-                if (!allow_code) {
-                    const token = s.insn.items(.token)[insn_handle];
-                    a.recordError(s.file.handle, token, "Instructions are not allowed in .data/.kdata/.const/.kconst/.stack sections", .{});
-                }
-                checkInstructionDependsOnLayout(s, insn_handle, maybe_params);
-            },
-            .db, .dw, .dd => {
-                if (!allow_data) {
-                    const token = s.insn.items(.token)[insn_handle];
-                    a.recordError(s.file.handle, token, "Data directives are not allowed in .entry/.kentry/.code/.kcode sections", .{});
-                }
-                if (maybe_params) |params_expr| {
-                    checkDataDirectiveExprList(a, s, params_expr);
-                } else {
-                    const token = s.insn.items(.token)[insn_handle];
-                    a.recordError(s.file.handle, token, "Expected at least one data expression", .{});
-                }
-                checkInstructionDependsOnLayout(s, insn_handle, maybe_params);
-            },
+                .none, .nil => std.debug.assert(maybe_params == null),
 
-            .push, .pop => {
-                if (!allow_code) {
-                    const token = s.insn.items(.token)[insn_handle];
-                    a.recordError(s.file.handle, token, "Instructions are not allowed in .data/.kdata/.const/.kconst/.stack sections", .{});
-                }
-                if (maybe_params) |params_expr| {
-                    checkStackNames(a, s, params_expr);
-                } else {
-                    const token = s.insn.items(.token)[insn_handle];
-                    a.recordError(s.file.handle, token, "Expected at least one stack block name", .{});
-                }
-            },
+                .org => checkOrgParams(a, s, insn_handle, maybe_params),
 
-            .keep => if (maybe_params) |params_expr| {
-                const token = s.expr.items(.token)[params_expr];
-                a.recordError(s.file.handle, token, "Expected no parameters", .{});
-            },
-            .range => {
-                if (!allow_range) {
-                    const token = s.insn.items(.token)[insn_handle];
-                    a.recordError(s.file.handle, token, ".range directive is only allowed in non-boot sections", .{});
-                } else {
-                    const expr_flags = s.expr.items(.flags);
-                    var params = [_]?Expression.Handle{null} ** 2;
-                    getParamHandles(a, s, maybe_params, &params);
-                    var range = Assembler.AddressRange{
-                        .first = 0,
-                        .len = 0,
-                    };
-                    if (params[0]) |expr| {
-                        switch (expr_resolved_types[expr]) {
-                            .unknown, .symbol_def => unreachable,
-                            .poison, .constant => {},
-                            .raw_base_offset, .data_address, .insn_address, .stack_address,
-                            .reg8, .reg16, .reg32, .sr => {
-                                const token = s.expr.items(.token)[expr];
-                                a.recordError(s.file.handle, token, "Expected minimum address constant", .{});
-                            },
-                        }
-                        if (expr_flags[expr].contains(.constant_depends_on_layout)) {
-                            const token = s.expr.items(.token)[expr];
-                            a.recordError(s.file.handle, token, "Expression cannot depend on layout", .{});
-                        } else {
-                            const constant = layout.resolveExpressionConstantOrDefault(a, s, 0, expr, 0x1000);
-                            range.first = constant.asInt(u32) catch a: {
-                                const token = s.expr.items(.token)[expr];
-                                a.recordError(s.file.handle, token, "Expression must fit in u32", .{});
-                                break :a 0x1000;
-                            };
-                            if (@truncate(bus.PageOffset, range.first) != 0) {
-                                const token = s.expr.items(.token)[expr];
-                                a.recordError(s.file.handle, token, "Expected an address with a page offset of 0", .{});
-                            }
-                        }
+                .@"align" => checkAlignParams(a, s, insn_handle, maybe_params),
+
+                .bound_insn => unreachable,
+                .insn => {
+                    if (!allow_code) {
+                        const token = s.insn.items(.token)[insn_handle];
+                        a.recordError(s.file.handle, token, "Instructions are not allowed in .data/.kdata/.const/.kconst/.stack sections", .{});
                     }
-                    if (params[1]) |expr| {
-                        switch (expr_resolved_types[expr]) {
-                            .unknown, .symbol_def => unreachable,
-                            .poison, .constant => {},
-                            .raw_base_offset, .data_address, .insn_address, .stack_address,
-                            .reg8, .reg16, .reg32, .sr => {
-                                const token = s.expr.items(.token)[expr];
-                                a.recordError(s.file.handle, token, "Expected maximum address constant", .{});
-                            },
-                        }
-                        if (expr_flags[expr].contains(.constant_depends_on_layout)) {
-                            const token = s.expr.items(.token)[expr];
-                            a.recordError(s.file.handle, token, "Expression cannot depend on layout", .{});
-                        } else {
-                            const constant = layout.resolveExpressionConstantOrDefault(a, s, 0, expr, 0xFFFF_FFFF);
-                            const last = constant.asInt(u32) catch a: {
-                                const token = s.expr.items(.token)[expr];
-                                a.recordError(s.file.handle, token, "Expression must fit in u32", .{});
-                                break :a 0xFFFF_FFFF;
-                            };
-                            if (@truncate(bus.PageOffset, last) != ~@as(bus.PageOffset, 0)) {
-                                const token = s.expr.items(.token)[expr];
-                                a.recordError(s.file.handle, token, "Expected an address with a page offset of 0xFFF", .{});
-                            }
-                            range.len = @as(usize, last - range.first) + 1;
+                    checkInstructionDependsOnLayout(s, insn_handle, maybe_params);
+                },
 
-                            const block_handle = s.file.findBlockByInstruction(insn_handle);
-                            const section_handle = s.file.blocks.items(.section)[block_handle].?;
-                            const section = a.getSectionPtr(section_handle);
-                            if (section.range) |_| {
-                                const token = s.insn.items(.token)[insn_handle];
-                                a.recordError(s.file.handle, token, "Multiple .range directives found for this section; ignoring this one", .{});
-                            } else {
-                                section.range = range;
-                            }
-                        }
+                .db, .dw, .dd => {
+                    if (!allow_data) {
+                        const token = s.insn.items(.token)[insn_handle];
+                        a.recordError(s.file.handle, token, "Data directives are not allowed in .entry/.kentry/.code/.kcode sections", .{});
+                    }
+                    if (maybe_params) |params_expr| {
+                        checkDataDirectiveExprList(a, s, params_expr);
                     } else {
                         const token = s.insn.items(.token)[insn_handle];
-                        a.recordError(s.file.handle, token, ".range directive must be followed by <min_address>, <max_address> constant expressions", .{});
+                        a.recordError(s.file.handle, token, "Expected at least one data expression", .{});
                     }
-                }
-            },
-            .org => {
-                var params = [_]?Expression.Handle{null};
-                getParamHandles(a, s, maybe_params, &params);
-                if (params[0]) |address_expr| {
-                    switch (expr_resolved_types[address_expr]) {
-                        .unknown, .symbol_def => unreachable,
-                        .poison, .constant => {},
-                        .reg8, .reg16, .reg32, .sr => {
-                            const token = s.expr.items(.token)[address_expr];
-                            a.recordError(s.file.handle, token, "Expected constant or absolute address, not register", .{});
-                        },
-                        .raw_base_offset, .data_address, .insn_address, .stack_address => |bo| {
-                            if (std.meta.eql(bo.base, .{ .sr = .IP }) and bo.offset == .constant) {
-                                const token = s.expr.items(.token)[address_expr];
-                                a.recordError(s.file.handle, token, "Expected absolute address, not relative; try using '@'", .{});
-                            } else if (bo.base != .constant or bo.offset != .none) {
-                                const token = s.expr.items(.token)[address_expr];
-                                a.recordError(s.file.handle, token, "Expected constant or absolute address", .{});
-                            }
-                        },
+                    checkInstructionDependsOnLayout(s, insn_handle, maybe_params);
+                },
+
+                .push => {
+                    if (!allow_code) {
+                        const token = s.insn.items(.token)[insn_handle];
+                        a.recordError(s.file.handle, token, "Instructions are not allowed in .data/.kdata/.const/.kconst/.stack sections", .{});
                     }
+                    checkPushedStacks(a, s, insn_handle, maybe_params, &pushed_stacks);
+                },
+                .pop => {
+                    if (!allow_code) {
+                        const token = s.insn.items(.token)[insn_handle];
+                        a.recordError(s.file.handle, token, "Instructions are not allowed in .data/.kdata/.const/.kconst/.stack sections", .{});
+                    }
+                    checkPoppedStacks(a, s, insn_handle, maybe_params, &pushed_stacks);
+                },
+
+                .keep => if (maybe_params) |params_expr| {
+                    const token = s.expr.items(.token)[params_expr];
+                    a.recordError(s.file.handle, token, "Expected no parameters", .{});
+                },
+
+                .range => {
+                    if (!allow_range) {
+                        const token = s.insn.items(.token)[insn_handle];
+                        a.recordError(s.file.handle, token, ".range directive is only allowed in non-boot sections", .{});
+                    } else {
+                        checkRangeParams(a, s, insn_handle, maybe_params);
+                    }
+                },
+
+                .def, .local => {},
+                .undef => if (maybe_params) |params_expr| {
+                    checkUndefExprList(a, s, params_expr);
                 } else {
                     const token = s.insn.items(.token)[insn_handle];
-                    a.recordError(s.file.handle, token, ".org directive must be followed by address expression", .{});
-                }
-            },
-            .@"align" => {
-                var params = [_]?Expression.Handle{null} ** 2;
-                getParamHandles(a, s, maybe_params, &params);
-                if (params[0]) |align_expr| {
-                    switch (expr_resolved_types[align_expr]) {
-                        .unknown, .symbol_def => unreachable,
-                        .poison, .constant => {},
-                        .reg8, .reg16, .reg32, .sr,
-                        .raw_base_offset, .data_address, .insn_address, .stack_address => {
-                            const token = s.expr.items(.token)[align_expr];
-                            a.recordError(s.file.handle, token, "Expected constant", .{});
-                        },
-                    }
-                } else {
-                    const token = s.insn.items(.token)[insn_handle];
-                    a.recordError(s.file.handle, token, ".align directive must be followed by constant expression", .{});
-                }
-
-                if (params[1]) |offset_expr| {
-                    switch (expr_resolved_types[offset_expr]) {
-                        .unknown, .symbol_def => unreachable,
-                        .poison, .constant => {},
-                        .reg8, .reg16, .reg32, .sr,
-                        .raw_base_offset, .data_address, .insn_address, .stack_address => {
-                            const token = s.expr.items(.token)[offset_expr];
-                            a.recordError(s.file.handle, token, "Expected constant", .{});
-                        },
-                    }
-                }
-            },
-
-            .local => if (maybe_params) |params_expr| {
-                checkLocalSymbolShadowing(a, s, params_expr);
-            },
-
-            .def => if (maybe_params) |params_expr| {
-                checkDefSymbolShadowing(a, s, params_expr);
-            },
-
-            .undef => if (maybe_params) |params_expr| {
-                checkUndefExprList(a, s, params_expr);
-            } else {
-                const token = s.insn.items(.token)[insn_handle];
-                a.recordError(s.file.handle, token, "Expected at least one .def symbol name", .{});
-            },
-
-            .boot => {
-                allow_code = true;
-                allow_data = true;
-                allow_range = false;
-            },
-            .section => {
-                allow_code = true;
-                allow_data = true;
-                allow_range = true;
-            },
-            .code, .kcode, .entry, .kentry => {
-                allow_code = true;
-                allow_data = false;
-                allow_range = true;
-            },
-            .data, .kdata, .@"const", .kconst => {
-                allow_code = false;
-                allow_data = true;
-                allow_range = true;
-            },
-            .stack => {
-                allow_code = false;
-                allow_data = true;
-                allow_range = false;
-            },
+                    a.recordError(s.file.handle, token, "Expected at least one .def symbol name", .{});
+                },
+            }
         }
+
+        pushed_stacks.clearRetainingCapacity();
     }
 }
 
@@ -882,6 +802,7 @@ fn checkInstructionDependsOnLayout(s: SourceFile.Slices, insn_handle: Instructio
     if (maybe_params) |params_handle| {
         if (instructionHasLayoutDependentParams(s, params_handle)) {
             s.insn.items(.flags)[insn_handle].insert(.depends_on_layout);
+            return;
         }
     }
 }
@@ -899,98 +820,133 @@ fn instructionHasLayoutDependentParams(s: SourceFile.Slices, params_handle: Expr
     return false;
 }
 
-fn checkLabelShadowing(a: *Assembler, s: SourceFile.Slices, insn_handle: Instruction.Handle, label_expr_handle: Expression.Handle) void {
-    switch (s.expr.items(.info)[label_expr_handle]) {
-        .local_label_def => |inner_label_expr| {
-            const label_name = symbols.parseSymbol(a, s, inner_label_expr).asString();
-            checkDuplicateLocal(a, s, label_expr_handle, label_name, .{ .instruction = .{
-                .file = s.file.handle,
-                .instruction = insn_handle,
-            }});
-            checkSymbolHidesPublicLabel(a, s, label_expr_handle, label_name, ".local label");
+fn checkPushedStacks(a: *Assembler, s: SourceFile.Slices, insn_handle: Instruction.Handle, maybe_params: ?Expression.Handle, pushed_stacks: *std.ArrayList([]const u8)) void {
+    const expr_infos = s.expr.items(.info);
+
+    var depends_on_layout = false;
+
+    var maybe_expr_handle = maybe_params;
+    while (maybe_expr_handle) |expr_handle| {
+        switch (expr_infos[expr_handle]) {
+            .list => |bin| {
+                depends_on_layout = checkPushedStack(a, s, bin.left, pushed_stacks) or depends_on_layout;
+                maybe_expr_handle = bin.right;
+            },
+            else => {
+                depends_on_layout = checkPushedStack(a, s, expr_handle, pushed_stacks) or depends_on_layout;
+                break;
+            }
+        }
+    } else {
+        const token = s.insn.items(.token)[insn_handle];
+        a.recordError(s.file.handle, token, "Expected at least one stack block name", .{});
+    }
+
+    if (depends_on_layout) {
+        s.insn.items(.flags)[insn_handle].insert(.depends_on_layout);
+    }
+}
+fn checkPushedStack(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle, pushed_stacks: *std.ArrayList([]const u8)) bool {
+    const insn_flags = s.insn.items(.flags);
+
+    var depends_on_layout = false;
+
+    const stack_block_name = symbols.parseSymbol(a, s, expr_handle).asString();
+    for (pushed_stacks.items) |name| {
+        if (std.mem.eql(u8, name, stack_block_name)) {
+            const token = s.expr.items(.token)[expr_handle];
+            a.recordError(s.file.handle, token, "This stack block has already been pushed", .{});
+            return false;
+        }
+    }
+    pushed_stacks.append(stack_block_name) catch @panic("OOM");
+
+    if (s.file.stacks.get(stack_block_name)) |stack_block_handle| {
+        var iter = s.blockInstructions(stack_block_handle);
+        while (iter.next()) |insn_handle| {
+            depends_on_layout = depends_on_layout or insn_flags[insn_handle].contains(.depends_on_layout);
+        }
+    } else {
+        const token = s.expr.items(.token)[expr_handle];
+        a.recordError(s.file.handle, token, "No .stack block found with this name", .{});
+    }
+
+    return depends_on_layout;
+}
+
+fn checkPoppedStacks(a: *Assembler, s: SourceFile.Slices, insn_handle: Instruction.Handle, maybe_params: ?Expression.Handle, pushed_stacks: *std.ArrayList([]const u8)) void {
+    const expr_infos = s.expr.items(.info);
+
+    var num_blocks_popped: usize = 0;
+    var maybe_expr_handle = maybe_params;
+    while (maybe_expr_handle) |expr_handle| switch (expr_infos[expr_handle]) {
+        .list => |bin| {
+            num_blocks_popped += 1;
+            maybe_expr_handle = bin.right;
         },
         else => {
-            const label_name = symbols.parseSymbol(a, s, label_expr_handle).asString();
+            num_blocks_popped += 1;
+            maybe_expr_handle = null;
+        }
+    };
 
-            if (std.mem.startsWith(u8, label_name, "_")) {
-                const token = s.expr.items(.token)[label_expr_handle];
-                const block_handle = s.file.findBlockByInstruction(@intCast(Instruction.Handle, insn_handle));
-                if (symbols.findLabelInBlock(s, block_handle, label_name)) |target_insn_handle| {
-                    if (target_insn_handle != insn_handle) {
-                        const target_line_number = s.insn.items(.line_number)[target_insn_handle];
-                        a.recordErrorFmt(s.file.handle, token, "Duplicate private label (canonical label is at line {})", .{ target_line_number }, .{});
-                    }
-                }
+    if (num_blocks_popped == 0) {
+        const token = s.insn.items(.token)[insn_handle];
+        a.recordError(s.file.handle, token, "Expected at least one stack block name", .{});
+    }
 
-                checkSymbolHidesLocal(a, s, label_expr_handle, label_name, "Private label");
+    var depends_on_layout = false;
 
-            } else if (a.public_labels.get(label_name)) |insn_ref| {
-                if (insn_ref.instruction != insn_handle or insn_ref.file != s.file.handle) {
-                    const token = s.expr.items(.token)[label_expr_handle];
-                    const target_file = a.getSource(insn_ref.file);
-                    const target_line_number = target_file.instructions.items(.line_number)[insn_ref.instruction];
-                    a.recordErrorFmt(s.file.handle, token, "Duplicate label (canonical label is at line {} in {s})", .{ target_line_number, target_file.name }, .{});
-                }
-            }
+    maybe_expr_handle = maybe_params;
+    while (maybe_expr_handle) |expr_handle| switch (expr_infos[expr_handle]) {
+        .list => |bin| {
+            depends_on_layout = checkPoppedStack(a, s, bin.left, pushed_stacks, &num_blocks_popped) or depends_on_layout;
+            maybe_expr_handle = bin.right;
         },
-    }
-}
-
-fn checkLocalSymbolShadowing(a: *Assembler, s: SourceFile.Slices, params_expr_handle: Expression.Handle) void {
-    const bin = s.expr.items(.info)[params_expr_handle].list;
-    const symbol_name = symbols.parseSymbol(a, s, bin.left).asString();
-
-    checkDuplicateLocal(a, s, bin.left, symbol_name, .{ .expression = bin.right });
-    checkSymbolHidesPublicLabel(a, s, bin.left, symbol_name, ".local");
-}
-
-fn checkDefSymbolShadowing(a: *Assembler, s: SourceFile.Slices, params_expr_handle: Expression.Handle) void {
-    const bin = s.expr.items(.info)[params_expr_handle].list;
-    const symbol_name = symbols.parseSymbol(a, s, bin.left).asString();
-
-    if (std.mem.startsWith(u8, symbol_name, "_")) {
-        const token = s.expr.items(.token)[bin.left];
-        const block_handle = s.file.findBlockByToken(token);
-        if (symbols.findLabelInBlock(s, block_handle, symbol_name)) |insn_handle| {
-            const line_number = s.insn.items(.line_number)[insn_handle];
-            a.recordErrorFmt(s.file.handle, token, ".def hides private label at line {} (cannot shadow symbols defined in the same file)", .{ line_number }, .{});
+        else => {
+            depends_on_layout = checkPoppedStack(a, s, expr_handle, pushed_stacks, &num_blocks_popped) or depends_on_layout;
+            maybe_expr_handle = null;
         }
+    };
+
+    if (depends_on_layout) {
+        s.insn.items(.flags)[insn_handle].insert(.depends_on_layout);
     }
-
-    // TODO stack sections
-
-    checkSymbolHidesLocal(a, s, bin.left, symbol_name, ".def");
-    checkSymbolHidesPublicLabel(a, s, bin.left, symbol_name, ".def");
 }
+fn checkPoppedStack(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle, pushed_stacks: *std.ArrayList([]const u8), num_blocks_to_pop: *usize) bool {
+    const insn_flags = s.insn.items(.flags);
 
-fn checkSymbolHidesPublicLabel(a: *Assembler, s: SourceFile.Slices, symbol_expr_handle: Expression.Handle, symbol_name: []const u8, comptime symbol_kind: []const u8) void {
-    if (a.public_labels.get(symbol_name)) |insn_ref| {
-        if (insn_ref.file == s.file.handle) {
-            const token = s.expr.items(.token)[symbol_expr_handle];
-            const line_number = s.insn.items(.line_number)[insn_ref.instruction];
-            a.recordErrorFmt(s.file.handle, token, symbol_kind ++ " hides public label at line {} (cannot shadow symbols defined in the same file)", .{ line_number }, .{});
+    var depends_on_layout = false;
+
+    const stack_block_name = symbols.parseSymbol(a, s, expr_handle).asString();
+    for (0.., pushed_stacks.items) |i, name| {
+        if (std.mem.eql(u8, name, stack_block_name)) {
+            if (i < pushed_stacks.items.len - num_blocks_to_pop.*) {
+                const token = s.expr.items(.token)[expr_handle];
+                a.recordError(s.file.handle, token, "Stack blocks must be popped in the reverse order they were pushed!", .{});
+            } else {
+                num_blocks_to_pop.* -= 1;
+            }
+            _ = pushed_stacks.orderedRemove(i);
+            break;
         }
+    } else {
+        const token = s.expr.items(.token)[expr_handle];
+        a.recordError(s.file.handle, token, "This stack block has already been popped or was never pushed!", .{});
+        return false;
     }
-}
 
-fn checkSymbolHidesLocal(a: *Assembler, s: SourceFile.Slices, symbol_expr_handle: Expression.Handle, symbol_name: []const u8, comptime symbol_kind: []const u8) void {
-    if (s.file.locals.get(symbol_name)) |target| {
-        const token = s.expr.items(.token)[symbol_expr_handle];
-        const target_insn_handle = target.getInstructionHandle(s);
-        const line_number = s.insn.items(.line_number)[target_insn_handle];
-        a.recordErrorFmt(s.file.handle, token, symbol_kind ++ " hides .local at line {} (cannot shadow symbols defined in the same file)", .{ line_number }, .{});
+    if (s.file.stacks.get(stack_block_name)) |stack_block_handle| {
+        var iter = s.blockInstructions(stack_block_handle);
+        while (iter.next()) |insn_handle| {
+            depends_on_layout = depends_on_layout or insn_flags[insn_handle].contains(.depends_on_layout);
+        }
+    } else {
+        const token = s.expr.items(.token)[expr_handle];
+        a.recordError(s.file.handle, token, "No .stack block found with this name", .{});
     }
-}
 
-fn checkDuplicateLocal(a: *Assembler, s: SourceFile.Slices, label_expr_handle: Expression.Handle, symbol_name: []const u8, expected: symbols.SymbolTarget) void {
-    if (s.file.locals.get(symbol_name)) |target| {
-        if (std.meta.eql(expected, target)) return;
-
-        const token = s.expr.items(.token)[label_expr_handle];
-        const target_insn_handle = target.getInstructionHandle(s);
-        const line_number = s.insn.items(.line_number)[target_insn_handle];
-        a.recordErrorFmt(s.file.handle, token, "Duplicate .local name (canonical symbol is at line {})", .{ line_number }, .{});
-    }
+    return depends_on_layout;
 }
 
 fn checkUndefExprList(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle) void {
@@ -1054,25 +1010,148 @@ fn checkDataDirectiveExpr(a: *Assembler, s: SourceFile.Slices, expr_handle: Expr
     }
 }
 
-fn checkStackNames(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle) void {
-    const infos = s.expr.items(.info);
-    var expr = expr_handle;
-    while (true) {
-        switch (infos[expr]) {
-            .list => |bin| {
-                checkStackNameExpr(a, s, bin.left);
-                expr = bin.right;
+fn checkOrgParams(a: *Assembler, s: SourceFile.Slices, insn_handle: Instruction.Handle, maybe_params: ?Expression.Handle) void {
+    const expr_resolved_types = s.expr.items(.resolved_type);
+
+    var params = [_]?Expression.Handle{null};
+    getParamHandles(a, s, maybe_params, &params);
+
+    if (params[0]) |address_expr| {
+        switch (expr_resolved_types[address_expr]) {
+            .unknown, .symbol_def => unreachable,
+            .poison, .constant => {},
+            .reg8, .reg16, .reg32, .sr => {
+                const token = s.expr.items(.token)[address_expr];
+                a.recordError(s.file.handle, token, "Expected constant or absolute address, not register", .{});
             },
-            else => break,
+            .raw_base_offset, .data_address, .insn_address, .stack_address => |bo| {
+                if (std.meta.eql(bo.base, .{ .sr = .IP }) and bo.offset == .constant) {
+                    const token = s.expr.items(.token)[address_expr];
+                    a.recordError(s.file.handle, token, "Expected absolute address, not relative; try using '@'", .{});
+                } else if (bo.base != .constant or bo.offset != .none) {
+                    const token = s.expr.items(.token)[address_expr];
+                    a.recordError(s.file.handle, token, "Expected constant or absolute address", .{});
+                }
+            },
+        }
+    } else {
+        const token = s.insn.items(.token)[insn_handle];
+        a.recordError(s.file.handle, token, ".org directive must be followed by address expression", .{});
+    }
+}
+
+fn checkAlignParams(a: *Assembler, s: SourceFile.Slices, insn_handle: Instruction.Handle, maybe_params: ?Expression.Handle) void {
+    const expr_resolved_types = s.expr.items(.resolved_type);
+
+    var params = [_]?Expression.Handle{null} ** 2;
+    getParamHandles(a, s, maybe_params, &params);
+
+    if (params[0]) |align_expr| {
+        switch (expr_resolved_types[align_expr]) {
+            .unknown, .symbol_def => unreachable,
+            .poison, .constant => {},
+            .reg8, .reg16, .reg32, .sr,
+            .raw_base_offset, .data_address, .insn_address, .stack_address => {
+                const token = s.expr.items(.token)[align_expr];
+                a.recordError(s.file.handle, token, "Expected constant", .{});
+            },
+        }
+    } else {
+        const token = s.insn.items(.token)[insn_handle];
+        a.recordError(s.file.handle, token, ".align directive must be followed by constant expression", .{});
+    }
+
+    if (params[1]) |offset_expr| {
+        switch (expr_resolved_types[offset_expr]) {
+            .unknown, .symbol_def => unreachable,
+            .poison, .constant => {},
+            .reg8, .reg16, .reg32, .sr,
+            .raw_base_offset, .data_address, .insn_address, .stack_address => {
+                const token = s.expr.items(.token)[offset_expr];
+                a.recordError(s.file.handle, token, "Expected constant", .{});
+            },
         }
     }
-    checkStackNameExpr(a, s, expr);
 }
-fn checkStackNameExpr(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle) void {
-    const constant = symbols.parseSymbol(a, s, expr_handle);
-    if (s.file.stacks.get(constant.asString()) == null) {
-        const token = s.expr.items(.token)[expr_handle];
-        a.recordError(s.file.handle, token, "No .stack block found with this name", .{});
+
+fn checkRangeParams(a: *Assembler, s: SourceFile.Slices, insn_handle: Instruction.Handle, maybe_params: ?Expression.Handle) void {
+    const expr_flags = s.expr.items(.flags);
+    const expr_resolved_types = s.expr.items(.resolved_type);
+
+    var params = [_]?Expression.Handle{null} ** 2;
+    getParamHandles(a, s, maybe_params, &params);
+
+    var range = Assembler.AddressRange{
+        .first = 0,
+        .len = 0,
+    };
+
+    if (params[0]) |expr| {
+        switch (expr_resolved_types[expr]) {
+            .unknown, .symbol_def => unreachable,
+            .poison, .constant => {},
+            .raw_base_offset, .data_address, .insn_address, .stack_address,
+            .reg8, .reg16, .reg32, .sr => {
+                const token = s.expr.items(.token)[expr];
+                a.recordError(s.file.handle, token, "Expected minimum address constant", .{});
+            },
+        }
+        if (expr_flags[expr].contains(.constant_depends_on_layout)) {
+            const token = s.expr.items(.token)[expr];
+            a.recordError(s.file.handle, token, "Expression cannot depend on layout", .{});
+        } else {
+            const constant = layout.resolveExpressionConstantOrDefault(a, s, 0, expr, 0x1000);
+            range.first = constant.asInt(u32) catch a: {
+                const token = s.expr.items(.token)[expr];
+                a.recordError(s.file.handle, token, "Expression must fit in u32", .{});
+                break :a 0x1000;
+            };
+            if (@truncate(bus.PageOffset, range.first) != 0) {
+                const token = s.expr.items(.token)[expr];
+                a.recordError(s.file.handle, token, "Expected an address with a page offset of 0", .{});
+            }
+        }
+    }
+
+    if (params[1]) |expr| {
+        switch (expr_resolved_types[expr]) {
+            .unknown, .symbol_def => unreachable,
+            .poison, .constant => {},
+            .raw_base_offset, .data_address, .insn_address, .stack_address,
+            .reg8, .reg16, .reg32, .sr => {
+                const token = s.expr.items(.token)[expr];
+                a.recordError(s.file.handle, token, "Expected maximum address constant", .{});
+            },
+        }
+        if (expr_flags[expr].contains(.constant_depends_on_layout)) {
+            const token = s.expr.items(.token)[expr];
+            a.recordError(s.file.handle, token, "Expression cannot depend on layout", .{});
+        } else {
+            const constant = layout.resolveExpressionConstantOrDefault(a, s, 0, expr, 0xFFFF_FFFF);
+            const last = constant.asInt(u32) catch a: {
+                const token = s.expr.items(.token)[expr];
+                a.recordError(s.file.handle, token, "Expression must fit in u32", .{});
+                break :a 0xFFFF_FFFF;
+            };
+            if (@truncate(bus.PageOffset, last) != ~@as(bus.PageOffset, 0)) {
+                const token = s.expr.items(.token)[expr];
+                a.recordError(s.file.handle, token, "Expected an address with a page offset of 0xFFF", .{});
+            }
+            range.len = @as(usize, last - range.first) + 1;
+
+            const block_handle = s.file.findBlockByInstruction(insn_handle);
+            const section_handle = s.file.blocks.items(.section)[block_handle].?;
+            const section = a.getSectionPtr(section_handle);
+            if (section.range) |_| {
+                const token = s.insn.items(.token)[insn_handle];
+                a.recordError(s.file.handle, token, "Multiple .range directives found for this section; ignoring this one", .{});
+            } else {
+                section.range = range;
+            }
+        }
+    } else {
+        const token = s.insn.items(.token)[insn_handle];
+        a.recordError(s.file.handle, token, ".range directive must be followed by <min_address>, <max_address> constant expressions", .{});
     }
 }
 

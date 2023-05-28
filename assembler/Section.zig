@@ -33,7 +33,7 @@ pub const Kind = enum {
             .@"const" => .constant_user,
             .kconst => .constant_kernel,
 
-            .stack, .none, .insn, .bound_insn, .org,
+            .stack, .none, .nil, .insn, .bound_insn, .org,
             .keep, .def, .undef, .local, .@"align",
             .db, .dw, .dd, .push, .pop, .range,
             => unreachable,

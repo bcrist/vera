@@ -7,7 +7,7 @@ const Instruction = @import("Instruction.zig");
 const Expression = @import("Expression.zig");
 const Constant = @import("Constant.zig");
 
-const SectionBlock = SourceFile.SectionBlock;
+const Block = SourceFile.Block;
 
 pub fn markBlocksToKeep(a: *Assembler, file: *SourceFile) void {
     const s = file.slices();

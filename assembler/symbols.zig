@@ -30,6 +30,7 @@ pub const SymbolTarget = union(enum) {
 pub const StackRef = struct {
     additional_sp_offset: u32,
     instruction: Instruction.Handle,
+    stack_block_name: []const u8,
 };
 
 pub const InstructionRef = struct {
@@ -115,7 +116,8 @@ pub fn lookupSymbol(a: *Assembler, s: SourceFile.Slices, symbol_token_handle: le
 
     // 2. private labels
     if (std.mem.startsWith(u8, symbol, "_")) {
-        if (findLabelInBlock(s, block_handle, symbol)) |insn_handle| {
+        const private_labels = s.block.items(.labels)[block_handle];
+        if (private_labels.get(symbol)) |insn_handle| {
             return .{ .instruction = .{
                 .file = s.file.handle,
                 .instruction = insn_handle,
@@ -141,58 +143,7 @@ pub fn lookupSymbol(a: *Assembler, s: SourceFile.Slices, symbol_token_handle: le
     return .{ .not_found = {} };
 }
 
-pub const StackSize = struct {
-    size: u32 = 0,
-    depends_on_layout: bool = false,
-};
-pub fn computePushOrPopSize(a: *Assembler, s: SourceFile.Slices, maybe_stack_name_list: ?Expression.Handle) StackSize {
-    const expr_infos = s.expr.items(.info);
-
-    var result = StackSize{};
-
-    var maybe_expr_handle = maybe_stack_name_list;
-    while (maybe_expr_handle) |expr_handle| switch (expr_infos[expr_handle]) {
-        .list => |bin| {
-            const frame = computeStackSize(a, s, bin.left);
-            result.size += frame.size;
-            if (frame.depends_on_layout) result.depends_on_layout = true;
-            maybe_expr_handle = bin.right;
-        },
-        else => {
-            const frame = computeStackSize(a, s, expr_handle);
-            result.size += frame.size;
-            if (frame.depends_on_layout) result.depends_on_layout = true;
-            maybe_expr_handle = null;
-        }
-    };
-
-    return result;
-}
-fn computeStackSize(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle) StackSize {
-    const addresses = s.insn.items(.address);
-    const lengths = s.insn.items(.length);
-    const flags = s.insn.items(.flags);
-
-    var result = StackSize{};
-
-    const constant = parseSymbol(a, s, expr_handle);
-    if (s.file.stacks.get(constant.asString())) |stack_block_handle| {
-        var iter = s.blockInstructions(stack_block_handle);
-        while (iter.next()) |insn_handle| {
-            if (flags[insn_handle].contains(.depends_on_layout)) {
-                result.depends_on_layout = true;
-            }
-            if (insn_handle + 1 == iter.end) {
-                const address = addresses[insn_handle];
-                const length = lengths[insn_handle];
-                result.size = @intCast(u32, std.mem.alignForward(address + length, 2));
-            }
-        }
-    }
-
-    return result;
-}
-pub fn computePushOrPopSizeFast(a: *Assembler, s: SourceFile.Slices, maybe_stack_name_list: ?Expression.Handle) u32 {
+pub fn computePushOrPopSize(a: *Assembler, s: SourceFile.Slices, maybe_stack_name_list: ?Expression.Handle) u32 {
     const expr_infos = s.expr.items(.info);
 
     var result: u32 = 0;
@@ -200,19 +151,18 @@ pub fn computePushOrPopSizeFast(a: *Assembler, s: SourceFile.Slices, maybe_stack
     var maybe_expr_handle = maybe_stack_name_list;
     while (maybe_expr_handle) |expr_handle| switch (expr_infos[expr_handle]) {
         .list => |bin| {
-            result += computeStackSizeFast(a, s, bin.left);
+            result += computeStackSize(a, s, bin.left);
             maybe_expr_handle = bin.right;
         },
         else => {
-            result += computeStackSizeFast(a, s, expr_handle);
+            result += computeStackSize(a, s, expr_handle);
             maybe_expr_handle = null;
         }
     };
 
     return result;
 }
-fn computeStackSizeFast(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle) u32 {
-    // Same as computeStackSize, but doesn't determine if the size depends on layout.
+fn computeStackSize(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle) u32 {
     const constant = parseSymbol(a, s, expr_handle);
     if (s.file.stacks.get(constant.asString())) |stack_block_handle| {
         const block_insns = s.blockInstructions(stack_block_handle);
@@ -229,13 +179,18 @@ fn computeStackSizeFast(a: *Assembler, s: SourceFile.Slices, expr_handle: Expres
 fn processPushOrPop(a: *Assembler, s: SourceFile.Slices, op: Instruction.OperationType, maybe_stack_ref: ?StackRef, expr_handle: Expression.Handle, symbol: []const u8) ?StackRef {
     if (maybe_stack_ref) |stack_ref| {
         var offset = stack_ref.additional_sp_offset;
-        const stack_size = computeStackSizeFast(a, s, expr_handle);
+        const stack_size = computeStackSize(a, s, expr_handle);
         if (op == .pop) {
+            const stack_block_name = parseSymbol(a, s, expr_handle).asString();
+            if (std.mem.eql(u8, stack_ref.stack_block_name, stack_block_name)) {
+                // this was the push that contains our symbol
+                return null;
+            }
+
             if (offset >= stack_size) {
                 offset -= stack_size;
             } else {
-                // this was the push that contains our symbol
-                return null;
+                offset = 0;
             }
         } else {
             offset += stack_size;
@@ -243,40 +198,25 @@ fn processPushOrPop(a: *Assembler, s: SourceFile.Slices, op: Instruction.Operati
         return .{
             .additional_sp_offset = offset,
             .instruction = stack_ref.instruction,
+            .stack_block_name = stack_ref.stack_block_name,
         };
-    } else if (op == .push) {
-        return findStackRef(a, s, expr_handle, symbol);
-    } else {
-        return maybe_stack_ref;
     }
-}
 
-fn findStackRef(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle, symbol: []const u8) ?StackRef {
-    const constant = parseSymbol(a, s, expr_handle);
-    if (s.file.stacks.get(constant.asString())) |stack_block_handle| {
-        if (findLabelInBlock(s, stack_block_handle, symbol)) |insn_handle| {
-            return .{
-                .additional_sp_offset = 0,
-                .instruction = insn_handle,
-            };
-        }
-    }
-    return null;
-}
-
-pub fn findLabelInBlock(s: SourceFile.Slices, block_handle: SourceFile.SectionBlock.Handle, symbol: []const u8) ?Instruction.Handle {
-    const labels = s.insn.items(.label);
-    const resolved_constants = s.expr.items(.resolved_constant);
-    var block_iter = s.blockInstructions(block_handle);
-    while (block_iter.next()) |insn_handle| {
-        if (labels[insn_handle]) |label_expr| {
-            const label_constant = resolved_constants[label_expr] orelse unreachable;
-            if (std.mem.eql(u8, symbol, label_constant.asString())) {
-                return insn_handle;
+    if (op == .push) {
+        const stack_block_name = parseSymbol(a, s, expr_handle).asString();
+        if (s.file.stacks.get(stack_block_name)) |stack_block_handle| {
+            const stack_labels = s.block.items(.labels)[stack_block_handle];
+            if (stack_labels.get(symbol)) |insn_handle| {
+                return .{
+                    .additional_sp_offset = 0,
+                    .instruction = insn_handle,
+                    .stack_block_name = stack_block_name,
+                };
             }
         }
     }
-    return null;
+
+    return maybe_stack_ref;
 }
 
 fn undefListContainsSymbol(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression.Handle, symbol: []const u8) bool {

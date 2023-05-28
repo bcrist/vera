@@ -468,7 +468,7 @@ fn addListingForChunk(a: *Assembler, listing: *Listing, chunk: SourceFile.Chunk,
             .stack => {
                 listing.addNonOutputLine(.stack_space, line_numbers[i], line_source, options.clone_source_strings);
             },
-            .none, .insn, .keep, .def, .undef, .local, .range => {
+            .none, .nil, .insn, .keep, .def, .undef, .local, .range => {
                 listing.addNonOutputLine(.empty, line_numbers[i], line_source, options.clone_source_strings);
             },
             .org => {

@@ -19,11 +19,11 @@ source: []const u8,
 tokens: lex.TokenList,
 instructions: std.MultiArrayList(Instruction),
 expressions: std.MultiArrayList(Expression),
-blocks: std.MultiArrayList(SectionBlock),
+blocks: std.MultiArrayList(Block),
 
 // not populated during parsing:
 locals: std.StringHashMapUnmanaged(symbols.SymbolTarget),
-stacks: std.StringHashMapUnmanaged(SectionBlock.Handle),
+stacks: std.StringHashMapUnmanaged(Block.Handle),
 
 pub const Handle = u32;
 
@@ -59,9 +59,9 @@ pub fn parse(gpa: std.mem.Allocator, handle: Handle, name: []const u8, source: [
             file.tryAddBlock(gpa, block_begin, new_block_begin);
             block_begin = new_block_begin;
         },
-        .none, .org, .@"align", .keep, .def, .undef,
+        .none, .nil, .org, .@"align", .keep,
         .local, .insn, .bound_insn, .db, .dw, .dd,
-        .push, .pop, .range,
+        .push, .pop, .range, .def, .undef,
         => {},
     };
 
@@ -71,6 +71,9 @@ pub fn parse(gpa: std.mem.Allocator, handle: Handle, name: []const u8, source: [
 }
 
 pub fn deinit(self: SourceFile, gpa: std.mem.Allocator, maybe_arena: ?std.mem.Allocator) void {
+    for (self.blocks.items(.labels)) |*map| {
+        map.deinit(gpa);
+    }
     self.tokens.deinit(gpa);
     self.instructions.deinit(gpa);
     self.expressions.deinit(gpa);
@@ -83,15 +86,16 @@ pub fn deinit(self: SourceFile, gpa: std.mem.Allocator, maybe_arena: ?std.mem.Al
     }
 }
 
-pub const SectionBlock = struct {
+pub const Block = struct {
     first_token: lex.Token.Handle,
     first_insn: Instruction.Handle,
     end_insn: Instruction.Handle,
 
     // not populated during parsing:
-    block_type: ?Instruction.OperationType,
-    section: ?Section.Handle,
-    keep: bool,
+    block_type: ?Instruction.OperationType = null,
+    section: ?Section.Handle = null,
+    keep: bool = false,
+    labels: std.StringHashMapUnmanaged(Instruction.Handle) = .{}, // only private and stack labels; not public labels
 
     pub const Handle = u32;
 };
@@ -107,9 +111,6 @@ fn tryAddBlock(self: *SourceFile, gpa: std.mem.Allocator, first_insn: Instructio
         .first_token = first_token,
         .first_insn = first_insn,
         .end_insn = end_insn,
-        .block_type = null,
-        .section = null,
-        .keep = false,
     }) catch @panic("OOM");
 }
 
@@ -117,9 +118,9 @@ pub const Slices = struct {
     file: *SourceFile,
     insn: std.MultiArrayList(Instruction).Slice,
     expr: std.MultiArrayList(Expression).Slice,
-    block: std.MultiArrayList(SectionBlock).Slice,
+    block: std.MultiArrayList(Block).Slice,
 
-    pub fn blockInstructions(self: Slices, block_handle: SectionBlock.Handle) Instruction.Iterator {
+    pub fn blockInstructions(self: Slices, block_handle: Block.Handle) Instruction.Iterator {
         return .{
             .begin = self.block.items(.first_insn)[block_handle],
             .end = self.block.items(.end_insn)[block_handle],
@@ -271,7 +272,7 @@ pub fn collectChunks(
                     state.checkChunkType(.data, insn_handle);
                 },
 
-                .none, .@"align", .keep, .def, .undef, .local, .range,
+                .none, .nil, .@"align", .keep, .def, .undef, .local, .range,
                 .section, .boot, .code, .kcode, .entry, .kentry, .data, .kdata, .@"const", .kconst, .stack
                 => {},
             }
@@ -316,7 +317,7 @@ pub fn findInstructionByExpr(self: *const SourceFile, expr_handle: Expression.Ha
     return self.findInstructionByToken(token_handle);
 }
 
-pub fn findBlockByToken(self: *const SourceFile, token_handle: lex.Token.Handle) SectionBlock.Handle {
+pub fn findBlockByToken(self: *const SourceFile, token_handle: lex.Token.Handle) Block.Handle {
     var haystack = self.blocks.items(.first_token);
     var base: usize = 0;
 
@@ -337,10 +338,10 @@ pub fn findBlockByToken(self: *const SourceFile, token_handle: lex.Token.Handle)
         } else break;
     }
 
-    return @intCast(SectionBlock.Handle, block_index orelse unreachable);
+    return @intCast(Block.Handle, block_index orelse unreachable);
 }
 
-pub fn findBlockByInstruction(self: *const SourceFile, insn_handle: Instruction.Handle) SectionBlock.Handle {
+pub fn findBlockByInstruction(self: *const SourceFile, insn_handle: Instruction.Handle) Block.Handle {
     var haystack = self.blocks.items(.first_insn);
     var base: usize = 0;
 
@@ -361,7 +362,7 @@ pub fn findBlockByInstruction(self: *const SourceFile, insn_handle: Instruction.
         } else break;
     }
 
-    return @intCast(SectionBlock.Handle, block_index orelse unreachable);
+    return @intCast(Block.Handle, block_index orelse unreachable);
 }
 
 fn backtrackLabels(operations: []const Instruction.Operation, handle: Instruction.Handle) Instruction.Handle {
