@@ -879,7 +879,7 @@ fn checkPoppedStack(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression
     const stack_block_name = symbols.parseSymbol(a, s, expr_handle).asString();
     for (0.., pushed_stacks.items) |i, name| {
         if (std.mem.eql(u8, name, stack_block_name)) {
-            if (i < pushed_stacks.items.len - num_blocks_to_pop.*) {
+            if (i + num_blocks_to_pop.* < pushed_stacks.items.len) {
                 a.recordExprError(s.file.handle, expr_handle, "Stack blocks must be popped in the reverse order they were pushed!", .{});
             } else {
                 num_blocks_to_pop.* -= 1;
@@ -1118,7 +1118,12 @@ fn getParamHandles(a: *Assembler, s: SourceFile.Slices, maybe_params_expr: ?Expr
 }
 
 pub fn checkSymbolAmbiguityInFile(a: *Assembler, s: SourceFile.Slices) void {
-    _ = s;
-    _ = a;
-
+    const expr_tokens = s.expr.items(.token);
+    for (0.., s.expr.items(.info)) |expr_handle, info| switch (info) {
+        .literal_symbol_ref, .directive_symbol_ref => {
+            const constant = symbols.parseSymbol(a, s, @intCast(Expression.Handle, expr_handle));
+            _ = symbols.lookupSymbol(a, s, expr_tokens[expr_handle], constant.asString(), true);
+        },
+        else => {},
+    };
 }

@@ -9,13 +9,15 @@ const Token = lex.Token;
 const Error = @This();
 
 file: SourceFile.Handle,
-context: union (enum) {
+context: Context,
+desc: []const u8,
+flags: FlagSet,
+
+pub const Context = union (enum) {
     token: lex.Token.Handle,
     instruction: Instruction.Handle,
     expression: Expression.Handle,
-},
-desc: []const u8,
-flags: FlagSet,
+};
 
 pub const FlagSet = std.EnumSet(Flags);
 pub const Flags = enum {

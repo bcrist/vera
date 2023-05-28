@@ -98,11 +98,11 @@ pub fn lookupSymbol(a: *Assembler, s: SourceFile.Slices, symbol_token_handle: le
                 var maybe_expr_handle = s.insn.items(.params)[insn_handle];
                 while (maybe_expr_handle) |expr_handle| switch (expr_infos[expr_handle]) {
                     .list => |bin| {
-                        maybe_stack_ref = processPushOrPop(a, s, op, maybe_stack_ref, bin.left, symbol, &dupe_strategy);
+                        maybe_stack_ref = processPushOrPop(a, s, op, maybe_stack_ref, bin.left, symbol_token_handle, symbol, &dupe_strategy);
                         maybe_expr_handle = bin.right;
                     },
                     else => {
-                        maybe_stack_ref = processPushOrPop(a, s, op, maybe_stack_ref, expr_handle, symbol, &dupe_strategy);
+                        maybe_stack_ref = processPushOrPop(a, s, op, maybe_stack_ref, expr_handle, symbol_token_handle, symbol, &dupe_strategy);
                         maybe_expr_handle = null;
                     }
                 };
@@ -112,44 +112,76 @@ pub fn lookupSymbol(a: *Assembler, s: SourceFile.Slices, symbol_token_handle: le
     }
 
     var maybe_private_label = if (std.mem.startsWith(u8, symbol, "_")) s.block.items(.labels)[block_handle].get(symbol) else null;
+    var maybe_local = s.file.locals.get(symbol);
+    var maybe_public = a.public_labels.get(symbol);
 
-    // 1. .def symbols
-    if (def_symbol_definition) |expr_handle| {
-        if (check_ambiguity) {
-            var is_ambiguous = false;
-            if (maybe_private_label) |_| {
-                is_ambiguous = true;
+    if (check_ambiguity) {
+        var num_matches: u32 = 0;
+        if (def_symbol_definition != null) num_matches += 1;
+        if (maybe_private_label != null) num_matches += 1;
+        if (maybe_stack_ref != null) num_matches += 1;
+        if (maybe_local != null) num_matches += 1;
+
+        if (maybe_public) |insn_ref| {
+            if (insn_ref.file != s.file.handle) {
+                num_matches += 1;
             }
         }
-        return .{ .expression = expr_handle };
+
+        if (num_matches > 1) {
+            const insn_line_numbers = s.insn.items(.line_number);
+
+            if (def_symbol_definition) |expr_handle| {
+                const insn_handle = s.file.findInstructionByExpr(expr_handle);
+                const line_number = insn_line_numbers[insn_handle];
+                a.recordTokenErrorFmt(s.file.handle, symbol_token_handle, "Ambiguous symbol; could be .def symbol from line {}", .{ line_number }, .{});
+            }
+
+            if (maybe_private_label) |insn_handle| {
+                const line_number = insn_line_numbers[insn_handle];
+                a.recordTokenErrorFmt(s.file.handle, symbol_token_handle, "Ambiguous symbol; could be private label from line {}", .{ line_number }, .{});
+            }
+
+            if (maybe_stack_ref) |stack_ref| {
+                if (dupe_strategy == .report_both) {
+                    const line_number = insn_line_numbers[stack_ref.instruction];
+                    a.recordTokenErrorFmt(s.file.handle, symbol_token_handle, "Ambiguous symbol; could be stack label from line {}", .{ line_number }, .{});
+                }
+            }
+
+            if (maybe_local) |target| switch (target) {
+                .not_found, .stack => unreachable,
+                .instruction => |insn_ref| {
+                    const line_number = insn_line_numbers[insn_ref.instruction];
+                    a.recordTokenErrorFmt(s.file.handle, symbol_token_handle, "Ambiguous symbol; could be file-local label from line {}", .{ line_number }, .{});
+                },
+                .expression => |expr_handle| {
+                    const insn_handle = s.file.findInstructionByExpr(expr_handle);
+                    const line_number = insn_line_numbers[insn_handle];
+                    a.recordTokenErrorFmt(s.file.handle, symbol_token_handle, "Ambiguous symbol; could be .local symbol from line {}", .{ line_number }, .{});
+                },
+            };
+
+            if (maybe_public) |insn_ref| {
+                if (insn_ref.file != s.file.handle) {
+                    const target_file = a.getSource(insn_ref.file);
+                    const line_number = target_file.instructions.items(.line_number)[insn_ref.instruction];
+                    a.recordTokenErrorFmt(s.file.handle, symbol_token_handle, "Ambiguous symbol; could be public label from line {} in {s}", .{ line_number, target_file.name }, .{});
+                }
+            }
+        }
     }
 
-    // 2. private labels
-    if (maybe_private_label) |insn_handle| {
-        if (check_ambiguity) {
-        }
-        return .{ .instruction = .{
+    return if (def_symbol_definition) |expr_handle| .{ .expression = expr_handle }
+        else if (maybe_private_label) |insn_handle| .{ .instruction = .{
             .file = s.file.handle,
             .instruction = insn_handle,
-        }};
-    }
-
-    // 3. stack labels from .pushed contexts
-    if (maybe_stack_ref) |stack_ref| {
-        return .{ .stack = stack_ref };
-    }
-
-    // 4. .local symbols
-    if (s.file.locals.get(symbol)) |local| {
-        return local;
-    }
-
-    // 5. public labels
-    if (a.public_labels.get(symbol)) |insn_ref| {
-        return .{ .instruction = insn_ref };
-    }
-
-    return .{ .not_found = {} };
+        }}
+        else if (maybe_stack_ref) |stack_ref| .{ .stack = stack_ref }
+        else if (maybe_local) |local| local
+        else if (maybe_public) |insn_ref| .{ .instruction = insn_ref }
+        else .{ .not_found = {} }
+        ;
 }
 
 pub fn computePushOrPopSize(a: *Assembler, s: SourceFile.Slices, maybe_stack_name_list: ?Expression.Handle) u32 {
@@ -190,7 +222,7 @@ const StackLabelDupeStrategy = enum {
     report_both,
     report_dupe_only,
 };
-fn processPushOrPop(a: *Assembler, s: SourceFile.Slices, op: Instruction.OperationType, maybe_stack_ref: ?StackRef, expr_handle: Expression.Handle, symbol: []const u8, dupe_strategy: *StackLabelDupeStrategy) ?StackRef {
+fn processPushOrPop(a: *Assembler, s: SourceFile.Slices, op: Instruction.OperationType, maybe_stack_ref: ?StackRef, expr_handle: Expression.Handle, symbol_token_handle: lex.Token.Handle, symbol: []const u8, dupe_strategy: *StackLabelDupeStrategy) ?StackRef {
     if (maybe_stack_ref) |stack_ref| {
         var offset = stack_ref.additional_sp_offset;
         const stack_size = computeStackSize(a, s, expr_handle);
@@ -216,13 +248,13 @@ fn processPushOrPop(a: *Assembler, s: SourceFile.Slices, op: Instruction.Operati
 
                         if (dupe_strategy.* == .report_both) {
                             const line_number = insn_line_numbers[stack_ref.instruction];
-                            a.recordExprErrorFmt(s.file.handle, expr_handle, "Ambiguous symbol; could be stack label from line {}", .{ line_number }, .{});
+                            a.recordTokenErrorFmt(s.file.handle, symbol_token_handle, "Ambiguous symbol; could be stack label from line {}", .{ line_number }, .{});
 
                             dupe_strategy.* = .report_dupe_only;
                         }
 
                         const line_number = insn_line_numbers[insn_handle];
-                        a.recordExprErrorFmt(s.file.handle, expr_handle, "Ambiguous symbol; could be stack label from line {}", .{ line_number }, .{});
+                        a.recordTokenErrorFmt(s.file.handle, symbol_token_handle, "Ambiguous symbol; could be stack label from line {}", .{ line_number }, .{});
                     }
                 }
             }

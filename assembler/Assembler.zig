@@ -276,55 +276,49 @@ pub fn readByte(self: *Assembler, address: u32, address_space: isa.AddressSpace)
     return iter.next();
 }
 
-pub fn recordTokenError(self: *Assembler, file_handle: SourceFile.Handle, token: lex.Token.Handle, desc: []const u8, flags: Error.FlagSet) void {
+pub fn recordError(self: *Assembler, file_handle: SourceFile.Handle, context: Error.Context, desc: []const u8, flags: Error.FlagSet) void {
     self.errors.append(self.gpa, .{
         .file = file_handle,
-        .context = .{ .token = token },
+        .context = context,
         .desc = desc,
         .flags = flags,
     }) catch @panic("OOM");
+}
+
+pub fn recordErrorFmt(self: *Assembler, file_handle: SourceFile.Handle, context: Error.Context, comptime fmt: []const u8, args: anytype, flags: Error.FlagSet) void {
+    const desc = std.fmt.allocPrint(self.gpa, fmt, args) catch @panic("OOM");
+    var mutable_flags = flags;
+    mutable_flags.insert(.desc_is_allocated);
+    self.errors.append(self.gpa, .{
+        .file = file_handle,
+        .context = context,
+        .desc = desc,
+        .flags = mutable_flags,
+    }) catch @panic("OOM");
+}
+
+pub fn recordTokenError(self: *Assembler, file_handle: SourceFile.Handle, token: lex.Token.Handle, desc: []const u8, flags: Error.FlagSet) void {
+    recordError(self, file_handle, .{ .token = token }, desc, flags);
+}
+
+pub fn recordTokenErrorFmt(self: *Assembler, file_handle: SourceFile.Handle, token: lex.Token.Handle, comptime fmt: []const u8, args: anytype, flags: Error.FlagSet) void {
+    recordErrorFmt(self, file_handle, .{ .token = token }, fmt, args, flags);
 }
 
 pub fn recordInsnError(self: *Assembler, file_handle: SourceFile.Handle, insn_handle: Instruction.Handle, desc: []const u8, flags: Error.FlagSet) void {
-    self.errors.append(self.gpa, .{
-        .file = file_handle,
-        .context = .{ .instruction = insn_handle },
-        .desc = desc,
-        .flags = flags,
-    }) catch @panic("OOM");
+    recordError(self, file_handle, .{ .instruction = insn_handle }, desc, flags);
 }
 
 pub fn recordInsnErrorFmt(self: *Assembler, file_handle: SourceFile.Handle, insn_handle: Instruction.Handle, comptime fmt: []const u8, args: anytype, flags: Error.FlagSet) void {
-    const desc = std.fmt.allocPrint(self.gpa, fmt, args) catch @panic("OOM");
-    var mutable_flags = flags;
-    mutable_flags.insert(.desc_is_allocated);
-    self.errors.append(self.gpa, .{
-        .file = file_handle,
-        .context = .{ .instruction = insn_handle },
-        .desc = desc,
-        .flags = mutable_flags,
-    }) catch @panic("OOM");
+    recordErrorFmt(self, file_handle, .{ .instruction = insn_handle }, fmt, args, flags);
 }
 
 pub fn recordExprError(self: *Assembler, file_handle: SourceFile.Handle, expr_handle: Expression.Handle, desc: []const u8, flags: Error.FlagSet) void {
-    self.errors.append(self.gpa, .{
-        .file = file_handle,
-        .context = .{ .expression = expr_handle },
-        .desc = desc,
-        .flags = flags,
-    }) catch @panic("OOM");
+    recordError(self, file_handle, .{ .expression = expr_handle }, desc, flags);
 }
 
 pub fn recordExprErrorFmt(self: *Assembler, file_handle: SourceFile.Handle, expr_handle: Expression.Handle, comptime fmt: []const u8, args: anytype, flags: Error.FlagSet) void {
-    const desc = std.fmt.allocPrint(self.gpa, fmt, args) catch @panic("OOM");
-    var mutable_flags = flags;
-    mutable_flags.insert(.desc_is_allocated);
-    self.errors.append(self.gpa, .{
-        .file = file_handle,
-        .context = .{ .expression = expr_handle },
-        .desc = desc,
-        .flags = mutable_flags,
-    }) catch @panic("OOM");
+    recordErrorFmt(self, file_handle, .{ .expression = expr_handle }, fmt, args, flags);
 }
 
 pub fn recordExpressionLayoutError(self: *Assembler, file_handle: SourceFile.Handle, outer_expr_handle: Expression.Handle, context_expr_handle: Expression.Handle, desc: []const u8, flags: Error.FlagSet) void {

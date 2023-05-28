@@ -1,8 +1,9 @@
-[assembler] Check name collisions
-[assembler] Don't allow branches across .push/.pop boundaries
-[assembler] "Address of end of chunk" literal?  Or maybe operator that gives the end address of the chunk that contains a queried address?  the latter is hard to implement in current code.
 [assembler] .zb, .zw, .zd directives - take one parameter, N, number of zero bytes/words/dwords to emit - defaults to 1
 [assembler] .crlf directive to convert LF in a constant to CRLF
+[assembler] CLI
+[assembler] Consider allowing things that expect constant expressions to also accept absolute addresses (.db/.dw/.dd, length casts, etc.)
+[assembler] Don't allow branches across .push/.pop boundaries
+[assembler] "Address of end of chunk" literal?  Or maybe operator that gives the end address of the chunk that contains a queried address?  the latter is hard to implement in current code.
 [assembler] Create disassembler
 [assembler] add a kentry output mode to write a "header" file that exports the addresses of kentry labels
 [assembler] add cycle counts to listing output

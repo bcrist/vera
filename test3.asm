@@ -16,4 +16,4 @@ a1bc: .dw 1
 end: .nil
 
 .stack more
-xyz:    .db 1, 2, 3, 4, 5
+xyz2:    .db 1, 2, 3, 4, 5
