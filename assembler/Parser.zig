@@ -979,7 +979,7 @@ fn tryToken(self: *Parser, kind: TokenKind) bool {
 fn recordError(self: *Parser, desc: []const u8) void {
     self.errors.append(self.gpa, .{
         .file = self.handle,
-        .token = self.next_token,
+        .context = .{ .token = self.next_token },
         .desc = desc,
         .flags = .{},
     }) catch @panic("OOM");
@@ -987,7 +987,7 @@ fn recordError(self: *Parser, desc: []const u8) void {
 fn recordErrorAbs(self: *Parser, desc: []const u8, token: Token.Handle) void {
     self.errors.append(self.gpa, .{
         .file = self.handle,
-        .token = token,
+        .context = .{ .token = token },
         .desc = desc,
         .flags = .{},
     }) catch @panic("OOM");
@@ -995,7 +995,7 @@ fn recordErrorAbs(self: *Parser, desc: []const u8, token: Token.Handle) void {
 fn recordErrorRel(self: *Parser, desc: []const u8, token_offset: i8) void {
     self.errors.append(self.gpa, .{
         .file = self.handle,
-        .token = @intCast(Token.Handle, @as(i32, self.next_token) + token_offset),
+        .context = .{ .token = @intCast(Token.Handle, @as(i32, self.next_token) + token_offset) },
         .desc = desc,
         .flags = .{},
     }) catch @panic("OOM");

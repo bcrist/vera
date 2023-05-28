@@ -12,7 +12,6 @@ const Instruction = @import("Instruction.zig");
 const Expression = @import("Expression.zig");
 const PageData = @import("PageData.zig");
 const Error = @import("Error.zig");
-const InsnEncodingError = @import("InsnEncodingError.zig");
 
 pub fn doFixedOrgLayout(a: *Assembler, chunks: []SourceFile.Chunk) bool {
     var layout_changed = false;
@@ -416,9 +415,8 @@ fn resolveAndApplyAlignment(
             if (resolveExpressionConstant(a, s, address, bin.left)) |constant| {
                 alignment = constant.asInt(u32) catch {
                     if (report_errors) {
-                        const token = s.expr.items(.token)[bin.left];
                         const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
-                        a.recordError(s.file.handle, token, "Overflow (alignment must fit in u32)", err_flags);
+                        a.recordExprError(s.file.handle, bin.left, "Overflow (alignment must fit in u32)", err_flags);
                     }
                     return address;
                 };
@@ -426,17 +424,15 @@ fn resolveAndApplyAlignment(
             if (resolveExpressionConstant(a, s, address, bin.right)) |constant| {
                 offset = constant.asInt(u32) catch {
                     if (report_errors) {
-                        const token = s.expr.items(.token)[bin.right];
                         const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
-                        a.recordError(s.file.handle, token, "Overflow (offset must fit in u32)", err_flags);
+                        a.recordExprError(s.file.handle, bin.right, "Overflow (offset must fit in u32)", err_flags);
                     }
                     return address;
                 };
                 if (offset >= alignment or offset < 0) {
                     if (report_errors) {
-                        const token = s.expr.items(.token)[bin.right];
                         const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
-                        a.recordError(s.file.handle, token, "Invalid offset (must be less than alignment)", err_flags);
+                        a.recordExprError(s.file.handle, bin.right, "Invalid offset (must be less than alignment)", err_flags);
                     }
                     return address;
                 }
@@ -446,9 +442,8 @@ fn resolveAndApplyAlignment(
             if (resolveExpressionConstant(a, s, address, align_expr)) |constant| {
                 alignment = constant.asInt(u32) catch {
                     if (report_errors) {
-                        const token = s.expr.items(.token)[align_expr];
                         const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
-                        a.recordError(s.file.handle, token, "Overflow (alignment too must fit in u32)", err_flags);
+                        a.recordExprError(s.file.handle, align_expr, "Overflow (alignment too must fit in u32)", err_flags);
                     }
                     return address;
                 };
@@ -462,9 +457,8 @@ fn resolveAndApplyAlignment(
 
     if (@popCount(alignment) != 1) {
         if (report_errors) {
-            const token = s.expr.items(.token)[alignment_expr];
             const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
-            a.recordError(s.file.handle, token, "Invalid alignment (must be power of 2)", err_flags);
+            a.recordExprError(s.file.handle, alignment_expr, "Invalid alignment (must be power of 2)", err_flags);
         }
         return address;
     }
@@ -501,9 +495,8 @@ fn checkAndApplyAlignment(
     }
 
     const new_address = std.math.cast(u32, new_address_usize) orelse {
-        const token = s.insn.items(.token)[insn_handle];
         const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
-        a.recordError(s.file.handle, token, "Aligned address overflow", err_flags);
+        a.recordInsnError(s.file.handle, insn_handle, "Aligned address overflow", err_flags);
         return address;
     };
 
@@ -522,9 +515,8 @@ fn checkAndApplyAlignment(
             .entry_user,
             .entry_kernel,
             => {
-                const token = s.insn.items(.token)[insn_handle];
                 const err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
-                a.recordError(s.file.handle, token, "Alignment not satisfied within instruction stream (try using NOP, NOPE, or an unconditional branch before this point)", err_flags);
+                a.recordInsnError(s.file.handle, insn_handle, "Alignment not satisfied within instruction stream (try using NOP, NOPE, or an unconditional branch before this point)", err_flags);
             },
         };
     }
@@ -569,7 +561,7 @@ fn resolvePushPopDirectiveLength(a: *Assembler, s: SourceFile.Slices, insn_handl
         if (flagset.contains(.depends_on_layout)) {
             flags.insert(.remove_on_layout_reset);
         }
-        a.recordError(s.file.handle, s.insn.items(.token)[insn_handle], "Stack frame too large", flags);
+        a.recordInsnError(s.file.handle, insn_handle, "Stack frame too large", flags);
     }
 
     insn_lengths[insn_handle] = length;
@@ -860,7 +852,7 @@ pub fn resolveExpressionConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, e
 }
 
 fn resolveSymbolRefExprConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, expr_handle: Expression.Handle, symbol_token_handle: lex.Token.Handle, symbol_constant: Constant) void {
-    switch (symbols.lookupSymbol(a, s, symbol_token_handle, symbol_constant.asString())) {
+    switch (symbols.lookupSymbol(a, s, symbol_token_handle, symbol_constant.asString(), false)) {
         .expression => |target_expr_handle| {
             s.expr.items(.resolved_constant)[expr_handle] = resolveExpressionConstant(a, s, ip, target_expr_handle);
         },
@@ -899,7 +891,7 @@ fn resolveInstructionEncoding(a: *Assembler, s: SourceFile.Slices, ip: u32, insn
         op.* = .{ .bound_insn = enc };
         return enc.getInstructionLength();
     } else {
-        var err_flags = InsnEncodingError.FlagSet.initOne(.remove_on_layout_reset);
+        var err_flags = Error.FlagSet.initOne(.remove_on_layout_reset);
         a.recordInsnEncodingError(s.file.handle, insn_handle, err_flags);
         return 0;
     }
@@ -949,8 +941,7 @@ pub fn populatePageChunks(a: *Assembler, chunks: []const SourceFile.Chunk) void 
                 const page_data_handle = a.page_lookup.get(@intCast(bus.Page, page)) orelse unreachable;
                 page_chunks[page_data_handle].append(a.gpa, chunk) catch @panic("OOM");
                 if (page_sections[page_data_handle] != section) {
-                    const token = a.getSource(chunk.file).instructions.items(.token)[chunk.instructions.begin];
-                    a.recordErrorFmt(chunk.file, token, "Chunk starting here was allocated to page 0x{X:0>5}, but that page is in use by another section", .{ page }, .{});
+                    a.recordInsnErrorFmt(chunk.file, chunk.instructions.begin, "Chunk starting here was allocated to page 0x{X:0>5}, but that page is in use by another section", .{ page }, .{});
                 }
             }
         }
@@ -1073,7 +1064,7 @@ fn encodeInstruction(
 
     if (length > buffer.len) {
         if (@truncate(u1, address) == 1) {
-            a.recordError(s.file.handle, s.insn.items(.token)[insn_handle], "Instruction crosses page boundary and is not word aligned", .{});
+            a.recordInsnError(s.file.handle, insn_handle, "Instruction crosses page boundary and is not word aligned", .{});
         }
 
         var temp = [_]u8{0} ** 8;

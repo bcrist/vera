@@ -9,8 +9,7 @@ const Constant = @import("Constant.zig");
 
 const Block = SourceFile.Block;
 
-pub fn markBlocksToKeep(a: *Assembler, file: *SourceFile) void {
-    const s = file.slices();
+pub fn markBlocksToKeep(a: *Assembler, s: SourceFile.Slices) void {
     const operations = s.insn.items(.operation);
     for (s.block.items(.first_insn), s.block.items(.end_insn), s.block.items(.keep)) |begin, end, *keep| {
         if (keep.*) continue;
@@ -93,7 +92,7 @@ fn traceReferencesInExpr(a: *Assembler, s: SourceFile.Slices, insn_handle: Instr
 }
 
 fn traceSymbol(a: *Assembler, s: SourceFile.Slices, token_handle: lex.Token.Handle, symbol: []const u8) void {
-    switch (symbols.lookupSymbol(a, s, token_handle, symbol)) {
+    switch (symbols.lookupSymbol(a, s, token_handle, symbol, false)) {
         .expression => |target_expr_handle| {
             const target_token_handle = s.expr.items(.token)[target_expr_handle];
             const block_handle = s.file.findBlockByToken(target_token_handle);

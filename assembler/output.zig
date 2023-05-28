@@ -439,16 +439,8 @@ fn addListingForChunk(a: *Assembler, listing: *Listing, chunk: SourceFile.Chunk,
 
     var iter = chunk.instructions;
     while (iter.next()) |i| {
-        var start_of_line = tokens[i];
-        var end_of_line = start_of_line;
-        while (start_of_line > 0 and token_kinds[start_of_line - 1] != .newline) {
-            start_of_line -= 1;
-        }
-        while (token_kinds[end_of_line] != .newline and token_kinds[end_of_line] != .eof) {
-            end_of_line += 1;
-            std.debug.assert(end_of_line <= file.tokens.len);
-        }
-        var line_source = file.source[token_offsets[start_of_line] .. token_offsets[end_of_line]];
+        var token_range = Instruction.getTokenRange(i, tokens, token_kinds);
+        var line_source = file.source[token_offsets[token_range.first] .. token_offsets[token_range.last + 1]];
         if (line_source.len > 0 and line_source[line_source.len - 1] == '\r') {
             line_source.len -= 1;
         }

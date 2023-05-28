@@ -59,7 +59,7 @@ pub fn parseSymbol(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression.
     }
 }
 
-pub fn lookupSymbol(a: *Assembler, s: SourceFile.Slices, symbol_token_handle: lex.Token.Handle, symbol: []const u8) SymbolTarget {
+pub fn lookupSymbol(a: *Assembler, s: SourceFile.Slices, symbol_token_handle: lex.Token.Handle, symbol: []const u8, comptime check_ambiguity: bool) SymbolTarget {
     const file = s.file;
     const operations = s.insn.items(.operation);
     const resolved_constants = s.expr.items(.resolved_constant);
@@ -67,9 +67,11 @@ pub fn lookupSymbol(a: *Assembler, s: SourceFile.Slices, symbol_token_handle: le
     const insn_containing_symbol_expression = file.findInstructionByToken(symbol_token_handle);
     const block_handle = file.findBlockByToken(symbol_token_handle);
 
+    // Look for lexically scoped symbols (.def expressions and stack labels)
     var def_symbol_definition: ?Expression.Handle = null;
     var maybe_stack_ref: ?StackRef = null;
     var block_iter = s.blockInstructions(block_handle);
+    var dupe_strategy: StackLabelDupeStrategy = if (check_ambiguity) .report_both else .skip_check;
     while (block_iter.next()) |insn_handle| {
         if (insn_handle >= insn_containing_symbol_expression) break;
 
@@ -96,11 +98,11 @@ pub fn lookupSymbol(a: *Assembler, s: SourceFile.Slices, symbol_token_handle: le
                 var maybe_expr_handle = s.insn.items(.params)[insn_handle];
                 while (maybe_expr_handle) |expr_handle| switch (expr_infos[expr_handle]) {
                     .list => |bin| {
-                        maybe_stack_ref = processPushOrPop(a, s, op, maybe_stack_ref, bin.left, symbol);
+                        maybe_stack_ref = processPushOrPop(a, s, op, maybe_stack_ref, bin.left, symbol, &dupe_strategy);
                         maybe_expr_handle = bin.right;
                     },
                     else => {
-                        maybe_stack_ref = processPushOrPop(a, s, op, maybe_stack_ref, expr_handle, symbol);
+                        maybe_stack_ref = processPushOrPop(a, s, op, maybe_stack_ref, expr_handle, symbol, &dupe_strategy);
                         maybe_expr_handle = null;
                     }
                 };
@@ -109,20 +111,27 @@ pub fn lookupSymbol(a: *Assembler, s: SourceFile.Slices, symbol_token_handle: le
         }
     }
 
+    var maybe_private_label = if (std.mem.startsWith(u8, symbol, "_")) s.block.items(.labels)[block_handle].get(symbol) else null;
+
     // 1. .def symbols
     if (def_symbol_definition) |expr_handle| {
+        if (check_ambiguity) {
+            var is_ambiguous = false;
+            if (maybe_private_label) |_| {
+                is_ambiguous = true;
+            }
+        }
         return .{ .expression = expr_handle };
     }
 
     // 2. private labels
-    if (std.mem.startsWith(u8, symbol, "_")) {
-        const private_labels = s.block.items(.labels)[block_handle];
-        if (private_labels.get(symbol)) |insn_handle| {
-            return .{ .instruction = .{
-                .file = s.file.handle,
-                .instruction = insn_handle,
-            }};
+    if (maybe_private_label) |insn_handle| {
+        if (check_ambiguity) {
         }
+        return .{ .instruction = .{
+            .file = s.file.handle,
+            .instruction = insn_handle,
+        }};
     }
 
     // 3. stack labels from .pushed contexts
@@ -176,7 +185,12 @@ fn computeStackSize(a: *Assembler, s: SourceFile.Slices, expr_handle: Expression
     return 0;
 }
 
-fn processPushOrPop(a: *Assembler, s: SourceFile.Slices, op: Instruction.OperationType, maybe_stack_ref: ?StackRef, expr_handle: Expression.Handle, symbol: []const u8) ?StackRef {
+const StackLabelDupeStrategy = enum {
+    skip_check,
+    report_both,
+    report_dupe_only,
+};
+fn processPushOrPop(a: *Assembler, s: SourceFile.Slices, op: Instruction.OperationType, maybe_stack_ref: ?StackRef, expr_handle: Expression.Handle, symbol: []const u8, dupe_strategy: *StackLabelDupeStrategy) ?StackRef {
     if (maybe_stack_ref) |stack_ref| {
         var offset = stack_ref.additional_sp_offset;
         const stack_size = computeStackSize(a, s, expr_handle);
@@ -193,6 +207,25 @@ fn processPushOrPop(a: *Assembler, s: SourceFile.Slices, op: Instruction.Operati
                 offset = 0;
             }
         } else {
+            if (dupe_strategy.* != .skip_check) {
+                const stack_block_name = parseSymbol(a, s, expr_handle).asString();
+                if (s.file.stacks.get(stack_block_name)) |stack_block_handle| {
+                    const stack_labels = s.block.items(.labels)[stack_block_handle];
+                    if (stack_labels.get(symbol)) |insn_handle| {
+                        const insn_line_numbers = s.insn.items(.line_number);
+
+                        if (dupe_strategy.* == .report_both) {
+                            const line_number = insn_line_numbers[stack_ref.instruction];
+                            a.recordExprErrorFmt(s.file.handle, expr_handle, "Ambiguous symbol; could be stack label from line {}", .{ line_number }, .{});
+
+                            dupe_strategy.* = .report_dupe_only;
+                        }
+
+                        const line_number = insn_line_numbers[insn_handle];
+                        a.recordExprErrorFmt(s.file.handle, expr_handle, "Ambiguous symbol; could be stack label from line {}", .{ line_number }, .{});
+                    }
+                }
+            }
             offset += stack_size;
         }
         return .{

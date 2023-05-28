@@ -209,8 +209,7 @@ pub fn collectChunks(
                 }) catch @panic("OOM");
 
                 if (state.chunk_type) |t| if (t == .code and !ended_by_unconditional_control_flow) {
-                    const token = state.file.instructions.items(.token)[chunk_end - 1];
-                    state.a.recordError(state.file.handle, token, "Expected unconditional control flow to terminate this chunk", .{});
+                    state.a.recordInsnError(state.file.handle, chunk_end - 1, "Expected unconditional control flow to terminate this chunk", .{});
                 };
             }
 

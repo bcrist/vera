@@ -124,3 +124,21 @@ pub fn isOrgHeader(op: OperationType) bool {
         => false,
     };
 }
+
+pub fn getTokenRange(insn_handle: Handle, insn_tokens: []const lex.Token.Handle, token_kinds: []const lex.TokenKind) lex.Token.Range {
+    var start_of_line = insn_tokens[insn_handle];
+    var end_of_line = start_of_line;
+
+    while (start_of_line > 0 and token_kinds[start_of_line - 1] != .newline) {
+        start_of_line -= 1;
+    }
+
+    while (token_kinds[end_of_line] != .newline and token_kinds[end_of_line] != .eof) {
+        end_of_line += 1;
+    }
+
+    return .{
+        .first = start_of_line,
+        .last = end_of_line - 1,
+    };
+}

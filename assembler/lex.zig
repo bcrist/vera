@@ -37,6 +37,20 @@ pub const Token = struct {
     kind: TokenKind,
 
     pub const Handle = u31;
+    pub const Range = struct {
+        first: Handle,
+        last: Handle,
+
+        pub fn expand(self: ?Range, t: Handle) Range {
+            return if (self) |s| .{
+                .first = @min(s.first, t),
+                .last = @max(s.last, t),
+            } else .{
+                .first = t,
+                .last = t,
+            };
+        }
+    };
 
     pub fn printContext(self: Token, source: []const u8, print_writer: anytype, max_line_width: usize) !void {
         try printContextRange(self, self, source, print_writer, max_line_width);

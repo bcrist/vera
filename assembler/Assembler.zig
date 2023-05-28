@@ -13,7 +13,6 @@ const Instruction = @import("Instruction.zig");
 const Expression = @import("Expression.zig");
 const SourceFile = @import("SourceFile.zig");
 const Error = @import("Error.zig");
-const InsnEncodingError = @import("InsnEncodingError.zig");
 const PageData = @import("PageData.zig");
 const ExpressionType = ie.Parameter.ExpressionType;
 const Mnemonic = isa.Mnemonic;
@@ -26,7 +25,6 @@ gpa: std.mem.Allocator,
 arena: std.mem.Allocator,
 files: std.ArrayListUnmanaged(SourceFile) = .{},
 errors: std.ArrayListUnmanaged(Error) = .{},
-insn_encoding_errors: std.ArrayListUnmanaged(InsnEncodingError) = .{},
 overlapping_chunks: std.AutoArrayHashMapUnmanaged(SourceFile.ChunkPair, void) = .{},
 public_labels: std.StringHashMapUnmanaged(symbols.InstructionRef) = .{},
 sections: std.StringArrayHashMapUnmanaged(Section) = .{},
@@ -118,7 +116,6 @@ pub fn deinit(self: *Assembler, deinit_arena: bool) void {
 
     self.files.deinit(self.gpa);
     self.errors.deinit(self.gpa);
-    self.insn_encoding_errors.deinit(self.gpa);
     self.overlapping_chunks.deinit(self.gpa);
     self.symbols.deinit(self.gpa);
     self.sections.deinit(self.gpa);
@@ -152,10 +149,11 @@ pub fn assemble(self: *Assembler) void {
 
     if (!typechecking.resolveExpressionTypes(self)) return;
 
-    typechecking.checkInstructionsAndDirectives(self);
-
     for (self.files.items) |*file| {
-        dead_code.markBlocksToKeep(self, file);
+        const s = file.slices();
+        typechecking.checkInstructionsAndDirectivesInFile(self, s);
+        typechecking.checkSymbolAmbiguityInFile(self, s);
+        dead_code.markBlocksToKeep(self, s);
     }
 
     var fixed_org_chunks = std.ArrayListUnmanaged(SourceFile.Chunk) {};
@@ -207,9 +205,6 @@ pub fn printErrors(self: *Assembler, writer: anytype) !void {
     for (self.errors.items) |err| {
         try err.print(self, writer);
     }
-    for (self.insn_encoding_errors.items) |err| {
-        try err.print(self, writer);
-    }
     for (self.overlapping_chunks.entries.items(.key)) |chunk_pair| {
         const a_range = chunk_pair.a.getAddressRange(self);
         const b_range = chunk_pair.b.getAddressRange(self);
@@ -242,15 +237,6 @@ fn resetLayout(self: *Assembler) void {
                 self.gpa.free(errors[i].desc);
             }
             _ = self.errors.swapRemove(i);
-        }
-    }
-
-    var insn_encoding_errors = self.insn_encoding_errors.items;
-    i = insn_encoding_errors.len;
-    while (i > 0) {
-        i -= 1;
-        if (insn_encoding_errors[i].flags.contains(.remove_on_layout_reset)) {
-            _ = self.insn_encoding_errors.swapRemove(i);
         }
     }
 
@@ -290,43 +276,75 @@ pub fn readByte(self: *Assembler, address: u32, address_space: isa.AddressSpace)
     return iter.next();
 }
 
-pub fn recordError(self: *Assembler, file_handle: SourceFile.Handle, token: lex.Token.Handle, desc: []const u8, flags: Error.FlagSet) void {
+pub fn recordTokenError(self: *Assembler, file_handle: SourceFile.Handle, token: lex.Token.Handle, desc: []const u8, flags: Error.FlagSet) void {
     self.errors.append(self.gpa, .{
         .file = file_handle,
-        .token = token,
+        .context = .{ .token = token },
         .desc = desc,
         .flags = flags,
     }) catch @panic("OOM");
 }
 
-pub fn recordErrorFmt(self: *Assembler, file_handle: SourceFile.Handle, token: lex.Token.Handle, comptime fmt: []const u8, args: anytype, flags: Error.FlagSet) void {
+pub fn recordInsnError(self: *Assembler, file_handle: SourceFile.Handle, insn_handle: Instruction.Handle, desc: []const u8, flags: Error.FlagSet) void {
+    self.errors.append(self.gpa, .{
+        .file = file_handle,
+        .context = .{ .instruction = insn_handle },
+        .desc = desc,
+        .flags = flags,
+    }) catch @panic("OOM");
+}
+
+pub fn recordInsnErrorFmt(self: *Assembler, file_handle: SourceFile.Handle, insn_handle: Instruction.Handle, comptime fmt: []const u8, args: anytype, flags: Error.FlagSet) void {
     const desc = std.fmt.allocPrint(self.gpa, fmt, args) catch @panic("OOM");
     var mutable_flags = flags;
     mutable_flags.insert(.desc_is_allocated);
     self.errors.append(self.gpa, .{
         .file = file_handle,
-        .token = token,
+        .context = .{ .instruction = insn_handle },
         .desc = desc,
         .flags = mutable_flags,
     }) catch @panic("OOM");
 }
 
-pub fn recordExpressionLayoutError(self: *Assembler, file_handle: SourceFile.Handle, ctx_expr_handle: Expression.Handle, token_expr_handle: Expression.Handle, desc: []const u8, flags: Error.FlagSet) void {
+pub fn recordExprError(self: *Assembler, file_handle: SourceFile.Handle, expr_handle: Expression.Handle, desc: []const u8, flags: Error.FlagSet) void {
+    self.errors.append(self.gpa, .{
+        .file = file_handle,
+        .context = .{ .expression = expr_handle },
+        .desc = desc,
+        .flags = flags,
+    }) catch @panic("OOM");
+}
+
+pub fn recordExprErrorFmt(self: *Assembler, file_handle: SourceFile.Handle, expr_handle: Expression.Handle, comptime fmt: []const u8, args: anytype, flags: Error.FlagSet) void {
+    const desc = std.fmt.allocPrint(self.gpa, fmt, args) catch @panic("OOM");
+    var mutable_flags = flags;
+    mutable_flags.insert(.desc_is_allocated);
+    self.errors.append(self.gpa, .{
+        .file = file_handle,
+        .context = .{ .expression = expr_handle },
+        .desc = desc,
+        .flags = mutable_flags,
+    }) catch @panic("OOM");
+}
+
+pub fn recordExpressionLayoutError(self: *Assembler, file_handle: SourceFile.Handle, outer_expr_handle: Expression.Handle, context_expr_handle: Expression.Handle, desc: []const u8, flags: Error.FlagSet) void {
     var mutable_flags = flags;
     const file = self.files.items[file_handle];
-    const token_handle = file.expressions.items(.token)[token_expr_handle];
-    const expr_flags = file.expressions.items(.flags)[ctx_expr_handle];
+    const expr_flags = file.expressions.items(.flags)[outer_expr_handle];
     if (expr_flags.contains(.constant_depends_on_layout)) {
         mutable_flags.insert(.remove_on_layout_reset);
     }
-    self.recordError(file_handle, token_handle, desc, mutable_flags);
+    self.recordExprError(file_handle, context_expr_handle, desc, mutable_flags);
 }
 
-pub fn recordInsnEncodingError(self: *Assembler, file_handle: SourceFile.Handle, insn_handle: Instruction.Handle, flags: InsnEncodingError.FlagSet) void {
-    self.insn_encoding_errors.append(self.gpa, .{
+pub fn recordInsnEncodingError(self: *Assembler, file_handle: SourceFile.Handle, insn_handle: Instruction.Handle, flags: Error.FlagSet) void {
+    var mutable_flags = flags;
+    mutable_flags.insert(.is_instruction_encoding_error);
+    self.errors.append(self.gpa, .{
         .file = file_handle,
-        .insn = insn_handle,
-        .flags = flags,
+        .context = .{ .instruction = insn_handle },
+        .desc = "No encodings found matching instruction signature: ",
+        .flags = mutable_flags,
     }) catch @panic("OOM");
 }
 
@@ -391,13 +409,7 @@ fn buildInstructionParameter(
         const constant = layout.resolveExpressionConstant(self, s, ip, expr_handle) orelse break :v 0;
         break :v constant.asInt(i64) catch {
             if (record_errors) {
-                const expr_token = s.expr.items(.token)[expr_handle];
-                const expr_flags = s.expr.items(.flags)[expr_handle];
-                var err_flags = Error.FlagSet{};
-                if (expr_flags.contains(.constant_depends_on_layout)) {
-                    err_flags.insert(.remove_on_layout_reset);
-                }
-                self.recordError(s.file.handle, expr_token, "Parameter constant too large (must fit in i64)", err_flags);
+                self.recordExpressionLayoutError(s.file.handle, expr_handle, expr_handle, "Parameter constant too large (must fit in i64)", .{});
             }
             return false;
         };
