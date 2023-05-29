@@ -854,7 +854,59 @@ pub fn resolveExpressionConstant(a: *Assembler, s: SourceFile.Slices, ip: u32, e
             };
             expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
         },
-
+        .lf_cast => |inner_expr| {
+            const constant = resolveExpressionConstant(a, s, ip, inner_expr) orelse return null;
+            a.constant_temp.clearRetainingCapacity();
+            var remaining = constant.asString();
+            var bytes_removed: u63 = 0;
+            while (std.mem.indexOfAny(u8, remaining, "\r\n")) |idx| {
+                a.constant_temp.appendSlice(a.gpa, remaining[0..idx]) catch @panic("OOM");
+                a.constant_temp.appendSlice(a.gpa, "\n") catch @panic("OOM");
+                var end_of_line = idx + 1;
+                switch (remaining[idx]) {
+                    '\r' => {
+                        if (idx + 1 < remaining.len and remaining[idx + 1] == '\n') {
+                            end_of_line += 1;
+                            bytes_removed += 1;
+                        }
+                    },
+                    '\n' => {},
+                    else => unreachable,
+                }
+                remaining = remaining[end_of_line..];
+            }
+            a.constant_temp.appendSlice(a.gpa, remaining) catch @panic("OOM");
+            const result = Constant.initStringBits(a.constant_temp.items, constant.getBitCount() - bytes_removed * 8, constant.getSignedness()) catch unreachable;
+            expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
+        },
+        .crlf_cast => |inner_expr| {
+            const constant = resolveExpressionConstant(a, s, ip, inner_expr) orelse return null;
+            a.constant_temp.clearRetainingCapacity();
+            var remaining = constant.asString();
+            var bytes_added: u63 = 0;
+            while (std.mem.indexOfAny(u8, remaining, "\r\n")) |idx| {
+                a.constant_temp.appendSlice(a.gpa, remaining[0..idx]) catch @panic("OOM");
+                a.constant_temp.appendSlice(a.gpa, "\r\n") catch @panic("OOM");
+                var end_of_line = idx + 1;
+                switch (remaining[idx]) {
+                    '\r' => {
+                        if (idx + 1 < remaining.len and remaining[idx + 1] == '\n') {
+                            end_of_line += 1;
+                        } else {
+                            bytes_added += 1;
+                        }
+                    },
+                    '\n' => {
+                        bytes_added += 1;
+                    },
+                    else => unreachable,
+                }
+                remaining = remaining[end_of_line..];
+            }
+            a.constant_temp.appendSlice(a.gpa, remaining) catch @panic("OOM");
+            const result = Constant.initStringBits(a.constant_temp.items, constant.getBitCount() + bytes_added * 8, constant.getSignedness()) catch unreachable;
+            expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
+        },
         .signed_cast => |inner_expr| {
             const constant = resolveExpressionConstant(a, s, ip, inner_expr) orelse return null;
             const result = constant.cloneWithSignedness(a.gpa, &a.constant_temp, .signed);

@@ -64,6 +64,8 @@ pub const Info = union(enum) {
     truncate: Binary,
     sign_extend: Binary,
     zero_extend: Binary,
+    crlf_cast: Unary,
+    lf_cast: Unary,
 };
 
 pub const Unary = Expression.Handle;

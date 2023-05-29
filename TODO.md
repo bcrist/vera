@@ -1,4 +1,3 @@
-[assembler] .crlf directive to convert LF in a constant to CRLF
 [assembler] CLI
 [assembler] Consider allowing things that expect constant expressions to also accept absolute addresses (.db/.dw/.dd, length casts, etc.)
 [assembler] Don't allow branches across .push/.pop boundaries

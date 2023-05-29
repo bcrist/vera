@@ -415,19 +415,23 @@ fn parsePrefixOperator(self: *Parser) ?OperatorInfo {
             if (self.tryKeyword("d")) {
                 break :info .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .data_address_cast };
             } else if (self.tryKeyword("i")) {
-                break :info .{ .token = t, .left_bp = 1,  .right_bp = 1, .expr = .insn_address_cast };
+                break :info .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .insn_address_cast };
             } else if (self.tryKeyword("s")) {
-                break :info .{ .token = t, .left_bp = 1,  .right_bp = 1, .expr = .stack_address_cast };
+                break :info .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .stack_address_cast };
             } else if (self.tryKeyword("raw")) {
-                break :info .{ .token = t, .left_bp = 1,  .right_bp = 1, .expr = .remove_address_cast };
+                break :info .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .remove_address_cast };
             } else if (self.tryKeyword("r")) {
-                break :info .{ .token = t, .left_bp = 1,  .right_bp = 1, .expr = .index_to_reg16 };
+                break :info .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .index_to_reg16 };
             } else if (self.tryKeyword("rx")) {
-                break :info .{ .token = t, .left_bp = 1,  .right_bp = 1, .expr = .index_to_reg32 };
+                break :info .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .index_to_reg32 };
             } else if (self.tryKeyword("rb")) {
-                break :info .{ .token = t, .left_bp = 1,  .right_bp = 1, .expr = .index_to_reg8 };
+                break :info .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .index_to_reg8 };
             } else if (self.tryKeyword("idx")) {
-                break :info .{ .token = t, .left_bp = 1,  .right_bp = 1, .expr = .reg_to_index };
+                break :info .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .reg_to_index };
+            } else if (self.tryKeyword("crlf")) {
+                break :info .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .crlf_cast };
+            } else if (self.tryKeyword("lf")) {
+                break :info .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .lf_cast };
             } else {
                 t = begin;
                 return null;
@@ -824,6 +828,8 @@ fn addTerminalExpression(self: *Parser, kind: Expression.Kind, token: Token.Hand
         .index_to_reg16,
         .index_to_reg32,
         .reg_to_index,
+        .crlf_cast,
+        .lf_cast,
         => unreachable,
     });
 }
@@ -848,6 +854,8 @@ fn addUnaryExpression(self: *Parser,  kind: Expression.Kind, token: Token.Handle
         .index_to_reg16 => .{ .index_to_reg16 = inner },
         .index_to_reg32 => .{ .index_to_reg32 = inner },
         .reg_to_index => .{ .reg_to_index = inner },
+        .crlf_cast => .{ .crlf_cast = inner },
+        .lf_cast => .{ .lf_cast = inner },
 
         .literal_int,
         .literal_str,
@@ -922,6 +930,8 @@ fn addBinaryExpression(self: *Parser, kind: Expression.Kind, token: Token.Handle
         .index_to_reg16,
         .index_to_reg32,
         .reg_to_index,
+        .crlf_cast,
+        .lf_cast,
         => unreachable,
     });
 }

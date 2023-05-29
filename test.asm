@@ -39,13 +39,14 @@ str: .db 1,2,3,4
     .db "\(  1   0d11  0b1100 0q1122 0o1122 0x1122)"
     .db "\(  235 )"
     .db "\(13 10)\r\n"
-    .db \\asdf
+    .db .crlf \
+        \\asdf
         \\     
         \\
         , 456789
     .db \\
 
-    // .db xyz
+    .db .lf "\r\n\r"
 
     .def asdf 1234
 

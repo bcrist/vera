@@ -103,6 +103,7 @@ fn getExpressionContext(expr: Expression.Handle, range: ?lex.Token.Range, tokens
         .data_address_cast, .insn_address_cast,
         .stack_address_cast, .remove_address_cast,
         .index_to_reg8, .index_to_reg16, .index_to_reg32,
+        .crlf_cast, .lf_cast,
         => |inner| return getExpressionContext(inner, result, tokens, infos),
 
         .literal_int, .literal_str, .literal_reg,

@@ -389,7 +389,7 @@ pub fn tryResolveExpressionType(a: *Assembler, s: SourceFile.Slices, expr_handle
             expr_resolved_types[expr_handle] = result_type;
             resolveConstantDependsOnLayoutBinary(s, expr_handle, bin);
         },
-        .negate, .complement => |inner_expr| {
+        .negate, .complement, .crlf_cast, .lf_cast => |inner_expr| {
             expr_resolved_types[expr_handle] = switch (expr_resolved_types[inner_expr]) {
                 .unknown => return false,
                 .poison => .{ .poison = {} },
