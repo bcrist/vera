@@ -514,9 +514,9 @@ fn addListingForChunk(a: *Assembler, listing: *Listing, chunk: SourceFile.Chunk,
                 }
             },
 
-            .db => listing.addDataLine(addresses[i], lengths[i], .data8, line_numbers[i], line_source, options.clone_source_strings),
-            .dw => listing.addDataLine(addresses[i], lengths[i], .data16, line_numbers[i], line_source, options.clone_source_strings),
-            .dd => listing.addDataLine(addresses[i], lengths[i], .data32, line_numbers[i], line_source, options.clone_source_strings),
+            .db, .zb => listing.addDataLine(addresses[i], lengths[i], .data8, line_numbers[i], line_source, options.clone_source_strings),
+            .dw, .zw => listing.addDataLine(addresses[i], lengths[i], .data16, line_numbers[i], line_source, options.clone_source_strings),
+            .dd, .zd => listing.addDataLine(addresses[i], lengths[i], .data32, line_numbers[i], line_source, options.clone_source_strings),
         }
     }
 }

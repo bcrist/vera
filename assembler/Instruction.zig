@@ -26,9 +26,9 @@ pub const Operation = union(enum) {
     bound_insn: *const ie.InstructionEncoding,
 
     // Data directives:
-    db,
-    dw,
-    dd,
+    db, zb,
+    dw, zw,
+    dd, zd,
 
     // Stack control directives:
     // payload is the size of the stack frame (align 2)
@@ -116,9 +116,9 @@ pub fn isOrgHeader(op: OperationType) bool {
         .org,
         .insn,
         .bound_insn,
-        .db,
-        .dw,
-        .dd,
+        .db, .zb,
+        .dw, .zw,
+        .dd, .zd,
         .push,
         .pop,
         => false,

@@ -77,7 +77,7 @@ pub fn processLabelsAndSections(a: *Assembler, file: *SourceFile) void {
                         result.value_ptr.* = .{ .expression = bin.right };
                     }
                 },
-                .none, .nil, .org, .@"align", .keep, .insn, .bound_insn, .db, .dw, .dd, .range => {},
+                .none, .nil, .org, .@"align", .keep, .insn, .bound_insn, .db, .dw, .dd, .zb, .zw, .zd, .range => {},
             }
         }
 
@@ -330,8 +330,8 @@ pub fn tryResolveExpressionType(a: *Assembler, s: SourceFile.Slices, expr_handle
             const block_handle = s.file.findBlockByToken(token_handle);
             if (s.block.items(.block_type)[block_handle]) |op| {
                 expr_resolved_types[expr_handle] = switch (op) {
-                    .none, .nil, .insn, .bound_insn, .org, .@"align", .keep,
-                    .def, .undef, .local, .db, .dw, .dd, .push, .pop, .range,
+                    .none, .nil, .insn, .bound_insn, .org, .@"align", .keep, .range,
+                    .def, .undef, .local, .db, .dw, .dd, .zb, .zw, .zd, .push, .pop,
                     => unreachable,
 
                     .section => ExpressionType.absoluteAddress(.data),
@@ -624,8 +624,8 @@ fn tryResolveSymbolType(a: *Assembler, s: SourceFile.Slices, expr_handle: Expres
             const block_handle = sym_file.findBlockByInstruction(insn_ref.instruction);
             if (sym_file.blocks.items(.block_type)[block_handle]) |op| {
                 expr_resolved_types[expr_handle] = switch (op) {
-                    .none, .nil, .insn, .bound_insn, .org, .@"align", .keep,
-                    .def, .undef, .local, .db, .dw, .dd, .push, .pop, .range,
+                    .none, .nil, .insn, .bound_insn, .org, .@"align", .keep, .range,
+                    .def, .undef, .local, .db, .dw, .dd, .zb, .zw, .zd, .push, .pop,
                     => unreachable,
 
                     .section => ExpressionType.absoluteAddress(.data),
@@ -718,6 +718,23 @@ pub fn checkInstructionsAndDirectivesInFile(a: *Assembler, s: SourceFile.Slices)
                         checkDataDirectiveExprList(a, s, params_expr);
                     } else {
                         a.recordInsnError(s.file.handle, insn_handle, "Expected at least one data expression", .{});
+                    }
+                    checkInstructionDependsOnLayout(s, insn_handle, maybe_params);
+                },
+
+                .zb, .zw, .zd => {
+                    if (!allow_data) {
+                        a.recordInsnError(s.file.handle, insn_handle, "Data directives are not allowed in .entry/.kentry/.code/.kcode sections", .{});
+                    }
+                    if (maybe_params) |params_expr| {
+                        switch (s.expr.items(.resolved_type)[params_expr]) {
+                            .unknown, .poison, .constant => {},
+                            .symbol_def => unreachable,
+                            .raw_base_offset, .data_address, .insn_address, .stack_address,
+                            .reg8, .reg16, .reg32, .sr => {
+                                a.recordExprError(s.file.handle, params_expr, "Expected constant expression", .{});
+                            },
+                        }
                     }
                     checkInstructionDependsOnLayout(s, insn_handle, maybe_params);
                 },

@@ -60,7 +60,8 @@ pub fn parse(gpa: std.mem.Allocator, handle: Handle, name: []const u8, source: [
             block_begin = new_block_begin;
         },
         .none, .nil, .org, .@"align", .keep,
-        .local, .insn, .bound_insn, .db, .dw, .dd,
+        .local, .insn, .bound_insn,
+        .db, .dw, .dd, .zb, .zw, .zd,
         .push, .pop, .range, .def, .undef,
         => {},
     };
@@ -267,7 +268,7 @@ pub fn collectChunks(
                 .push, .pop => {
                     state.checkChunkType(.code, insn_handle);
                 },
-                .db, .dw, .dd => {
+                .db, .dw, .dd, .zb, .zw, .zd => {
                     state.checkChunkType(.data, insn_handle);
                 },
 

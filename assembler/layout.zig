@@ -207,8 +207,8 @@ fn getAlignmentForChunk(a: *Assembler, chunk: SourceFile.Chunk) Assembler.Alignm
             .@"align" => if (getResolvedAlignment(s, insn_params[insn_handle])) |resolved_align| {
                 alignment = resolved_align;
             },
-            .db, .push, .pop, .insn, .bound_insn => break,
-            .dw, .dd => {
+            .db, .zb, .push, .pop, .insn, .bound_insn => break,
+            .dw, .dd, .zw, .zd, => {
                 if ((alignment.modulo & 1) != 0) {
                     alignment.modulo *= 2;
                 }
@@ -263,12 +263,12 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
                             }
                         },
 
-                        .dw, .dd => {
+                        .dw, .dd, .zw, .zd => {
                             address = applyAlignment(address, 2, 0);
                             break;
                         },
 
-                        .insn, .bound_insn, .push, .pop, .db => break,
+                        .insn, .bound_insn, .push, .pop, .db, .zb => break,
                     }
                 }
             },
@@ -306,14 +306,28 @@ fn doChunkLayout(a: *Assembler, chunk: SourceFile.Chunk, initial_address: u32) b
                 address += resolveDataDirectiveLength(a, s, address, insn_handle, 1);
                 check_for_alignment_holes = true;
             },
+            .zb => {
+                address += resolveZeroedDataDirectiveLength(a, s, address, insn_handle, 1);
+                check_for_alignment_holes = true;
+            },
             .dw => {
                 address = checkAndApplyAlignment(a, s, address, 2, 0, check_for_alignment_holes, insn_handle, chunk.section);
                 address += resolveDataDirectiveLength(a, s, address, insn_handle, 2);
                 check_for_alignment_holes = true;
             },
+            .zw => {
+                address = checkAndApplyAlignment(a, s, address, 2, 0, check_for_alignment_holes, insn_handle, chunk.section);
+                address += resolveZeroedDataDirectiveLength(a, s, address, insn_handle, 2);
+                check_for_alignment_holes = true;
+            },
             .dd => {
                 address = checkAndApplyAlignment(a, s, address, 2, 0, check_for_alignment_holes, insn_handle, chunk.section);
                 address += resolveDataDirectiveLength(a, s, address, insn_handle, 4);
+                check_for_alignment_holes = true;
+            },
+            .zd => {
+                address = checkAndApplyAlignment(a, s, address, 2, 0, check_for_alignment_holes, insn_handle, chunk.section);
+                address += resolveZeroedDataDirectiveLength(a, s, address, insn_handle, 4);
                 check_for_alignment_holes = true;
             },
             .push => {
@@ -562,6 +576,32 @@ fn resolvePushPopDirectiveLength(a: *Assembler, s: SourceFile.Slices, insn_handl
             flags.insert(.remove_on_layout_reset);
         }
         a.recordInsnError(s.file.handle, insn_handle, "Stack frame too large", flags);
+    }
+
+    insn_lengths[insn_handle] = length;
+
+    if (!flagset.contains(.depends_on_layout)) {
+        insn_flags[insn_handle].insert(.length_computed);
+    }
+
+    return length;
+}
+
+fn resolveZeroedDataDirectiveLength(a: *Assembler, s: SourceFile.Slices, ip: u32, insn_handle: Instruction.Handle, granularity_bytes: u8) u32 {
+    const insn_flags = s.insn.items(.flags);
+    const insn_lengths = s.insn.items(.length);
+
+    const flagset = insn_flags[insn_handle];
+
+    if (flagset.contains(.length_computed)) {
+        return insn_lengths[insn_handle];
+    }
+
+    var length: u32 = granularity_bytes;
+
+    if (s.insn.items(.params)[insn_handle]) |params_expr_handle| {
+        length = if (resolveExpressionConstant(a, s, ip, params_expr_handle)) |constant| 
+            std.math.mul(u32, constant.asInt(u32) catch 1, granularity_bytes) catch granularity_bytes else 1;
     }
 
     insn_lengths[insn_handle] = length;
@@ -1022,6 +1062,26 @@ pub fn encodePageData(a: *Assembler, file: *SourceFile) void {
                     buffer = &page_datas[page_data_handle];
                 }
                 encodeDataDirective(s, params, granularity_bytes, written, buffer);
+            },
+            .zb, .zw, .zd => {
+                const address = insn_addresses[insn_handle];
+                var remaining: usize = insn_lengths[insn_handle];
+                var page = @truncate(bus.Page, address >> @bitSizeOf(bus.PageOffset));
+                const initial_offset = @truncate(bus.PageOffset, address);
+                var page_data_handle = a.page_lookup.get(page) orelse continue;
+                var buffer = page_datas[page_data_handle][initial_offset..];
+
+                while (remaining > 0) {
+                    if (buffer.len > remaining) {
+                        std.mem.set(u8, buffer[0..remaining], 0);
+                        break;
+                    }
+                    std.mem.set(u8, buffer, 0);
+                    remaining -= buffer.len;
+                    page += 1;
+                    page_data_handle = a.page_lookup.get(page) orelse break;
+                    buffer = &page_datas[page_data_handle];
+                }
             },
             .push, .pop => |stack_size| {
                 const insn = ie.Instruction{

@@ -35,7 +35,7 @@ pub const Kind = enum {
 
             .stack, .none, .nil, .insn, .bound_insn, .org,
             .keep, .def, .undef, .local, .@"align",
-            .db, .dw, .dd, .push, .pop, .range,
+            .db, .dw, .dd, .zb, .zw, .zd, .push, .pop, .range,
             => unreachable,
         };
     }
