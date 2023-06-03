@@ -4,6 +4,11 @@ const Assembler = @import("Assembler.zig");
 const dump = @import("dump.zig");
 const output = @import("output.zig");
 
+// --ssx filename.ext --ssx-no-list
+// --srec filename.ext --split <num>:<width> --offset <address offset> --range min-max --merge --pretty
+// --ihex filename.ext
+// --list filename.ext --order file|address
+
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};

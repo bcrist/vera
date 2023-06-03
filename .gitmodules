@@ -6,7 +6,7 @@
 	url = https://github.com/bcrist/Zig-SX
 [submodule "kicad"]
 	path = kicad
-	url = https://github.com/bcrist/cpu-kicad
+	url = https://github.com/bcrist/vera-kicad
 	shallow = true
 [submodule "pkg/zig-gamedev"]
 	path = pkg/zig-gamedev
