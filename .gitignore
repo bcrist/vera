@@ -4,7 +4,6 @@ arch/microcode_roms/rom_*
 **/zig-out/
 
 **/.vscode/
-tools/.vs/
 
 _archive/
 .obsidian/
