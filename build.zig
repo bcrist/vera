@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    //[[!! include 'build' !! 267 ]]
+    //[[!! include 'build' !! 269 ]]
     //[[ ################# !! GENERATED CODE -- DO NOT MODIFY !! ################# ]]
 
     const bits = b.createModule(.{
@@ -95,6 +95,10 @@ pub fn build(b: *std.Build) void {
 
     const TempAllocator = dep__Zig_TempAllocator.module("TempAllocator");
 
+    const dep__Zig_ConsoleHelper = b.dependency("Zig-ConsoleHelper", .{});
+
+    const console = dep__Zig_ConsoleHelper.module("console");
+
     const deep_hash_map = b.createModule(.{
         .source_file = .{ .path = "pkg/deep_hash_map.zig" },
     });
@@ -120,6 +124,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "address_translator_types", .module = address_translator_types },
             .{ .name = "bits", .module = bits },
             .{ .name = "bus_types", .module = bus_types },
+            .{ .name = "console", .module = console },
             .{ .name = "isa_encoding", .module = isa_encoding },
             .{ .name = "isa_types", .module = isa_types },
         },
@@ -133,10 +138,6 @@ pub fn build(b: *std.Build) void {
             .{ .name = "isa_types", .module = isa_types },
         },
     });
-
-    const dep__Zig_ConsoleHelper = b.dependency("Zig-ConsoleHelper", .{});
-
-    const console = dep__Zig_ConsoleHelper.module("console");
 
     const ihex = b.createModule(.{
         .source_file = .{ .path = "pkg/ihex.zig" },
@@ -182,6 +183,7 @@ pub fn build(b: *std.Build) void {
     assemble_exe.addModule("address_translator_types", address_translator_types);
     assemble_exe.addModule("bits", bits);
     assemble_exe.addModule("bus_types", bus_types);
+    assemble_exe.addModule("console", console);
     assemble_exe.addModule("ihex", ihex);
     assemble_exe.addModule("isa_encoding", isa_encoding);
     assemble_exe.addModule("isa_types", isa_types);
@@ -250,6 +252,7 @@ pub fn build(b: *std.Build) void {
     tests2.addModule("address_translator_types", address_translator_types);
     tests2.addModule("bits", bits);
     tests2.addModule("bus_types", bus_types);
+    tests2.addModule("console", console);
     tests2.addModule("isa_encoding", isa_encoding);
     tests2.addModule("isa_types", isa_types);
     const run_tests2 = b.addRunArtifact(tests2);
@@ -285,7 +288,6 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_tests5.step);
 
     _ = assembler_lib;
-    _ = console;
     //[[ ######################### END OF GENERATED CODE ######################### ]]
 }
 

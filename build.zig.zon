@@ -7,8 +7,8 @@
             .hash = "1220079d450ece4a0be68e67c5f4aab3b9b979b57f52ce8c65c8ced858a48e8a818f",
         },
         .@"Zig-ConsoleHelper" = .{
-            .url = "https://github.com/bcrist/Zig-ConsoleHelper/archive/1b23afa8bdf6a6a20e7ec0b11805decc7dee277a.tar.gz",
-            .hash = "1220f3edaf62e2680017f5cbc44edd73463cdc45463d697717cae9b324885584c8f6",
+            .url = "https://github.com/bcrist/Zig-ConsoleHelper/archive/801c8eddda4aac7b16204aa3efdde51c4b0a8a35.tar.gz",
+            .hash = "122030b67aff9849fc3e1a878d0ece965371089ab6f41891e63747f5a7c897b71587",
         },
         .@"Zig-SX" = .{
             .url = "https://github.com/bcrist/Zig-SX/archive/3ebc7ff7cb7866ae93c9732c0533f59b671e04d9.tar.gz",

@@ -1,4 +1,5 @@
 const std = @import("std");
+const console = @import("console");
 const ie = @import("isa_encoding");
 const Assembler = @import("Assembler.zig");
 const dump = @import("dump.zig");
@@ -10,6 +11,9 @@ const output = @import("output.zig");
 // --list filename.ext --order file|address
 
 pub fn main() !void {
+    try console.init();
+    defer console.deinit();
+
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
 

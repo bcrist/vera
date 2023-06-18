@@ -1,4 +1,5 @@
 const std = @import("std");
+const console = @import("console");
 const lex = @import("lex.zig");
 const Assembler = @import("Assembler.zig");
 const SourceFile = @import("SourceFile.zig");
@@ -30,7 +31,28 @@ pub fn print(self: Error, a: *Assembler, writer: anytype) !void {
     const file = a.getSource(self.file);
     const s = file.slices();
 
-    try writer.print("\n{s}: {s}", .{ file.name, self.desc });
+    var context = switch (self.context) {
+        .token => |handle| lex.Token.Range.expand(null, handle),
+        .instruction => |handle| getInstructionContext(s, handle),
+        .expression => |handle| getExpressionContext(handle, null, s.expr.items(.token), s.expr.items(.info)),
+    };
+
+    const first = file.tokens.get(context.first);
+    const last = file.tokens.get(context.last);
+
+    const highlight_start = first.offset;
+    const highlight_end = last.offset + last.location(file.source).len;
+
+    try writer.writeByte('\n');
+    try console.printContext(file.source, &.{
+        .{
+            .offset = highlight_start,
+            .len = highlight_end - highlight_start,
+            .note = self.desc,
+        },
+    }, writer, 160, .{
+        .filename = file.name,
+    });
 
     if (self.flags.contains(.is_instruction_encoding_error)) {
         const insn_handle = self.context.instruction;
@@ -56,18 +78,7 @@ pub fn print(self: Error, a: *Assembler, writer: anytype) !void {
                 try writer.writeByte('\n');
             }
         }
-
-    } else {
-        try writer.writeByte('\n');
     }
-
-    var context = switch (self.context) {
-        .token => |handle| lex.Token.Range.expand(null, handle),
-        .instruction => |handle| getInstructionContext(s, handle),
-        .expression => |handle| getExpressionContext(handle, null, s.expr.items(.token), s.expr.items(.info)),
-    };
-
-    try lex.Token.printContextRange(file.tokens.get(context.first), file.tokens.get(context.last), file.source, writer, 160);
 }
 
 fn getInstructionContext(s: SourceFile.Slices, insn_handle: Instruction.Handle) lex.Token.Range {
