@@ -1,5 +1,5 @@
 const std = @import("std");
-const TempAllocator = @import("temp_allocator");
+const TempAllocator = @import("TempAllocator");
 
 pub var global_gpa = std.heap.GeneralPurposeAllocator(.{}) {};
 

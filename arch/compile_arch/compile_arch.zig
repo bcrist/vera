@@ -1,5 +1,5 @@
 const std = @import("std");
-const TempAllocator = @import("temp_allocator");
+const TempAllocator = @import("TempAllocator");
 const allocators = @import("allocators.zig");
 const ib = @import("instruction_builder.zig");
 const cb = @import("cycle_builder.zig");

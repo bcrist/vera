@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    //[[!! include 'build' !! 249 ]]
+    //[[!! include 'build' !! 267 ]]
     //[[ ################# !! GENERATED CODE -- DO NOT MODIFY !! ################# ]]
 
     const bits = b.createModule(.{
@@ -91,13 +91,17 @@ pub fn build(b: *std.Build) void {
     Simulator.dependencies.put("misc", misc) catch unreachable;
     Simulator.dependencies.put("physical_address", physical_address) catch unreachable;
 
+    const dep__Zig_TempAllocator = b.dependency("Zig-TempAllocator", .{});
+
+    const TempAllocator = dep__Zig_TempAllocator.module("TempAllocator");
+
     const deep_hash_map = b.createModule(.{
         .source_file = .{ .path = "pkg/deep_hash_map.zig" },
     });
 
-    const sx = b.createModule(.{
-        .source_file = .{ .path = "pkg/sx/sx.zig" },
-    });
+    const dep__Zig_SX = b.dependency("Zig-SX", .{});
+
+    const sx = dep__Zig_SX.module("sx");
 
     const isa_encoding = b.createModule(.{
         .source_file = .{ .path = "arch/isa_encoding.zig" },
@@ -129,6 +133,10 @@ pub fn build(b: *std.Build) void {
             .{ .name = "isa_types", .module = isa_types },
         },
     });
+
+    const dep__Zig_ConsoleHelper = b.dependency("Zig-ConsoleHelper", .{});
+
+    const console = dep__Zig_ConsoleHelper.module("console");
 
     const ihex = b.createModule(.{
         .source_file = .{ .path = "pkg/ihex.zig" },
@@ -165,10 +173,6 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    const temp_allocator = b.createModule(.{
-        .source_file = .{ .path = "pkg/tempallocator/temp_allocator.zig" },
-    });
-
     const assemble_exe = b.addExecutable(.{
         .name = "assemble",
         .root_source_file = .{ .path = "assembler/assemble.zig" },
@@ -193,6 +197,7 @@ pub fn build(b: *std.Build) void {
         .optimize = mode,
     });
     compile_arch.addModule("ControlSignals", ControlSignals);
+    compile_arch.addModule("TempAllocator", TempAllocator);
     compile_arch.addModule("bits", bits);
     compile_arch.addModule("comptime_encoding", comptime_encoding);
     compile_arch.addModule("deep_hash_map", deep_hash_map);
@@ -203,7 +208,6 @@ pub fn build(b: *std.Build) void {
     compile_arch.addModule("misc", misc);
     compile_arch.addModule("physical_address", physical_address);
     compile_arch.addModule("sx", sx);
-    compile_arch.addModule("temp_allocator", temp_allocator);
     b.installArtifact(compile_arch);
     _ = makeRunStep(b, compile_arch, "uc", "Run compile_arch");
 
@@ -239,35 +243,49 @@ pub fn build(b: *std.Build) void {
     const run_tests1 = b.addRunArtifact(tests1);
 
     const tests2 = b.addTest(.{
-        .root_source_file = .{ .path = "assembler/lex.zig"},
+        .root_source_file = .{ .path = "assembler/SourceFile.zig"},
         .target = target,
         .optimize = mode,
     });
+    tests2.addModule("address_translator_types", address_translator_types);
+    tests2.addModule("bits", bits);
+    tests2.addModule("bus_types", bus_types);
+    tests2.addModule("isa_encoding", isa_encoding);
+    tests2.addModule("isa_types", isa_types);
     const run_tests2 = b.addRunArtifact(tests2);
 
     const tests3 = b.addTest(.{
-        .root_source_file = .{ .path = "pkg/bits.zig"},
+        .root_source_file = .{ .path = "assembler/lex.zig"},
         .target = target,
         .optimize = mode,
     });
     const run_tests3 = b.addRunArtifact(tests3);
 
     const tests4 = b.addTest(.{
+        .root_source_file = .{ .path = "pkg/bits.zig"},
+        .target = target,
+        .optimize = mode,
+    });
+    const run_tests4 = b.addRunArtifact(tests4);
+
+    const tests5 = b.addTest(.{
         .root_source_file = .{ .path = "pkg/rom_decompress.zig"},
         .target = target,
         .optimize = mode,
     });
-    tests4.addModule("bits", bits);
-    tests4.addModule("rom_compress", rom_compress);
-    const run_tests4 = b.addRunArtifact(tests4);
+    tests5.addModule("bits", bits);
+    tests5.addModule("rom_compress", rom_compress);
+    const run_tests5 = b.addRunArtifact(tests5);
 
     const test_step = b.step("test", "Run all tests");
     test_step.dependOn(&run_tests1.step);
     test_step.dependOn(&run_tests2.step);
     test_step.dependOn(&run_tests3.step);
     test_step.dependOn(&run_tests4.step);
+    test_step.dependOn(&run_tests5.step);
 
     _ = assembler_lib;
+    _ = console;
     //[[ ######################### END OF GENERATED CODE ######################### ]]
 }
 

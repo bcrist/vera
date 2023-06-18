@@ -3,13 +3,15 @@
 local parser = sx.parser(get_file_contents('build.sx'))
 local root_visitor = {}
 local dir_visitor = {}
-local pkg_visitor = {}
+local dep_visitor = {}
 local exe_visitor = {}
+local module_visitor = {}
 
 local dirs = {}
+local dep_pkgs = {}
 local notest_dirs = {}
 local file_deps = {}
-local packages = {}
+local modules = {}
 local exes = {}
 local tests = {}
 
@@ -30,29 +32,60 @@ function root_visitor.dir ()
     parser:require_close()
 end
 
-function root_visitor.module ()
+function root_visitor.dep ()
     local name = parser:require_string()
-    local package = {
+    local dep = {
         name = name,
-        safe_name = make_safe_name(name),
-        module = true,
-        extra_exe_config = {},
-        pass_exe_to = {},
+        safe_name = 'dep__' .. make_safe_name(name),
     }
-    while nil ~= parser:property(pkg_visitor, package) do end
+    dep_pkgs[name] = dep
+    while nil ~= parser:property(dep_visitor, dep) do end
     parser:require_close()
-    packages[package.name] = package
 end
 
+-- Comments
+function root_visitor._ ()
+    parser:ignore_remaining_expression()
+end
 function dir_visitor._ ()
-    -- Comment
+    parser:ignore_remaining_expression()
+end
+function dep_visitor._ ()
     parser:ignore_remaining_expression()
 end
 
-function dir_visitor.pkg (_, _, dir_path)
+function root_visitor.module ()
+    local name = parser:require_string()
+    local module = {
+        name = name,
+        safe_name = make_safe_name(name),
+        raw = true,
+        extra_exe_config = {},
+        pass_exe_to = {},
+    }
+    while nil ~= parser:property(module_visitor, module) do end
+    parser:require_close()
+    modules[module.name] = module
+end
+
+function dep_visitor.module (_, _, dep_pkg)
+    local name = parser:require_string()
+    local module = {
+        name = name,
+        safe_name = make_safe_name(name),
+        dep_pkg = dep_pkg,
+        extra_exe_config = {},
+        pass_exe_to = {},
+    }
+    while nil ~= parser:property(module_visitor, module) do end
+    parser:require_close()
+    modules[module.name] = module
+end
+
+function dir_visitor.module (_, _, dir_path)
     local name = parser:require_string()
     local default_path = fs.compose_path_slash(dir_path, fs.replace_extension(name, '.zig'))
-    local package = {
+    local module = {
         name = name,
         safe_name = make_safe_name(name),
         dir = dir_path,
@@ -60,9 +93,9 @@ function dir_visitor.pkg (_, _, dir_path)
         extra_exe_config = {},
         pass_exe_to = {},
     }
-    while nil ~= parser:property(pkg_visitor, package) do end
+    while nil ~= parser:property(module_visitor, modules) do end
     parser:require_close()
-    packages[package.name] = package
+    modules[module.name] = module
 end
 
 function dir_visitor.exe (_, _, dir_path)
@@ -86,26 +119,26 @@ function dir_visitor.notest (_, _, dir_path)
     notest_dirs[dir_path] = true
 end
 
-function pkg_visitor.path (_, _, package)
+function module_visitor.path (_, _, module)
     local filename = fs.replace_extension(parser:require_string(), '.zig')
     parser:require_close()
-    package.path = fs.compose_path_slash(package.dir, filename)
+    module.path = fs.compose_path_slash(module.dir, filename)
 end
 
-function pkg_visitor.func (_, _, package)
-    package.pass_exe_to[#package.pass_exe_to+1] = parser:require_string()
+function module_visitor.func (_, _, module)
+    module.pass_exe_to[#module.pass_exe_to+1] = parser:require_string()
     parser:require_close()
 end
 
-function pkg_visitor.config (_, _, package)
-    package.extra_exe_config[#package.extra_exe_config+1] = parser:require_string()
+function module_visitor.config (_, _, module)
+    module.extra_exe_config[#module.extra_exe_config+1] = parser:require_string()
     parser:require_close()
 end
 
-function pkg_visitor.safe_name (_, _, package)
+function module_visitor.safe_name (_, _, module)
     local safe_name = parser:require_string()
     parser:require_close()
-    package.safe_name = safe_name
+    module.safe_name = safe_name
 end
 
 function exe_visitor.run_step (_, _, executable)
@@ -113,9 +146,9 @@ function exe_visitor.run_step (_, _, executable)
     parser:require_close()
 end
 
-exe_visitor.func = pkg_visitor.func
-exe_visitor.config = pkg_visitor.config
-exe_visitor.safe_name = pkg_visitor.safe_name
+exe_visitor.func = module_visitor.func
+exe_visitor.config = module_visitor.config
+exe_visitor.safe_name = module_visitor.safe_name
 
 while nil ~= parser:property(root_visitor) do end
 
@@ -158,21 +191,21 @@ local function collect_named_deps (path, named_deps, visited_files)
         if fs.path_extension(dep) == '.zig' then
             collect_named_deps(dep, named_deps, visited_files)
         else
-            if packages[dep] == nil then
-                error("Package not found: " .. dep)
+            if modules[dep] == nil then
+                error("Module not found: " .. dep)
             end
             named_deps[dep] = true
-            packages[dep].used = true
+            modules[dep].used = true
         end
     end
 end
 
--- Compile dependencies for each package
-for _, package in pairs(packages) do
-    if package.deps == nil then
-        package.deps = {}
-        if not package.module then
-            collect_named_deps(package.path, package.deps, {})
+-- Compile dependencies for each module
+for _, module in pairs(modules) do
+    if module.deps == nil then
+        module.deps = {}
+        if not module.raw and not module.dep_pkg then
+            collect_named_deps(module.path, module.deps, {})
         end
     end
 end
@@ -188,53 +221,63 @@ for _, exe in pairs(exes) do
     end
 end
 
-local function get_package (pkg_name)
-    local pkg = packages[pkg_name]
-    if pkg == nil then
-        error("Package " .. pkg_name .. " not found!")
+local function get_module (name)
+    local module = modules[name]
+    if module == nil then
+        error("Module " .. name .. " not found!")
     end
-    return pkg
+    return module
 end
 
-local function try_write_package (package)
-    if package.module then return end
+local function try_write_module (module)
+    if module.raw then return end
 
-    if not package.written_to_build then
-        if package.started_writing_to_build then
-            if not package.written_to_build_without_dependencies then
+    if not module.written_to_build then
+        if module.dep_pkg then
+            if not module.dep_pkg.written_to_build then
+                writeln(nl, 'const ', module.dep_pkg.safe_name, ' = b.dependency("', module.dep_pkg.name, '", .{});')
+                module.dep_pkg.written_to_build = true
+            end
+            writeln(nl, 'const ', module.safe_name, ' = ', module.dep_pkg.safe_name, '.module("', module.name, '");')
+            module.written_to_build = true
+            return
+        end
+
+        if module.started_writing_to_build then
+            if not module.written_to_build_without_dependencies then
                 -- There's a circular dependency; we need a forward declaration to avoid infinite recursion
-                write(nl, 'const ', package.safe_name, ' = b.createModule(.{', indent)
-                write(nl, '.source_file = .{ .path = "', package.path, '" },')
+                write(nl, 'const ', module.safe_name, ' = b.createModule(.{', indent)
+                write(nl, '.source_file = .{ .path = "', module.path, '" },')
                 unindent()
                 nl()
                 write '});'
                 nl()
-                package.written_to_build_without_dependencies = true
+                module.written_to_build_without_dependencies = true
             end
             return
         end
 
-        package.started_writing_to_build = true
-        for dep in spairs(package.deps) do
-            try_write_package(get_package(dep))
+        module.started_writing_to_build = true
+        for dep in spairs(module.deps) do
+            try_write_module(get_module(dep))
         end
-        if package.written_to_build_without_dependencies then
-            if next(package.deps) then
+        if module.written_to_build_without_dependencies then
+            if next(module.deps) then
                 nl()
-                for dep in spairs(package.deps) do
-                    local safe_name = packages[dep].safe_name
-                    writeln(package.safe_name, '.dependencies.put("', dep, '", ', safe_name, ') catch unreachable;')
+                for dep in spairs(module.deps) do
+                    local safe_name = modules[dep].safe_name
+                    writeln(module.safe_name, '.dependencies.put("', dep, '", ', safe_name, ') catch unreachable;')
                 end
             end
         else
-            write(nl, 'const ', package.safe_name, ' = b.createModule(.{', indent)
-            write(nl, '.source_file = .{ .path = "', package.path, '" },')
-            if next(package.deps) then
+            write(nl, 'const ', module.safe_name, ' = b.createModule(.{', indent)
+            write(nl, '.source_file = .{ .path = "', module.path, '" },')
+            if next(module.deps) then
                 nl()
                 write '.dependencies = &.{'
                 indent()
-                for dep in spairs(package.deps) do
-                    local safe_name = packages[dep].safe_name
+                for dep in spairs(module.deps) do
+                    local safe_name = modules[dep].safe_name
                     write(nl, '.{ .name = "', dep, '", .module = ', safe_name, ' },')
                 end
                 unindent()
@@ -247,12 +290,12 @@ local function try_write_package (package)
             nl()
         end
 
-        package.written_to_build = true
+        module.written_to_build = true
     end
 end
 
-for _, package in spairs(packages) do
-    try_write_package(package)
+for _, module in spairs(modules) do
+    try_write_module(module)
 end
 
 local write_exe = template [[
@@ -263,14 +306,14 @@ const `safe_name` = b.addExecutable(.{
     .target = target,
     .optimize = mode,
 });`
-local packages = ...
+local modules = ...
 for dep in spairs(deps) do
-    local pkg = packages[dep]
-    write(nl, safe_name, '.addModule("', dep, '", ', pkg.safe_name,');')
-    for _, fun in ipairs(pkg.extra_exe_config) do 
+    local module = modules[dep]
+    write(nl, safe_name, '.addModule("', dep, '", ', module.safe_name,');')
+    for _, fun in ipairs(module.extra_exe_config) do 
         write(nl, safe_name, '.', fun, ';')
     end
-    for _, fun in ipairs(pkg.pass_exe_to) do
+    for _, fun in ipairs(module.pass_exe_to) do
         write(nl, fun, '(', safe_name, ');')
     end
 end
@@ -285,7 +328,7 @@ _ = makeRunStep(b, `safe_name`, "`run_step`", "Run `name`");
 ]]
 
 for _, exe in spairs(exes) do
-    write_exe(exe, packages)
+    write_exe(exe, modules)
 end
 
 local i = 1
@@ -302,7 +345,7 @@ for test in spairs(tests) do
     nl()
     write('});')
     for dep in spairs(deps) do
-        write(nl, 'tests', i, '.addModule("', dep, '", ', packages[dep].safe_name, ');')
+        write(nl, 'tests', i, '.addModule("', dep, '", ', modules[dep].safe_name, ');')
     end
     write(nl, 'const run_tests', i, ' = b.addRunArtifact(tests', i, ');', nl)
     i = i + 1
@@ -321,8 +364,8 @@ if i > 1 then
     nl()
 end
 
-for _, package in spairs(packages) do
-    if not package.used then
-        write(nl, '_ = ', package.safe_name, ';')
+for _, module in spairs(modules) do
+    if not module.used then
+        write(nl, '_ = ', module.safe_name, ';')
     end
 end

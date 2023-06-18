@@ -1,0 +1,18 @@
+.{
+    .name = "vera",
+    .version = "0.0.0",
+    .dependencies = .{
+        .@"Zig-TempAllocator" = .{
+            .url = "https://github.com/bcrist/Zig-TempAllocator/archive/c9f955915ada19fc168cb5de1d5be8eff773639e.tar.gz",
+            .hash = "1220079d450ece4a0be68e67c5f4aab3b9b979b57f52ce8c65c8ced858a48e8a818f",
+        },
+        .@"Zig-ConsoleHelper" = .{
+            .url = "https://github.com/bcrist/Zig-ConsoleHelper/archive/1b23afa8bdf6a6a20e7ec0b11805decc7dee277a.tar.gz",
+            .hash = "1220f3edaf62e2680017f5cbc44edd73463cdc45463d697717cae9b324885584c8f6",
+        },
+        .@"Zig-SX" = .{
+            .url = "https://github.com/bcrist/Zig-SX/archive/3ebc7ff7cb7866ae93c9732c0533f59b671e04d9.tar.gz",
+            .hash = "12201ab1336b4d7c390c8599921b19117a321e9c8029a339c8c6133b38f39c8dbdf0",
+        },
+    },
+}

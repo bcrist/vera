@@ -1,6 +1,6 @@
 const std = @import("std");
 const allocators = @import("allocators.zig");
-const TempAllocator = @import("temp_allocator");
+const TempAllocator = @import("TempAllocator");
 const ControlSignals = @import("ControlSignals");
 const uc = @import("microcode");
 const bits = @import("bits");
