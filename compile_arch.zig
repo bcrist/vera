@@ -1,12 +1,9 @@
 const std = @import("std");
 const TempAllocator = @import("TempAllocator");
-const allocators = @import("allocators.zig");
-const ib = @import("instruction_builder.zig");
-const cb = @import("cycle_builder.zig");
-const uc = @import("microcode");
-const arch = @import("arch_builder.zig");
-const uc_roms = @import("microcode_roms");
-const ControlSignals = @import("ControlSignals");
+const allocators = @import("compile_arch/allocators.zig");
+const ib = @import("compile_arch/instruction_builder.zig");
+const cb = @import("compile_arch/cycle_builder.zig");
+const arch = @import("arch");
 
 pub fn main() !void {
     allocators.temp_arena = try TempAllocator.init(0x1000_0000);
@@ -56,28 +53,28 @@ pub fn main() !void {
         try arch.writeInstructionEncodings(f.writer());
     }
 
-    var rom_data = try uc_roms.writeCompressedRoms(allocators.temp_arena.allocator(), allocators.temp_arena.allocator(), &arch.microcode);
+    // var rom_data = try uc_roms.writeCompressedRoms(allocators.temp_arena.allocator(), allocators.temp_arena.allocator(), &arch.microcode);
 
-    for (rom_data, 0..) |data, n| {
-        std.debug.print("ROM {}: {} bytes compressed\n", .{ n, data.len });
+    // for (rom_data, 0..) |data, n| {
+    //     std.debug.print("ROM {}: {} bytes compressed\n", .{ n, data.len });
 
-        var path_buf: [32]u8 = undefined;
-        var path = try std.fmt.bufPrint(&path_buf, "arch/microcode_roms/rom_{}", .{ n });
-        var af = try std.fs.cwd().atomicFile(path, .{});
-        defer af.deinit();
-        try af.file.writeAll(data);
-        try af.finish();
-    }
+    //     var path_buf: [32]u8 = undefined;
+    //     var path = try std.fmt.bufPrint(&path_buf, "arch/microcode_roms/rom_{}", .{ n });
+    //     var af = try std.fs.cwd().atomicFile(path, .{});
+    //     defer af.deinit();
+    //     try af.file.writeAll(data);
+    //     try af.finish();
+    // }
 
-    rom_data = try uc_roms.writeSRecRoms(allocators.temp_arena.allocator(), allocators.temp_arena.allocator(), &arch.microcode);
-    for (rom_data, 0..) |data, n| {
-        var path_buf: [32]u8 = undefined;
-        var path = try std.fmt.bufPrint(&path_buf, "arch/microcode_roms/rom_{}.srec", .{ n });
-        var af = try std.fs.cwd().atomicFile(path, .{});
-        defer af.deinit();
-        try af.file.writeAll(data);
-        try af.finish();
-    }
+    // rom_data = try uc_roms.writeSRecRoms(allocators.temp_arena.allocator(), allocators.temp_arena.allocator(), &arch.microcode);
+    // for (rom_data, 0..) |data, n| {
+    //     var path_buf: [32]u8 = undefined;
+    //     var path = try std.fmt.bufPrint(&path_buf, "arch/microcode_roms/rom_{}.srec", .{ n });
+    //     var af = try std.fs.cwd().atomicFile(path, .{});
+    //     defer af.deinit();
+    //     try af.file.writeAll(data);
+    //     try af.finish();
+    // }
 }
 
 fn reserved() void {

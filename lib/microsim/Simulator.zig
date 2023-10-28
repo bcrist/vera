@@ -19,6 +19,7 @@ pub const AddressTranslator = @import("cpu/AddressTranslator.zig");
 pub const Memory = @import("devices/Memory.zig");
 pub const FrameTracker = @import("devices/FrameTracker.zig");
 
+pub const DecodeStage = @import("DecodeStage.zig");
 pub const SetupStage = @import("SetupStage.zig");
 pub const ComputeStage = @import("ComputeStage.zig");
 pub const TransactStage = @import("TransactStage.zig");

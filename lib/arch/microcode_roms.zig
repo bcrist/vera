@@ -7,12 +7,12 @@ const uc = @import("microcode");
 const misc = @import("misc");
 
 pub const all_compressed_data = [_][]const u8{
-    @embedFile("rom_0"),
-    @embedFile("rom_1"),
-    @embedFile("rom_2"),
-    @embedFile("rom_3"),
-    @embedFile("rom_4"),
-    @embedFile("rom_5"),
+    @embedFile("microcode_roms/rom_0"),
+    @embedFile("microcode_roms/rom_1"),
+    @embedFile("microcode_roms/rom_2"),
+    @embedFile("microcode_roms/rom_3"),
+    @embedFile("microcode_roms/rom_4"),
+    @embedFile("microcode_roms/rom_5"),
 };
 
 pub const CompressedRomData = [6][]const u8;

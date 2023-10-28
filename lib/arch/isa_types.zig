@@ -87,8 +87,6 @@ pub fn printMnemonicAndSuffix(writer: anytype, mnemonic: Mnemonic, suffix: Mnemo
     return len;
 }
 
-pub const Opcode = u16;
-
 pub const SpecialRegister = enum {
     IP,
     SP,
@@ -151,9 +149,33 @@ pub fn getBranchKind(mnemonic: Mnemonic, suffix: MnemonicSuffix) BranchKind {
     };
 }
 
+pub const Opcode = u16;
+
 pub const OpcodeRange = struct {
     min: Opcode,
     max: Opcode,
+
+    pub fn iterator(self: OpcodeRange) Iterator {
+        return .{
+            .next_opcode = self.min,
+            .final_opcode = self.max
+        };
+    }
+
+    pub const Iterator = struct {
+        next_opcode: u17,
+        final_opcode: u17,
+
+        pub fn next(self: *Iterator) ?Opcode {
+            if (self.next_opcode <= self.final_opcode) {
+                const opcode: Opcode = @intCast(self.next_opcode);
+                self.next_opcode += 1;
+                return opcode;
+            } else {
+                return null;
+            }
+        }
+    };
 };
 
 pub const ConstantRange = struct {

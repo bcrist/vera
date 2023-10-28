@@ -1,4 +1,4 @@
-arch/microcode_roms/rom_*
+roms/
 
 **/zig-cache/
 **/zig-out/

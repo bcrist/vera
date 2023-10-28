@@ -6,13 +6,33 @@
             .url = "https://github.com/bcrist/Zig-TempAllocator/archive/c9f955915ada19fc168cb5de1d5be8eff773639e.tar.gz",
             .hash = "1220079d450ece4a0be68e67c5f4aab3b9b979b57f52ce8c65c8ced858a48e8a818f",
         },
+        .@"Zig-BitHelper" = .{
+            .url = "https://github.com/bcrist/Zig-BitHelper/archive/3a6c4fc3e4687a27e433667e7eb0c666336c6289.tar.gz",
+            .hash = "1220c64879b36e674cf97404f16eb3af5e640567e76ef33ab7c00fd060b3098227d1",
+        },
         .@"Zig-ConsoleHelper" = .{
             .url = "https://github.com/bcrist/Zig-ConsoleHelper/archive/801c8eddda4aac7b16204aa3efdde51c4b0a8a35.tar.gz",
             .hash = "122030b67aff9849fc3e1a878d0ece965371089ab6f41891e63747f5a7c897b71587",
         },
+        .@"Zig-DeepHashMap" = .{
+            .url = "https://github.com/bcrist/Zig-DeepHashMap/archive/7fa902f6721b2cb0ebcb6677a705cd6b525cd4d7.tar.gz",
+            .hash = "12201a8c1ceb731f541d0eb4f37174129413643f6abf1e5cf18681e6c6555f5390de",
+        },
         .@"Zig-SX" = .{
             .url = "https://github.com/bcrist/Zig-SX/archive/3ebc7ff7cb7866ae93c9732c0533f59b671e04d9.tar.gz",
             .hash = "12201ab1336b4d7c390c8599921b19117a321e9c8029a339c8c6133b38f39c8dbdf0",
+        },
+        .@"Zig-S-Records" = .{
+            .url = "https://github.com/bcrist/Zig-S-Records/archive/6ec518414fa2c3891f91473cb1b20c7f82118d73.tar.gz",
+            .hash = "1220077a1454926b758ef362e01dd85c0ab2534bf914fce5212fccb8e2f1b105dfda",
+        },
+        .@"Zig-Intel-Hex" = .{
+            .url = "https://github.com/bcrist/Zig-Intel-Hex/archive/1b670ed42db6b65beb63f09b3c21a38cfc4822f8.tar.gz",
+            .hash = "122086754f636dae9d5a0d93f0db8f8bb9204d9a2b5f18081a57aa39427b50297c0c",
+        },
+        .@"Zig-ROM-Compress" = .{
+            .url = "https://github.com/bcrist/Zig-ROM-Compress/archive/16fdcf0b35954e0f361eed1f0fbf43b5c6246abb.tar.gz",
+            .hash = "122014961c9420c29a72eb1cb211fe17144b70754a6b67436b823d6296cd54bce40f",
         },
     },
 }
