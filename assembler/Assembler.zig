@@ -194,13 +194,6 @@ pub fn assemble(self: *Assembler) void {
     }
 }
 
-pub fn countErrors(self: *Assembler) usize {
-    return self.errors.items.len
-        + self.insn_encoding_errors.items.len
-        + self.overlapping_chunks.count()
-        ;
-}
-
 pub fn printErrors(self: *Assembler, writer: anytype) !void {
     for (self.errors.items) |err| {
         try err.print(self, writer);
