@@ -10,14 +10,16 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
     defer std.debug.assert(gpa.deinit() == .ok);
 
+    var memory = try sim.Simple_Memory.init(arena.allocator(), hw.addr.Frame.init(0), 1024);
+
+
     const decode_rom = try arena.allocator().alloc(hw.decode.Result, hw.decode.Address.count);
     const microcode_rom = try arena.allocator().alloc(hw.Control_Signals, hw.microcode.Address.count);
     //uc_roms.readCompressedRoms(@import("microcode_roms").all_compressed_data, microcode);
     var simulator = try sim.Simulator.init(arena.allocator(), decode_rom, microcode_rom, &.{
-        // TODO memory
+        memory.device()
     });
-    // var xo = std.rand.Xoshiro256.init(12345);
-    // sim.randomizeState(xo.random());
+
     // for (&sim.memory.flash) |*chip| {
     //     std.mem.set(u16, chip, 0xFFFF);
     // }
@@ -133,6 +135,6 @@ const Config = @import("microsim/Config.zig");
 const sim = @import("lib_microsim");
 // const uc_roms = @import("microcode_roms");
 const hw = arch.hw;
-const arch = @import("arch");
+const arch = @import("lib_arch");
 const zglfw = @import("zglfw");
 const std = @import("std");

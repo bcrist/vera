@@ -3,7 +3,7 @@ const TempAllocator = @import("TempAllocator");
 const allocators = @import("compile_arch/allocators.zig");
 const ib = @import("compile_arch/instruction_builder.zig");
 const cb = @import("compile_arch/cycle_builder.zig");
-const arch = @import("arch");
+const arch = @import("lib_arch");
 
 pub fn main() !void {
     allocators.temp_arena = try TempAllocator.init(0x1000_0000);

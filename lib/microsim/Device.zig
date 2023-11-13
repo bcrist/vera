@@ -1,28 +1,28 @@
 ctx: *anyopaque,
 slot: ?u3,
 debug_name: []const u8,
-read_fn: *const fn(ctx: *anyopaque, addr: hw.addr.Physical) ?hw.D,
-write_fn: *const fn(ctx: *anyopaque, addr: hw.addr.Physical, data: hw.D) void,
+read_fn: *const fn(ctx: *anyopaque, addr: hw.addr.Physical, width: hw.Control_Signals.Bus_Width) ?hw.D,
+write_fn: *const fn(ctx: *anyopaque, addr: hw.addr.Physical, width: hw.Control_Signals.Bus_Width, data: hw.D) void,
 update_fn: ?*const fn(ctx: *anyopaque, simulator: *Simulator) void,
 
 pub fn init(comptime T: type, device: *T, slot: ?u3) Device {
     const wrap = struct {
-        fn read(ctx: *anyopaque, addr: hw.addr.Physical) ?hw.D {
+        fn read(ctx: *anyopaque, addr: hw.addr.Physical, width: hw.Control_Signals.Bus_Width) ?hw.D {
             const dev: *T = @ptrCast(@alignCast(ctx));
-            return @call(.force_inline, T.read, .{ dev, addr });
+            return @call(.always_inline, T.read, .{ dev, addr, width });
         }
-        fn write(ctx: *anyopaque, addr: hw.addr.Physical, data: hw.D) void {
+        fn write(ctx: *anyopaque, addr: hw.addr.Physical, width: hw.Control_Signals.Bus_Width, data: hw.D) void {
             const dev: *T = @ptrCast(@alignCast(ctx));
-            @call(.force_inline, T.write, .{ dev, addr, data });
+            @call(.always_inline, T.write, .{ dev, addr, width, data });
         }
         fn update(ctx: *anyopaque, simulator: *Simulator) void {
             const dev: *T = @ptrCast(@alignCast(ctx));
-            @call(.force_inline, T.update, .{ dev, simulator });
+            @call(.always_inline, T.update, .{ dev, simulator });
         }
     };
 
     return .{
-        .self = device,
+        .ctx = device,
         .slot = slot,
         .debug_name = if (@hasField(T, "name")) device.name else @typeName(T),
         .read_fn = wrap.read,
@@ -65,5 +65,5 @@ const log = std.log.scoped(.device);
 const Device = @This();
 const Simulator = @import("Simulator.zig");
 const hw = arch.hw;
-const arch = @import("arch");
+const arch = @import("lib_arch");
 const std = @import("std");

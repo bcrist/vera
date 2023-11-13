@@ -34,13 +34,12 @@ pub fn build(b: *std.Build) void {
             .{ .name = "bits", .module = ext.bits },
         },
     });
-    lib_arch.dependencies.put("arch", lib_arch) catch @panic("OOM");
 
     // const lib_assembler = makeModule("assembler", .{
     //     .source_file = .{ .path = "lib/assembler.zig" },
     //     .dependencies = &.{
     //         .{ .name = "bits", .module = ext.bits },
-    //         .{ .name = "arch", .module = lib_arch },
+    //         .{ .name = "lib_arch", .module = lib_arch },
     //     },
     // });
     // _ = lib_assembler;
@@ -49,7 +48,7 @@ pub fn build(b: *std.Build) void {
         .source_file = .{ .path = "lib/microsim.zig" },
         .dependencies = &.{
             .{ .name = "bits", .module = ext.bits },
-            .{ .name = "arch", .module = lib_arch },
+            .{ .name = "lib_arch", .module = lib_arch },
         },
     });
 
@@ -71,7 +70,7 @@ pub fn build(b: *std.Build) void {
     //     .source_file = .{ .path = "compile_arch.zig" },
     //     .dependencies = &.{
     //         .{ .name = "TempAllocator", .module = ext.TempAllocator },
-    //         .{ .name = "arch", .module = lib_arch },
+    //         .{ .name = "lib_arch", .module = lib_arch },
     //     },
     // });
 
@@ -89,7 +88,7 @@ pub fn build(b: *std.Build) void {
     const microsim = makeExe("microsim", .{
         .source_file = .{ .path = "microsim.zig" },
         .dependencies = &.{
-            .{ .name = "arch", .module = lib_arch },
+            .{ .name = "lib_arch", .module = lib_arch },
             .{ .name = "lib_microsim", .module = lib_microsim },
             .{ .name = "sx", .module = ext.sx },
             .{ .name = "zgpu", .module = zgpu_pkg.zgpu },
@@ -104,6 +103,7 @@ pub fn build(b: *std.Build) void {
 
 fn makeModule(comptime name: []const u8, options: std.build.CreateModuleOptions) *std.build.Module {
     const mod = builder.createModule(options);
+    mod.dependencies.put(name, mod) catch @panic("OOM");
     _ = makeTest(name, options);
     return mod;
 }

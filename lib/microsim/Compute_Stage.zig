@@ -416,6 +416,6 @@ const Transact_Stage = @import("Transact_Stage.zig");
 const Control_Signals = hw.Control_Signals;
 const at = hw.addr.translation;
 const hw = arch.hw;
-const arch = @import("arch");
+const arch = @import("lib_arch");
 const bits = @import("bits");
 const std = @import("std");

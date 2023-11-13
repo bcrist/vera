@@ -24,7 +24,7 @@ td: Transact_Stage.Debug,
 
 microcycles_simulated: u64,
 
-pub fn init(allocator: std.mem.Allocator, decode_rom: []const hw.decode.Result, microcode_rom: []const Control_Signals, devices: []Device) !Simulator {
+pub fn init(allocator: std.mem.Allocator, decode_rom: []const hw.decode.Result, microcode_rom: []const Control_Signals, devices: []const Device) !Simulator {
     const registers = try allocator.alloc(hw.Register_Set, hw.RSN.count);
     errdefer allocator.free(registers);
     @memset(registers, std.mem.zeroes(hw.Register_Set));
@@ -125,7 +125,7 @@ pub fn simulate_microcycles(self: *Simulator, n: u64) void {
             var read_collision = false;
             var read_device: ?*Device = null;
             for (self.global_devices) |*d| {
-                if (d.read_fn(d.ctx, addr)) |result| {
+                if (d.read_fn(d.ctx, addr, self.t.cs.bus_width)) |result| {
                     if (read_device) |previous| {
                         if (!read_collision) {
                             previous.log_contention(self.microcycles_simulated + i);
@@ -139,7 +139,7 @@ pub fn simulate_microcycles(self: *Simulator, n: u64) void {
             }
             if (addr.device_slot()) |slot| {
                 if (self.device_slots[slot]) |d| {
-                    if (d.read_fn(d.ctx, addr)) |result| {
+                    if (d.read_fn(d.ctx, addr, self.t.cs.bus_width)) |result| {
                         if (read_device) |previous| {
                             if (!read_collision) {
                                 previous.log_contention(self.microcycles_simulated + i);
@@ -160,11 +160,11 @@ pub fn simulate_microcycles(self: *Simulator, n: u64) void {
         if (self.td.write_addr) |addr| {
             const data = self.td.d;
             for (self.global_devices) |*d| {
-                d.write_fn(d.ctx, addr, data);
+                d.write_fn(d.ctx, addr, self.t.cs.bus_width, data);
             }
             if (addr.device_slot()) |slot| {
                 if (self.device_slots[slot]) |d| {
-                    d.write_fn(d.ctx, addr, data);
+                    d.write_fn(d.ctx, addr, self.t.cs.bus_width, data);
                 }
             }
         }
@@ -208,5 +208,5 @@ const Device = @import("Device.zig");
 const Control_Signals = hw.Control_Signals;
 const at = hw.addr.translation;
 const hw = arch.hw;
-const arch = @import("arch");
+const arch = @import("lib_arch");
 const std = @import("std");

@@ -482,7 +482,6 @@ pub const addr = struct {
         }
 
         pub const ram_start = init(0x0_000_000);
-        pub const ram_end = init(0x0_800_000);
 
         pub const device_0 = init(0x2_000_000);
         pub const device_1 = init(0x2_400_000);
@@ -579,5 +578,5 @@ pub const addr = struct {
     };
 };
 
-const arch = @import("arch");
+const arch = @import("lib_arch");
 const std = @import("std");
