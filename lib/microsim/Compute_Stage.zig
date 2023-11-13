@@ -8,7 +8,6 @@ dr: hw.D,
 ij: hw.IJ,
 ik: hw.IK,
 iw: hw.IW,
-stat: hw.Status,
 asn: at.ASN,
 last_translation: at.Info,
 stat_c: bool,
@@ -48,10 +47,35 @@ pub fn simulate(
 
     simulate_address_translator(in, out, translations);
 
+    out.sr1 = in.sr1;
+    out.sr2 = in.sr2;
+    out.jh = in.j.hi;
+
     out.special_fault = in.cs.special == .trigger_fault;
     out.any_fault = out.special_fault or out.page_fault or out.page_align_fault or out.access_fault;
 
     out.inhibit_writes = in.stall_atomic or out.any_fault or reset;
+
+    out.pipeline = in.pipeline;
+    out.cs = in.cs;
+    out.exec_mode = in.exec_mode;
+    out.rsn = in.rsn;
+    out.uc_slot = in.uc_slot;
+    out.dr = in.dr;
+    out.ij = in.ij;
+    out.ik = in.ik;
+    out.iw = in.iw;
+    out.asn = in.asn;
+    out.last_translation = in.last_translation;
+    out.stat_c = in.stat_c;
+    out.stat_v = in.stat_v;
+    out.stat_n = in.stat_n;
+    out.stat_z = in.stat_z;
+    out.stat_k = in.stat_k;
+    out.stat_a = in.stat_a;
+    out.next_k = in.next_k;
+    out.want_atomic = in.want_atomic;
+    out.stall_atomic = in.stall_atomic;
 
     return .{};
 }
@@ -297,7 +321,7 @@ fn simulate_address_translator(in: Compute_Stage, out: *Transact_Stage, translat
         .offset = virtual.offset,
         .frame = hw.addr.Frame.init(@truncate(virtual.page.raw())),
     };
-    out.at_k = in.stat.k;
+    out.at_k = in.stat_k;
     out.page_fault = enabled_translate and !any_match;
     out.page_align_fault = false;
     out.access_fault = false;
@@ -312,7 +336,7 @@ fn simulate_address_translator(in: Compute_Stage, out: *Transact_Stage, translat
                 }
             },
             .kernel_entry_256 => {
-                if (in.stat.k or (virtual.offset.raw() & 0xFF) == 0) {
+                if (in.stat_k or (virtual.offset.raw() & 0xFF) == 0) {
                     if (insn_load) {
                         out.at_k = true;
                     }
@@ -321,7 +345,7 @@ fn simulate_address_translator(in: Compute_Stage, out: *Transact_Stage, translat
                 }
             },
             .kernel_entry_4096 => {
-                if (in.stat.k or virtual.offset.raw() == 0) {
+                if (in.stat_k or virtual.offset.raw() == 0) {
                     if (insn_load) {
                         out.at_k = true;
                     }
@@ -330,7 +354,7 @@ fn simulate_address_translator(in: Compute_Stage, out: *Transact_Stage, translat
                 }
             },
             .kernel_private => {
-                if (!in.stat.k) {
+                if (!in.stat_k) {
                     out.access_fault = true;
                 }
             },

@@ -58,12 +58,12 @@ pub fn main() !void {
     // }
     // std.debug.print("\n", .{});
 
-    var loaded_config = try Config.load(gpa.allocator(), gpa.allocator());
+    var loaded_config = try Config.load(arena.allocator(), gpa.allocator());
     var gui = try Gui.init(gpa.allocator(), &simulator, loaded_config.window, loaded_config.frames);
     defer gui.deinit(gpa.allocator());
-    loaded_config.deinit(gpa.allocator());
+    loaded_config.deinit();
 
-    defer saveConfig(gpa.allocator(), &gui);
+    defer saveConfig(arena.allocator(), &gui);
 
     var sim_stats: ?struct {
         microcycles_elapsed: u64 = 0,
@@ -119,12 +119,11 @@ fn saveConfig(alloc: std.mem.Allocator, gui: *Gui) void {
         std.log.warn("Failed to collect config data: {}", .{ err });
         return;
     };
+    defer config.deinit();
 
     config.save(alloc) catch |err| {
         std.log.warn("Failed to save config data: {}", .{ err });
     };
-
-    config.deinit(alloc);
 }
 
 

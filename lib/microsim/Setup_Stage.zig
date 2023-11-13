@@ -84,6 +84,27 @@ pub fn simulate(
 
     out.virtual_addr = hw.addr.Virtual.init(addr_base +% addr_offset);
 
+    out.pipeline = in.pipeline;
+    out.cs = in.cs;
+    out.exec_mode = in.exec_mode;
+    out.rsn = in.rsn;
+    out.uc_slot = in.uc_slot;
+    out.dr = in.dr;
+    out.ij = in.ij;
+    out.ik = in.ik;
+    out.iw = in.iw;
+    out.asn = in.asn;
+    out.last_translation = in.last_translation;
+    out.stat_c = in.stat_c;
+    out.stat_v = in.stat_v;
+    out.stat_n = in.stat_n;
+    out.stat_z = in.stat_z;
+    out.stat_k = in.stat_k;
+    out.stat_a = in.stat_a;
+    out.next_k = in.next_k;
+    out.want_atomic = in.want_atomic;
+    out.stall_atomic = in.stall_atomic;
+
     return .{};
 }
 

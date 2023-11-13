@@ -1,26 +1,3 @@
-
-// pub fn printState(self: *Simulator, writer: anytype, pipe: misc.PipeID) !void {
-//     if (self.exec_state.reset) try writer.writeAll(" RESET");
-//     if (self.exec_state.sleep) try writer.writeAll(" SLEEP");
-//     for (self.exec_state.interrupt_pending, 0..) |int_pending, pipe_index| {
-//         if (int_pending) {
-//             try writer.print(" INT{}", .{ pipe_index + 1 });
-//         }
-//     }
-
-// fn printRegs(self: *Simulator, reg: LoopRegisters, writer: anytype) !void {
-//     try writer.print("      UA: {X:0>4}  DL: {X:0>4}   OA: {X:0>1}  OB: {X:0>1}  ", .{
-//         reg.ua, reg.dl, reg.oa, reg.ob,
-//     });
-//     try reg.stat.print(writer);
-// }
-
-pub const Window_Settings = struct {
-    pos: [2]i32,
-    size: [2]i32,
-    maximized: bool,
-};
-
 simulator: *sim.Simulator,
 window: *zglfw.Window,
 gctx: *zgpu.GraphicsContext,
@@ -48,7 +25,7 @@ pub fn init(allocator: std.mem.Allocator, simulator: *sim.Simulator, window_sett
 
     const embedded_font_data = @embedFile("iosevka-custom-regular.ttf");
 
-    const font_size = 14.0 * scale_factor;
+    const font_size = 16.0 * scale_factor;
     const font = zgui.io.addFontFromMemory(embedded_font_data, font_size);
     std.debug.assert(zgui.io.getFont(0) == font);
 
@@ -185,6 +162,11 @@ fn compute_scale_factor(window: *zglfw.Window) f32 {
     return @max(scale[0], scale[1]);
 }
 
+pub const Window_Settings = struct {
+    pos: [2]i32,
+    size: [2]i32,
+    maximized: bool,
+};
 
 const Gui = @This();
 const Pipeline_State = @import("Pipeline_State.zig");

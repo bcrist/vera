@@ -10,12 +10,14 @@ const expr_size = "size";
 const expr_maximized = "maximized";
 const expr_collapsed = "collapsed";
 
+allocator: std.mem.Allocator,
 window: ?Gui.Window_Settings,
 frames: []zgui.WindowSettings,
 
 pub fn init(alloc: std.mem.Allocator, gui: *const Gui) !Config {
     var frame_settings = try zgui.getWindowSettings(alloc);
     return .{
+        .allocator = alloc,
         .window = .{
             .pos = gui.window.getPos(),
             .size = gui.window.getSize(),
@@ -25,8 +27,8 @@ pub fn init(alloc: std.mem.Allocator, gui: *const Gui) !Config {
     };
 }
 
-pub fn deinit(self: *Config, alloc: std.mem.Allocator) void {
-    alloc.free(self.frames);
+pub fn deinit(self: *Config) void {
+    self.allocator.free(self.frames);
 }
 
 pub fn load(alloc: std.mem.Allocator, temp: std.mem.Allocator) !Config {
@@ -36,6 +38,7 @@ pub fn load(alloc: std.mem.Allocator, temp: std.mem.Allocator) !Config {
     defer dir.close();
     var file = dir.openFile(config_filename, .{}) catch |err| switch (err) {
         error.FileNotFound => return .{
+            .allocator = alloc,
             .window = null,
             .frames = try alloc.alloc(zgui.WindowSettings, 0),
         },
@@ -114,6 +117,7 @@ fn parse(alloc: std.mem.Allocator, temp: std.mem.Allocator, reader: *sx.Reader(s
     try reader.requireDone();
 
     return .{
+        .allocator = alloc,
         .window = window_settings,
         .frames = try alloc.dupe(zgui.WindowSettings, frames.items),
     };

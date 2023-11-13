@@ -66,7 +66,10 @@ pub fn init(simulator: *const sim.Simulator, pipeline: hw.Pipeline) Pipeline_Sta
         };
 
     } else if (simulator.s.pipeline == pipeline) {
-        
+        const in = simulator.s;
+        var out = std.mem.zeroInit(sim.Compute_Stage, .{ .cs = &simulator.microcode_rom[0] });
+        _ = in.simulate(&out, simulator.registers);
+
         return .{
             .pipeline = pipeline,
             .stage = .setup,
@@ -75,7 +78,6 @@ pub fn init(simulator: *const sim.Simulator, pipeline: hw.Pipeline) Pipeline_Sta
             .exec_mode = out.exec_mode,
             .rsn = out.rsn,
             .uc_slot = out.uc_slot,
-            .uc_slot_src = in.uc_slot_src,
             .dr = out.dr,
             .ij = out.ij,
             .ik = out.ik,
@@ -95,11 +97,92 @@ pub fn init(simulator: *const sim.Simulator, pipeline: hw.Pipeline) Pipeline_Sta
         };
 
     } else if (simulator.c.pipeline == pipeline) {
-        unreachable;
+        const in = simulator.c;
+        var out = std.mem.zeroInit(sim.Transact_Stage, .{ .cs = &simulator.microcode_rom[0] });
+        _ = in.simulate(&out, simulator.reset, simulator.translations);
+
+        return .{
+            .pipeline = pipeline,
+            .stage = .compute,
+            .rs = &simulator.registers[out.rsn.raw()],
+            .cs = out.cs,
+            .exec_mode = out.exec_mode,
+            .rsn = out.rsn,
+            .uc_slot = out.uc_slot,
+            .dr = out.dr,
+            .ij = out.ij,
+            .ik = out.ik,
+            .iw = out.iw,
+            .asn = out.asn,
+            .last_translation = out.last_translation,
+            .stat_c = out.stat_c,
+            .stat_v = out.stat_v,
+            .stat_n = out.stat_n,
+            .stat_z = out.stat_n,
+            .stat_k = out.stat_k,
+            .stat_a = out.stat_a,
+            .next_k = out.next_k,
+            .want_atomic = out.want_atomic,
+            .stall_atomic = out.stall_atomic,
+            .inhibit_writes = false,
+        };
+
     } else if (simulator.t.pipeline == pipeline) {
-        unreachable;
+        const in = simulator.t;
+
+        return .{
+            .pipeline = pipeline,
+            .stage = .transact,
+            .rs = &simulator.registers[in.rsn.raw()],
+            .cs = in.cs,
+            .exec_mode = in.exec_mode,
+            .rsn = in.rsn,
+            .uc_slot = in.uc_slot,
+            .dr = in.dr,
+            .ij = in.ij,
+            .ik = in.ik,
+            .iw = in.iw,
+            .asn = in.asn,
+            .last_translation = in.last_translation,
+            .stat_c = in.stat_c,
+            .stat_v = in.stat_v,
+            .stat_n = in.stat_n,
+            .stat_z = in.stat_n,
+            .stat_k = in.stat_k,
+            .stat_a = in.stat_a,
+            .next_k = in.next_k,
+            .want_atomic = in.want_atomic,
+            .stall_atomic = in.stall_atomic,
+            .inhibit_writes = false,
+        };
+
     } else {
-        unreachable;
+        return .{
+            .pipeline = pipeline,
+            .stage = .reset,
+            .rs = &simulator.registers[0],
+            .cs = &simulator.microcode_rom[0],
+            .exec_mode = .interrupt_fault,
+            .rsn = hw.RSN.init(0),
+            .uc_slot = .reset,
+            .uc_slot_src = .seq_literal,
+            .dr = hw.D.init(0),
+            .ij = hw.IJ.init(0),
+            .ik = hw.IK.init(0),
+            .iw = hw.IW.init(0),
+            .asn = at.ASN.init(0),
+            .last_translation = at.Info.init(0),
+            .stat_c = false,
+            .stat_v = false,
+            .stat_n = false,
+            .stat_z = false,
+            .stat_k = false,
+            .stat_a = false,
+            .next_k = false,
+            .want_atomic = false,
+            .stall_atomic = false,
+            .inhibit_writes = false,
+        };
     }
 }
 
@@ -138,7 +221,7 @@ pub fn doWindow(self: Pipeline_State) void {
         zgui.textUnformattedColored(colors.label, " ");
     }
     zgui.sameLine(.{});
-    zgui.text("{X:0>3}", .{ self.uc_slot });
+    zgui.text("{X:0>3}", .{ self.uc_slot.raw() });
 
     zgui.sameLine(.{ .offset_from_start_x = 26 * glyph_width });
     // if (uc.getOpcodeForAddress(reg.ua)) |opcode| {
@@ -166,7 +249,7 @@ pub fn doWindow(self: Pipeline_State) void {
         else => " ",
     });
     zgui.sameLine(.{});
-    zgui.text("{X:0>1}", .{ self.asn });
+    zgui.text("{X:0>1}", .{ self.asn.raw() });
 
     zgui.sameLine(.{ .offset_from_start_x = 50 * glyph_width });
     switch (self.exec_mode) {
@@ -189,7 +272,7 @@ pub fn doWindow(self: Pipeline_State) void {
         else => " ",
     });
     zgui.sameLine(.{});
-    zgui.text("{X:0>2}", .{ self.rsn });
+    zgui.text("{X:0>2}", .{ self.rsn.raw() });
 
     zgui.sameLine(.{ .offset_from_start_x = 15 * glyph_width });
     zgui.textUnformattedColored(colors.label, "DR");
@@ -199,7 +282,7 @@ pub fn doWindow(self: Pipeline_State) void {
         .read_to_dr => "D",
     });
     zgui.sameLine(.{});
-    zgui.text("{X:0>4}", .{ self.dr });
+    zgui.text("{X:0>4}", .{ self.dr.raw() });
     zgui.sameLine(.{});
     zgui.textUnformattedColored(colors.read, switch (self.cs.bus_dir) {
         .read, .read_to_dr, .write_from_ll => " ",
@@ -216,7 +299,7 @@ pub fn doWindow(self: Pipeline_State) void {
         .from_decode => "D",
     });
     zgui.sameLine(.{});
-    zgui.text("{X:0>1}", .{ self.ij });
+    zgui.text("{X:0>1}", .{ self.ij.raw() });
     zgui.sameLine(.{});
 
     zgui.sameLine(.{ .offset_from_start_x = 38 * glyph_width });
@@ -229,7 +312,7 @@ pub fn doWindow(self: Pipeline_State) void {
         .from_decode => "D",
     });
     zgui.sameLine(.{});
-    zgui.text("{X:0>1}", .{ self.ik });
+    zgui.text("{X:0>1}", .{ self.ik.raw() });
     zgui.sameLine(.{});
 
     zgui.sameLine(.{ .offset_from_start_x = 46 * glyph_width });
@@ -242,7 +325,7 @@ pub fn doWindow(self: Pipeline_State) void {
         .from_decode => "D",
     });
     zgui.sameLine(.{});
-    zgui.text("{X:0>1}", .{ self.iw });
+    zgui.text("{X:0>1}", .{ self.iw.raw() });
     zgui.sameLine(.{});
 
 

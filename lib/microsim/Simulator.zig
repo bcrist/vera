@@ -155,6 +155,7 @@ pub fn simulate_microcycles(self: *Simulator, n: u64) void {
 
         var t_out: Decode_Stage = self.d;
         self.td = self.t.simulate(&t_out, read_data, self.power, self.reset, self.registers, self.translations, &self.interrupts_pending);
+        t_out.pipeline = hw.Pipeline.init(self.d.pipeline.raw() +% 1);
 
         if (self.td.write_addr) |addr| {
             const data = self.td.d;

@@ -8,7 +8,6 @@ dr: hw.D,
 ij: hw.IJ,
 ik: hw.IK,
 iw: hw.IW,
-stat: hw.Status,
 asn: at.ASN,
 last_translation: at.Info,
 stat_c: bool,
@@ -102,8 +101,28 @@ pub fn simulate(
 
     in.simulate_register_file(out, l, registers);
     in.simulate_status_register(out, l);
-    in.simulate_address_translator(out, l, translations);
+    in.simulate_address_translator(l, translations);
     in.simulate_sequencer(out, l.hi, reset, interrupts_pending);
+
+    out.pipeline = in.pipeline;
+    out.cs = in.cs;
+    // out.exec_mode = in.exec_mode;
+    // out.rsn = in.rsn;
+    // out.uc_slot = in.uc_slot;
+    // out.dr = in.dr;
+    out.ij = in.ij;
+    out.ik = in.ik;
+    out.iw = in.iw;
+    // out.asn = in.asn;
+    // out.last_translation = in.last_translation;
+    // out.stat_c = in.stat_c;
+    // out.stat_v = in.stat_v;
+    // out.stat_n = in.stat_n;
+    // out.stat_z = in.stat_z;
+    // out.stat_k = in.stat_k;
+    // out.stat_a = in.stat_a;
+    // out.next_k = in.next_k;
+    // out.want_atomic = in.want_atomic;
 
     return .{
         .l = l,
@@ -310,8 +329,7 @@ fn simulate_status_register(in: Transact_Stage, out: *Decode_Stage, l: hw.L) voi
     }
 }
 
-fn simulate_address_translator(in: Transact_Stage, out: *Decode_Stage, l: hw.L, translations: []at.Entry_Pair) void {
-    _ = out;
+fn simulate_address_translator(in: Transact_Stage, l: hw.L, translations: []at.Entry_Pair) void {
     if (in.inhibit_writes) return;
 
     switch (in.cs.at_op) {

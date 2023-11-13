@@ -52,7 +52,7 @@ pub fn simulate(
         .from_decode => id_result.iw,
     };
 
-    const uc_slot = switch (in.uc_slot_src) {
+    out.uc_slot = switch (in.uc_slot_src) {
         .hold => in.uc_slot,
         .insn_decoder => id_result.slot,
         .continuation => blk: {
@@ -66,7 +66,7 @@ pub fn simulate(
     };
 
     const uc_addr: hw.microcode.Address = .{
-        .slot = uc_slot,
+        .slot = out.uc_slot,
         .flags = .{
             .z = in.stat_z,
             .n = in.stat_n,
@@ -79,6 +79,27 @@ pub fn simulate(
 
     out.want_atomic = in.want_atomic or out.cs.special == .atomic_this or out.cs.special == .atomic_next;
     out.stall_atomic = out.want_atomic and atomic_busy;
+
+    out.pipeline = in.pipeline;
+    // out.cs = in.cs;
+    out.exec_mode = in.exec_mode;
+    out.rsn = in.rsn;
+    // out.uc_slot = in.uc_slot;
+    out.dr = in.dr;
+    // out.ij = in.ij;
+    // out.ik = in.ik;
+    // out.iw = in.iw;
+    out.asn = in.asn;
+    out.last_translation = in.last_translation;
+    out.stat_c = in.stat_c;
+    out.stat_v = in.stat_v;
+    out.stat_n = in.stat_n;
+    out.stat_z = in.stat_z;
+    out.stat_k = in.stat_k;
+    out.stat_a = in.stat_a;
+    out.next_k = in.next_k;
+    //out.want_atomic = in.want_atomic;
+    //out.stall_atomic = in.stall_atomic;
 
     return .{};
 }

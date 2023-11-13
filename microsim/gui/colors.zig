@@ -7,7 +7,7 @@ pub const read = [_]f32 { 0.2, 0.7, 0.2, 1.0 };
 pub const write = [_]f32 { 0.7, 0.4, 0.2, 1.0 };
 
 pub const stage_reset = [_]f32 { 1.0, 0.5, 0.5, 1.0 };
-pub const stage_decode = [_]f32 { 0.5, 0.5, 1.0, 1.0 };
+pub const stage_decode = [_]f32 { 0.7, 0.5, 1.0, 1.0 };
 pub const stage_setup = [_]f32 { 0.5, 0.7, 1.0, 1.0 };
 pub const stage_compute = [_]f32 { 0.5, 1.0, 0.5, 1.0 };
 pub const stage_transact = [_]f32 { 1.0, 0.7, 0.5, 1.0 };
