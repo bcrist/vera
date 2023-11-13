@@ -25,14 +25,16 @@ pub fn build(b: *std.Build) void {
         .ihex = b.dependency("Zig-Intel-Hex", .{}).module("ihex"),
         .rom_compress = b.dependency("Zig-ROM-Compress", .{}).module("rom-compress"),
         .rom_decompress = b.dependency("Zig-ROM-Compress", .{}).module("rom-decompress"),
+        .zbox = b.dependency("zbox", .{}).module("zbox"),
     };
 
-    const lib_arch = makeModule("arch", .{
+    const lib_arch = makeModule("lib_arch", .{
         .source_file = .{ .path = "lib/arch.zig" },
         .dependencies = &.{
             .{ .name = "bits", .module = ext.bits },
         },
     });
+    lib_arch.dependencies.put("arch", lib_arch) catch @panic("OOM");
 
     // const lib_assembler = makeModule("assembler", .{
     //     .source_file = .{ .path = "lib/assembler.zig" },
@@ -43,14 +45,20 @@ pub fn build(b: *std.Build) void {
     // });
     // _ = lib_assembler;
 
-    // const lib_microsim = makeModule("microsim", .{
-    //     .source_file = .{ .path = "lib/microsim.zig" },
-    //     .dependencies = &.{
-    //         .{ .name = "bits", .module = ext.bits },
-    //         .{ .name = "arch", .module = lib_arch },
-    //     },
-    // });
-    // _ = lib_microsim;
+    const lib_microsim = makeModule("lib_microsim", .{
+        .source_file = .{ .path = "lib/microsim.zig" },
+        .dependencies = &.{
+            .{ .name = "bits", .module = ext.bits },
+            .{ .name = "arch", .module = lib_arch },
+        },
+    });
+
+    _ = makeExe("block_diagram", .{
+        .source_file = .{ .path = "block_diagram.zig" },
+        .dependencies = &.{
+            .{ .name = "zbox", .module = ext.zbox },
+        },
+    });
 
     // _ = makeExe(b, test_step, "assemble", .{
     //     .source_file = .{ .path = "assemble.zig" },
@@ -59,38 +67,39 @@ pub fn build(b: *std.Build) void {
     //     },
     // });
 
-    _ = makeExe("compile_arch", .{
-        .source_file = .{ .path = "compile_arch.zig" },
-        .dependencies = &.{
-            .{ .name = "TempAllocator", .module = ext.TempAllocator },
-            .{ .name = "arch", .module = lib_arch },
+    // _ = makeExe("compile_arch", .{
+    //     .source_file = .{ .path = "compile_arch.zig" },
+    //     .dependencies = &.{
+    //         .{ .name = "TempAllocator", .module = ext.TempAllocator },
+    //         .{ .name = "arch", .module = lib_arch },
+    //     },
+    // });
+
+    const zgui_pkg = zgui.package(b, target, optimize, .{
+        .options = .{ .backend = .glfw_wgpu },
+    });
+    const zglfw_pkg = zglfw.package(b, target, optimize, .{});
+    const zpool_pkg = zpool.package(b, target, optimize, .{});
+    const zgpu_pkg = zgpu.package(b, target, optimize, .{
+        .deps = .{
+            .zpool = zpool_pkg.zpool,
+            .zglfw = zglfw_pkg.zglfw
         },
     });
-
-    // const zgui_pkg = zgui.package(b, target, optimize, .{
-    //     .options = .{ .backend = .glfw_wgpu },
-    // });
-    // const zglfw_pkg = zglfw.package(b, target, optimize, .{});
-    // const zpool_pkg = zpool.package(b, target, optimize, .{});
-    // const zgpu_pkg = zgpu.package(b, target, optimize, .{
-    //     .deps = .{
-    //         .zpool = zpool_pkg.zpool,
-    //         .zglfw = zglfw_pkg.zglfw
-    //     },
-    // });
-    //
-    // const usim = makeExe(b, test_step, "usim", .{
-    //     .source_file = .{ .path = "usim.zig" },
-    //     .dependencies = &.{
-    //         .{ .name = "microsim", .module = lib_microsim },
-    //         .{ .name = "zgpu", .module = zgpu_pkg.zgpu },
-    //         .{ .name = "zgui", .module = zgui_pkg.zgui },
-    //     },
-    // });
-    // zglfw_pkg.link(usim);
-    // zgpu_pkg.link(usim);
-    // zgui_pkg.link(usim);
-    // usim.want_lto = false;
+    const microsim = makeExe("microsim", .{
+        .source_file = .{ .path = "microsim.zig" },
+        .dependencies = &.{
+            .{ .name = "arch", .module = lib_arch },
+            .{ .name = "lib_microsim", .module = lib_microsim },
+            .{ .name = "sx", .module = ext.sx },
+            .{ .name = "zgpu", .module = zgpu_pkg.zgpu },
+            .{ .name = "zgui", .module = zgui_pkg.zgui },
+        },
+    });
+    zglfw_pkg.link(microsim);
+    zgpu_pkg.link(microsim);
+    zgui_pkg.link(microsim);
+    microsim.want_lto = false;
 }
 
 fn makeModule(comptime name: []const u8, options: std.build.CreateModuleOptions) *std.build.Module {

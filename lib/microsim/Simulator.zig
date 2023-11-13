@@ -1,130 +1,211 @@
-const std = @import("std");
-const ControlSignals = @import("ControlSignals");
-const uc = @import("microcode");
-const bits = @import("bits");
-const misc = @import("misc");
-const bus = @import("bus_types");
+allocator: std.mem.Allocator,
+decode_rom: []const hw.decode.Result,
+microcode_rom: []const Control_Signals,
+device_slots: [8]?*Device,
+slotted_devices: []Device,
+global_devices: []Device,
+updatable_devices: []Updatable_Device,
 
-pub const arithmetic_unit = @import("cpu/arithmetic_unit.zig");
-pub const logic_unit = @import("cpu/logic_unit.zig");
-pub const shifter_unit = @import("cpu/shifter_unit.zig");
-pub const multiplier_unit = @import("cpu/multiplier_unit.zig");
-pub const RegisterFile = @import("cpu/RegisterFile.zig");
-pub const StatusRegister = @import("cpu/StatusRegister.zig");
-pub const decoder = @import("cpu/decoder.zig");
-pub const faults = @import("cpu/faults.zig");
-pub const address_generator = @import("cpu/address_generator.zig");
-pub const AddressTranslator = @import("cpu/AddressTranslator.zig");
+reset: bool,
+interrupts_pending: [hw.Pipeline.count]bool,
+power: hw.Power_Mode,
 
-pub const Memory = @import("devices/Memory.zig");
-pub const FrameTracker = @import("devices/FrameTracker.zig");
+registers: []hw.Register_Set,
+translations: []at.Entry_Pair,
 
-pub const DecodeStage = @import("DecodeStage.zig");
-pub const SetupStage = @import("SetupStage.zig");
-pub const ComputeStage = @import("ComputeStage.zig");
-pub const TransactStage = @import("TransactStage.zig");
+d: Decode_Stage,
+dd: Decode_Stage.Debug,
+s: Setup_Stage,
+sd: Setup_Stage.Debug,
+c: Compute_Stage,
+cd: Compute_Stage.Debug,
+t: Transact_Stage,
+td: Transact_Stage.Debug,
 
-pub const SystemBusControl = @import("SystemBusControl.zig");
-pub const LoopRegisters = @import("LoopRegisters.zig");
+microcycles_simulated: u64,
 
-pub const ExecutionState = struct {
-    reset: bool = false,
-    interrupt_pending: [3]bool = .{ false } ** 3,
-    pipe: misc.PipeID = .zero, // The pipe ID currently in the transact stage
-    power: misc.PowerMode = .run,
-};
+pub fn init(allocator: std.mem.Allocator, decode_rom: []const hw.decode.Result, microcode_rom: []const Control_Signals, devices: []Device) !Simulator {
+    const registers = try allocator.alloc(hw.Register_Set, hw.RSN.count);
+    errdefer allocator.free(registers);
+    @memset(registers, std.mem.zeroes(hw.Register_Set));
 
-const Simulator = @This();
+    const translations = try allocator.alloc(at.Entry_Pair, at.Entry_Address.count);
+    errdefer allocator.free(translations);
+    @memset(translations, std.mem.zeroes(at.Entry_Pair));
 
-microcode: *const [misc.microcode_length]ControlSignals,
-register_file: *RegisterFile,
-address_translator: *AddressTranslator,
-memory: *Memory, 
-frame_tracker: *FrameTracker,
+    var updatable_device_count: usize = 0;
+    var slotted_device_count: usize = 0;
+    for (devices) |d| {
+        if (d.update_fn != null) updatable_device_count += 1;
+        if (d.slot != null) slotted_device_count += 1;
+    }
 
-exec_state: ExecutionState = .{},
-s: SetupStage.PipelineRegister = .{},
-c: ComputeStage.PipelineRegister = .{},
-t: TransactStage.PipelineRegister = .{},
-microcycles_simulated: u64 = 0,
+    var device_slots: [8]?*Device = .{ null } ** 8;
+    const slotted_devices = try allocator.alloc(Device, slotted_device_count);
+    errdefer allocator.free(slotted_devices);
+    if (slotted_devices.len > 0) {
+        var next: usize = 0;
+        for (devices) |d| {
+            if (d.slot) |slot| {
+                if (device_slots[slot] != null) return error.DeviceSlotConflict;
+                slotted_devices[next] = d;
+                device_slots[slot] = &slotted_devices[next];
+                next += 1;
+            }
+        }
+    }
 
-pub fn init(allocator: std.mem.Allocator, microcode: *const [misc.microcode_length]ControlSignals) !Simulator {
-    const memory = try allocator.create(Memory);
-    errdefer allocator.destroy(memory);
-    const register_file = try allocator.create(RegisterFile);
-    errdefer allocator.destroy(register_file);
-    const address_translator = try allocator.create(AddressTranslator);
-    errdefer allocator.destroy(address_translator);
-    const frame_tracker = try allocator.create(FrameTracker);
-    errdefer allocator.destroy(frame_tracker);
+    const global_devices = try allocator.alloc(Device, devices.len - slotted_device_count);
+    errdefer allocator.free(global_devices);
+    if (global_devices.len > 0) {
+        var next: usize = 0;
+        for (devices) |d| {
+            if (d.slot == null) {
+                global_devices[next] = d;
+                next += 1;
+            }
+        }
+    }
 
-    memory.reset();
-    register_file.reset();
-    address_translator.reset();
-    frame_tracker.reset();
+    const updatable_devices = try allocator.alloc(Updatable_Device, updatable_device_count);
+    errdefer allocator.free(updatable_devices);
+    if (updatable_devices.len > 0) {
+        var next: usize = 0;
+        for (devices) |d| {
+            if (d.updatable()) |ud| {
+                updatable_devices[next] = ud;
+            }
+        }
+    }
 
-    return Simulator{
-        .microcode = microcode,
-        .exec_state = ExecutionState{},
-
-        .register_file = register_file,
-        .address_translator = address_translator,
-        .memory = memory,
-        .frame_tracker = frame_tracker,
+    return .{
+        .allocator = allocator,
+        .decode_rom = decode_rom,
+        .microcode_rom = microcode_rom,
+        .device_slots = device_slots,
+        .slotted_devices = slotted_devices,
+        .global_devices = global_devices,
+        .updatable_devices = updatable_devices,
+        .reset = false,
+        .interrupts_pending = .{ false } ** hw.Pipeline.count,
+        .power = .run,
+        .registers = registers,
+        .translations = translations,
+        .d = std.mem.zeroInit(Decode_Stage, .{ .cs = &microcode_rom[0] }),
+        .dd = std.mem.zeroes(Decode_Stage.Debug),
+        .s = std.mem.zeroInit(Setup_Stage, .{ .cs = &microcode_rom[0] }),
+        .sd = std.mem.zeroes(Setup_Stage.Debug),
+        .c = std.mem.zeroInit(Compute_Stage, .{ .cs = &microcode_rom[0] }),
+        .cd = std.mem.zeroes(Compute_Stage.Debug),
+        .t = std.mem.zeroInit(Transact_Stage, .{ .cs = &microcode_rom[0] }),
+        .td = std.mem.zeroes(Transact_Stage.Debug),
+        .microcycles_simulated = 0,
     };
 }
 
-pub fn deinit(self: *Simulator, allocator: std.mem.Allocator) void {
-    allocator.destroy(self.frame_tracker);
-    allocator.destroy(self.address_translator);
-    allocator.destroy(self.register_file);
-    allocator.destroy(self.memory);
+pub fn deinit(self: *Simulator) void {
+    self.allocator.free(self.translations);
+    self.allocator.free(self.registers);
+    self.allocator.free(self.updatable_devices);
+    self.allocator.free(self.slotted_devices);
+    self.allocator.free(self.global_devices);
 }
 
-pub fn randomizeState(self: *Simulator, rnd: std.rand.Random) void {
-    self.memory.randomize(rnd);
-    self.register_file.randomize(rnd);
-    self.address_translator.randomize(rnd);
-    self.frame_tracker.randomize(rnd);
-    self.s.randomize(rnd);
-    self.c.randomize(rnd);
-    self.t.randomize(rnd);
-}
-
-pub fn microcycle(self: *Simulator, n: u64) void {
+pub fn simulate_microcycles(self: *Simulator, n: u64) void {
     var i: u64 = 0;
     while (i < n) : (i += 1) {
-        self.exec_state.pipe = self.exec_state.pipe.next();
+        const atomic_busy = self.s.is_atomic() or self.c.is_atomic() or self.t.is_atomic();
 
-        const s = SetupStage.init(self.t, self.register_file, self.s.isAtomic(), self.c.isAtomic());
-        const c = ComputeStage.init(self.s, self.address_translator, self.exec_state);
-        const t = TransactStage.init(self.c, self.microcode, self.exec_state, self.memory, self.frame_tracker);
+        for (self.updatable_devices) |d| {
+            d.update_fn(d.ctx, self);
+        }
 
-        self.s.update(s);
-        self.c.update(c);
-        self.t.update(t, &self.exec_state, self.register_file, self.address_translator, self.memory, self.frame_tracker);
+        var read_data: hw.D = hw.D.init(0);
+        if (self.t.read()) |addr| {
+            var read_collision = false;
+            var read_device: ?*Device = null;
+            for (self.global_devices) |*d| {
+                if (d.read_fn(d.ctx, addr)) |result| {
+                    if (read_device) |previous| {
+                        if (!read_collision) {
+                            previous.log_contention(self.microcycles_simulated + i);
+                            read_collision = true;
+                        }
+                        d.log_contention(self.microcycles_simulated + i);
+                    }
+                    read_data = result;
+                    read_device = d;
+                }
+            }
+            if (addr.device_slot()) |slot| {
+                if (self.device_slots[slot]) |d| {
+                    if (d.read_fn(d.ctx, addr)) |result| {
+                        if (read_device) |previous| {
+                            if (!read_collision) {
+                                previous.log_contention(self.microcycles_simulated + i);
+                                read_collision = true;
+                            }
+                            d.log_contention(self.microcycles_simulated + i);
+                        }
+                        read_data = result;
+                    }
+                }
+            }
+        }
 
-        self.microcycles_simulated += 1;
+        var t_out: Decode_Stage = self.d;
+        self.td = self.t.simulate(&t_out, read_data, self.power, self.reset, self.registers, self.translations, &self.interrupts_pending);
+
+        if (self.td.write_addr) |addr| {
+            const data = self.td.d;
+            for (self.global_devices) |*d| {
+                d.write_fn(d.ctx, addr, data);
+            }
+            if (addr.device_slot()) |slot| {
+                if (self.device_slots[slot]) |d| {
+                    d.write_fn(d.ctx, addr, data);
+                }
+            }
+        }
+
+        self.cd = self.c.simulate(&self.t, self.reset, self.translations);
+        self.sd = self.s.simulate(&self.c, self.registers);
+        self.dd = self.d.simulate(&self.s, self.decode_rom, self.microcode_rom, atomic_busy);
+        self.d = t_out;
     }
+    self.microcycles_simulated += n;
 }
 
-pub fn cycle(self: *Simulator, n: u64) void {
-    self.microcycle(n * 3);
+pub fn simulate_cycles(self: *Simulator, n: u64) void {
+    self.simulate_microcycles(n * 4);
 }
 
-pub fn resetAndCycle(self: *Simulator) void {
-    self.exec_state.reset = true;
-    self.cycle(1);
-    while (self.t.pipe != .zero) {
-        self.microcycle(1);
+pub fn simulate_reset(self: *Simulator) void {
+    self.reset = true;
+    self.simulate_cycles(1);
+    while (self.t.pipeline != .zero) {
+        self.simulate_microcycles(1);
     }
-    self.exec_state.reset = false;
+    self.reset = false;
 }
 
-pub fn resetAndInit(self: *Simulator) void {
-    self.resetAndCycle();
+pub fn simulate_reset_and_init(self: *Simulator) void {
+    self.simulate_reset();
     while (self.t.cs.seq_op != .next_instruction) {
-        self.cycle(1);
+        self.simulate_cycles(1);
     }
-    self.cycle(1);
 }
+
+const log = std.log.scoped(.sim);
+const Simulator = @This();
+const Decode_Stage = @import("Decode_Stage.zig");
+const Setup_Stage = @import("Setup_Stage.zig");
+const Compute_Stage = @import("Compute_Stage.zig");
+const Transact_Stage = @import("Transact_Stage.zig");
+const Updatable_Device = Device.Updatable_Device;
+const Device = @import("Device.zig");
+const Control_Signals = hw.Control_Signals;
+const at = hw.addr.translation;
+const hw = arch.hw;
+const arch = @import("arch");
+const std = @import("std");

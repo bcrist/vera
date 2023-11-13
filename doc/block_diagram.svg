@@ -1,0 +1,749 @@
+<svg viewBox="-50 -233 2656 1316" xmlns="http://www.w3.org/2000/svg">
+<title>Architecture Block Diagram</title>
+<style>
+svg {
+    background: #394150;
+}
+text {
+    display: block;
+    white-space-collapse: preserve;
+    text-wrap: nowrap;
+    font-size: 14px;
+    font-family: Iosevka Custom, Iosevka, Inconsolata, Consolas, monospace;
+    fill: #E5E9F0;
+}
+text._nl { dominant-baseline: auto; text-anchor: start; }
+text._nc { dominant-baseline: auto; text-anchor: middle; }
+text._nr { dominant-baseline: auto; text-anchor: end; }
+text._ml { dominant-baseline: middle; text-anchor: start; }
+text._mc { dominant-baseline: middle; text-anchor: middle; }
+text._mr { dominant-baseline: middle; text-anchor: end; }
+text._hl { dominant-baseline: hanging; text-anchor: start; }
+text._hc { dominant-baseline: hanging; text-anchor: middle; }
+text._hr { dominant-baseline: hanging; text-anchor: end; }
+.box-label.main, .box-label.top, .box-label.bottom {
+    font-size: 25px;
+}
+.box-label.interface.interface, text.small.small.small {
+    font-size: 14px;
+}
+text.bitmark-label {
+    stroke: none;
+    fill: #E5E9F0;
+    font-size: 9px;
+}
+.sep {
+    stroke-width: 3;
+    stroke: #262c38;
+}
+.sep-label {
+    fill: #12161d;
+    font-size: 18px;
+}
+.box {
+    stroke-width: 2;
+    stroke: #ECEFF4;
+    fill: #4C566A;
+    rx: 5;
+    ry: 5;
+}
+.wire {
+    stroke-width: 2;
+    stroke: #A3BE8C;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+}
+.wire.junction {
+    fill: #A3BE8C;
+    stroke: none;
+}
+.wire.bus {
+    stroke-width: 4;
+    stroke: #5E81AC;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+}
+.wire.bus.junction {
+    fill: #5E81AC;
+    stroke: none;
+}
+.wire.wire.wire.bitmark {
+    stroke-width: 1;
+}
+
+ .wire.wire.wire.wire { stroke-width: 2; }
+ .wire.wire.wire.bitmark { stroke-width: 1; }
+ .wire.wire.wire.junction { stroke: none; }
+ .wire.control { stroke: #6d6; }
+ .wire-label.control { fill: #6d6; }
+ .wire.junction.control { fill: #6d6; }
+ .box.pipeline { fill: #4F466A; }
+ .box-label.interface.interface { font-size: 12px; }
+</style>
+<line x1="0" y1="-233" x2="0" y2="1083" class=" sep"/>
+<line x1="890" y1="-233" x2="890" y2="1083" class=" sep"/>
+<line x1="1790" y1="-233" x2="1790" y2="1083" class=" sep"/>
+<line x1="2485" y1="-233" x2="2485" y2="1083" class=" sep"/>
+<line x1="2585" y1="-233" x2="2585" y2="1083" class=" sep"/>
+<path d="M 455 668 H 235 V 668 H 25" class="wire bus control"/>
+<line x1="126.5" y1="671.5" x2="133.5" y2="664.5" class="wire bitmark bus control"/>
+<text x="130" y="673" class="label _hc bitmark-label">4</text>
+<path d="M 455 688 H 235 V 688 H 25" class="wire bus"/>
+<line x1="126.5" y1="691.5" x2="133.5" y2="684.5" class="wire bitmark bus"/>
+<text x="130" y="693" class="label _hc bitmark-label">4</text>
+<path d="M 455 708 H 307.5" class="wire bus"/>
+<path d="M 282.5 708 H 235 V 688" class="wire bus"/>
+<circle cx="235" cy="688" r="4" class="wire junction bus"/>
+<path d="M 495 678 H 865" class="wire bus"/>
+<line x1="676.5" y1="681.5" x2="683.5" y2="674.5" class="wire bitmark bus"/>
+<text x="680" y="683" class="label _hc bitmark-label">4</text>
+<path d="M 455 808 H 235 V 808 H 25" class="wire bus control"/>
+<line x1="126.5" y1="811.5" x2="133.5" y2="804.5" class="wire bitmark bus control"/>
+<text x="130" y="813" class="label _hc bitmark-label">4</text>
+<path d="M 455 828 H 235 V 828 H 25" class="wire bus"/>
+<line x1="126.5" y1="831.5" x2="133.5" y2="824.5" class="wire bitmark bus"/>
+<text x="130" y="833" class="label _hc bitmark-label">4</text>
+<path d="M 455 848 H 307.5" class="wire bus"/>
+<path d="M 282.5 848 H 235 V 828" class="wire bus"/>
+<circle cx="235" cy="828" r="4" class="wire junction bus"/>
+<path d="M 495 818 H 865" class="wire bus"/>
+<line x1="676.5" y1="821.5" x2="683.5" y2="814.5" class="wire bitmark bus"/>
+<text x="680" y="823" class="label _hc bitmark-label">4</text>
+<path d="M 455 948 H 235 V 948 H 25" class="wire bus control"/>
+<line x1="126.5" y1="951.5" x2="133.5" y2="944.5" class="wire bitmark bus control"/>
+<text x="130" y="953" class="label _hc bitmark-label">4</text>
+<path d="M 455 968 H 235 V 968 H 25" class="wire bus"/>
+<line x1="126.5" y1="971.5" x2="133.5" y2="964.5" class="wire bitmark bus"/>
+<text x="130" y="973" class="label _hc bitmark-label">4</text>
+<path d="M 455 988 H 307.5" class="wire bus"/>
+<path d="M 282.5 988 H 235 V 968" class="wire bus"/>
+<circle cx="235" cy="968" r="4" class="wire junction bus"/>
+<path d="M 495 958 H 865" class="wire bus"/>
+<line x1="676.5" y1="961.5" x2="683.5" y2="954.5" class="wire bitmark bus"/>
+<text x="680" y="963" class="label _hc bitmark-label">4</text>
+<path d="M 175 120 H 25" class="wire bus"/>
+<line x1="126.5" y1="123.5" x2="133.5" y2="116.5" class="wire bitmark bus"/>
+<text x="130" y="125" class="label _hc bitmark-label">2</text>
+<path d="M 295 120 H 865" class="wire bus"/>
+<line x1="576.5" y1="123.5" x2="583.5" y2="116.5" class="wire bitmark bus"/>
+<text x="580" y="125" class="label _hc bitmark-label">2</text>
+<path d="M 175 140 H 25" class="wire bus control"/>
+<line x1="126.5" y1="143.5" x2="133.5" y2="136.5" class="wire bitmark bus control"/>
+<text x="130" y="145" class="label _hc bitmark-label">2</text>
+<path d="M 175 160 H 25" class="wire control"/>
+<path d="M 175 180 H 25" class="wire"/>
+<path d="M 175 200 H 25" class="wire"/>
+<path d="M 175 220 H 25" class="wire"/>
+<path d="M 175 240 H 25" class="wire"/>
+<path d="M 175 260 H 25" class="wire"/>
+<path d="M 175 280 H 25" class="wire"/>
+<path d="M 175 300 H 25" class="wire"/>
+<path d="M 175 320 H 25" class="wire"/>
+<path d="M 295 220 H 475 V 458" class="wire bus"/>
+<line x1="381.5" y1="223.5" x2="388.5" y2="216.5" class="wire bitmark bus"/>
+<text x="385" y="225" class="label _hc bitmark-label">2</text>
+<path d="M 295 320 H 395 V 372.5" class="wire bus"/>
+<line x1="391.5" y1="349.75" x2="398.5" y2="342.75" class="wire bitmark bus"/>
+<text x="401" y="347.75" class="label _ml bitmark-label">3</text>
+<path d="M 175 570 H 25" class="wire bus"/>
+<line x1="96.5" y1="573.5" x2="103.5" y2="566.5" class="wire bitmark bus"/>
+<text x="100" y="575" class="label _hc bitmark-label">16</text>
+<path d="M 175 590 H 25" class="wire control"/>
+<path d="M 295 550 H 395 V 528 H 455" class="wire bus"/>
+<line x1="341.5" y1="553.5" x2="348.5" y2="546.5" class="wire bitmark bus"/>
+<text x="345" y="555" class="label _hc bitmark-label">12</text>
+<path d="M 295 570 H 395 V 648 H 455" class="wire bus"/>
+<line x1="341.5" y1="573.5" x2="348.5" y2="566.5" class="wire bitmark bus"/>
+<text x="345" y="575" class="label _hc bitmark-label">4</text>
+<path d="M 295 590 H 375 V 788 H 455" class="wire bus"/>
+<line x1="331.5" y1="593.5" x2="338.5" y2="586.5" class="wire bitmark bus"/>
+<text x="335" y="595" class="label _hc bitmark-label">4</text>
+<path d="M 295 610 H 355 V 928 H 455" class="wire bus"/>
+<line x1="321.5" y1="613.5" x2="328.5" y2="606.5" class="wire bitmark bus"/>
+<text x="325" y="615" class="label _hc bitmark-label">4</text>
+<path d="M 175 410 H 25" class="wire bus control"/>
+<line x1="126.5" y1="413.5" x2="133.5" y2="406.5" class="wire bitmark bus control"/>
+<text x="130" y="415" class="label _hc bitmark-label">12</text>
+<path d="M 175 430 H 25" class="wire bus control"/>
+<line x1="126.5" y1="433.5" x2="133.5" y2="426.5" class="wire bitmark bus control"/>
+<text x="130" y="435" class="label _hc bitmark-label">2</text>
+<path d="M 175 450 H 25" class="wire bus control"/>
+<line x1="126.5" y1="453.5" x2="133.5" y2="446.5" class="wire bitmark bus control"/>
+<text x="130" y="455" class="label _hc bitmark-label">2</text>
+<path d="M 175 470 H 25" class="wire bus control"/>
+<line x1="126.5" y1="473.5" x2="133.5" y2="466.5" class="wire bitmark bus control"/>
+<text x="130" y="475" class="label _hc bitmark-label">2</text>
+<path d="M 295 440 H 375 V 488 H 455" class="wire bus"/>
+<line x1="331.5" y1="443.5" x2="338.5" y2="436.5" class="wire bitmark bus"/>
+<text x="335" y="445" class="label _hc bitmark-label">12</text>
+<path d="M 455 508 H 25" class="wire bus"/>
+<line x1="236.5" y1="511.5" x2="243.5" y2="504.5" class="wire bitmark bus"/>
+<text x="240" y="513" class="label _hc bitmark-label">12</text>
+<path d="M 595 210 H 545 V 50 H 25" class="wire bus"/>
+<line x1="566.5" y1="213.5" x2="573.5" y2="206.5" class="wire bitmark bus"/>
+<text x="570" y="215" class="label _hc bitmark-label">5</text>
+<path d="M 495 498 H 545 V 410 H 595" class="wire bus"/>
+<line x1="516.5" y1="501.5" x2="523.5" y2="494.5" class="wire bitmark bus"/>
+<text x="520" y="503" class="label _hc bitmark-label">12</text>
+<line x1="566.5" y1="413.5" x2="573.5" y2="406.5" class="wire bitmark bus"/>
+<text x="570" y="415" class="label _hc bitmark-label">12</text>
+<path d="M 715 20 H 865" class="wire bus control"/>
+<line x1="756.5" y1="23.5" x2="763.5" y2="16.5" class="wire bitmark bus control"/>
+<text x="760" y="25" class="label _hc bitmark-label">6</text>
+<path d="M 715 40 H 865" class="wire bus control"/>
+<line x1="756.5" y1="43.5" x2="763.5" y2="36.5" class="wire bitmark bus control"/>
+<text x="760" y="45" class="label _hc bitmark-label">12</text>
+<path d="M 715 60 H 865" class="wire control"/>
+<path d="M 715 80 H 865" class="wire bus control"/>
+<line x1="756.5" y1="83.5" x2="763.5" y2="76.5" class="wire bitmark bus control"/>
+<text x="760" y="85" class="label _hc bitmark-label">2</text>
+<path d="M 715 100 H 865" class="wire bus control"/>
+<line x1="756.5" y1="103.5" x2="763.5" y2="96.5" class="wire bitmark bus control"/>
+<text x="760" y="105" class="label _hc bitmark-label">2</text>
+<path d="M 715 120 H 865" class="wire bus control"/>
+<line x1="756.5" y1="123.5" x2="763.5" y2="116.5" class="wire bitmark bus control"/>
+<text x="760" y="125" class="label _hc bitmark-label">2</text>
+<path d="M 715 140 H 865" class="wire control"/>
+<path d="M 715 160 H 865" class="wire bus control"/>
+<line x1="756.5" y1="163.5" x2="763.5" y2="156.5" class="wire bitmark bus control"/>
+<text x="760" y="165" class="label _hc bitmark-label">2</text>
+<path d="M 715 180 H 865" class="wire bus control"/>
+<line x1="756.5" y1="183.5" x2="763.5" y2="176.5" class="wire bitmark bus control"/>
+<text x="760" y="185" class="label _hc bitmark-label">3</text>
+<path d="M 715 200 H 865" class="wire bus control"/>
+<line x1="756.5" y1="203.5" x2="763.5" y2="196.5" class="wire bitmark bus control"/>
+<text x="760" y="205" class="label _hc bitmark-label">3</text>
+<path d="M 715 220 H 865" class="wire bus control"/>
+<line x1="756.5" y1="223.5" x2="763.5" y2="216.5" class="wire bitmark bus control"/>
+<text x="760" y="225" class="label _hc bitmark-label">3</text>
+<path d="M 715 240 H 865" class="wire bus control"/>
+<line x1="756.5" y1="243.5" x2="763.5" y2="236.5" class="wire bitmark bus control"/>
+<text x="760" y="245" class="label _hc bitmark-label">3</text>
+<path d="M 715 260 H 865" class="wire bus control"/>
+<line x1="756.5" y1="263.5" x2="763.5" y2="256.5" class="wire bitmark bus control"/>
+<text x="760" y="265" class="label _hc bitmark-label">3</text>
+<path d="M 715 280 H 865" class="wire bus control"/>
+<line x1="756.5" y1="283.5" x2="763.5" y2="276.5" class="wire bitmark bus control"/>
+<text x="760" y="285" class="label _hc bitmark-label">3</text>
+<path d="M 715 300 H 865" class="wire bus control"/>
+<line x1="756.5" y1="303.5" x2="763.5" y2="296.5" class="wire bitmark bus control"/>
+<text x="760" y="305" class="label _hc bitmark-label">2</text>
+<path d="M 715 320 H 865" class="wire bus control"/>
+<line x1="756.5" y1="323.5" x2="763.5" y2="316.5" class="wire bitmark bus control"/>
+<text x="760" y="325" class="label _hc bitmark-label">2</text>
+<path d="M 715 340 H 865" class="wire bus control"/>
+<line x1="756.5" y1="343.5" x2="763.5" y2="336.5" class="wire bitmark bus control"/>
+<text x="760" y="345" class="label _hc bitmark-label">4</text>
+<path d="M 715 360 H 865" class="wire bus control"/>
+<line x1="756.5" y1="363.5" x2="763.5" y2="356.5" class="wire bitmark bus control"/>
+<text x="760" y="365" class="label _hc bitmark-label">2</text>
+<path d="M 715 380 H 865" class="wire bus control"/>
+<line x1="756.5" y1="383.5" x2="763.5" y2="376.5" class="wire bitmark bus control"/>
+<text x="760" y="385" class="label _hc bitmark-label">4</text>
+<path d="M 715 400 H 865" class="wire bus control"/>
+<line x1="756.5" y1="403.5" x2="763.5" y2="396.5" class="wire bitmark bus control"/>
+<text x="760" y="405" class="label _hc bitmark-label">2</text>
+<path d="M 715 420 H 865" class="wire control"/>
+<path d="M 715 440 H 865" class="wire control"/>
+<path d="M 715 460 H 865" class="wire bus control"/>
+<line x1="756.5" y1="463.5" x2="763.5" y2="456.5" class="wire bitmark bus control"/>
+<text x="760" y="465" class="label _hc bitmark-label">2</text>
+<path d="M 715 480 H 865" class="wire bus control"/>
+<line x1="756.5" y1="483.5" x2="763.5" y2="476.5" class="wire bitmark bus control"/>
+<text x="760" y="485" class="label _hc bitmark-label">3</text>
+<path d="M 715 500 H 865" class="wire bus control"/>
+<line x1="756.5" y1="503.5" x2="763.5" y2="496.5" class="wire bitmark bus control"/>
+<text x="760" y="505" class="label _hc bitmark-label">4</text>
+<path d="M 715 520 H 865" class="wire bus control"/>
+<line x1="756.5" y1="523.5" x2="763.5" y2="516.5" class="wire bitmark bus control"/>
+<text x="760" y="525" class="label _hc bitmark-label">4</text>
+<path d="M 715 540 H 865" class="wire bus control"/>
+<line x1="756.5" y1="543.5" x2="763.5" y2="536.5" class="wire bitmark bus control"/>
+<text x="760" y="545" class="label _hc bitmark-label">4</text>
+<path d="M 715 560 H 865" class="wire bus control"/>
+<line x1="756.5" y1="563.5" x2="763.5" y2="556.5" class="wire bitmark bus control"/>
+<text x="760" y="565" class="label _hc bitmark-label">2</text>
+<path d="M 715 580 H 865" class="wire bus control"/>
+<line x1="756.5" y1="583.5" x2="763.5" y2="576.5" class="wire bitmark bus control"/>
+<text x="760" y="585" class="label _hc bitmark-label">2</text>
+<path d="M 715 600 H 865" class="wire control"/>
+<path d="M 1115 80 H 1055 V 80 H 915" class="wire bus"/>
+<line x1="1081.5" y1="83.5" x2="1088.5" y2="76.5" class="wire bitmark bus"/>
+<text x="1085" y="85" class="label _hc bitmark-label">6</text>
+<path d="M 1115 100 H 1055 V 100 H 915" class="wire bus"/>
+<line x1="1081.5" y1="103.5" x2="1088.5" y2="96.5" class="wire bitmark bus"/>
+<text x="1085" y="105" class="label _hc bitmark-label">4</text>
+<path d="M 1115 940 H 1055 V 80" class="wire bus"/>
+<line x1="1081.5" y1="943.5" x2="1088.5" y2="936.5" class="wire bitmark bus"/>
+<text x="1085" y="945" class="label _hc bitmark-label">6</text>
+<circle cx="1055" cy="80" r="4" class="wire junction bus"/>
+<path d="M 1115 455 H 1055" class="wire bus"/>
+<line x1="1081.5" y1="458.5" x2="1088.5" y2="451.5" class="wire bitmark bus"/>
+<text x="1085" y="460" class="label _hc bitmark-label">6</text>
+<circle cx="1055" cy="455" r="4" class="wire junction bus"/>
+<path d="M 1115 475 H 1055 V 475 H 915" class="wire bus"/>
+<line x1="1081.5" y1="478.5" x2="1088.5" y2="471.5" class="wire bitmark bus"/>
+<text x="1085" y="480" class="label _hc bitmark-label">4</text>
+<path d="M 1462.5 519 H 1395 V 530 H 1035 V 100" class="wire bus"/>
+<line x1="1211.5" y1="533.5" x2="1218.5" y2="526.5" class="wire bitmark bus"/>
+<text x="1215" y="535" class="label _hc bitmark-label">4</text>
+<circle cx="1035" cy="100" r="4" class="wire junction bus"/>
+<path d="M 1462.5 565 H 1415 V 565 H 1015 V 475" class="wire bus"/>
+<line x1="1211.5" y1="568.5" x2="1218.5" y2="561.5" class="wire bitmark bus"/>
+<text x="1215" y="570" class="label _hc bitmark-label">4</text>
+<circle cx="1015" cy="475" r="4" class="wire junction bus"/>
+<path d="M 1462.5 531 H 1415 V 565" class="wire bus"/>
+<circle cx="1415" cy="565" r="4" class="wire junction bus"/>
+<path d="M 1500 545 H 1415" class="wire bus"/>
+<circle cx="1415" cy="545" r="4" class="wire junction bus"/>
+<path d="M 1102.5 585 H 915" class="wire bus control"/>
+<line x1="1005.25" y1="588.5" x2="1012.25" y2="581.5" class="wire bitmark bus control"/>
+<text x="1008.75" y="590" class="label _hc bitmark-label">6</text>
+<path d="M 1152.5 605 H 1077.5 V 585" class="wire bus control"/>
+<circle cx="1077.5" cy="585" r="4" class="wire junction bus control"/>
+<path d="M 1102.5 645 H 1077.5 V 605" class="wire bus control"/>
+<circle cx="1077.5" cy="605" r="4" class="wire junction bus control"/>
+<path d="M 1152.5 665 H 1077.5 V 645" class="wire bus control"/>
+<circle cx="1077.5" cy="645" r="4" class="wire junction bus control"/>
+<path d="M 1115 190 H 1055" class="wire bus"/>
+<line x1="1081.5" y1="193.5" x2="1088.5" y2="186.5" class="wire bitmark bus"/>
+<text x="1085" y="195" class="label _hc bitmark-label">6</text>
+<circle cx="1055" cy="190" r="4" class="wire junction bus"/>
+<path d="M 1115 210 H 1055 V 210 H 915" class="wire bus control"/>
+<line x1="1081.5" y1="213.5" x2="1088.5" y2="206.5" class="wire bitmark bus control"/>
+<text x="1085" y="215" class="label _hc bitmark-label">3</text>
+<path d="M 1115 300 H 1055" class="wire bus"/>
+<line x1="1081.5" y1="303.5" x2="1088.5" y2="296.5" class="wire bitmark bus"/>
+<text x="1085" y="305" class="label _hc bitmark-label">6</text>
+<circle cx="1055" cy="300" r="4" class="wire junction bus"/>
+<path d="M 1115 320 H 1055 V 320 H 915" class="wire bus control"/>
+<line x1="1081.5" y1="323.5" x2="1088.5" y2="316.5" class="wire bitmark bus control"/>
+<text x="1085" y="325" class="label _hc bitmark-label">3</text>
+<path d="M 1115 835 H 1055" class="wire bus"/>
+<line x1="1081.5" y1="838.5" x2="1088.5" y2="831.5" class="wire bitmark bus"/>
+<text x="1085" y="840" class="label _hc bitmark-label">6</text>
+<circle cx="1055" cy="835" r="4" class="wire junction bus"/>
+<path d="M 1115 855 H 1055 V 855 H 915" class="wire bus control"/>
+<line x1="1081.5" y1="858.5" x2="1088.5" y2="851.5" class="wire bitmark bus control"/>
+<text x="1085" y="860" class="label _hc bitmark-label">3</text>
+<path d="M 1115 960 H 1055 V 960 H 1035 V 855" class="wire bus control"/>
+<line x1="1081.5" y1="963.5" x2="1088.5" y2="956.5" class="wire bitmark bus control"/>
+<text x="1085" y="965" class="label _hc bitmark-label">3</text>
+<circle cx="1035" cy="855" r="4" class="wire junction bus control"/>
+<path d="M 1575 90 H 1525" class="wire bus"/>
+<line x1="1546.5" y1="93.5" x2="1553.5" y2="86.5" class="wire bitmark bus"/>
+<text x="1550" y="95" class="label _hc bitmark-label">16</text>
+<path d="M 1575 110 H 1525" class="wire bus"/>
+<line x1="1546.5" y1="113.5" x2="1553.5" y2="106.5" class="wire bitmark bus"/>
+<text x="1550" y="115" class="label _hc bitmark-label">16</text>
+<path d="M 1215 80 H 1415 V 130 H 1525 V 130 H 1575" class="wire bus"/>
+<line x1="1546.5" y1="133.5" x2="1553.5" y2="126.5" class="wire bitmark bus"/>
+<text x="1550" y="135" class="label _hc bitmark-label">16</text>
+<path d="M 1215 190 H 1315 V 150 H 1525 V 150 H 1575" class="wire bus"/>
+<line x1="1546.5" y1="153.5" x2="1553.5" y2="146.5" class="wire bitmark bus"/>
+<text x="1550" y="155" class="label _hc bitmark-label">16</text>
+<path d="M 1215 300 H 1335 V 170 H 1525 V 170 H 1575" class="wire bus"/>
+<line x1="1546.5" y1="173.5" x2="1553.5" y2="166.5" class="wire bitmark bus"/>
+<text x="1550" y="175" class="label _hc bitmark-label">16</text>
+<path d="M 1575 190 H 1525 V 190 H 1487.5" class="wire bus"/>
+<line x1="1546.5" y1="193.5" x2="1553.5" y2="186.5" class="wire bitmark bus"/>
+<text x="1550" y="195" class="label _hc bitmark-label">16</text>
+<path d="M 1462.5 190 H 1395" class="wire"/>
+<circle cx="1395" cy="190" r="4" class="wire junction"/>
+<path d="M 1575 260 H 1525" class="wire bus"/>
+<line x1="1546.5" y1="263.5" x2="1553.5" y2="256.5" class="wire bitmark bus"/>
+<text x="1550" y="265" class="label _hc bitmark-label">16</text>
+<path d="M 1215 100 H 1395 V 280 H 1525 V 280 H 1575" class="wire bus"/>
+<line x1="1546.5" y1="283.5" x2="1553.5" y2="276.5" class="wire bitmark bus"/>
+<text x="1550" y="285" class="label _hc bitmark-label">16</text>
+<path d="M 1215 210 H 1375 V 300 H 1525 V 300 H 1575" class="wire bus"/>
+<line x1="1546.5" y1="303.5" x2="1553.5" y2="296.5" class="wire bitmark bus"/>
+<text x="1550" y="305" class="label _hc bitmark-label">16</text>
+<path d="M 1215 320 H 1355 V 320 H 1525 V 320 H 1575" class="wire bus"/>
+<line x1="1546.5" y1="323.5" x2="1553.5" y2="316.5" class="wire bitmark bus"/>
+<text x="1550" y="325" class="label _hc bitmark-label">16</text>
+<path d="M 1215 465 H 1315 V 465 H 1525 V 465 H 1575" class="wire bus"/>
+<line x1="1546.5" y1="468.5" x2="1553.5" y2="461.5" class="wire bitmark bus"/>
+<text x="1550" y="470" class="label _hc bitmark-label">16</text>
+<path d="M 1575 485 H 1525 V 485 H 1375 V 300" class="wire bus"/>
+<line x1="1546.5" y1="488.5" x2="1553.5" y2="481.5" class="wire bitmark bus"/>
+<text x="1550" y="490" class="label _hc bitmark-label">16</text>
+<circle cx="1375" cy="300" r="4" class="wire junction bus"/>
+<path d="M 1575 505 H 1525 V 505 H 1355 V 320" class="wire bus"/>
+<line x1="1546.5" y1="508.5" x2="1553.5" y2="501.5" class="wire bitmark bus"/>
+<text x="1550" y="510" class="label _hc bitmark-label">16</text>
+<circle cx="1355" cy="320" r="4" class="wire junction bus"/>
+<path d="M 1575 525 H 1525 V 525 H 1487.5" class="wire bus"/>
+<line x1="1546.5" y1="528.5" x2="1553.5" y2="521.5" class="wire bitmark bus"/>
+<text x="1550" y="530" class="label _hc bitmark-label">16</text>
+<path d="M 1575 545 H 1525 V 545 H 1525" class="wire bus"/>
+<line x1="1546.5" y1="548.5" x2="1553.5" y2="541.5" class="wire bitmark bus"/>
+<text x="1550" y="550" class="label _hc bitmark-label">16</text>
+<path d="M 1575 565 H 1525 V 565 H 1487.5" class="wire bus"/>
+<line x1="1546.5" y1="568.5" x2="1553.5" y2="561.5" class="wire bitmark bus"/>
+<text x="1550" y="570" class="label _hc bitmark-label">16</text>
+<path d="M 1575 585 H 1525 V 585 H 1127.5" class="wire bus"/>
+<line x1="1546.5" y1="588.5" x2="1553.5" y2="581.5" class="wire bitmark bus"/>
+<text x="1550" y="590" class="label _hc bitmark-label">16</text>
+<path d="M 1575 605 H 1525 V 605 H 1177.5" class="wire bus"/>
+<line x1="1546.5" y1="608.5" x2="1553.5" y2="601.5" class="wire bitmark bus"/>
+<text x="1550" y="610" class="label _hc bitmark-label">16</text>
+<path d="M 1315 645 H 1265 V 645 H 1127.5" class="wire bus"/>
+<line x1="1286.5" y1="648.5" x2="1293.5" y2="641.5" class="wire bitmark bus"/>
+<text x="1290" y="650" class="label _hc bitmark-label">32</text>
+<path d="M 1315 665 H 1265 V 665 H 1177.5" class="wire bus"/>
+<line x1="1286.5" y1="668.5" x2="1293.5" y2="661.5" class="wire bitmark bus"/>
+<text x="1290" y="670" class="label _hc bitmark-label">32</text>
+<path d="M 1315 685 H 1265" class="wire bus"/>
+<line x1="1286.5" y1="688.5" x2="1293.5" y2="681.5" class="wire bitmark bus"/>
+<text x="1290" y="690" class="label _hc bitmark-label">32</text>
+<path d="M 1315 705 H 1265" class="wire bus"/>
+<line x1="1286.5" y1="708.5" x2="1293.5" y2="701.5" class="wire bitmark bus"/>
+<text x="1290" y="710" class="label _hc bitmark-label">32</text>
+<path d="M 1315 845 H 1265 V 845 H 1215" class="wire bus"/>
+<line x1="1286.5" y1="848.5" x2="1293.5" y2="841.5" class="wire bitmark bus"/>
+<text x="1290" y="850" class="label _hc bitmark-label">32</text>
+<path d="M 1315 865 H 1265 V 950 H 1215" class="wire bus"/>
+<line x1="1286.5" y1="868.5" x2="1293.5" y2="861.5" class="wire bitmark bus"/>
+<text x="1290" y="870" class="label _hc bitmark-label">32</text>
+<path d="M 1355 675 H 1405 V 727.5 H 1455" class="wire bus"/>
+<line x1="1376.5" y1="678.5" x2="1383.5" y2="671.5" class="wire bitmark bus"/>
+<text x="1380" y="680" class="label _hc bitmark-label">32</text>
+<path d="M 1355 855 H 1405 V 802.5 H 1455" class="wire bus"/>
+<line x1="1376.5" y1="858.5" x2="1383.5" y2="851.5" class="wire bitmark bus"/>
+<text x="1380" y="860" class="label _hc bitmark-label">32</text>
+<path d="M 1615 140 H 1765" class="wire bus"/>
+<line x1="1686.5" y1="143.5" x2="1693.5" y2="136.5" class="wire bitmark bus"/>
+<text x="1690" y="145" class="label _hc bitmark-label">16</text>
+<path d="M 1615 290 H 1765" class="wire bus"/>
+<line x1="1686.5" y1="293.5" x2="1693.5" y2="286.5" class="wire bitmark bus"/>
+<text x="1690" y="295" class="label _hc bitmark-label">16</text>
+<path d="M 1615 535 H 1765" class="wire bus"/>
+<line x1="1686.5" y1="538.5" x2="1693.5" y2="531.5" class="wire bitmark bus"/>
+<text x="1690" y="540" class="label _hc bitmark-label">16</text>
+<path d="M 1535 727.5 H 1765" class="wire bus"/>
+<line x1="1646.5" y1="731" x2="1653.5" y2="724" class="wire bitmark bus"/>
+<text x="1650" y="732.5" class="label _hc bitmark-label">20</text>
+<path d="M 1535 802.5 H 1765" class="wire bus"/>
+<line x1="1646.5" y1="806" x2="1653.5" y2="799" class="wire bitmark bus"/>
+<text x="1650" y="807.5" class="label _hc bitmark-label">12</text>
+<path d="M 2165 110 H 1815" class="wire bus"/>
+<line x1="1986.5" y1="113.5" x2="1993.5" y2="106.5" class="wire bitmark bus"/>
+<text x="1990" y="115" class="label _hc bitmark-label">16</text>
+<path d="M 2165 130 H 1815" class="wire bus"/>
+<line x1="1986.5" y1="133.5" x2="1993.5" y2="126.5" class="wire bitmark bus"/>
+<text x="1990" y="135" class="label _hc bitmark-label">16</text>
+<path d="M 2165 210 H 2125" class="wire bus"/>
+<line x1="2141.5" y1="213.5" x2="2148.5" y2="206.5" class="wire bitmark bus"/>
+<text x="2145" y="215" class="label _hc bitmark-label">32</text>
+<path d="M 2100 210 H 2060" class="wire bus"/>
+<line x1="2076.5" y1="213.5" x2="2083.5" y2="206.5" class="wire bitmark bus"/>
+<text x="2080" y="215" class="label _hc bitmark-label">32</text>
+<path d="M 2100 65 H 2060" class="wire"/>
+<path d="M 2035 65 H 1815" class="wire"/>
+<path d="M 2020 190 H 1980" class="wire bus"/>
+<line x1="1996.5" y1="193.5" x2="2003.5" y2="186.5" class="wire bitmark bus"/>
+<text x="2000" y="195" class="label _hc bitmark-label">32</text>
+<path d="M 2020 210 H 1980 V 210 H 1940" class="wire bus"/>
+<line x1="1996.5" y1="213.5" x2="2003.5" y2="206.5" class="wire bitmark bus"/>
+<text x="2000" y="215" class="label _hc bitmark-label">32</text>
+<path d="M 2020 230 H 1980" class="wire bus"/>
+<line x1="1996.5" y1="233.5" x2="2003.5" y2="226.5" class="wire bitmark bus"/>
+<text x="2000" y="235" class="label _hc bitmark-label">32</text>
+<path d="M 1915 210 H 1890 V 210 H 1815" class="wire bus"/>
+<line x1="1849" y1="213.5" x2="1856" y2="206.5" class="wire bitmark bus"/>
+<text x="1852.5" y="215" class="label _hc bitmark-label">16</text>
+<path d="M 1955 190 H 1890 V 210" class="wire bus"/>
+<circle cx="1890" cy="210" r="4" class="wire junction bus"/>
+<path d="M 1955 230 H 1890 V 210" class="wire bus"/>
+<circle cx="1890" cy="210" r="4" class="wire junction bus"/>
+<path d="M 2245 110 H 2460" class="wire bus"/>
+<line x1="2349" y1="113.5" x2="2356" y2="106.5" class="wire bitmark bus"/>
+<text x="2352.5" y="115" class="label _hc bitmark-label">16</text>
+<path d="M 2245 130 H 2460" class="wire bus"/>
+<line x1="2349" y1="133.5" x2="2356" y2="126.5" class="wire bitmark bus"/>
+<text x="2352.5" y="135" class="label _hc bitmark-label">16</text>
+<path d="M 2190 325 H 2040" class="wire bus control"/>
+<circle cx="2040" cy="325" r="4" class="wire junction bus control"/>
+<path d="M 2335 265 H 2360" class="wire"/>
+<path d="M 2385 265 H 2460" class="wire"/>
+<path d="M 2295 175 H 2245" class="wire bus"/>
+<line x1="2266.5" y1="178.5" x2="2273.5" y2="171.5" class="wire bitmark bus"/>
+<text x="2270" y="180" class="label _hc bitmark-label">2</text>
+<path d="M 2295 195 H 2245" class="wire bus"/>
+<line x1="2266.5" y1="198.5" x2="2273.5" y2="191.5" class="wire bitmark bus"/>
+<text x="2270" y="200" class="label _hc bitmark-label">2</text>
+<path d="M 2335 185 H 2460" class="wire bus"/>
+<line x1="2394" y1="188.5" x2="2401" y2="181.5" class="wire bitmark bus"/>
+<text x="2397.5" y="190" class="label _hc bitmark-label">2</text>
+<path d="M 475 718 V 748 H 25" class="wire bus control"/>
+<line x1="246.5" y1="751.5" x2="253.5" y2="744.5" class="wire bitmark bus control"/>
+<text x="250" y="753" class="label _hc bitmark-label">2</text>
+<path d="M 475 858 V 888 H 25" class="wire bus control"/>
+<line x1="246.5" y1="891.5" x2="253.5" y2="884.5" class="wire bitmark bus control"/>
+<text x="250" y="893" class="label _hc bitmark-label">2</text>
+<path d="M 475 998 V 1028 H 25" class="wire bus control"/>
+<line x1="246.5" y1="1031.5" x2="253.5" y2="1024.5" class="wire bitmark bus control"/>
+<text x="250" y="1033" class="label _hc bitmark-label">2</text>
+<path d="M 395 397.5 V 468 H 455" class="wire bus"/>
+<line x1="391.5" y1="436.25" x2="398.5" y2="429.25" class="wire bitmark bus"/>
+<text x="401" y="434.25" class="label _ml bitmark-label">12</text>
+<path d="M 545 498 V 645 H 865" class="wire bus"/>
+<line x1="701.5" y1="648.5" x2="708.5" y2="641.5" class="wire bitmark bus"/>
+<text x="705" y="650" class="label _hc bitmark-label">12</text>
+<circle cx="545" cy="498" r="4" class="wire junction bus"/>
+<path d="M 1595 80 V 25 H 915" class="wire bus control"/>
+<line x1="1251.5" y1="28.5" x2="1258.5" y2="21.5" class="wire bitmark bus control"/>
+<text x="1255" y="30" class="label _hc bitmark-label">3</text>
+<path d="M 1595 330 V 375 H 915" class="wire bus control"/>
+<line x1="1251.5" y1="378.5" x2="1258.5" y2="371.5" class="wire bitmark bus control"/>
+<text x="1255" y="380" class="label _hc bitmark-label">2</text>
+<path d="M 1595 455 V 400 H 915" class="wire bus control"/>
+<line x1="1251.5" y1="403.5" x2="1258.5" y2="396.5" class="wire bitmark bus control"/>
+<text x="1255" y="405" class="label _hc bitmark-label">3</text>
+<path d="M 1335 715 V 750 H 915" class="wire bus control"/>
+<path d="M 1335 830 V 780 H 915" class="wire control"/>
+<path d="M 2205 90 V 65 H 2125" class="wire"/>
+<path d="M 2047.5 52.5 V 27.5 H 1815" class="wire control"/>
+<path d="M 2112.5 77.5 V 197.5" class="wire control"/>
+<path d="M 2040 250 V 325 H 1815" class="wire bus control"/>
+<line x1="1924" y1="328.5" x2="1931" y2="321.5" class="wire bitmark bus control"/>
+<text x="1927.5" y="330" class="label _hc bitmark-label">2</text>
+<path d="M 2195 230 V 275 H 2295" class="wire"/>
+<path d="M 2215 230 V 255 H 2295" class="wire"/>
+<path d="M 2315 290 V 325 H 2215" class="wire"/>
+<path d="M 2372.5 277.5 V 345 H 1815" class="wire control"/>
+<path d="M 2112.5 222.5 V 345" class="wire control"/>
+<circle cx="2112.5" cy="345" r="4" class="wire junction control"/>
+<path d="M 2315 210 V 240" class="wire"/>
+<rect x="-25" y="0" width="50" height="1058" class="box block pipeline"/>
+<rect x="865" y="0" width="50" height="998" class="box block pipeline"/>
+<rect x="175" y="100" width="120" height="240" class="box block "/>
+<text x="235" y="220" class="label _mc block box-label main">SEQ</text>
+<rect x="175" y="390" width="120" height="100" class="box block "/>
+<text x="235" y="440" class="label _mc block box-label main">C MASK</text>
+<rect x="175" y="530" width="120" height="100" class="box block "/>
+<text x="235" y="580" class="label _mc block box-label main">ID ROM</text>
+<rect x="382.5" y="372.5" width="25" height="25" class="box small "/>
+<text x="395" y="385" class="label _mc small box-label main">zx</text>
+<path d="M 455 448 V 548 L 495 528 V 468 Z" class="box mux "/>
+<path d="M 455 628 V 728 L 495 708 V 648 Z" class="box mux "/>
+<rect x="282.5" y="695.5" width="25" height="25" class="box small "/>
+<text x="295" y="708" class="label _mc small box-label main">^1</text>
+<path d="M 455 768 V 868 L 495 848 V 788 Z" class="box mux "/>
+<rect x="282.5" y="835.5" width="25" height="25" class="box small "/>
+<text x="295" y="848" class="label _mc small box-label main">^1</text>
+<path d="M 455 908 V 1008 L 495 988 V 928 Z" class="box mux "/>
+<rect x="282.5" y="975.5" width="25" height="25" class="box small "/>
+<text x="295" y="988" class="label _mc small box-label main">^1</text>
+<rect x="595" y="0" width="120" height="620" class="box block "/>
+<text x="655" y="310" class="label _mc block box-label main">&#181;C ROM</text>
+<rect x="1765" y="0" width="50" height="835" class="box block pipeline"/>
+<rect x="1115" y="50" width="100" height="80" class="box block "/>
+<text x="1165" y="90" class="label _mc block box-label main">JR</text>
+<rect x="1115" y="425" width="100" height="80" class="box block "/>
+<text x="1165" y="465" class="label _mc block box-label main">KR</text>
+<rect x="1115" y="160" width="100" height="80" class="box block "/>
+<text x="1165" y="200" class="label _mc block box-label main">SR1</text>
+<rect x="1115" y="270" width="100" height="80" class="box block "/>
+<text x="1165" y="310" class="label _mc block box-label main">SR2</text>
+<rect x="1115" y="805" width="100" height="80" class="box block "/>
+<text x="1165" y="845" class="label _mc block box-label main">SR1B</text>
+<rect x="1115" y="910" width="100" height="80" class="box block "/>
+<text x="1165" y="950" class="label _mc block box-label main">SR2B</text>
+<path d="M 1575 70 V 210 L 1615 190 V 90 Z" class="box mux "/>
+<path d="M 1575 240 V 340 L 1615 320 V 260 Z" class="box mux "/>
+<path d="M 1575 445 V 625 L 1615 605 V 465 Z" class="box mux "/>
+<rect x="1462.5" y="177.5" width="25" height="25" class="box small "/>
+<text x="1475" y="190" class="label _mc small box-label main">sx</text>
+<rect x="1462.5" y="512.5" width="25" height="25" class="box small "/>
+<text x="1475" y="525" class="label _mc small box-label main">zx</text>
+<rect x="1500" y="532.5" width="25" height="25" class="box small "/>
+<text x="1512.5" y="545" class="label _mc small box-label main">zx</text>
+<rect x="1462.5" y="552.5" width="25" height="25" class="box small "/>
+<text x="1475" y="565" class="label _mc small box-label main">1&lt;&lt;</text>
+<rect x="1102.5" y="572.5" width="25" height="25" class="box small "/>
+<text x="1115" y="585" class="label _mc small box-label main">zx</text>
+<rect x="1152.5" y="592.5" width="25" height="25" class="box small "/>
+<text x="1165" y="605" class="label _mc small box-label main">1x</text>
+<rect x="1102.5" y="632.5" width="25" height="25" class="box small "/>
+<text x="1115" y="645" class="label _mc small box-label main">zx</text>
+<rect x="1152.5" y="652.5" width="25" height="25" class="box small "/>
+<text x="1165" y="665" class="label _mc small box-label main">1x</text>
+<path d="M 1315 625 V 725 L 1355 705 V 645 Z" class="box mux "/>
+<path d="M 1315 820 V 890 L 1355 870 V 840 Z" class="box mux "/>
+<rect x="1455" y="695" width="80" height="140" class="box block "/>
+<text x="1495" y="765" class="label _mc block box-label main">+</text>
+<rect x="2460" y="0" width="50" height="277.5" class="box block pipeline"/>
+<rect x="2165" y="90" width="80" height="140" class="box block "/>
+<text x="2205" y="160" class="label _mc block box-label main">+</text>
+<rect x="2100" y="197.5" width="25" height="25" class="box small "/>
+<text x="2112.5" y="210" class="label _mc small box-label main">^</text>
+<path d="M 2020 160 V 260 L 2060 240 V 180 Z" class="box mux "/>
+<rect x="1955" y="177.5" width="25" height="25" class="box small "/>
+<text x="1967.5" y="190" class="label _mc small box-label main">zx</text>
+<rect x="1915" y="197.5" width="25" height="25" class="box small "/>
+<text x="1927.5" y="210" class="label _mc small box-label main">sx</text>
+<rect x="1955" y="217.5" width="25" height="25" class="box small "/>
+<text x="1967.5" y="230" class="label _mc small box-label main">1x</text>
+<rect x="2035" y="52.5" width="25" height="25" class="box small "/>
+<text x="2047.5" y="65" class="label _mc small box-label main">&amp;</text>
+<rect x="2100" y="52.5" width="25" height="25" class="box small "/>
+<text x="2112.5" y="65" class="label _mc small box-label main">^</text>
+<path d="M 2295 230 V 300 L 2335 280 V 250 Z" class="box mux "/>
+<rect x="2190" y="312.5" width="25" height="25" class="box small "/>
+<text x="2202.5" y="325" class="label _mc small box-label main">=0</text>
+<rect x="2360" y="252.5" width="25" height="25" class="box small "/>
+<text x="2372.5" y="265" class="label _mc small box-label main">^</text>
+<path d="M 2295 150 V 220 L 2335 200 V 170 Z" class="box mux "/>
+<rect x="1915" y="445" width="50" height="120" class="box block "/>
+<text x="1940" y="505" class="label _mc block box-label main">rev</text>
+<rect x="1915" y="565" width="50" height="120" class="box block "/>
+<text x="1940" y="625" class="label _mc block box-label main">rev</text>
+<rect x="2005" y="445" width="50" height="240" class="box block "/>
+<text x="2030" y="565" class="label _mc block box-label main">&#10536;</text>
+<rect x="2095" y="445" width="50" height="120" class="box block "/>
+<text x="2120" y="505" class="label _mc block box-label main">&amp;</text>
+<rect x="2185" y="445" width="50" height="240" class="box block "/>
+<text x="2210" y="565" class="label _mc block box-label main">>></text>
+<rect x="2275" y="445" width="50" height="240" class="box block "/>
+<text x="2300" y="565" class="label _mc block box-label main">&#10536;</text>
+<rect x="2365" y="445" width="50" height="120" class="box block "/>
+<text x="2390" y="505" class="label _mc block box-label main">rev</text>
+<rect x="2365" y="565" width="50" height="120" class="box block "/>
+<text x="2390" y="625" class="label _mc block box-label main">rev</text>
+<text x="4" y="-208" class="label _hr sep-label" transform-origin="4 -208" transform="rotate(-90)">Decode</text>
+<text x="886" y="-208" class="label _nr sep-label" transform-origin="886 -208" transform="rotate(-90)">Decode</text>
+<text x="894" y="-208" class="label _hr sep-label" transform-origin="894 -208" transform="rotate(-90)">Setup</text>
+<text x="1786" y="-208" class="label _nr sep-label" transform-origin="1786 -208" transform="rotate(-90)">Setup</text>
+<text x="1794" y="-208" class="label _hr sep-label" transform-origin="1794 -208" transform="rotate(-90)">Compute</text>
+<text x="2481" y="-208" class="label _nr sep-label" transform-origin="2481 -208" transform="rotate(-90)">Compute</text>
+<text x="2489" y="-208" class="label _hr sep-label" transform-origin="2489 -208" transform="rotate(-90)">Transact</text>
+<text x="2581" y="-208" class="label _nr sep-label" transform-origin="2581 -208" transform="rotate(-90)">Transact</text>
+<text x="33" y="664" class="label _nl control wire-label bus">C[3:0]</text>
+<text x="33" y="684" class="label _nl wire-label bus">IJ</text>
+<text x="33" y="744" class="label _nl control wire-label bus">IJ_SEL</text>
+<text x="857" y="674" class="label _nr wire-label bus">IJ</text>
+<text x="33" y="804" class="label _nl control wire-label bus">C[7:4]</text>
+<text x="33" y="824" class="label _nl wire-label bus">IK</text>
+<text x="33" y="884" class="label _nl control wire-label bus">IK_SEL</text>
+<text x="857" y="814" class="label _nr wire-label bus">IK</text>
+<text x="33" y="944" class="label _nl control wire-label bus">C[11:8]</text>
+<text x="33" y="964" class="label _nl wire-label bus">IW</text>
+<text x="33" y="1024" class="label _nl control wire-label bus">IW_SEL</text>
+<text x="857" y="954" class="label _nr wire-label bus">IW</text>
+<text x="33" y="116" class="label _nl wire-label bus">EXEC_MODE</text>
+<text x="303" y="116" class="label _nl wire-label bus">EXEC_MODE</text>
+<text x="857" y="116" class="label _nr wire-label bus">EXEC_MODE</text>
+<text x="33" y="136" class="label _nl control wire-label bus">SEQ_OP</text>
+<text x="33" y="157" class="label _nl control wire-label">ALLOW_INT</text>
+<text x="33" y="177" class="label _nl wire-label">RESET</text>
+<text x="33" y="197" class="label _nl wire-label">WANT_ATOMIC</text>
+<text x="33" y="217" class="label _nl wire-label">STALL_ATOMIC</text>
+<text x="33" y="237" class="label _nl wire-label">PAGE_FAULT</text>
+<text x="33" y="257" class="label _nl wire-label">PAGE_ALIGN_FAULT</text>
+<text x="33" y="277" class="label _nl wire-label">ACCESS_FAULT</text>
+<text x="33" y="297" class="label _nl wire-label">INSN_FAULT</text>
+<text x="33" y="317" class="label _nl wire-label">INT_PEND</text>
+<text x="303" y="216" class="label _nl wire-label bus">&#181;CA_SEL</text>
+<text x="303" y="316" class="label _nl wire-label bus">&#181;CA_LIT</text>
+<text x="33" y="566" class="label _nl wire-label bus">ID</text>
+<text x="33" y="587" class="label _nl control wire-label">ID_MODE</text>
+<text x="303" y="546" class="label _nl wire-label bus">OPCODE</text>
+<text x="303" y="566" class="label _nl wire-label bus">IIJ</text>
+<text x="303" y="586" class="label _nl wire-label bus">IIK</text>
+<text x="303" y="606" class="label _nl wire-label bus">IIW</text>
+<text x="33" y="406" class="label _nl control wire-label bus">C</text>
+<text x="33" y="426" class="label _nl control wire-label bus">IJ_SEL</text>
+<text x="33" y="446" class="label _nl control wire-label bus">IK_SEL</text>
+<text x="33" y="466" class="label _nl control wire-label bus">IW_SEL</text>
+<text x="303" y="436" class="label _nl wire-label bus">C</text>
+<text x="33" y="504" class="label _nl wire-label bus">&#181;CA</text>
+<text x="33" y="46" class="label _nl wire-label bus">KVCNZ</text>
+<text x="857" y="641" class="label _nr wire-label bus">&#181;CA</text>
+<text x="857" y="16" class="label _nr control wire-label bus">LITERAL</text>
+<text x="857" y="36" class="label _nr control wire-label bus">C</text>
+<text x="857" y="57" class="label _nr control wire-label">ID_MODE</text>
+<text x="857" y="76" class="label _nr control wire-label bus">IJ_SEL</text>
+<text x="857" y="96" class="label _nr control wire-label bus">IK_SEL</text>
+<text x="857" y="116" class="label _nr control wire-label bus">IW_SEL</text>
+<text x="857" y="137" class="label _nr control wire-label">JKR_WMODE</text>
+<text x="857" y="156" class="label _nr control wire-label bus">JL_SRC</text>
+<text x="857" y="176" class="label _nr control wire-label bus">JH_SRC</text>
+<text x="857" y="196" class="label _nr control wire-label bus">K_SRC</text>
+<text x="857" y="216" class="label _nr control wire-label bus">SR1_RI</text>
+<text x="857" y="236" class="label _nr control wire-label bus">SR2_RI</text>
+<text x="857" y="256" class="label _nr control wire-label bus">SR1_WI</text>
+<text x="857" y="276" class="label _nr control wire-label bus">SR2_WI</text>
+<text x="857" y="296" class="label _nr control wire-label bus">SR1_WSRC</text>
+<text x="857" y="316" class="label _nr control wire-label bus">SR2_WSRC</text>
+<text x="857" y="336" class="label _nr control wire-label bus">BASE</text>
+<text x="857" y="356" class="label _nr control wire-label bus">OFFSET</text>
+<text x="857" y="376" class="label _nr control wire-label bus">MODE</text>
+<text x="857" y="396" class="label _nr control wire-label bus">BUS_MODE</text>
+<text x="857" y="417" class="label _nr control wire-label">BUS_BYTE</text>
+<text x="857" y="437" class="label _nr control wire-label">BUS_RW</text>
+<text x="857" y="456" class="label _nr control wire-label bus">AT_OP</text>
+<text x="857" y="476" class="label _nr control wire-label bus">SPECIAL</text>
+<text x="857" y="496" class="label _nr control wire-label bus">LL_SRC</text>
+<text x="857" y="516" class="label _nr control wire-label bus">LH_SRC</text>
+<text x="857" y="536" class="label _nr control wire-label bus">STAT_OP</text>
+<text x="857" y="556" class="label _nr control wire-label bus">IDR_OP</text>
+<text x="857" y="576" class="label _nr control wire-label bus">SEQ_OP</text>
+<text x="857" y="597" class="label _nr control wire-label">ALLOW_INT</text>
+<text x="923" y="21" class="label _nl control wire-label bus">JH_SRC</text>
+<text x="923" y="371" class="label _nl control wire-label bus">JL_SRC</text>
+<text x="923" y="396" class="label _nl control wire-label bus">K_SRC</text>
+<text x="923" y="76" class="label _nl wire-label bus">RSN</text>
+<text x="923" y="96" class="label _nl wire-label bus">IJ</text>
+<text x="1107" y="936" class="label _nr wire-label bus">RSN</text>
+<text x="1107" y="451" class="label _nr wire-label bus">RSN</text>
+<text x="923" y="471" class="label _nl wire-label bus">IK</text>
+<text x="1387" y="526" class="label _nr wire-label bus">IJ</text>
+<text x="1407" y="561" class="label _nr wire-label bus">IK</text>
+<text x="923" y="581" class="label _nl control wire-label bus">LITERAL</text>
+<text x="1107" y="186" class="label _nr wire-label bus">RSN</text>
+<text x="923" y="206" class="label _nl control wire-label bus">SR1_RI</text>
+<text x="1107" y="296" class="label _nr wire-label bus">RSN</text>
+<text x="923" y="316" class="label _nl control wire-label bus">SR2_RI</text>
+<text x="1107" y="831" class="label _nr wire-label bus">RSN</text>
+<text x="923" y="851" class="label _nl control wire-label bus">BASE[2:0]</text>
+<text x="1520" y="90" class="label _mr wire-label bus">0x0000</text>
+<text x="1520" y="110" class="label _mr wire-label bus">0xFFFF</text>
+<text x="1223" y="76" class="label _nl wire-label bus">JR[31:16]</text>
+<text x="1223" y="186" class="label _nl wire-label bus">SR1[31:16]</text>
+<text x="1223" y="296" class="label _nl wire-label bus">SR1[31:16]</text>
+<text x="1454.5" y="187" class="label _nr wire-label">JR[15]</text>
+<text x="1520" y="260" class="label _mr wire-label bus">0x0000</text>
+<text x="1223" y="96" class="label _nl wire-label bus">JR[15:0]</text>
+<text x="1223" y="206" class="label _nl wire-label bus">SR1[15:0]</text>
+<text x="1223" y="316" class="label _nl wire-label bus">SR2[15:0]</text>
+<text x="1223" y="461" class="label _nl wire-label bus">KR</text>
+<text x="1260" y="685" class="label _mr wire-label bus">0x00000000</text>
+<text x="1260" y="705" class="label _mr wire-label bus">0x00000002</text>
+<text x="923" y="746" class="label _nl control wire-label bus">OFFSET</text>
+<text x="923" y="777" class="label _nl control wire-label">BASE[3]</text>
+<text x="1757" y="136" class="label _nr wire-label bus">JH</text>
+<text x="1757" y="286" class="label _nr wire-label bus">JL</text>
+<text x="1757" y="531" class="label _nr wire-label bus">K</text>
+<text x="1757" y="723.5" class="label _nr wire-label bus">P</text>
+<text x="1757" y="798.5" class="label _nr wire-label bus">N</text>
+<text x="2205" y="94" class="label _mr block box-label interface top" transform-origin="2205 94" transform="rotate(-90)">C0</text>
+<text x="1823" y="106" class="label _nl wire-label bus">JH</text>
+<text x="1823" y="126" class="label _nl wire-label bus">JL</text>
+<text x="1823" y="62" class="label _nl wire-label">STAT_C</text>
+<text x="1823" y="24.5" class="label _nl control wire-label">MODE[1]</text>
+<text x="1823" y="321" class="label _nl control wire-label bus">MODE[3:2]</text>
+<text x="1823" y="206" class="label _nl wire-label bus">K</text>
+<text x="2452" y="106" class="label _nr wire-label bus">ARITH_H</text>
+<text x="2452" y="126" class="label _nr wire-label bus">ARITH_L</text>
+<text x="2195" y="226" class="label _ml block box-label interface bottom" transform-origin="2195 226" transform="rotate(-90)">C16</text>
+<text x="2215" y="226" class="label _ml block box-label interface bottom" transform-origin="2215 226" transform="rotate(-90)">C32</text>
+<text x="2452" y="262" class="label _nr wire-label">ARITH_C</text>
+<text x="1823" y="342" class="label _nl control wire-label">MODE[0]</text>
+<text x="2241" y="175" class="label _mr block box-label interface right">ZNV32</text>
+<text x="2241" y="195" class="label _mr block box-label interface right">ZNV16</text>
+<text x="2452" y="181" class="label _nr wire-label bus">ARITH_ZNV</text>
+</svg>

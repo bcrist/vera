@@ -23,7 +23,6 @@ const block_transfer_to_ram = cb.block_transfer_to_ram;
 const reg_to_JL = cb.reg_to_JL;
 const reg32_to_J = cb.reg32_to_J;
 const literal_to_K = cb.literal_to_K;
-const OB_OA_to_K = cb.OB_OA_to_K;
 const reg_to_K = cb.reg_to_K;
 const JH_to_LH = cb.JH_to_LH;
 const pipe_id_to_L = cb.pipe_id_to_L;

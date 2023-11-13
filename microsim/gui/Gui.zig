@@ -1,15 +1,3 @@
-const std = @import("std");
-const zgui = @import("zgui");
-const zglfw = @import("zglfw");
-const zgpu = @import("zgpu");
-const wgpu = zgpu.wgpu;
-const misc = @import("misc");
-const uc = @import("microcode");
-const ControlSignals = @import("ControlSignals");
-const Simulator = @import("Simulator");
-const colors = @import("colors.zig");
-const pipes = @import("pipes.zig");
-
 
 // pub fn printState(self: *Simulator, writer: anytype, pipe: misc.PipeID) !void {
 //     if (self.exec_state.reset) try writer.writeAll(" RESET");
@@ -27,21 +15,19 @@ const pipes = @import("pipes.zig");
 //     try reg.stat.print(writer);
 // }
 
-const Gui = @This();
-
-pub const WindowSettings = struct {
+pub const Window_Settings = struct {
     pos: [2]i32,
     size: [2]i32,
     maximized: bool,
 };
 
-sim: *Simulator,
+simulator: *sim.Simulator,
 window: *zglfw.Window,
 gctx: *zgpu.GraphicsContext,
 base_style: zgui.Style,
 run: bool = false,
 
-pub fn init(allocator: std.mem.Allocator, sim: *Simulator, window_settings: ?WindowSettings, frame_settings: []zgui.WindowSettings) !Gui {
+pub fn init(allocator: std.mem.Allocator, simulator: *sim.Simulator, window_settings: ?Window_Settings, frame_settings: []zgui.WindowSettings) !Gui {
     try zglfw.init();
 
     const window = try zglfw.Window.create(1600, 1000, "Microsim", null);
@@ -53,12 +39,12 @@ pub fn init(allocator: std.mem.Allocator, sim: *Simulator, window_settings: ?Win
         window.setAttribute(.maximized, settings.maximized);
     }
 
-    const gctx = try zgpu.GraphicsContext.create(allocator, window);
+    const gctx = try zgpu.GraphicsContext.create(allocator, window, .{});
 
     zgui.init(allocator);
     zgui.plot.init();
 
-    const scale_factor = computeScaleFactor(window);
+    const scale_factor = compute_scale_factor(window);
 
     const embedded_font_data = @embedFile("iosevka-custom-regular.ttf");
 
@@ -71,7 +57,7 @@ pub fn init(allocator: std.mem.Allocator, sim: *Simulator, window_settings: ?Win
     zgui.backend.initWithConfig(
         window,
         gctx.device,
-        @enumToInt(zgpu.GraphicsContext.swapchain_format),
+        @intFromEnum(zgpu.GraphicsContext.swapchain_format),
         .{ .texture_filter_mode = .linear, .pipeline_multisample_count = 1 },
     );
 
@@ -83,7 +69,7 @@ pub fn init(allocator: std.mem.Allocator, sim: *Simulator, window_settings: ?Win
     current_style.scaleAllSizes(scale_factor);
 
     return Gui{
-        .sim = sim,
+        .simulator = simulator,
         .window = window,
         .gctx = gctx,
         .base_style = base_style,
@@ -99,13 +85,13 @@ pub fn deinit(self: *Gui, allocator: std.mem.Allocator) void {
     zglfw.terminate();
 }
 
-pub const UpdateResult = enum {
+pub const Update_Result = enum {
     pause,
     run,
     exit,
 };
 
-pub fn update(self: *Gui) !UpdateResult {
+pub fn update(self: *Gui) !Update_Result {
     zglfw.pollEvents();
     
     zgui.backend.newFrame(
@@ -115,11 +101,11 @@ pub fn update(self: *Gui) !UpdateResult {
 
     if (zgui.begin("Clock Control", .{})) {
         if (zgui.button("Microstep", .{})) {
-            self.sim.microcycle(1);
+            self.simulator.simulate_microcycles(1);
         }
         zgui.sameLine(.{});
         if (zgui.button("Step", .{})) {
-            self.sim.cycle(1);
+            self.simulator.simulate_cycles(1);
         }
         zgui.sameLine(.{});
         if (zgui.button("Run", .{})) {
@@ -130,11 +116,11 @@ pub fn update(self: *Gui) !UpdateResult {
             self.run = false;
         }
         zgui.sameLine(.{});
-        _ = zgui.checkbox("Reset", .{ .v = &self.sim.exec_state.reset });
+        _ = zgui.checkbox("Reset", .{ .v = &self.simulator.reset });
 
         zgui.sameLine(.{});
         if (zgui.button("Reset & Init", .{})) {
-            self.sim.resetAndInit();
+            self.simulator.simulate_reset_and_init();
         }
     }
     zgui.end();
@@ -143,8 +129,8 @@ pub fn update(self: *Gui) !UpdateResult {
     //zgui.setNextWindowPos(.{ .x = 20.0, .y = 20.0, .cond = .first_use_ever });
     //zgui.setNextWindowSize(.{ .w = -1.0, .h = -1.0, .cond = .first_use_ever });
 
-    for (std.enums.values(misc.PipeID)) |pipe| {
-        pipes.doPipeWindow(pipe, self.sim);
+    for (std.enums.values(hw.Pipeline)) |pipe| {
+        Pipeline_State.init(self.simulator, pipe).doWindow();
     }
 
     self.draw();
@@ -178,7 +164,7 @@ fn draw(self: *Gui) void {
     _ = gctx.present();
 }
 
-pub fn setSimulationRate(self: *Gui, sim_freq: ?f64, target_sim_freq: f64) void {
+pub fn set_simulation_rate(self: *Gui, sim_freq: ?f64, target_sim_freq: f64) void {
     if (sim_freq) |freq_hz| {
         const freq_mhz = freq_hz / 1_000_000;
         const percent = 100 * freq_hz / target_sim_freq;
@@ -194,7 +180,20 @@ pub fn setSimulationRate(self: *Gui, sim_freq: ?f64, target_sim_freq: f64) void 
     }
 }
 
-fn computeScaleFactor(window: *zglfw.Window) f32 {
+fn compute_scale_factor(window: *zglfw.Window) f32 {
     const scale = window.getContentScale();
-    return std.math.max(scale[0], scale[1]);
+    return @max(scale[0], scale[1]);
 }
+
+
+const Gui = @This();
+const Pipeline_State = @import("Pipeline_State.zig");
+const sim = @import("lib_microsim");
+const hw = arch.hw;
+const arch = @import("arch");
+const colors = @import("colors.zig");
+const zgui = @import("zgui");
+const zglfw = @import("zglfw");
+const zgpu = @import("zgpu");
+const wgpu = zgpu.wgpu;
+const std = @import("std");

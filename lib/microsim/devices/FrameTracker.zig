@@ -3,6 +3,13 @@ const bus = @import("bus_types");
 const physical_address = @import("physical_address");
 const SystemBusControl = @import("Simulator").SystemBusControl;
 
+// TODO sleep flag set/cleared by writing to a register in the system device space
+
+        sys_interrupt_controller = Physical.device_sys.frame.raw(),
+        sys_block_transfer_config = Physical.device_sys.frame.raw() + 1,
+        sys_accessed_frames = Physical.device_sys.frame.raw() + 2,
+        sys_dirty_frames = Physical.device_sys.frame.raw() + 3,
+
 const base_frame = physical_address.DeviceFrame.sys_interrupt_controller;
 const ram_end_frame = physical_address.toFrame(physical_address.ram_end);
 const num_ram_frame_chunks = (ram_end_frame / 8) + 1;
@@ -12,15 +19,6 @@ const FrameTracker = @This();
 accessed_frames: [num_ram_frame_chunks]u8 = [_]u8{0} ** num_ram_frame_chunks,
 dirty_frames: [num_ram_frame_chunks]u8 = [_]u8{0} ** num_ram_frame_chunks,
 
-pub fn reset(self: *FrameTracker) void {
-    self.accessed_frames = .{0} ** num_ram_frame_chunks;
-    self.dirty_frames = .{0} ** num_ram_frame_chunks;
-}
-
-pub fn randomize(self: *FrameTracker, rnd: std.rand.Random) void {
-    rnd.bytes(std.mem.sliceAsBytes(self.accessed_frames[0..]));
-    rnd.bytes(std.mem.sliceAsBytes(self.dirty_frames[0..]));
-}
 
 pub fn read(self: *const FrameTracker, bus_ctrl: SystemBusControl) ?bus.D {
     if (!bus_ctrl.read) return null;

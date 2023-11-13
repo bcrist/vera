@@ -52,6 +52,63 @@ const op_reg_mult_op_reg_to_LL = cb.op_reg_mult_op_reg_to_LL;
 const bitcount_op_reg_to_LL = cb.bitcount_op_reg_to_LL;
 const L_to_reg32 = cb.L_to_reg32;
 
+
+const CF = ?*const fn() CF;
+
+
+pub const instructions = .{
+    struct {
+        // TODO I'm not totally happy with this system for encoding/syntax yet...
+        pub const encoding = "8:? 4:j 4:w   8:i";
+        pub const syntax = "ADD Xj, Si -> Xw"; // can make this a tuple/array to implement aliases
+        pub const desc = "Add signed 8b immediate to 32b register";
+        pub const entry = read_immediate;
+
+        fn read_immediate() CF {
+            IP_read_to_D(2, .byte);
+            D_to_L(.sx);
+            L_to_SR(.temp_1);
+            return add;
+        }
+
+        fn add() CF {
+            op_reg32_plus_SRL_to_L(.OA, .temp_1, .sx, .fresh, .flags);
+            L_to_op_reg32(.OB);
+            return load_and_exec_next_insn(3);
+        }
+
+    },
+    struct {
+        pub const spec =
+        \\ NEG Xsrc -> Xdest
+        \\ SUB 0, Xsrc -> Xdest
+        \\ SUB R0, Xsrc -> Xdest
+        \\
+        \\ src:  K0 xxx0
+        \\ dest: W0 xxx0
+        ;
+    },
+    struct {
+        pub const spec =
+        \\ NEG Xsd
+        \\ NEG Xsrc -> Xdest
+        \\ SUB 0, Xsrc -> Xdest
+        \\ SUB R0, Xsrc -> Xdest
+        \\
+        \\      sd: K0, W0
+        \\      src: K0
+        \\      dest: W0
+        \\      K0: xxx0
+        \\      W0: xxx0
+        \\
+        \\      reg32[W0] = 
+        ;
+    },
+
+};
+
+
+
 pub fn _7000_70FF() void {
     encoding(.ADD, .{ .Xa, .imm8s, .to, .Xb });
     desc("Add signed 8b immediate to 32b regiser");

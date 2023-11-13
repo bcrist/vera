@@ -1,6 +1,7 @@
 .{
     .name = "vera",
     .version = "0.0.0",
+    .paths = .{""},
     .dependencies = .{
         .@"Zig-TempAllocator" = .{
             .url = "https://github.com/bcrist/Zig-TempAllocator/archive/c9f955915ada19fc168cb5de1d5be8eff773639e.tar.gz",
@@ -33,6 +34,14 @@
         .@"Zig-ROM-Compress" = .{
             .url = "https://github.com/bcrist/Zig-ROM-Compress/archive/16fdcf0b35954e0f361eed1f0fbf43b5c6246abb.tar.gz",
             .hash = "122014961c9420c29a72eb1cb211fe17144b70754a6b67436b823d6296cd54bce40f",
+        },
+        .zbox = .{
+            .url = "https://github.com/bcrist/zbox/archive/417478b837444f2d17ecfa0da59642f505a5cb5d.tar.gz",
+            .hash = "1220f767269b06779da0b600938ddc313a77e268ac6ac2eb384b4ac87ff874d48723",
+        },
+        .dawn_x86_64_windows_gnu = .{
+            .url = "https://github.com/michal-z/webgpu_dawn-x86_64-windows-gnu/archive/d3a68014e6b6b53fd330a0ccba99e4dcfffddae5.tar.gz",
+            .hash = "1220f9448cde02ef3cd51bde2e0850d4489daa0541571d748154e89c6eb46c76a267",
         },
     },
 }

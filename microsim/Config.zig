@@ -1,11 +1,3 @@
-const std = @import("std");
-const sx = @import("sx");
-const Gui = @import("gui/Gui.zig");
-const zglfw = @import("zglfw");
-const zgui = @import("zgui");
-
-const Config = @This();
-
 const config_filename = "microsim-config.sx";
 
 const expr_root = "microsim-config";
@@ -18,7 +10,7 @@ const expr_size = "size";
 const expr_maximized = "maximized";
 const expr_collapsed = "collapsed";
 
-window: ?Gui.WindowSettings,
+window: ?Gui.Window_Settings,
 frames: []zgui.WindowSettings,
 
 pub fn init(alloc: std.mem.Allocator, gui: *const Gui) !Config {
@@ -65,7 +57,7 @@ pub fn load(alloc: std.mem.Allocator, temp: std.mem.Allocator) !Config {
 }
 
 fn parse(alloc: std.mem.Allocator, temp: std.mem.Allocator, reader: *sx.Reader(std.fs.File.Reader)) !Config {
-    var window_settings: ?Gui.WindowSettings = null;
+    var window_settings: ?Gui.Window_Settings = null;
     var frames = std.ArrayList(zgui.WindowSettings).init(temp);
     defer frames.deinit();
 
@@ -73,7 +65,7 @@ fn parse(alloc: std.mem.Allocator, temp: std.mem.Allocator, reader: *sx.Reader(s
 
     while (true) {
         if (try reader.expression(expr_window)) {
-            var settings = Gui.WindowSettings{
+            var settings = Gui.Window_Settings{
                 .pos = .{ 100, 100 },
                 .size = .{ 600, 400 },
                 .maximized = false,
@@ -185,3 +177,10 @@ pub fn save(self: Config, temp: std.mem.Allocator) !void {
 
     try writer.done(); // expr_root
 }
+
+const Config = @This();
+const Gui = @import("gui/Gui.zig");
+const zglfw = @import("zglfw");
+const zgui = @import("zgui");
+const sx = @import("sx");
+const std = @import("std");
