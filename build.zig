@@ -32,17 +32,22 @@ pub fn build(b: *std.Build) void {
         .source_file = .{ .path = "lib/arch.zig" },
         .dependencies = &.{
             .{ .name = "bits", .module = ext.bits },
+            .{ .name = "deep_hash_map", .module = ext.deep_hash_map },
+            .{ .name = "sx", .module = ext.sx },
         },
     });
 
-    // const lib_assembler = makeModule("assembler", .{
-    //     .source_file = .{ .path = "lib/assembler.zig" },
-    //     .dependencies = &.{
-    //         .{ .name = "bits", .module = ext.bits },
-    //         .{ .name = "lib_arch", .module = lib_arch },
-    //     },
-    // });
-    // _ = lib_assembler;
+    const lib_assembler = makeModule("assembler", .{
+        .source_file = .{ .path = "lib/assembler.zig" },
+        .dependencies = &.{
+            .{ .name = "lib_arch", .module = lib_arch },
+            .{ .name = "console", .module = ext.console },
+            .{ .name = "bits", .module = ext.bits },
+            .{ .name = "sx", .module = ext.sx },
+            .{ .name = "ihex", .module = ext.ihex },
+            .{ .name = "srec", .module = ext.srec },
+        },
+    });
 
     const lib_microsim = makeModule("lib_microsim", .{
         .source_file = .{ .path = "lib/microsim.zig" },
@@ -59,12 +64,14 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    // _ = makeExe(b, test_step, "assemble", .{
-    //     .source_file = .{ .path = "assemble.zig" },
-    //     .dependencies = &.{
-    //         .{ .name = "assembler", .module = lib_assembler },
-    //     },
-    // });
+    _ = makeExe("assemble", .{
+        .source_file = .{ .path = "assemble.zig" },
+        .dependencies = &.{
+            .{ .name = "lib_assembler", .module = lib_assembler },
+            .{ .name = "lib_arch", .module = lib_arch },
+            .{ .name = "console", .module = ext.console },
+        },
+    });
 
     // _ = makeExe("compile_arch", .{
     //     .source_file = .{ .path = "compile_arch.zig" },

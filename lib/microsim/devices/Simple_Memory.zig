@@ -1,3 +1,6 @@
+// This device doesn't simulate the nuances of the real memory system (even/odd address calculation, byte swapping, etc.)
+// and it doesn't include block transfer logic at all, but it's especially useful for running CPU/instruction validation tests.
+
 allocator: std.mem.Allocator,
 frame_begin: hw.addr.Frame,
 frame_end: hw.addr.Frame,

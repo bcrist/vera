@@ -1,29 +1,22 @@
-const std = @import("std");
-const isa = @import("isa_types");
-const ie = @import("isa_encoding");
-const lex = @import("lex.zig");
-const Expression = @import("Expression.zig");
-const Constant = @import("Constant.zig");
-
 label: ?Expression.Handle,
 token: lex.Token.Handle,
 operation: Operation,
 params: ?Expression.Handle,
-flags: FlagSet = .{},
+flags: Flag_Set = .{},
 line_number: u32,
 address: u32 = 0,
 length: u32 = 0,
 
-pub const FlagSet = std.EnumSet(Flags);
+pub const Flag_Set = std.EnumSet(Flags);
 
-pub const OperationType = std.meta.Tag(Operation);
-pub const Operation = union(enum) {
+pub const Operation_Type = std.meta.Tag(Operation);
+pub const Operation = union (enum) {
     none, // label only
     nil, // same as none, but blocks wont backtrack over this
 
     // .insn are transformed to .bound_insn during the layout process:
     insn: MnemonicAndSuffix,
-    bound_insn: *const ie.InstructionEncoding,
+    bound_insn: *const isa.Instruction_Encoding,
 
     // Data directives:
     db, zb,
@@ -60,7 +53,7 @@ pub const Operation = union(enum) {
 
 pub const MnemonicAndSuffix = struct {
     mnemonic: isa.Mnemonic,
-    suffix: isa.MnemonicSuffix,
+    suffix: isa.Mnemonic_Suffix,
 };
 
 pub const Flags = enum {
@@ -88,9 +81,9 @@ pub const Iterator = struct {
     }
 };
 
-pub fn isOrgHeader(op: OperationType) bool {
+pub fn is_org_header(op: Operation_Type) bool {
     // When these operations appear before a .org directive, they are included in the fixed-org chunk that follows, not the previous chunk (if any)
-    // See SourceFile.collectChunks and SourceFile.backtrackOrgHeaders
+    // See Source_File.collect_chunks and Source_File.backtrack_org_headers
     return switch (op) {
         .section,
         .boot,
@@ -125,7 +118,7 @@ pub fn isOrgHeader(op: OperationType) bool {
     };
 }
 
-pub fn getTokenRange(insn_handle: Handle, insn_tokens: []const lex.Token.Handle, token_kinds: []const lex.TokenKind) lex.Token.Range {
+pub fn token_range(insn_handle: Handle, insn_tokens: []const lex.Token.Handle, token_kinds: []const lex.Token_Kind) lex.Token.Range {
     var start_of_line = insn_tokens[insn_handle];
     var end_of_line = start_of_line;
 
@@ -142,3 +135,9 @@ pub fn getTokenRange(insn_handle: Handle, insn_tokens: []const lex.Token.Handle,
         .last = end_of_line - 1,
     };
 }
+
+const lex = @import("lex.zig");
+const Expression = @import("Expression.zig");
+const Constant = @import("Constant.zig");
+const isa = @import("lib_arch").isa;
+const std = @import("std");

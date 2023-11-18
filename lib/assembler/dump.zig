@@ -1,12 +1,6 @@
-const std = @import("std");
-const ie = @import("isa_encoding");
-const Assembler = @import("Assembler.zig");
-const Constant = @import("Constant.zig");
-const ExpressionType = ie.Parameter.ExpressionType;
-
-pub fn dump(self: *Assembler, writer: anytype) !void {
+pub fn dump(a: *Assembler, writer: anytype) !void {
     try writer.writeAll("Files:\n");
-    for (self.files.items) |file| {
+    for (a.files.items) |file| {
         const block_slice = file.blocks.slice();
         try writer.print("   {s}\n", .{ file.name });
         try writer.print("      Blocks:\n", .{});
@@ -89,7 +83,7 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
             try writer.print("         #{:0>5}:", .{ handle });
             try writer.print(" {s}", .{ @tagName(info) });
              switch (info) {
-                .list, .arrow_list,
+                .list,
                 .plus, .minus, .multiply, .shl, .shr, .concat, .concat_repeat,
                 .bitwise_or, .bitwise_xor, .bitwise_and, .length_cast,
                 .truncate, .sign_extend, .zero_extend,
@@ -97,7 +91,7 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
                     try writer.print(" #{}, #{}", .{ binary.left, binary.right });
                 },
 
-                .directive_symbol_def, .directive_symbol_ref, .arrow_prefix,
+                .directive_symbol_def, .directive_symbol_ref,
                 .signed_cast, .unsigned_cast, .remove_signedness_cast,
                 .negate, .complement, .absolute_address_cast, .local_label_def,
                 .data_address_cast, .insn_address_cast, .stack_address_cast, .remove_address_cast,
@@ -112,11 +106,11 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
 
             if (expr_type != .unknown) {
                 try writer.writeByte(' ');
-                try expr_type.print(writer);
+                try print_expression_type(expr_type, writer);
             }
             if (maybe_constant) |constant| {
                 try writer.writeByte(' ');
-                try printConstant(writer, constant);
+                try print_constant(writer, constant);
             }
 
             var flags_iter = flags.iterator();
@@ -129,22 +123,22 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
     }
 
     try writer.writeAll("Public Labels:\n");
-    var symbol_iter = self.public_labels.iterator();
+    var symbol_iter = a.public_labels.iterator();
     while (symbol_iter.next()) |entry| {
         const symbol = entry.key_ptr.*;
         const file_handle = entry.value_ptr.file;
         const insn_handle = entry.value_ptr.instruction;
-        const file_name = self.getSource(file_handle).name;
+        const file_name = a.get_source(file_handle).name;
         try writer.print("   {s} #{} <- {s}\n", .{ file_name, insn_handle, symbol });
     }
 
     try writer.writeAll("Sections:\n");
-    for (0.., self.sections.entries.items(.value)) |section_handle, section| {
+    for (0.., a.sections.entries.items(.value)) |section_handle, section| {
         try writer.print("   #{}: {s} : {s}\n", .{ section_handle, section.name, @tagName(section.kind) });
     }
 
     try writer.writeAll("Pages:\n");
-    for (self.pages.items(.page), self.pages.items(.section), self.pages.items(.usage), self.pages.items(.data), self.pages.items(.chunks)) |page, section_handle, usage, data, chunks| {
+    for (a.pages.items(.page), a.pages.items(.section), a.pages.items(.usage), a.pages.items(.data), a.pages.items(.chunks)) |page, section_handle, usage, data, chunks| {
         try writer.print("   {X:0>5}: #{}\n", .{ page, section_handle });
         for (0..8) |row| {
             try writer.writeAll("      usage:");
@@ -166,7 +160,7 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
                 for (0..64) |i| {
                     try writer.print("{X:0>2}", .{ data_chunk[63 - i] });
                 }
-                try writer.print(" {}\n", .{ fmtSliceReplaceNonAscii(data_chunk) });
+                try writer.print(" {}\n", .{ fmt_slice_replace_non_ascii(data_chunk) });
             }
         }
         for (chunks.items) |chunk| {
@@ -174,23 +168,30 @@ pub fn dump(self: *Assembler, writer: anytype) !void {
         }
     }
 
-    try self.printErrors(writer);
+    try a.print_errors(writer);
 }
 
-fn printConstant(writer: anytype, constant: *const Constant) !void {
+fn print_expression_type(expr_type: Expression.Type, writer: anytype) !void {
+    try isa.print.print_parameter_signature(expr_type.param_signature(), .{
+        .base_register_index = expr_type.param_base_register_index(),
+        .offset_register_index = expr_type.param_offset_register_index(),
+    }, writer);
+}
+
+fn print_constant(writer: anytype, constant: *const Constant) !void {
     try writer.print("{:>4}b: ", .{ constant.bit_count });
-    if (constant.asInt(i64) catch null) |int_value| {
-        var uint_value = constant.asInt(u64) catch unreachable;
+    if (constant.as_int(i64) catch null) |int_value| {
+        var uint_value = constant.as_int(u64) catch unreachable;
         try writer.print("0x{X} {} ", .{ uint_value, int_value });
     }
-    try writer.print("'{s}'", .{ std.fmt.fmtSliceEscapeUpper(constant.asString()) });
+    try writer.print("'{s}'", .{ std.fmt.fmtSliceEscapeUpper(constant.as_string()) });
 }
 
-fn fmtSliceReplaceNonAscii(bytes: []const u8) std.fmt.Formatter(formatSliceReplaceNonAsciiImpl) {
+fn fmt_slice_replace_non_ascii(bytes: []const u8) std.fmt.Formatter(format_slice_replace_non_ascii_impl) {
     return .{ .data = bytes };
 }
 
-fn formatSliceReplaceNonAsciiImpl(
+fn format_slice_replace_non_ascii_impl(
     bytes: []const u8,
     comptime fmt: []const u8,
     options: std.fmt.FormatOptions,
@@ -209,3 +210,9 @@ fn formatSliceReplaceNonAsciiImpl(
         }
     }
 }
+
+const Expression = @import("Expression.zig");
+const Assembler = @import("Assembler.zig");
+const Constant = @import("Constant.zig");
+const isa = @import("lib_arch").isa;
+const std = @import("std");

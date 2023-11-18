@@ -51,8 +51,8 @@ pub fn load(alloc: std.mem.Allocator, temp: std.mem.Allocator) !Config {
     return parse(alloc, temp, &reader) catch |err| switch (err) {
         error.SExpressionSyntaxError => {
             std.log.err("Failed to parse microsim-config.sx!", .{});
-            const context = try reader.getNextTokenContext();
-            try context.printForFile(&file, std.io.getStdErr().writer(), 160);
+            const context = try reader.token_context();
+            try context.print_for_file(&file, std.io.getStdErr().writer(), 160);
             return err;
         },
         else => return err,
@@ -64,7 +64,7 @@ fn parse(alloc: std.mem.Allocator, temp: std.mem.Allocator, reader: *sx.Reader(s
     var frames = std.ArrayList(zgui.WindowSettings).init(temp);
     defer frames.deinit();
 
-    try reader.requireExpression(expr_root);
+    try reader.require_expression(expr_root);
 
     while (true) {
         if (try reader.expression(expr_window)) {
@@ -75,46 +75,46 @@ fn parse(alloc: std.mem.Allocator, temp: std.mem.Allocator, reader: *sx.Reader(s
             };
             while (true) {
                 if (try reader.expression(expr_position)) {
-                    settings.pos[0] = try reader.requireAnyInt(i32, 10);
-                    settings.pos[1] = try reader.requireAnyInt(i32, 10);
-                    try reader.requireClose();
+                    settings.pos[0] = try reader.require_any_int(i32, 10);
+                    settings.pos[1] = try reader.require_any_int(i32, 10);
+                    try reader.require_close();
                 } else if (try reader.expression(expr_size)) {
-                    settings.size[0] = try reader.requireAnyInt(i32, 10);
-                    settings.size[1] = try reader.requireAnyInt(i32, 10);
-                    try reader.requireClose();
+                    settings.size[0] = try reader.require_any_int(i32, 10);
+                    settings.size[1] = try reader.require_any_int(i32, 10);
+                    try reader.require_close();
                 } else if (try reader.expression(expr_maximized)) {
                     settings.maximized = true;
-                    try reader.requireClose();
+                    try reader.require_close();
                 } else break;
             }
-            try reader.requireClose(); // expr_window
+            try reader.require_close(); // expr_window
             window_settings = settings;
         } else if (try reader.expression(expr_frames)) {
-            while (try reader.anyExpression()) |name| {
+            while (try reader.any_expression()) |name| {
                 var frame_settings = try frames.addOne();
                 frame_settings.name = try alloc.dupeZ(u8, name);
                 while (true) {
                     if (try reader.expression(expr_position)) {
-                        frame_settings.pos[0] = try reader.requireAnyInt(i16, 10);
-                        frame_settings.pos[1] = try reader.requireAnyInt(i16, 10);
-                        try reader.requireClose();
+                        frame_settings.pos[0] = try reader.require_any_int(i16, 10);
+                        frame_settings.pos[1] = try reader.require_any_int(i16, 10);
+                        try reader.require_close();
                     } else if (try reader.expression(expr_size)) {
-                        frame_settings.size[0] = try reader.requireAnyInt(i16, 10);
-                        frame_settings.size[1] = try reader.requireAnyInt(i16, 10);
-                        try reader.requireClose();
+                        frame_settings.size[0] = try reader.require_any_int(i16, 10);
+                        frame_settings.size[1] = try reader.require_any_int(i16, 10);
+                        try reader.require_close();
                     } else if (try reader.expression(expr_collapsed)) {
                         frame_settings.collapsed = true;
-                        try reader.requireClose();
+                        try reader.require_close();
                     } else break;
                 }
-                try reader.requireClose(); // expr_frames
+                try reader.require_close(); // expr_frames
             }
-            try reader.requireClose(); // expr_frames
+            try reader.require_close(); // expr_frames
         } else break;
     }
 
-    try reader.requireClose(); // expr_root
-    try reader.requireDone();
+    try reader.require_close(); // expr_root
+    try reader.require_done();
 
     return .{
         .allocator = alloc,
@@ -133,10 +133,10 @@ pub fn save(self: Config, temp: std.mem.Allocator) !void {
     var writer = sx.writer(temp, file.writer());
     defer writer.deinit();
 
-    try writer.expressionExpanded(expr_root);
+    try writer.expression_expanded(expr_root);
 
     if (self.window) |window| {
-        try writer.expressionExpanded(expr_window);
+        try writer.expression_expanded(expr_window);
 
         try writer.expression(expr_position);
         try writer.int(window.pos[0], 10);
@@ -156,9 +156,9 @@ pub fn save(self: Config, temp: std.mem.Allocator) !void {
         try writer.close(); // expr_window
     }
 
-    try writer.expressionExpanded(expr_frames);
+    try writer.expression_expanded(expr_frames);
     for (self.frames) |frame| {
-        try writer.expressionExpanded(frame.name);
+        try writer.expression_expanded(frame.name);
 
         try writer.expression(expr_position);
         try writer.int(frame.pos[0], 10);

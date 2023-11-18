@@ -72,12 +72,12 @@ pub const Operand_Index_Op = enum (u2) {
     from_decode = 3,
 };
 
-pub const Register_Write_Width = enum(u1) {
+pub const Register_Write_Width = enum (u1) {
     write_16 = 0,
     write_32 = 1,
 };
 
-pub const SR1_Index = enum(u3) {
+pub const SR1_Index = enum (u3) {
     zero = 0,           // 0x0000_0000 (currently not used for anything)
     rp = 1,             // return pointer
     sp = 2,             // stack pointer
@@ -94,7 +94,7 @@ pub const SR1_Index = enum(u3) {
     pub const count = std.math.maxInt(u3) + 1;
 };
 
-pub const SR2_Index = enum(u3) {
+pub const SR2_Index = enum (u3) {
     zero = 0,           // 0x0000_0000 (must never be overwritten)
     ip = 1,             // instruction pointer
     asn = 2,            // address space number
@@ -111,21 +111,21 @@ pub const SR2_Index = enum(u3) {
     pub const count = std.math.maxInt(u3) + 1;
 };
 
-pub const SR1_Write_Source = enum(u2) {
+pub const SR1_Write_Source = enum (u2) {
     no_write = 0,
     rsn_sr1 = 1, // bits 31:16 from RSN that was used during setup cycle, bits 15:0 from SR1 data that was read during setup cycle.
     l = 2,
     virtual_addr = 3,
 };
 
-pub const SR2_Write_Source = enum(u2) {
+pub const SR2_Write_Source = enum (u2) {
     no_write = 0,
     sr2 = 1,
     l = 2,
     virtual_addr = 3,
 };
 
-pub const Any_SR_Index = enum(u4) {
+pub const Any_SR_Index = enum (u4) {
     zero = @intFromEnum(SR2_Index.zero),
     ip = @intFromEnum(SR2_Index.ip),
     next_ip = @intFromEnum(SR2_Index.next_ip),
@@ -155,21 +155,21 @@ pub const Any_SR_Index = enum(u4) {
     }
 };
 
-pub const Address_Offset_Source = enum(u2) {
+pub const Address_Offset_Source = enum (u2) {
     zero = 0,
     literal = 1,
     two = 2,
     literal_minus_64 = 3,
 };
 
-pub const JL_Source = enum(u2) {
+pub const JL_Source = enum (u2) {
     zero = 0,
     jrl = 1,
     sr1l = 2,
     sr2l = 3,
 };
 
-pub const JH_Source = enum(u3) {
+pub const JH_Source = enum (u3) {
     zero = 0,
     jrh = 1,
     sr1h = 2,
@@ -181,7 +181,7 @@ pub const JH_Source = enum(u3) {
     _,
 };
 
-pub const K_Source = enum(u3) {
+pub const K_Source = enum (u3) {
     kr = 0,
     ik_bit = 1,
     ik_zx = 2,
@@ -192,7 +192,7 @@ pub const K_Source = enum(u3) {
     sr2l = 7,
 };
 
-pub const Compute_Unit = enum(u2) {
+pub const Compute_Unit = enum (u2) {
     alu = 0,
     shift = 1,
     mult = 2,
@@ -318,7 +318,7 @@ pub const Bit_Count_Mode = packed struct (u6) {
     pub const clz  = Bit_Count_Mode { .leftmost_only = true,  .rightmost_only = false, .invert_jl = true  };
 };
 
-pub const LL_Source = enum(u3) {
+pub const LL_Source = enum (u3) {
     zero = 0,
     compute_l = 1,
     d = 2,
@@ -329,7 +329,7 @@ pub const LL_Source = enum(u3) {
     _,
 };
 
-pub const LH_Source = enum(u3) {
+pub const LH_Source = enum (u3) {
     zero = 0,
     compute_h = 1,
     d8_sx = 3,
@@ -339,19 +339,19 @@ pub const LH_Source = enum(u3) {
     _,
 };
 
-pub const Bus_Direction = enum(u2) {
+pub const Bus_Direction = enum (u2) {
     read,
     read_to_dr,
     write_from_ll,
     write_from_dr,
 };
 
-pub const Bus_Width = enum(u1) {
+pub const Bus_Width = enum (u1) {
     word = 0,
     byte = 1,
 };
 
-pub const Address_Space = enum(u2) {
+pub const Address_Space = enum (u2) {
     raw = 0,
     data = 1,
     stack = 2,
@@ -360,14 +360,14 @@ pub const Address_Space = enum(u2) {
 
 // what should the address translator do this cycle?
 // bus operation is inhibited if not .translate
-pub const Address_Translator_Op = enum(u2) {
+pub const Address_Translator_Op = enum (u2) {
     none = 0,
     translate = 1,
     update = 2,
     invalidate = 3,
 };
 
-pub const Status_Op = enum(u4) {
+pub const Status_Op = enum (u4) {
     hold = 0,
     load_zncv = 1,
     clear_a = 2,
@@ -386,14 +386,14 @@ pub const Status_Op = enum(u4) {
     zn_32_no_set_z__c_from_shift = 15,
 };
 
-pub const Sequencer_Op = enum(u2) {
+pub const Sequencer_Op = enum (u2) {
     next_uop = 0,
     next_instruction = 1,
     next_uop_force_normal = 2,
     fault_return = 3,
 };
 
-pub const Special_Op = enum(u3) {
+pub const Special_Op = enum (u3) {
     none = 0,
     atomic_this = 1, // This cycle is atomic, but the next one is not, unless it is also .atomic_this
     atomic_next = 2, // All upcoming cycles are atomic, until the next cycle that's .atomic_this or .atomic_end
@@ -404,5 +404,5 @@ pub const Special_Op = enum(u3) {
 };
 
 const Control_Signals = @This();
-const hw = @import("hardware.zig");
+const hw = @import("lib_arch").hw;
 const std = @import("std");

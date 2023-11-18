@@ -1,45 +1,23 @@
-const std = @import("std");
-const isa = @import("isa_types");
-const ie = @import("isa_encoding");
-const bus = @import("bus_types");
-const lex = @import("lex.zig");
-const typechecking = @import("typechecking.zig");
-const dead_code = @import("dead_code.zig");
-const layout = @import("layout.zig");
-const symbols = @import("symbols.zig");
-const Constant = @import("Constant.zig");
-const Section = @import("Section.zig");
-const Instruction = @import("Instruction.zig");
-const Expression = @import("Expression.zig");
-const SourceFile = @import("SourceFile.zig");
-const Error = @import("Error.zig");
-const PageData = @import("PageData.zig");
-const ExpressionType = ie.Parameter.ExpressionType;
-const Mnemonic = isa.Mnemonic;
-const MnemonicSuffix = isa.MnemonicSuffix;
-
-const Assembler = @This();
-
-edb: ie.data.EncoderDatabase,
+edb: isa.Encoding_Database,
 gpa: std.mem.Allocator,
 arena: std.mem.Allocator,
-files: std.ArrayListUnmanaged(SourceFile) = .{},
+files: std.ArrayListUnmanaged(Source_File) = .{},
 errors: std.ArrayListUnmanaged(Error) = .{},
-overlapping_chunks: std.AutoArrayHashMapUnmanaged(SourceFile.ChunkPair, void) = .{},
-public_labels: std.StringHashMapUnmanaged(symbols.InstructionRef) = .{},
+overlapping_chunks: std.AutoArrayHashMapUnmanaged(Source_File.Chunk_Pair, void) = .{},
+public_labels: std.StringHashMapUnmanaged(symbols.Instruction_Ref) = .{},
 sections: std.StringArrayHashMapUnmanaged(Section) = .{},
-chunks: std.ArrayListUnmanaged(ChunkWithAddress) = .{},
-pages: std.MultiArrayList(PageData) = .{},
-page_lookup: std.AutoHashMapUnmanaged(bus.Page, PageData.Handle) = .{},
+chunks: std.ArrayListUnmanaged(Chunk_With_Address) = .{},
+pages: std.MultiArrayList(Page_Data) = .{},
+page_lookup: std.AutoHashMapUnmanaged(hw.addr.Page, Page_Data.Handle) = .{},
 constant_temp: std.ArrayListUnmanaged(u8) = .{},
-params_temp: std.ArrayListUnmanaged(ie.Parameter) = .{},
-constants: Constant.InternPool = .{},
+params_temp: std.ArrayListUnmanaged(isa.Parameter) = .{},
+constants: Constant.Intern_Pool = .{},
 
-pub const ChunkWithAddress = struct {
-    chunk: SourceFile.Chunk,
+pub const Chunk_With_Address = struct {
+    chunk: Source_File.Chunk,
     address: u32,
 
-    fn lessThan(_: void, lhs: ChunkWithAddress, rhs: ChunkWithAddress) bool {
+    fn less_than(_: void, lhs: Chunk_With_Address, rhs: Chunk_With_Address) bool {
         return lhs.address < rhs.address;
     }
 };
@@ -49,15 +27,15 @@ pub const Alignment = struct {
     offset: u32,
 };
 
-pub const AddressRange = struct {
+pub const Address_Range = struct {
     first: u32,
     len: usize,
 
-    pub fn last(self: AddressRange) u32 {
-        return self.first + @intCast(u32, self.len - 1);
+    pub fn last(self: Address_Range) u32 {
+        return self.first + @as(u32, @intCast(self.len - 1));
     }
 
-    pub fn intersectionWith(self: AddressRange, other: AddressRange) AddressRange {
+    pub fn intersection_with(self: Address_Range, other: Address_Range) Address_Range {
         const begin = @max(self.first, other.first);
         const end = @max(begin, @min(self.first + self.len, other.first + other.len));
         return .{
@@ -67,7 +45,7 @@ pub const AddressRange = struct {
     }
 };
 
-pub fn init(gpa: std.mem.Allocator, arena: std.mem.Allocator, edb: ie.data.EncoderDatabase) Assembler {
+pub fn init(gpa: std.mem.Allocator, arena: std.mem.Allocator, edb: isa.Encoding_Database) Assembler {
     // It's possible to use the same allocator for gpa and arena,
     // but nothing allocated in the arena allocator will be freed
     // until Assembler.deinit() is called, so it's a good candidate
@@ -127,16 +105,16 @@ pub fn deinit(self: *Assembler, deinit_arena: bool) void {
     self.constants.deinit(self.gpa);
 }
 
-pub fn addSource(self: *Assembler, name: []const u8, source: []const u8) SourceFile.Handle {
+pub fn add_source(self: *Assembler, name: []const u8, source: []const u8) Source_File.Handle {
     const owned_name = self.arena.dupe(name) catch @panic("OOM");
     const owned_source = self.arena.dupe(source) catch @panic("OOM");
-    return self.adoptSource(owned_name, owned_source);
+    return self.adopt_source(owned_name, owned_source);
 }
 
 // Takes ownership of name and source; assumed to have been allocated with self.arena
-pub fn adoptSource(self: *Assembler, name: []const u8, source: []const u8) SourceFile.Handle {
-    const handle = @intCast(SourceFile.Handle, self.files.items.len);
-    const file = SourceFile.parse(self.gpa, handle, name, source, &self.errors);
+pub fn adopt_source(self: *Assembler, name: []const u8, source: []const u8) Source_File.Handle {
+    const handle: Source_File.Handle = @intCast(self.files.items.len);
+    const file = Source_File.parse(self.gpa, handle, name, source, &self.errors);
     const ptr = self.files.addOne(self.gpa) catch @panic("OOM");
     ptr.* = file;
     return handle;
@@ -144,33 +122,33 @@ pub fn adoptSource(self: *Assembler, name: []const u8, source: []const u8) Sourc
 
 pub fn assemble(self: *Assembler) void {
     for (self.files.items) |*file| {
-        typechecking.processLabelsAndSections(self, file);
+        typechecking.process_labels_and_sections(self, file);
     }
 
-    if (!typechecking.resolveExpressionTypes(self)) return;
+    if (!typechecking.resolve_expression_types(self)) return;
 
     for (self.files.items) |*file| {
         const s = file.slices();
-        typechecking.checkInstructionsAndDirectivesInFile(self, s);
-        typechecking.checkSymbolAmbiguityInFile(self, s);
-        dead_code.markBlocksToKeep(self, s);
+        typechecking.check_instructions_and_directives_in_file(self, s);
+        typechecking.check_symbol_ambiguity_in_file(self, s);
+        dead_code.mark_blocks_to_keep(self, s);
     }
 
-    var fixed_org_chunks = std.ArrayListUnmanaged(SourceFile.Chunk) {};
-    var auto_org_chunks = std.ArrayListUnmanaged(SourceFile.Chunk) {};
+    var fixed_org_chunks = std.ArrayListUnmanaged(Source_File.Chunk) {};
+    var auto_org_chunks = std.ArrayListUnmanaged(Source_File.Chunk) {};
     defer fixed_org_chunks.deinit(self.gpa);
     defer auto_org_chunks.deinit(self.gpa);
     for (self.files.items) |*file| {
-        file.collectChunks(self, &fixed_org_chunks, &auto_org_chunks);
+        file.collect_chunks(self, &fixed_org_chunks, &auto_org_chunks);
     }
 
     var attempts: usize = 0;
     const max_attempts = 100;
     while (attempts < max_attempts) : (attempts += 1) {
-        self.resetLayout();
+        self.reset_layout();
 
-        var try_again = layout.doFixedOrgLayout(self, fixed_org_chunks.items);
-        try_again = layout.doAutoOrgLayout(self, auto_org_chunks.items) or try_again;
+        var try_again = layout.do_fixed_org_layout(self, fixed_org_chunks.items);
+        try_again = layout.do_auto_org_layout(self, auto_org_chunks.items) or try_again;
 
         // TODO better handling of degenerate/recursive cases where the layout never reaches an equilibrium?
         if (!try_again) break;
@@ -180,28 +158,28 @@ pub fn assemble(self: *Assembler) void {
         std.debug.print("Failed to find a stable layout after {} iterations!\n", .{ attempts });
     }
 
-    layout.populatePageChunks(self, fixed_org_chunks.items);
-    layout.populatePageChunks(self, auto_org_chunks.items);
+    layout.populate_page_chunks(self, fixed_org_chunks.items);
+    layout.populate_page_chunks(self, auto_org_chunks.items);
 
-    std.sort.sort(ChunkWithAddress, self.chunks.items, {}, ChunkWithAddress.lessThan);
+    std.sort.pdq(Chunk_With_Address, self.chunks.items, {}, Chunk_With_Address.less_than);
 
     for (self.pages.items(.chunks)) |chunks| {
-        layout.findOverlappingChunks(self, chunks.items);
+        layout.find_overlapping_chunks(self, chunks.items);
     }
 
     for (self.files.items) |*file| {
-        layout.encodePageData(self, file);
+        layout.encode_page_data(self, file);
     }
 }
 
-pub fn printErrors(self: *Assembler, writer: anytype) !void {
+pub fn print_errors(self: *Assembler, writer: anytype) !void {
     for (self.errors.items) |err| {
         try err.print(self, writer);
     }
     for (self.overlapping_chunks.entries.items(.key)) |chunk_pair| {
-        const a_range = chunk_pair.a.getAddressRange(self);
-        const b_range = chunk_pair.b.getAddressRange(self);
-        const intersection = a_range.intersectionWith(b_range);
+        const a_range = chunk_pair.a.address_range(self);
+        const b_range = chunk_pair.b.address_range(self);
+        const intersection = a_range.intersection_with(b_range);
 
         try writer.print("Found chunks overlapping on address range [{X:0>16},{X:0>16}]\n", .{
             intersection.first, intersection.last(),
@@ -209,7 +187,7 @@ pub fn printErrors(self: *Assembler, writer: anytype) !void {
     }
 }
 
-fn resetLayout(self: *Assembler) void {
+fn reset_layout(self: *Assembler) void {
     // std.debug.print("Resetting Layout\n", .{});
     for (self.files.items) |*file| {
         var expr_resolved_constants = file.expressions.items(.resolved_constant);
@@ -240,36 +218,36 @@ fn resetLayout(self: *Assembler) void {
     self.page_lookup.clearRetainingCapacity();
 }
 
-pub fn getSource(self: *Assembler, handle: SourceFile.Handle) *SourceFile {
+pub fn get_source(self: *Assembler, handle: Source_File.Handle) *Source_File {
     return &self.files.items[handle];
 }
 
-pub fn getSection(self: *const Assembler, handle: Section.Handle) Section {
+pub fn get_section(self: *const Assembler, handle: Section.Handle) Section {
     return self.sections.values()[handle];
 }
 
-pub fn getSectionPtr(self: *Assembler, handle: Section.Handle) *Section {
+pub fn get_section_ptr(self: *Assembler, handle: Section.Handle) *Section {
     return &self.sections.values()[handle];
 }
 
-pub fn findOrCreatePage(self: *Assembler, page: bus.Page, access: Section.AccessPolicies, section: Section.Handle) PageData.Handle {
+pub fn find_or_create_page(self: *Assembler, page: hw.addr.Page, access: Section.Access_Policies, section: Section.Handle) Page_Data.Handle {
     if (self.page_lookup.get(page)) |handle| return handle;
 
-    const handle = @intCast(PageData.Handle, self.pages.len);
+    const handle: Page_Data.Handle = @intCast(self.pages.len);
     self.page_lookup.ensureUnusedCapacity(self.gpa, 1) catch @panic("OOM");
-    self.pages.append(self.gpa, PageData.init(page, access, section)) catch @panic("OOM");
+    self.pages.append(self.gpa, Page_Data.init(page, access, section)) catch @panic("OOM");
     self.page_lookup.putAssumeCapacity(page, handle);
     // std.debug.print("{X:0>13}: Created page for section {}\n", .{ page, section });
     return handle;
 }
 
-pub fn readByte(self: *Assembler, address: u32, address_space: isa.AddressSpace) u8 {
+pub fn read_byte(self: *Assembler, address: u32, address_space: isa.Address_Space) u8 {
     _ = address_space;
-    var iter = PageData.DataIterator.init(self, address);
+    var iter = Page_Data.Data_Iterator.init(self, address);
     return iter.next();
 }
 
-pub fn recordError(self: *Assembler, file_handle: SourceFile.Handle, context: Error.Context, desc: []const u8, flags: Error.FlagSet) void {
+pub fn record_error(self: *Assembler, file_handle: Source_File.Handle, context: Error.Context, desc: []const u8, flags: Error.Flag_Set) void {
     self.errors.append(self.gpa, .{
         .file = file_handle,
         .context = context,
@@ -278,7 +256,7 @@ pub fn recordError(self: *Assembler, file_handle: SourceFile.Handle, context: Er
     }) catch @panic("OOM");
 }
 
-pub fn recordErrorFmt(self: *Assembler, file_handle: SourceFile.Handle, context: Error.Context, comptime fmt: []const u8, args: anytype, flags: Error.FlagSet) void {
+pub fn record_error_fmt(self: *Assembler, file_handle: Source_File.Handle, context: Error.Context, comptime fmt: []const u8, args: anytype, flags: Error.Flag_Set) void {
     const desc = std.fmt.allocPrint(self.gpa, fmt, args) catch @panic("OOM");
     var mutable_flags = flags;
     mutable_flags.insert(.desc_is_allocated);
@@ -290,41 +268,41 @@ pub fn recordErrorFmt(self: *Assembler, file_handle: SourceFile.Handle, context:
     }) catch @panic("OOM");
 }
 
-pub fn recordTokenError(self: *Assembler, file_handle: SourceFile.Handle, token: lex.Token.Handle, desc: []const u8, flags: Error.FlagSet) void {
-    recordError(self, file_handle, .{ .token = token }, desc, flags);
+pub fn record_token_error(self: *Assembler, file_handle: Source_File.Handle, token: lex.Token.Handle, desc: []const u8, flags: Error.Flag_Set) void {
+    record_error(self, file_handle, .{ .token = token }, desc, flags);
 }
 
-pub fn recordTokenErrorFmt(self: *Assembler, file_handle: SourceFile.Handle, token: lex.Token.Handle, comptime fmt: []const u8, args: anytype, flags: Error.FlagSet) void {
-    recordErrorFmt(self, file_handle, .{ .token = token }, fmt, args, flags);
+pub fn record_token_error_fmt(self: *Assembler, file_handle: Source_File.Handle, token: lex.Token.Handle, comptime fmt: []const u8, args: anytype, flags: Error.Flag_Set) void {
+    record_error_fmt(self, file_handle, .{ .token = token }, fmt, args, flags);
 }
 
-pub fn recordInsnError(self: *Assembler, file_handle: SourceFile.Handle, insn_handle: Instruction.Handle, desc: []const u8, flags: Error.FlagSet) void {
-    recordError(self, file_handle, .{ .instruction = insn_handle }, desc, flags);
+pub fn record_insn_error(self: *Assembler, file_handle: Source_File.Handle, insn_handle: Instruction.Handle, desc: []const u8, flags: Error.Flag_Set) void {
+    record_error(self, file_handle, .{ .instruction = insn_handle }, desc, flags);
 }
 
-pub fn recordInsnErrorFmt(self: *Assembler, file_handle: SourceFile.Handle, insn_handle: Instruction.Handle, comptime fmt: []const u8, args: anytype, flags: Error.FlagSet) void {
-    recordErrorFmt(self, file_handle, .{ .instruction = insn_handle }, fmt, args, flags);
+pub fn record_insn_error_fmt(self: *Assembler, file_handle: Source_File.Handle, insn_handle: Instruction.Handle, comptime fmt: []const u8, args: anytype, flags: Error.Flag_Set) void {
+    record_error_fmt(self, file_handle, .{ .instruction = insn_handle }, fmt, args, flags);
 }
 
-pub fn recordExprError(self: *Assembler, file_handle: SourceFile.Handle, expr_handle: Expression.Handle, desc: []const u8, flags: Error.FlagSet) void {
-    recordError(self, file_handle, .{ .expression = expr_handle }, desc, flags);
+pub fn record_expr_error(self: *Assembler, file_handle: Source_File.Handle, expr_handle: Expression.Handle, desc: []const u8, flags: Error.Flag_Set) void {
+    record_error(self, file_handle, .{ .expression = expr_handle }, desc, flags);
 }
 
-pub fn recordExprErrorFmt(self: *Assembler, file_handle: SourceFile.Handle, expr_handle: Expression.Handle, comptime fmt: []const u8, args: anytype, flags: Error.FlagSet) void {
-    recordErrorFmt(self, file_handle, .{ .expression = expr_handle }, fmt, args, flags);
+pub fn record_expr_error_fmt(self: *Assembler, file_handle: Source_File.Handle, expr_handle: Expression.Handle, comptime fmt: []const u8, args: anytype, flags: Error.Flag_Set) void {
+    record_error_fmt(self, file_handle, .{ .expression = expr_handle }, fmt, args, flags);
 }
 
-pub fn recordExpressionLayoutError(self: *Assembler, file_handle: SourceFile.Handle, outer_expr_handle: Expression.Handle, context_expr_handle: Expression.Handle, desc: []const u8, flags: Error.FlagSet) void {
+pub fn record_expr_layout_error(self: *Assembler, file_handle: Source_File.Handle, outer_expr_handle: Expression.Handle, context_expr_handle: Expression.Handle, desc: []const u8, flags: Error.Flag_Set) void {
     var mutable_flags = flags;
     const file = self.files.items[file_handle];
     const expr_flags = file.expressions.items(.flags)[outer_expr_handle];
     if (expr_flags.contains(.constant_depends_on_layout)) {
         mutable_flags.insert(.remove_on_layout_reset);
     }
-    self.recordExprError(file_handle, context_expr_handle, desc, mutable_flags);
+    self.record_expr_error(file_handle, context_expr_handle, desc, mutable_flags);
 }
 
-pub fn recordInsnEncodingError(self: *Assembler, file_handle: SourceFile.Handle, insn_handle: Instruction.Handle, flags: Error.FlagSet) void {
+pub fn record_insn_encoding_error(self: *Assembler, file_handle: Source_File.Handle, insn_handle: Instruction.Handle, flags: Error.Flag_Set) void {
     var mutable_flags = flags;
     mutable_flags.insert(.is_instruction_encoding_error);
     self.errors.append(self.gpa, .{
@@ -335,40 +313,25 @@ pub fn recordInsnEncodingError(self: *Assembler, file_handle: SourceFile.Handle,
     }) catch @panic("OOM");
 }
 
-pub fn buildInstruction(self: *Assembler, s: SourceFile.Slices, ip: u32, mnemonic: Mnemonic, suffix: MnemonicSuffix, params: ?Expression.Handle, record_errors: bool) ?ie.Instruction {
+pub fn build_instruction(self: *Assembler, s: Source_File.Slices, ip: u32, mnemonic: Mnemonic, suffix: Mnemonic_Suffix, params: ?Expression.Handle, record_errors: bool) ?isa.Instruction {
     self.params_temp.clearRetainingCapacity();
     if (params) |base_expr_handle| {
         const expr_infos = s.expr.items(.info);
         const expr_resolved_types = s.expr.items(.resolved_type);
 
         var expr_handle = base_expr_handle;
-        var is_arrow = false;
         while (true) {
             const info = expr_infos[expr_handle];
-            switch (info) {
-                .list, .arrow_list => |bin| {
-                    const param_expr_handle = switch (expr_infos[bin.left]) {
-                        .arrow_prefix => |inner| inner,
-                        else => bin.left,
-                    };
-                    const expr_type = expr_resolved_types[param_expr_handle];
-                    if (!self.buildInstructionParameter(s, ip, param_expr_handle, is_arrow, expr_type, record_errors)) {
-                        return null;
-                    }
-                    is_arrow = info == .arrow_list;
+            const param_expr_handle = switch (info) {
+                .list => |bin| h: {
                     expr_handle = bin.right;
+                    break :h bin.left;
                 },
-                .arrow_prefix => |inner| {
-                    is_arrow = true;
-                    expr_handle = inner;
-                },
-                else => {
-                    const expr_type = expr_resolved_types[expr_handle];
-                    if (!self.buildInstructionParameter(s, ip, expr_handle, is_arrow, expr_type, record_errors)) {
-                        return null;
-                    }
-                    break;
-                },
+                else => expr_handle,
+            };
+            const expr_type = expr_resolved_types[param_expr_handle];
+            if (!self.build_instruction_parameter(s, ip, param_expr_handle, expr_type, record_errors)) {
+                return null;
             }
         }
     }
@@ -380,31 +343,53 @@ pub fn buildInstruction(self: *Assembler, s: SourceFile.Slices, ip: u32, mnemoni
     };
 }
 
-fn buildInstructionParameter(
+fn build_instruction_parameter(
     self: *Assembler,
-    s: SourceFile.Slices,
+    s: Source_File.Slices,
     ip: u32,
     expr_handle: Expression.Handle,
-    is_arrow: bool,
-    resolved_type: ExpressionType,
+    resolved_type: Expression.Type,
     record_errors: bool,
 ) bool {
-    if (resolved_type == .poison) {
-        return false;
+    switch (resolved_type) {
+        .unknown, .poison, .symbol_def => return false,
+        else => {},
     }
     const constant_value = v: {
-        const constant = layout.resolveExpressionConstant(self, s, ip, expr_handle) orelse break :v 0;
-        break :v constant.asInt(i64) catch {
+        const constant = layout.resolve_expression_constant(self, s, ip, expr_handle) orelse break :v 0;
+        break :v constant.as_int(i64) catch {
             if (record_errors) {
-                self.recordExpressionLayoutError(s.file.handle, expr_handle, expr_handle, "Parameter constant too large (must fit in i64)", .{});
+                self.record_expr_layout_error(s.file.handle, expr_handle, expr_handle, "Parameter constant too large (must fit in i64)", .{});
             }
             return false;
         };
     };
-    self.params_temp.append(self.gpa, .{
-        .arrow = is_arrow,
-        .expr_type = resolved_type,
+    self.params_temp.append(self.gpa, isa.Parameter{
+        .signature = resolved_type.param_signature(),
+        .base_register_index = resolved_type.param_base_register_index(),
+        .offset_register_index = resolved_type.param_offset_register_index(),
         .constant = constant_value,
     }) catch @panic("OOM");
     return true;
 }
+
+const Assembler = @This();
+
+const lex = @import("lex.zig");
+const typechecking = @import("typechecking.zig");
+const dead_code = @import("dead_code.zig");
+const layout = @import("layout.zig");
+const symbols = @import("symbols.zig");
+const Constant = @import("Constant.zig");
+const Section = @import("Section.zig");
+const Instruction = @import("Instruction.zig");
+const Expression = @import("Expression.zig");
+const Source_File = @import("Source_File.zig");
+const Error = @import("Error.zig");
+const Page_Data = @import("Page_Data.zig");
+const Mnemonic = isa.Mnemonic;
+const Mnemonic_Suffix = isa.Mnemonic_Suffix;
+const isa = arch.isa;
+const hw = arch.hw;
+const arch = @import("lib_arch");
+const std = @import("std");

@@ -1,13 +1,3 @@
-const std = @import("std");
-const bus = @import("bus_types");
-const at_types = @import("address_translator_types");
-const SourceFile = @import("SourceFile.zig");
-const Instruction = @import("Instruction.zig");
-const Expression = @import("Expression.zig");
-const Assembler = @import("Assembler.zig");
-const PageData = @import("PageData.zig");
-const AccessPolicy = at_types.AccessPolicy;
-
 pub const Kind = enum {
     info,
     boot,
@@ -20,7 +10,7 @@ pub const Kind = enum {
     constant_user,
     constant_kernel,
 
-    pub fn fromDirective(op: Instruction.OperationType) Kind {
+    pub fn from_directive(op: Instruction.Operation_Type) Kind {
         return switch (op) {
             .section => .info,
             .boot => .boot,
@@ -40,7 +30,7 @@ pub const Kind = enum {
         };
     }
 
-    pub fn defaultName(self: Kind) []const u8 {
+    pub fn default_name(self: Kind) []const u8 {
         return switch (self) {
             .info => "default_info",
             .boot => "default_boot",
@@ -55,7 +45,7 @@ pub const Kind = enum {
         };
     }
 
-    pub fn accessPolicies(self: Kind, chunk_length: usize) AccessPolicies {
+    pub fn access_policies(self: Kind, chunk_length: usize) Access_Policies {
         return .{
             .read = switch (self) {
                 .info => null,
@@ -77,23 +67,32 @@ pub const Kind = enum {
     }
 };
 
-pub const AccessPolicies = struct {
-    read: ?AccessPolicy,
-    write: ?AccessPolicy,
-    execute: ?AccessPolicy,
+pub const Access_Policies = struct {
+    read: ?at.Access_Policy,
+    write: ?at.Access_Policy,
+    execute: ?at.Access_Policy,
 };
 
 name: []const u8,
 kind: Kind,
 has_chunks: bool,
-range: ?Assembler.AddressRange,
+range: ?Assembler.Address_Range,
 
 const Section = @This();
 pub const Handle = u31;
 
-pub fn getRange(self: Section) Assembler.AddressRange {
+pub fn address_range(self: Section) Assembler.Address_Range {
     return self.range orelse .{
         .first = 0x1000,
         .len = 0x1_0000_0000 - 0x1000,
     };
 }
+
+const Instruction = @import("Instruction.zig");
+const Expression = @import("Expression.zig");
+const Assembler = @import("Assembler.zig");
+const Page_Data = @import("Page_Data.zig");
+const at = hw.addr.translation;
+const hw = arch.hw;
+const arch = @import("lib_arch");
+const std = @import("std");

@@ -1,3 +1,8 @@
+// This program generates several types of data about the CPU architecture:
+//  - Instruction decode and microcode ROM contents
+//  - Mappings between assembly syntax and machine code and vice-versa; used by the assembler and disassembler
+//  - HTML instruction set documentation
+
 const std = @import("std");
 const TempAllocator = @import("TempAllocator");
 const allocators = @import("compile_arch/allocators.zig");
@@ -84,12 +89,12 @@ fn reserved() void {
 }
 
 fn assignReservedOpcodes() !void {
-    var opIter = uc.opcodeIterator(0x0000, 0xFFFF);
-    while (opIter.next()) |cur_opcode| {
-        if (arch.getMicrocodeCycle(uc.getAddressForOpcode(cur_opcode, .{})) == null) {
-            const granularity = uc.getOpcodeGranularity(cur_opcode);
-            const last_opcode = cur_opcode +% granularity -% 1;
-            try ib.processOpcodes(cur_opcode, last_opcode, reserved, false);
-        }
-    }
+    // var opIter = uc.opcodeIterator(0x0000, 0xFFFF);
+    // while (opIter.next()) |cur_opcode| {
+    //     if (arch.getMicrocodeCycle(uc.getAddressForOpcode(cur_opcode, .{})) == null) {
+    //         const granularity = uc.getOpcodeGranularity(cur_opcode);
+    //         const last_opcode = cur_opcode +% granularity -% 1;
+    //         try ib.processOpcodes(cur_opcode, last_opcode, reserved, false);
+    //     }
+    // }
 }

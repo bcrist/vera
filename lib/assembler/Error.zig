@@ -1,18 +1,7 @@
-const std = @import("std");
-const console = @import("console");
-const lex = @import("lex.zig");
-const Assembler = @import("Assembler.zig");
-const SourceFile = @import("SourceFile.zig");
-const Instruction = @import("Instruction.zig");
-const Expression = @import("Expression.zig");
-const Token = lex.Token;
-
-const Error = @This();
-
-file: SourceFile.Handle,
+file: Source_File.Handle,
 context: Context,
 desc: []const u8,
-flags: FlagSet,
+flags: Flag_Set,
 
 pub const Context = union (enum) {
     token: lex.Token.Handle,
@@ -20,7 +9,7 @@ pub const Context = union (enum) {
     expression: Expression.Handle,
 };
 
-pub const FlagSet = std.EnumSet(Flags);
+pub const Flag_Set = std.EnumSet(Flags);
 pub const Flags = enum {
     remove_on_layout_reset,
     desc_is_allocated,
@@ -28,13 +17,13 @@ pub const Flags = enum {
 };
 
 pub fn print(self: Error, a: *Assembler, writer: anytype) !void {
-    const file = a.getSource(self.file);
+    const file = a.get_source(self.file);
     const s = file.slices();
 
     var context = switch (self.context) {
         .token => |handle| lex.Token.Range.expand(null, handle),
-        .instruction => |handle| getInstructionContext(s, handle),
-        .expression => |handle| getExpressionContext(handle, null, s.expr.items(.token), s.expr.items(.info)),
+        .instruction => |handle| get_instruction_context(s, handle),
+        .expression => |handle| get_expression_context(handle, null, s.expr.items(.token), s.expr.items(.info)),
     };
 
     const first = file.tokens.get(context.first);
@@ -44,7 +33,7 @@ pub fn print(self: Error, a: *Assembler, writer: anytype) !void {
     const highlight_end = last.offset + last.location(file.source).len;
 
     try writer.writeByte('\n');
-    try console.printContext(file.source, &.{
+    try console.print_context(file.source, &.{
         .{
             .offset = highlight_start,
             .len = highlight_end - highlight_start,
@@ -67,23 +56,26 @@ pub fn print(self: Error, a: *Assembler, writer: anytype) !void {
 
         const address = s.insn.items(.address)[insn_handle];
         const params = s.insn.items(.params)[insn_handle];
-        const insn = a.buildInstruction(s, address, mn.mnemonic, mn.suffix, params, false).?;
-        try insn.print(writer, address);
+        const insn = a.build_instruction(s, address, mn.mnemonic, mn.suffix, params, false).?;
+        try isa.print.print_instruction(insn, address, writer);
         try writer.writeByte('\n');
 
-        if (a.edb.mnemonic_to_encoding.get(insn.mnemonic)) |encodings| {
-            try writer.print("Possible encodings for {s} are:\n", .{ @tagName(insn.mnemonic) });
-            for (encodings) |enc| {
-                try enc.print(writer);
-                try writer.writeByte('\n');
+        var iter = a.edb.similar_encodings(insn);
+        var first_alternative = true;
+        if (iter.next()) |enc| {
+            if (first_alternative) {
+                try writer.writeAll("Encodings with the same signature:\n");
+                first_alternative = false;
             }
+            try isa.print.print_encoding(enc, writer);
+            try writer.writeByte('\n');
         }
     }
 }
 
-fn getInstructionContext(s: SourceFile.Slices, insn_handle: Instruction.Handle) lex.Token.Range {
+fn get_instruction_context(s: Source_File.Slices, insn_handle: Instruction.Handle) lex.Token.Range {
     const token_kinds = s.file.tokens.items(.kind);
-    var range = Instruction.getTokenRange(insn_handle, s.insn.items(.token), token_kinds);
+    var range = Instruction.token_range(insn_handle, s.insn.items(.token), token_kinds);
 
     while (range.first < range.last and token_kinds[range.first] == .linespace) {
         range.first += 1;
@@ -96,18 +88,18 @@ fn getInstructionContext(s: SourceFile.Slices, insn_handle: Instruction.Handle) 
     return range;
 }
 
-fn getExpressionContext(expr: Expression.Handle, range: ?lex.Token.Range, tokens: []const lex.Token.Handle, infos: []const Expression.Info) lex.Token.Range {
+fn get_expression_context(expr: Expression.Handle, range: ?lex.Token.Range, tokens: []const lex.Token.Handle, infos: []const Expression.Info) lex.Token.Range {
     var result = lex.Token.Range.expand(range, tokens[expr]);
     switch (infos[expr]) {
-        .list, .arrow_list, .plus, .minus, .multiply, .shl, .shr,
+        .list, .plus, .minus, .multiply, .shl, .shr,
         .concat, .concat_repeat, .bitwise_or, .bitwise_xor, .bitwise_and,
         .length_cast, .truncate, .sign_extend, .zero_extend,
         => |bin| {
-            result = getExpressionContext(bin.left, result, tokens, infos);
-            return getExpressionContext(bin.right, result, tokens, infos);
+            result = get_expression_context(bin.left, result, tokens, infos);
+            return get_expression_context(bin.right, result, tokens, infos);
         },
 
-        .arrow_prefix, .directive_symbol_def, .directive_symbol_ref,
+        .directive_symbol_def, .directive_symbol_ref,
         .local_label_def, .negate, .reg_to_index,
         .complement, .signed_cast, .unsigned_cast,
         .remove_signedness_cast, .absolute_address_cast,
@@ -115,10 +107,22 @@ fn getExpressionContext(expr: Expression.Handle, range: ?lex.Token.Range, tokens
         .stack_address_cast, .remove_address_cast,
         .index_to_reg8, .index_to_reg16, .index_to_reg32,
         .crlf_cast, .lf_cast,
-        => |inner| return getExpressionContext(inner, result, tokens, infos),
+        => |inner| return get_expression_context(inner, result, tokens, infos),
 
-        .literal_int, .literal_str, .literal_reg,
+        .arrow, .literal_int, .literal_str, .literal_reg,
         .literal_current_address, .literal_symbol_def, .literal_symbol_ref,
         => return result,
     }
 }
+
+const Error = @This();
+const Token = lex.Token;
+const lex = @import("lex.zig");
+const Assembler = @import("Assembler.zig");
+const Source_File = @import("Source_File.zig");
+const Instruction = @import("Instruction.zig");
+const Expression = @import("Expression.zig");
+const isa = arch.isa;
+const arch = @import("lib_arch");
+const console = @import("console");
+const std = @import("std");

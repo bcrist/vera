@@ -1,32 +1,16 @@
-const std = @import("std");
-const isa = @import("isa_types");
-const ie = @import("isa_encoding");
-const lex = @import("lex.zig");
-const SourceFile = @import("SourceFile.zig");
-const Error = @import("Error.zig");
-const Instruction = @import("Instruction.zig");
-const Expression = @import("Expression.zig");
-
-const Token = lex.Token;
-const TokenKind = lex.TokenKind;
-const Mnemonic = isa.Mnemonic;
-const MnemonicSuffix = isa.MnemonicSuffix;
-const ExpressionType = ie.Parameter.ExpressionType;
-const Parser = @This();
-
 temp: std.mem.Allocator,
 gpa: std.mem.Allocator,
-handle: SourceFile.Handle,
-out: *SourceFile,
+handle: Source_File.Handle,
+out: *Source_File,
 errors: *std.ArrayListUnmanaged(Error),
 next_token: Token.Handle,
 sync_to_end_of_line: bool,
-token_kinds: []TokenKind,
+token_kinds: []Token_Kind,
 token_offsets: []u32,
 
 mnemonic_map: std.StringHashMapUnmanaged(Mnemonic),
-suffix_map: std.StringHashMapUnmanaged(MnemonicSuffix),
-directive_map: std.StringHashMapUnmanaged(Instruction.OperationType),
+suffix_map: std.StringHashMapUnmanaged(Mnemonic_Suffix),
+directive_map: std.StringHashMapUnmanaged(Instruction.Operation_Type),
 
 const max_mnemonic_length = 8;
 const max_suffix_length = 4;
@@ -35,13 +19,13 @@ const max_directive_length = 8;
 pub fn init(
     temp: std.mem.Allocator,
     gpa: std.mem.Allocator,
-    handle: SourceFile.Handle,
-    out: *SourceFile,
+    handle: Source_File.Handle,
+    out: *Source_File,
     errors: *std.ArrayListUnmanaged(Error),
 ) Parser {
     var mnemonic_map = std.StringHashMapUnmanaged(Mnemonic) {};
-    var suffix_map = std.StringHashMapUnmanaged(MnemonicSuffix) {};
-    var directive_map = std.StringHashMapUnmanaged(Instruction.OperationType) {};
+    var suffix_map = std.StringHashMapUnmanaged(Mnemonic_Suffix) {};
+    var directive_map = std.StringHashMapUnmanaged(Instruction.Operation_Type) {};
 
     const mnemonics = comptime std.enums.values(Mnemonic);
     mnemonic_map.ensureUnusedCapacity(temp, mnemonics.len) catch @panic("OOM");
@@ -57,8 +41,8 @@ pub fn init(
         mnemonic_map.putAssumeCapacityNoClobber(lower, mnemonic);
     }
 
-    const suffixes = comptime std.enums.values(MnemonicSuffix);
-    suffix_map.ensureUnusedCapacity(temp, @intCast(u32, suffixes.len + 20)) catch @panic("OOM");
+    const suffixes = comptime std.enums.values(Mnemonic_Suffix);
+    suffix_map.ensureUnusedCapacity(temp, @intCast(suffixes.len + 20)) catch @panic("OOM");
     errdefer suffix_map.deinit(temp);
 
     inline for (suffixes) |suffix| {
@@ -70,28 +54,28 @@ pub fn init(
         suffix_map.putAssumeCapacityNoClobber(lower, suffix);
     }
 
-    suffix_map.putAssumeCapacityNoClobber("eq", .Z);
-    suffix_map.putAssumeCapacityNoClobber("neq", .NZ);
-    suffix_map.putAssumeCapacityNoClobber("ltu", .LU);
-    suffix_map.putAssumeCapacityNoClobber("lts", .LS);
-    suffix_map.putAssumeCapacityNoClobber("leu", .NGU);
-    suffix_map.putAssumeCapacityNoClobber("les", .NGS);
-    suffix_map.putAssumeCapacityNoClobber("gtu", .GU);
-    suffix_map.putAssumeCapacityNoClobber("gts", .GS);
-    suffix_map.putAssumeCapacityNoClobber("geu", .NLU);
-    suffix_map.putAssumeCapacityNoClobber("ges", .NLS);
-    suffix_map.putAssumeCapacityNoClobber("nltu", .NLU);
-    suffix_map.putAssumeCapacityNoClobber("nlts", .NLS);
-    suffix_map.putAssumeCapacityNoClobber("nleu", .GU);
-    suffix_map.putAssumeCapacityNoClobber("nles", .GS);
-    suffix_map.putAssumeCapacityNoClobber("ngtu", .NGU);
-    suffix_map.putAssumeCapacityNoClobber("ngts", .NGS);
-    suffix_map.putAssumeCapacityNoClobber("ngeu", .LU);
-    suffix_map.putAssumeCapacityNoClobber("nges", .LS);
-    suffix_map.putAssumeCapacityNoClobber("dw", .W);
-    suffix_map.putAssumeCapacityNoClobber("dr", .R);
+    suffix_map.putAssumeCapacityNoClobber("eq", .z);
+    suffix_map.putAssumeCapacityNoClobber("neq", .nz);
+    suffix_map.putAssumeCapacityNoClobber("ltu", .lu);
+    suffix_map.putAssumeCapacityNoClobber("lts", .ls);
+    suffix_map.putAssumeCapacityNoClobber("leu", .ngu);
+    suffix_map.putAssumeCapacityNoClobber("les", .ngs);
+    suffix_map.putAssumeCapacityNoClobber("gtu", .gu);
+    suffix_map.putAssumeCapacityNoClobber("gts", .gs);
+    suffix_map.putAssumeCapacityNoClobber("geu", .nlu);
+    suffix_map.putAssumeCapacityNoClobber("ges", .nls);
+    suffix_map.putAssumeCapacityNoClobber("nltu", .nlu);
+    suffix_map.putAssumeCapacityNoClobber("nlts", .nls);
+    suffix_map.putAssumeCapacityNoClobber("nleu", .gu);
+    suffix_map.putAssumeCapacityNoClobber("nles", .gs);
+    suffix_map.putAssumeCapacityNoClobber("ngtu", .ngu);
+    suffix_map.putAssumeCapacityNoClobber("ngts", .ngs);
+    suffix_map.putAssumeCapacityNoClobber("ngeu", .lu);
+    suffix_map.putAssumeCapacityNoClobber("nges", .ls);
+    suffix_map.putAssumeCapacityNoClobber("dw", .w);
+    suffix_map.putAssumeCapacityNoClobber("dr", .r);
 
-    const directives = comptime std.enums.values(Instruction.OperationType);
+    const directives = comptime std.enums.values(Instruction.Operation_Type);
     directive_map.ensureUnusedCapacity(temp, directives.len) catch @panic("OOM");
     errdefer directive_map.deinit(temp);
 
@@ -124,84 +108,84 @@ pub fn init(
     };
 }
 
-pub fn parseInstruction(self: *Parser) bool {
+pub fn parse_instruction(self: *Parser) bool {
     const label_token = self.next_token;
-    const label = self.parseLabel();
-    self.skipLinespace();
+    const label = self.parse_label();
+    self.skip_linespace();
     self.sync_to_end_of_line = false;
 
-    if (self.parseDirective()) |directive| {
+    if (self.parse_directive()) |directive| {
         const directive_token = self.next_token - 1;
         switch (directive) {
             .def, .local => {
-                if (self.parseSymbolDef()) |symbol| {
-                    if (self.parseExpr(false)) |expr| {
-                        const params = self.addBinaryExpression(.list, directive_token, symbol, expr);
-                        self.addInstruction(label, directive_token, switch (directive) {
-                            .def => .{ .def = {} },
-                            .local => .{ .local = {} },
+                if (self.parse_symbol_def()) |symbol| {
+                    if (self.parse_expr()) |expr| {
+                        const params = self.add_binary_expression(.list, directive_token, symbol, expr);
+                        self.add_instruction(label, directive_token, switch (directive) {
+                            .def => .def,
+                            .local => .local,
                             else => unreachable,
                         }, params);
                     } else {
-                        self.recordError("Expected expression for symbol definition");
+                        self.record_error("Expected expression for symbol definition");
                         self.sync_to_end_of_line = true;
                     }
                 } else {
-                    self.recordError("Expected symbol name");
+                    self.record_error("Expected symbol name");
                     self.sync_to_end_of_line = true;
                 }
             },
-            .undef => self.addInstruction(label, directive_token, .{ .undef = {} }, self.parseSymbolDefList()),
+            .undef => self.add_instruction(label, directive_token, .undef, self.parse_symbol_def_list()),
 
-            .push => self.addInstruction(label, directive_token, .{ .push = 0 }, self.parseSymbolDefList()),
-            .pop => self.addInstruction(label, directive_token, .{ .pop = 0 }, self.parseSymbolDefList()),
+            .push => self.add_instruction(label, directive_token, .{ .push = 0 }, self.parse_symbol_def_list()),
+            .pop => self.add_instruction(label, directive_token, .{ .pop = 0 }, self.parse_symbol_def_list()),
 
-            .section  => self.addInstruction(label, directive_token, .{ .section = {} }, self.parseSymbolDef()),
-            .boot     => self.addInstruction(label, directive_token, .{ .boot = {} }, self.parseSymbolDef()),
-            .code     => self.addInstruction(label, directive_token, .{ .code = {} }, self.parseSymbolDef()),
-            .kcode,   => self.addInstruction(label, directive_token, .{ .kcode = {} }, self.parseSymbolDef()),
-            .entry    => self.addInstruction(label, directive_token, .{ .entry = {} }, self.parseSymbolDef()),
-            .kentry   => self.addInstruction(label, directive_token, .{ .kentry = {} }, self.parseSymbolDef()),
-            .data     => self.addInstruction(label, directive_token, .{ .data = {} }, self.parseSymbolDef()),
-            .kdata    => self.addInstruction(label, directive_token, .{ .kdata = {} }, self.parseSymbolDef()),
-            .@"const" => self.addInstruction(label, directive_token, .{ .@"const" = {} }, self.parseSymbolDef()),
-            .kconst   => self.addInstruction(label, directive_token, .{ .kconst = {} }, self.parseSymbolDef()),
-            .stack    => self.addInstruction(label, directive_token, .{ .stack = {} }, self.parseSymbolDef()),
+            .section  => self.add_instruction(label, directive_token, .section, self.parse_symbol_def()),
+            .boot     => self.add_instruction(label, directive_token, .boot, self.parse_symbol_def()),
+            .code     => self.add_instruction(label, directive_token, .code, self.parse_symbol_def()),
+            .kcode,   => self.add_instruction(label, directive_token, .kcode, self.parse_symbol_def()),
+            .entry    => self.add_instruction(label, directive_token, .entry, self.parse_symbol_def()),
+            .kentry   => self.add_instruction(label, directive_token, .kentry, self.parse_symbol_def()),
+            .data     => self.add_instruction(label, directive_token, .data, self.parse_symbol_def()),
+            .kdata    => self.add_instruction(label, directive_token, .kdata, self.parse_symbol_def()),
+            .@"const" => self.add_instruction(label, directive_token, .@"const", self.parse_symbol_def()),
+            .kconst   => self.add_instruction(label, directive_token, .kconst, self.parse_symbol_def()),
+            .stack    => self.add_instruction(label, directive_token, .stack, self.parse_symbol_def()),
 
             .none, .insn, .bound_insn => unreachable,
 
             inline else => |d| {
-                const params = self.parseExprList(true, false);
+                const params = self.parse_expr_list(false);
                 const op = @unionInit(Instruction.Operation, @tagName(d), {});
-                self.addInstruction(label, directive_token, op, params);
+                self.add_instruction(label, directive_token, op, params);
             },
         }
-    } else if (self.parseMnemonic()) |mnemonic| {
+    } else if (self.parse_mnemonic()) |mnemonic| {
         const mnemonic_token = self.next_token - 1;
         var swap_params = false;
-        const suffix = self.parseSuffix(&swap_params);
-        const params = self.parseExprList(true, swap_params);
-        self.addInstruction(label, mnemonic_token, .{ .insn = .{
+        const suffix = self.parse_suffix(&swap_params);
+        const params = self.parse_expr_list(swap_params);
+        self.add_instruction(label, mnemonic_token, .{ .insn = .{
             .mnemonic = mnemonic,
             .suffix = suffix,
         }}, params);
     } else if (label) |_| {
-        self.addInstruction(label, label_token, .{ .none = {} }, null);
+        self.add_instruction(label, label_token, .none, null);
     }
-    self.skipLinespace();
-    _ = self.tryToken(.comment);
+    self.skip_linespace();
+    _ = self.try_token(.comment);
     while (true) {
-        if (self.tryToken(.newline)) return true;
-        if (self.tryToken(.eof)) return false;
+        if (self.try_token(.newline)) return true;
+        if (self.try_token(.eof)) return false;
         if (!self.sync_to_end_of_line) {
-            self.recordError("Expected end of line");
+            self.record_error("Expected end of line");
             self.sync_to_end_of_line = true;
         }
         self.next_token += 1;
     }
 }
 
-fn addInstruction(self: *Parser, label: ?Expression.Handle, token: Token.Handle, op: Instruction.Operation, params: ?Expression.Handle) void {
+fn add_instruction(self: *Parser, label: ?Expression.Handle, token: Token.Handle, op: Instruction.Operation, params: ?Expression.Handle) void {
     var instructions = &self.out.instructions;
     var start_token: Token.Handle = 0;
     var start_line: u32 = 1;
@@ -215,7 +199,7 @@ fn addInstruction(self: *Parser, label: ?Expression.Handle, token: Token.Handle,
             .offset = self.token_offsets[start_token],
             .kind = self.token_kinds[start_token],
         };
-        start_line += t.countNewlines(self.out.source);
+        start_line += t.count_new_lines(self.out.source);
     }
     instructions.append(self.gpa, .{
         .label = label,
@@ -226,10 +210,10 @@ fn addInstruction(self: *Parser, label: ?Expression.Handle, token: Token.Handle,
     }) catch @panic("OOM");
 }
 
-fn trySuffix(self: *Parser) MnemonicSuffix {
-    if (self.tryToken(.dot)) {
-        if (self.tryToken(.id)) {
-            const suffix_str = self.tokenLocation(self.next_token - 1);
+fn try_suffix(self: *Parser) Mnemonic_Suffix {
+    if (self.try_token(.dot)) {
+        if (self.try_token(.id)) {
+            const suffix_str = self.token_location(self.next_token - 1);
             if (suffix_str.len <= max_suffix_length) {
                 var buf = [_]u8 {0} ** max_suffix_length;
                 const lower = std.ascii.lowerString(&buf, suffix_str);
@@ -237,146 +221,158 @@ fn trySuffix(self: *Parser) MnemonicSuffix {
                     return suffix;
                 }
             }
-            self.recordErrorRel("Unrecognized mnemonic suffix", -1);
+            self.record_error_rel("Unrecognized mnemonic suffix", -1);
         } else {
-            self.recordError("Expected mnemonic suffix");
+            self.record_error("Expected mnemonic suffix");
         }
     }
     return .none;
 }
 
-fn parseSuffix(self: *Parser, swap_params: *bool) MnemonicSuffix {
-    const suffix1 = self.trySuffix();
-    const suffix2 = self.trySuffix();
+fn parse_suffix(self: *Parser, swap_params: *bool) Mnemonic_Suffix {
+    const suffix1 = self.try_suffix();
+    const suffix2 = self.try_suffix();
     return switch (suffix1) {
         .none => suffix2,
-        .LU => switch (suffix2) {
+        .lu => switch (suffix2) {
             .none => suffix1,
-            .GU => .LU_GU,
-            .Z => .LU_Z,
+            .gu => .lu_gu,
+            .z => .lu_z,
             else => blk: {
-                self.recordErrorRel("Invalid mnemonic suffix combination", -1);
+                self.record_error_rel("Invalid mnemonic suffix combination", -1);
                 break :blk suffix1;
             },
         },
-        .GU => switch (suffix2) {
+        .gu => switch (suffix2) {
             .none => suffix1,
-            .LU => blk: {
+            .lu => blk: {
                 swap_params.* = true;
-                break :blk .LU_GU;
+                break :blk .lu_gu;
             },
-            .Z => .GU_Z,
+            .z => .gu_z,
             else => blk: {
-                self.recordErrorRel("Invalid mnemonic suffix combination", -1);
+                self.record_error_rel("Invalid mnemonic suffix combination", -1);
                 break :blk suffix1;
             },
         },
-        .Z => switch (suffix2) {
+        .z => switch (suffix2) {
             .none => suffix1,
-            .LU => blk: {
+            .lu => blk: {
                 swap_params.* = true;
-                break :blk .LU_Z;
+                break :blk .lu_z;
             },
-            .GU => blk: {
+            .gu => blk: {
                 swap_params.* = true;
-                break :blk .GU_Z;
+                break :blk .gu_z;
             },
-            .LS => blk: {
+            .ls => blk: {
                 swap_params.* = true;
-                break :blk .LS_Z;
+                break :blk .ls_z;
             },
-            .GS => blk: {
+            .gs => blk: {
                 swap_params.* = true;
-                break :blk .GS_Z;
+                break :blk .gs_z;
             },
-            .N => blk: {
+            .n => blk: {
                 swap_params.* = true;
-                break :blk .N_Z;
+                break :blk .n_z;
             },
-            .P => blk: {
+            .p => blk: {
                 swap_params.* = true;
-                break :blk .P_Z;
+                break :blk .p_z;
             },
             else => blk: {
-                self.recordErrorRel("Invalid mnemonic suffix combination", -1);
+                self.record_error_rel("Invalid mnemonic suffix combination", -1);
                 break :blk suffix1;
             },
         },
-        .LS => switch (suffix2) {
+        .ls => switch (suffix2) {
             .none => suffix1,
-            .GS => .LS_GS,
-            .Z => .LS_Z,
+            .gs => .ls_gs,
+            .z => .ls_z,
             else => blk: {
-                self.recordErrorRel("Invalid mnemonic suffix combination", -1);
+                self.record_error_rel("Invalid mnemonic suffix combination", -1);
                 break :blk suffix1;
             },
         },
-        .GS =>  switch (suffix2) {
+        .gs =>  switch (suffix2) {
             .none => suffix1,
-            .LS => blk: {
+            .ls => blk: {
                 swap_params.* = true;
-                break :blk .LS_GS;
+                break :blk .ls_gs;
             },
-            .Z => .GS_Z,
+            .z => .gs_z,
             else => blk: {
-                self.recordErrorRel("Invalid mnemonic suffix combination", -1);
+                self.record_error_rel("Invalid mnemonic suffix combination", -1);
                 break :blk suffix1;
             },
         },
-        .N => switch (suffix2) {
+        .n => switch (suffix2) {
             .none => suffix1,
-            .Z => .N_Z,
-            .P => .N_P,
+            .z => .n_z,
+            .p => .n_p,
             else => blk: {
-                self.recordErrorRel("Invalid mnemonic suffix combination", -1);
+                self.record_error_rel("Invalid mnemonic suffix combination", -1);
                 break :blk suffix1;
             },
         },
-        .P => switch (suffix2) {
+        .p => switch (suffix2) {
             .none => suffix1,
-            .Z => .P_Z,
-            .N => blk: {
+            .z => .p_z,
+            .n => blk: {
                 swap_params.* = true;
-                break :blk .N_P;
+                break :blk .n_p;
             },
             else => blk: {
-                self.recordErrorRel("Invalid mnemonic suffix combination", -1);
+                self.record_error_rel("Invalid mnemonic suffix combination", -1);
                 break :blk suffix1;
             },
         },
         else => switch (suffix2) {
             .none => suffix1,
             else => blk: {
-                self.recordErrorRel("Invalid mnemonic suffix combination", -1);
+                self.record_error_rel("Invalid mnemonic suffix combination", -1);
                 break :blk suffix1;
             },
         }
     };
 }
 
-fn parseExprList(self: *Parser, first: bool, swap_params: bool) ?Expression.Handle {
+fn parse_expr_list(self: *Parser, swap_params: bool) ?Expression.Handle {
     const begin = self.next_token;
-    if (self.parseExpr(first)) |lhs| {
-        self.skipLinespace();
-        if (self.tryToken(.comma) or self.tryToken(.arrow)) {
+    self.skip_linespace();
+    if (!self.try_token(.arrow)) {
+        const token = self.next_token - 1;
+        const lhs = self.add_typed_terminal_expression(.arrow, token, .arrow);
+        if (self.parse_expr_list(false)) |rhs| {
+            return self.add_binary_expression(.list, token, lhs, rhs);
+        } else {
+            return lhs;
+        }
+    } else if (self.parse_expr()) |lhs| {
+        self.skip_linespace();
+        if (self.try_token(.comma) or self.try_token(.arrow)) {
             const token = self.next_token - 1;
-            if (self.parseExprList(false, false)) |rhs| {
+            if (self.parse_expr_list(false)) |rhs| {
                 switch (self.token_kinds[token]) {
                     .comma => if (swap_params) {
-                        return self.addBinaryExpression(.list, token, rhs, lhs);
+                        return self.add_binary_expression(.list, token, rhs, lhs);
                     } else {
-                        return self.addBinaryExpression(.list, token, lhs, rhs);
+                        return self.add_binary_expression(.list, token, lhs, rhs);
                     },
-                    .arrow => if (swap_params) {
-                        return self.addBinaryExpression(.arrow_list, token, rhs, lhs);
-                    } else {
-                        return self.addBinaryExpression(.arrow_list, token, lhs, rhs);
+                    .arrow => {
+                        const arrow = self.add_typed_terminal_expression(.arrow, token, .arrow);
+                        const arrow_rhs = self.add_binary_expression(.list, token, arrow, rhs);
+                        return self.add_binary_expression(.list, token, lhs, arrow_rhs);
                     },
                     else => unreachable,
                 }
+            } else if (self.token_kinds[token] == .arrow) {
+                const rhs = self.add_typed_terminal_expression(.arrow, token, .arrow);
+                return self.add_binary_expression(.list, token, lhs, rhs);
             } else {
                 if (!self.sync_to_end_of_line) {
-                    self.recordError("Expected expression");
+                    self.record_error("Expected expression");
                     self.sync_to_end_of_line = true;
                 }
                 return lhs;
@@ -389,51 +385,49 @@ fn parseExprList(self: *Parser, first: bool, swap_params: bool) ?Expression.Hand
     return null;
 }
 
-fn parseExpr(self: *Parser, allow_arrow_prefix: bool) ?Expression.Handle {
-    return self.parseExprPratt(if (allow_arrow_prefix) 0 else 1);
+fn parse_expr(self: *Parser) ?Expression.Handle {
+    return self.parse_expr_pratt(0);
 }
 
-const OperatorInfo = struct {
+const Operator_Info = struct {
     token: Token.Handle,
     left_bp: u8,
     right_bp: ?u8, // null for postfix operators
     expr: Expression.Kind,
 };
-fn parsePrefixOperator(self: *Parser) ?OperatorInfo {
+fn parse_prefix_operator(self: *Parser) ?Operator_Info {
     const begin = self.next_token;
-    self.skipLinespace();
+    self.skip_linespace();
     var t = self.next_token;
-    const info: OperatorInfo = switch (self.token_kinds[t]) {
-        .arrow => .{ .token = t, .left_bp = 0, .right_bp = 1, .expr = .arrow_prefix },
+    const info: Operator_Info = switch (self.token_kinds[t]) {
         .minus => .{ .token = t, .left_bp = 1, .right_bp = 0xFF, .expr = .negate },
         .tilde => .{ .token = t, .left_bp = 1, .right_bp = 0xFF, .expr = .complement },
         .at    => .{ .token = t, .left_bp = 1, .right_bp = 0xFF, .expr = .absolute_address_cast },
-        .dot => info: {
+        .dot => {
             t += 1;
             self.next_token = t;
-            defer self.next_token = t;
-            if (self.tryKeyword("d")) {
-                break :info .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .data_address_cast };
-            } else if (self.tryKeyword("i")) {
-                break :info .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .insn_address_cast };
-            } else if (self.tryKeyword("s")) {
-                break :info .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .stack_address_cast };
-            } else if (self.tryKeyword("raw")) {
-                break :info .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .remove_address_cast };
-            } else if (self.tryKeyword("r")) {
-                break :info .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .index_to_reg16 };
-            } else if (self.tryKeyword("rx")) {
-                break :info .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .index_to_reg32 };
-            } else if (self.tryKeyword("rb")) {
-                break :info .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .index_to_reg8 };
-            } else if (self.tryKeyword("idx")) {
-                break :info .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .reg_to_index };
-            } else if (self.tryKeyword("crlf")) {
-                break :info .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .crlf_cast };
-            } else if (self.tryKeyword("lf")) {
-                break :info .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .lf_cast };
+            if (self.try_keyword("d")) {
+                return .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .data_address_cast };
+            } else if (self.try_keyword("i")) {
+                return .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .insn_address_cast };
+            } else if (self.try_keyword("s")) {
+                return .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .stack_address_cast };
+            } else if (self.try_keyword("raw")) {
+                return .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .remove_address_cast };
+            } else if (self.try_keyword("r")) {
+                return .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .index_to_reg16 };
+            } else if (self.try_keyword("rx")) {
+                return .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .index_to_reg32 };
+            } else if (self.try_keyword("rb")) {
+                return .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .index_to_reg8 };
+            } else if (self.try_keyword("idx")) {
+                return .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .reg_to_index };
+            } else if (self.try_keyword("crlf")) {
+                return .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .crlf_cast };
+            } else if (self.try_keyword("lf")) {
+                return .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .lf_cast };
             } else {
-                t = begin;
+                self.next_token = begin;
                 return null;
             }
         },
@@ -445,11 +439,11 @@ fn parsePrefixOperator(self: *Parser) ?OperatorInfo {
     self.next_token += 1;
     return info;
 }
-fn parseOperator(self: *Parser) ?OperatorInfo {
+fn parse_operator(self: *Parser) ?Operator_Info {
     const begin = self.next_token;
-    self.skipLinespace();
+    self.skip_linespace();
     var t = self.next_token;
-    const info: OperatorInfo = switch (self.token_kinds[t]) {
+    const info: Operator_Info = switch (self.token_kinds[t]) {
         .bar        => .{ .token = t, .left_bp = 10, .right_bp = 11, .expr = .bitwise_or },
         .caret      => .{ .token = t, .left_bp = 12, .right_bp = 13, .expr = .bitwise_xor },
         .amp        => .{ .token = t, .left_bp = 14, .right_bp = 15, .expr = .bitwise_and },
@@ -465,17 +459,17 @@ fn parseOperator(self: *Parser) ?OperatorInfo {
             t += 1;
             self.next_token = t;
             defer self.next_token = t;
-            if (self.tryKeyword("zx")) {
+            if (self.try_keyword("zx")) {
                 break :info .{ .token = t, .left_bp = 50, .right_bp = 51, .expr = .zero_extend };
-            } else if (self.tryKeyword("sx")) {
+            } else if (self.try_keyword("sx")) {
                 break :info .{ .token = t, .left_bp = 50, .right_bp = 51, .expr = .sign_extend };
-            } else if (self.tryKeyword("trunc")) {
+            } else if (self.try_keyword("trunc")) {
                 break :info .{ .token = t, .left_bp = 50, .right_bp = 51, .expr = .truncate };
-            } else if (self.tryKeyword("signed")) {
+            } else if (self.try_keyword("signed")) {
                 break :info .{ .token = t, .left_bp = 50, .right_bp = null, .expr = .signed_cast };
-            } else if (self.tryKeyword("unsigned")) {
+            } else if (self.try_keyword("unsigned")) {
                 break :info .{ .token = t, .left_bp = 50, .right_bp = null, .expr = .unsigned_cast };
-            } else if (self.tryKeyword("without_signedness")) {
+            } else if (self.try_keyword("without_signedness")) {
                 break :info .{ .token = t, .left_bp = 50, .right_bp = null, .expr = .remove_signedness_cast };
             } else {
                 t = begin;
@@ -491,42 +485,42 @@ fn parseOperator(self: *Parser) ?OperatorInfo {
     return info;
 }
 
-fn parseExprPratt(self: *Parser, min_binding_power: u8) ?Expression.Handle {
+fn parse_expr_pratt(self: *Parser, min_binding_power: u8) ?Expression.Handle {
     if (self.sync_to_end_of_line) return null;
 
     const before_prefix_operator = self.next_token;
-    var expr = if (self.parsePrefixOperator()) |operator| e: {
+    var expr = if (self.parse_prefix_operator()) |operator| e: {
         if (operator.left_bp < min_binding_power) {
             self.next_token = before_prefix_operator;
             return null;
         }
-        if (self.parseExprPratt(operator.right_bp.?)) |right| {
-            break :e self.addUnaryExpression(operator.expr, operator.token, right);
+        if (self.parse_expr_pratt(operator.right_bp.?)) |right| {
+            break :e self.add_unary_expression(operator.expr, operator.token, right);
         } else if (!self.sync_to_end_of_line) {
-            self.recordError("Expected expression");
+            self.record_error("Expected expression");
             self.sync_to_end_of_line = true;
         }
         return null;
-    } else self.parseAtom() orelse return null;
+    } else self.parse_atom() orelse return null;
 
     while (true) {
         if (self.sync_to_end_of_line) return null;
         const before_operator = self.next_token;
-        if (self.parseOperator()) |operator| {
+        if (self.parse_operator()) |operator| {
             if (operator.left_bp < min_binding_power) {
                 self.next_token = before_operator;
                 break;
             }
             if (operator.right_bp) |binding_power| {
-                if (self.parseExprPratt(binding_power)) |right| {
-                    expr = self.addBinaryExpression(operator.expr, operator.token, expr, right);
+                if (self.parse_expr_pratt(binding_power)) |right| {
+                    expr = self.add_binary_expression(operator.expr, operator.token, expr, right);
                 } else if (!self.sync_to_end_of_line) {
-                    self.recordError("Expected expression");
+                    self.record_error("Expected expression");
                     self.sync_to_end_of_line = true;
                     return null;
                 }
             } else {
-                expr = self.addUnaryExpression(operator.expr, operator.token, expr);
+                expr = self.add_unary_expression(operator.expr, operator.token, expr);
             }
         } else break;
     }
@@ -534,34 +528,34 @@ fn parseExprPratt(self: *Parser, min_binding_power: u8) ?Expression.Handle {
     return expr;
 }
 
-fn parseAtom(self: *Parser) ?Expression.Handle {
-    return self.parseParenExpr()
-        orelse self.parseIntLiteral()
-        orelse self.parseStringLiteral()
-        orelse self.parseRegisterLiteral()
-        orelse self.parseSpecialLiteral()
-        orelse self.parseSymbolRef()
+fn parse_atom(self: *Parser) ?Expression.Handle {
+    return self.parse_paren_expr()
+        orelse self.parse_int_literal()
+        orelse self.parse_string_literal()
+        orelse self.parse_register_literal()
+        orelse self.parse_special_literal()
+        orelse self.parse_symbol_ref()
         ;
 }
 
-fn parseParenExpr(self: *Parser) ?Expression.Handle {
+fn parse_paren_expr(self: *Parser) ?Expression.Handle {
     const begin = self.next_token;
-    self.skipLinespace();
-    if (self.tryToken(.paren_open)) {
-        if (self.parseExpr(false)) |expr| {
-            if (!self.tryToken(.paren_close)) {
+    self.skip_linespace();
+    if (self.try_token(.paren_open)) {
+        if (self.parse_expr()) |expr| {
+            if (!self.try_token(.paren_close)) {
                 if (!self.sync_to_end_of_line) {
-                    self.recordError("Expected ')'");
+                    self.record_error("Expected ')'");
                     self.sync_to_end_of_line = true;
                 }
             }
             return expr;
         } else {
             if (!self.sync_to_end_of_line) {
-                self.recordError("Expected expression");
+                self.record_error("Expected expression");
                 self.sync_to_end_of_line = true;
             }
-            _ = self.tryToken(.paren_close);
+            _ = self.try_token(.paren_close);
             return null;
         }
     }
@@ -569,67 +563,67 @@ fn parseParenExpr(self: *Parser) ?Expression.Handle {
     return null;
 }
 
-fn parseIntLiteral(self: *Parser) ?Expression.Handle {
+fn parse_int_literal(self: *Parser) ?Expression.Handle {
     const begin = self.next_token;
-    self.skipLinespace();
-    if (self.tryToken(.int_literal)) {
-        return self.addTerminalExpression(.literal_int, self.next_token - 1);
+    self.skip_linespace();
+    if (self.try_token(.int_literal)) {
+        return self.add_terminal_expression(.literal_int, self.next_token - 1);
     }
     self.next_token = begin;
     return null;
 }
 
-fn parseStringLiteral(self: *Parser) ?Expression.Handle {
+fn parse_string_literal(self: *Parser) ?Expression.Handle {
     const begin = self.next_token;
-    self.skipLinespace();
+    self.skip_linespace();
     const literal_token = self.next_token;
-    if (self.tryToken(.str_literal)) {
-        return self.addTerminalExpression(.literal_str, literal_token);
-    } else if (self.tryToken(.str_literal_raw)) {
+    if (self.try_token(.str_literal)) {
+        return self.add_terminal_expression(.literal_str, literal_token);
+    } else if (self.try_token(.str_literal_raw)) {
         while (true) {
             const end = self.next_token;
-            self.skipLinespace();
-            if (self.tryToken(.str_literal_raw)) continue;
+            self.skip_linespace();
+            if (self.try_token(.str_literal_raw)) continue;
 
             self.next_token = end;
             break;
         }
-        return self.addTerminalExpression(.literal_str, literal_token);
+        return self.add_terminal_expression(.literal_str, literal_token);
     }
     self.next_token = begin;
     return null;
 }
 
-fn parseRegisterLiteral(self: *Parser) ?Expression.Handle {
+fn parse_register_literal(self: *Parser) ?Expression.Handle {
     const begin = self.next_token;
-    self.skipLinespace();
-    if (self.tryToken(.id)) {
+    self.skip_linespace();
+    if (self.try_token(.id)) {
         const token = self.next_token - 1;
-        const id = self.tokenLocation(token);
-        if (isGprLiteral(id)) {
-            return self.addTerminalExpression(.literal_reg, token);
+        const id = self.token_location(token);
+        if (is_gpr_literal(id)) {
+            return self.add_terminal_expression(.literal_reg, token);
         }
         if (id.len >= 2 and id.len <= 4) {
             var buf = [_]u8 {0} ** 4;
             const lower = std.ascii.lowerString(&buf, id);
             if (lower[1] == 'p') {
                 if (std.mem.eql(u8, lower, "ip")) {
-                    return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .IP });
+                    return self.add_typed_terminal_expression(.literal_reg, token, Expression.Type.sr(.ip));
                 } else if (std.mem.eql(u8, lower, "sp")) {
-                    return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .SP });
+                    return self.add_typed_terminal_expression(.literal_reg, token, Expression.Type.sr(.sp));
                 } else if (std.mem.eql(u8, lower, "rp")) {
-                    return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .RP });
+                    return self.add_typed_terminal_expression(.literal_reg, token, Expression.Type.sr(.rp));
                 } else if (std.mem.eql(u8, lower, "bp")) {
-                    return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .BP });
+                    return self.add_typed_terminal_expression(.literal_reg, token, Expression.Type.sr(.bp));
                 }
             } else if (std.mem.eql(u8, lower, "uxp")) {
-                return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .UXP });
+                return self.add_typed_terminal_expression(.literal_reg, token, Expression.Type.sr(.uxp));
             } else if (std.mem.eql(u8, lower, "kxp")) {
-                return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .KXP });
+                return self.add_typed_terminal_expression(.literal_reg, token, Expression.Type.sr(.kxp));
             } else if (std.mem.eql(u8, lower, "stat")) {
-                return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .STAT });
+                return self.add_typed_terminal_expression(.literal_reg, token, Expression.Type.sr(.stat));
             } else if (std.mem.eql(u8, lower, "asn")) {
-                return self.addTypedTerminalExpression(.literal_reg, token, .{ .sr = .ASN });
+                return self.add_typed_terminal_expression(.literal_reg, token, Expression.Type.sr(.asn));
             }
         }
     }
@@ -637,18 +631,18 @@ fn parseRegisterLiteral(self: *Parser) ?Expression.Handle {
     return null;
 }
 
-fn parseSpecialLiteral(self: *Parser) ?Expression.Handle {
+fn parse_special_literal(self: *Parser) ?Expression.Handle {
         const begin = self.next_token;
-    self.skipLinespace();
+    self.skip_linespace();
     const token = self.next_token;
-    if (self.tryToken(.money)) {
-        return self.addTerminalExpression(.literal_current_address, token);
+    if (self.try_token(.money)) {
+        return self.add_terminal_expression(.literal_current_address, token);
     }
     self.next_token = begin;
     return null;
 }
 
-fn isGprLiteral(id: []const u8) bool {
+fn is_gpr_literal(id: []const u8) bool {
     if (id.len < 2) return false;
     switch (id[0]) {
         'r', 'R', 'x', 'X', 'b', 'B' => {
@@ -660,15 +654,15 @@ fn isGprLiteral(id: []const u8) bool {
     }
 }
 
-fn parseLabel(self: *Parser) ?Expression.Handle {
+fn parse_label(self: *Parser) ?Expression.Handle {
     const begin = self.next_token;
     const begin_expression_len = self.out.expressions.len;
 
-    const local = self.parseLocalLabelDirective();
-    if (self.parseSymbolDef()) |expr| {
-        self.skipLinespace();
-        if (self.tryToken(.colon)) {
-            return if (local) self.addUnaryExpression(.local_label_def, begin + 1, expr) else expr;
+    const local = self.parse_local_label_directive();
+    if (self.parse_symbol_def()) |expr| {
+        self.skip_linespace();
+        if (self.try_token(.colon)) {
+            return if (local) self.add_unary_expression(.local_label_def, begin + 1, expr) else expr;
         }
     }
     self.out.expressions.len = begin_expression_len;
@@ -676,10 +670,10 @@ fn parseLabel(self: *Parser) ?Expression.Handle {
     return null;
 }
 
-fn parseLocalLabelDirective(self: *Parser) bool {
+fn parse_local_label_directive(self: *Parser) bool {
     const begin = self.next_token;
-    if (self.tryToken(.dot) and self.tryToken(.id)) {
-        const directive_str = self.tokenLocation(self.next_token - 1);
+    if (self.try_token(.dot) and self.try_token(.id)) {
+        const directive_str = self.token_location(self.next_token - 1);
         if (std.mem.eql(u8, directive_str, "local")) {
             return true;
         }
@@ -688,17 +682,17 @@ fn parseLocalLabelDirective(self: *Parser) bool {
     return false;
 }
 
-fn parseSymbolDefList(self: *Parser) ?Expression.Handle {
+fn parse_symbol_def_list(self: *Parser) ?Expression.Handle {
     const begin = self.next_token;
-    if (self.parseSymbolDef()) |lhs| {
-        self.skipLinespace();
+    if (self.parse_symbol_def()) |lhs| {
+        self.skip_linespace();
         const token = self.next_token;
-        if (self.tryToken(.comma)) {
-            if (self.parseSymbolDefList()) |rhs| {
-                return self.addBinaryExpression(.list, token, lhs, rhs);
+        if (self.try_token(.comma)) {
+            if (self.parse_symbol_def_list()) |rhs| {
+                return self.add_binary_expression(.list, token, lhs, rhs);
             } else {
                 if (!self.sync_to_end_of_line) {
-                    self.recordError("Expected symbol");
+                    self.record_error("Expected symbol");
                     self.sync_to_end_of_line = true;
                 }
                 return lhs;
@@ -711,34 +705,34 @@ fn parseSymbolDefList(self: *Parser) ?Expression.Handle {
     return null;
 }
 
-fn parseSymbolDef(self: *Parser) ?Expression.Handle {
+fn parse_symbol_def(self: *Parser) ?Expression.Handle {
     const begin = self.next_token;
-    self.skipLinespace();
-    if (self.tryToken(.id)) {
-        return self.addTerminalExpression(.literal_symbol_def, self.next_token - 1);
-    } else if (self.tryToken(.dot) and self.tryKeyword("sym")) {
+    self.skip_linespace();
+    if (self.try_token(.id)) {
+        return self.add_terminal_expression(.literal_symbol_def, self.next_token - 1);
+    } else if (self.try_token(.dot) and self.try_keyword("sym")) {
         const sym_token = self.next_token - 1;
-        if (self.parseStringLiteral()) |expr| {
-            return self.addUnaryExpression(.directive_symbol_def, sym_token, expr);
+        if (self.parse_string_literal()) |expr| {
+            return self.add_unary_expression(.directive_symbol_def, sym_token, expr);
         } else {
-            self.recordError("Expected constant expression");
+            self.record_error("Expected constant expression");
             self.sync_to_end_of_line = true;
         }
     }
     self.next_token = begin;
     return null;
 }
-fn parseSymbolRef(self: *Parser) ?Expression.Handle {
+fn parse_symbol_ref(self: *Parser) ?Expression.Handle {
     const begin = self.next_token;
-    self.skipLinespace();
-    if (self.tryToken(.id)) {
-        return self.addTerminalExpression(.literal_symbol_ref, self.next_token - 1);
-    } else if (self.tryToken(.dot) and self.tryKeyword("sym")) {
+    self.skip_linespace();
+    if (self.try_token(.id)) {
+        return self.add_terminal_expression(.literal_symbol_ref, self.next_token - 1);
+    } else if (self.try_token(.dot) and self.try_keyword("sym")) {
         const sym_token = self.next_token - 1;
-        if (self.parseStringLiteral()) |expr| {
-            return self.addUnaryExpression(.directive_symbol_ref, sym_token, expr);
+        if (self.parse_string_literal()) |expr| {
+            return self.add_unary_expression(.directive_symbol_ref, sym_token, expr);
         } else {
-            self.recordError("Expected constant expression");
+            self.record_error("Expected constant expression");
             self.sync_to_end_of_line = true;
         }
     }
@@ -746,10 +740,10 @@ fn parseSymbolRef(self: *Parser) ?Expression.Handle {
     return null;
 }
 
-fn tryKeyword(self: *Parser, comptime kw: []const u8) bool {
+fn try_keyword(self: *Parser, comptime kw: []const u8) bool {
     const begin = self.next_token;
-    if (self.tryToken(.id)) {
-        const str = self.tokenLocation(begin);
+    if (self.try_token(.id)) {
+        const str = self.token_location(begin);
         if (str.len == kw.len) {
             var buf = [_]u8 {0} ** kw.len;
             if (std.mem.eql(u8, std.ascii.lowerString(&buf, str), kw)) {
@@ -761,8 +755,8 @@ fn tryKeyword(self: *Parser, comptime kw: []const u8) bool {
     return false;
 }
 
-fn addTypedTerminalExpression(self: *Parser, comptime kind: Expression.Kind, token: Token.Handle, expr_type: ExpressionType) Expression.Handle {
-    const handle = @intCast(Expression.Handle, self.out.expressions.len);
+fn add_typed_terminal_expression(self: *Parser, comptime kind: Expression.Kind, token: Token.Handle, expr_type: Expression.Type) Expression.Handle {
+    const handle: Expression.Handle = @intCast(self.out.expressions.len);
     self.out.expressions.append(self.gpa, .{
         .token = token,
         .info = @unionInit(Expression.Info, @tagName(kind), {}),
@@ -773,30 +767,29 @@ fn addTypedTerminalExpression(self: *Parser, comptime kind: Expression.Kind, tok
     return handle;
 }
 
-fn addExpressionInfo(self: *Parser, token: Token.Handle, info: Expression.Info) Expression.Handle {
-    const handle = @intCast(Expression.Handle, self.out.expressions.len);
+fn add_expression_info(self: *Parser, token: Token.Handle, info: Expression.Info) Expression.Handle {
+    const handle: Expression.Handle = @intCast(self.out.expressions.len);
     self.out.expressions.append(self.gpa, .{
         .token = token,
         .info = info,
-        .resolved_type = .{ .unknown = {} },
+        .resolved_type = .unknown,
         .resolved_constant = null,
         .flags = .{},
     }) catch @panic("OOM");
     return handle;
 }
 
-fn addTerminalExpression(self: *Parser, kind: Expression.Kind, token: Token.Handle) Expression.Handle {
-    return self.addExpressionInfo(token, switch (kind) {
-        .literal_int => .{ .literal_int = {} },
-        .literal_str => .{ .literal_str = {} },
-        .literal_reg => .{ .literal_reg = {} },
-        .literal_symbol_def => .{ .literal_symbol_def = {} },
-        .literal_symbol_ref => .{ .literal_symbol_ref = {} },
-        .literal_current_address => .{ .literal_current_address = {} },
+fn add_terminal_expression(self: *Parser, kind: Expression.Kind, token: Token.Handle) Expression.Handle {
+    return self.add_expression_info(token, switch (kind) {
+        .arrow => .arrow,
+        .literal_int => .literal_int,
+        .literal_str => .literal_str,
+        .literal_reg => .literal_reg,
+        .literal_symbol_def => .literal_symbol_def,
+        .literal_symbol_ref => .literal_symbol_ref,
+        .literal_current_address => .literal_current_address,
 
         .list,
-        .arrow_list,
-        .arrow_prefix,
         .directive_symbol_def,
         .directive_symbol_ref,
         .local_label_def,
@@ -834,9 +827,8 @@ fn addTerminalExpression(self: *Parser, kind: Expression.Kind, token: Token.Hand
     });
 }
 
-fn addUnaryExpression(self: *Parser,  kind: Expression.Kind, token: Token.Handle, inner: Expression.Handle) Expression.Handle {
-    return self.addExpressionInfo(token, switch (kind) {
-        .arrow_prefix => .{ .arrow_prefix = inner },
+fn add_unary_expression(self: *Parser, kind: Expression.Kind, token: Token.Handle, inner: Expression.Handle) Expression.Handle {
+    return self.add_expression_info(token, switch (kind) {
         .directive_symbol_def => .{ .directive_symbol_def = inner },
         .directive_symbol_ref => .{ .directive_symbol_ref = inner },
         .local_label_def => .{ .local_label_def = inner },
@@ -857,6 +849,7 @@ fn addUnaryExpression(self: *Parser,  kind: Expression.Kind, token: Token.Handle
         .crlf_cast => .{ .crlf_cast = inner },
         .lf_cast => .{ .lf_cast = inner },
 
+        .arrow,
         .literal_int,
         .literal_str,
         .literal_reg,
@@ -864,7 +857,6 @@ fn addUnaryExpression(self: *Parser,  kind: Expression.Kind, token: Token.Handle
         .literal_symbol_ref,
         .literal_current_address,
         .list,
-        .arrow_list,
         .plus,
         .minus,
         .multiply,
@@ -883,14 +875,13 @@ fn addUnaryExpression(self: *Parser,  kind: Expression.Kind, token: Token.Handle
     });
 }
 
-fn addBinaryExpression(self: *Parser, kind: Expression.Kind, token: Token.Handle, lhs: Expression.Handle, rhs: Expression.Handle) Expression.Handle {
+fn add_binary_expression(self: *Parser, kind: Expression.Kind, token: Token.Handle, lhs: Expression.Handle, rhs: Expression.Handle) Expression.Handle {
     const bin = Expression.Binary{
         .left = lhs,
         .right = rhs,
     };
-    return self.addExpressionInfo(token, switch (kind) {
+    return self.add_expression_info(token, switch (kind) {
         .list => .{ .list = bin },
-        .arrow_list => .{ .arrow_list = bin },
         .plus => .{ .plus = bin },
         .minus => .{ .minus = bin },
         .multiply => .{ .multiply = bin },
@@ -906,7 +897,7 @@ fn addBinaryExpression(self: *Parser, kind: Expression.Kind, token: Token.Handle
         .zero_extend => .{ .zero_extend = bin },
         .truncate => .{ .truncate = bin },
 
-        .arrow_prefix,
+        .arrow,
         .directive_symbol_def,
         .directive_symbol_ref,
         .local_label_def,
@@ -936,10 +927,10 @@ fn addBinaryExpression(self: *Parser, kind: Expression.Kind, token: Token.Handle
     });
 }
 
-fn parseMnemonic(self: *Parser) ?Mnemonic {
-    if (self.sync_to_end_of_line or !self.tryToken(.id)) return null;
+fn parse_mnemonic(self: *Parser) ?Mnemonic {
+    if (self.sync_to_end_of_line or !self.try_token(.id)) return null;
 
-    const mnemonic_str = self.tokenLocation(self.next_token - 1);
+    const mnemonic_str = self.token_location(self.next_token - 1);
     if (mnemonic_str.len <= max_mnemonic_length) {
         var buf = [_]u8 {0} ** max_mnemonic_length;
         const lower = std.ascii.lowerString(&buf, mnemonic_str);
@@ -948,16 +939,16 @@ fn parseMnemonic(self: *Parser) ?Mnemonic {
         }
     }
 
-    self.recordErrorRel("Unrecognized mnemonic", -1);
+    self.record_error_rel("Unrecognized mnemonic", -1);
     self.sync_to_end_of_line = true;
     return null;
 }
 
-fn parseDirective(self: *Parser) ?Instruction.OperationType {
-    if (self.sync_to_end_of_line or !self.tryToken(.dot)) return null;
+fn parse_directive(self: *Parser) ?Instruction.Operation_Type {
+    if (self.sync_to_end_of_line or !self.try_token(.dot)) return null;
 
-    if (self.tryToken(.id)) {
-        const directive_str = self.tokenLocation(self.next_token - 1);
+    if (self.try_token(.id)) {
+        const directive_str = self.token_location(self.next_token - 1);
         if (directive_str.len <= max_directive_length) {
             var buf = [_]u8 {0} ** max_directive_length;
             const lower = std.ascii.lowerString(&buf, directive_str);
@@ -965,19 +956,19 @@ fn parseDirective(self: *Parser) ?Instruction.OperationType {
                 return directive;
             }
         }
-        self.recordErrorRel("Unrecognized directive", -1);
+        self.record_error_rel("Unrecognized directive", -1);
     } else {
-        self.recordError("Expected directive");
+        self.record_error("Expected directive");
     }
     self.sync_to_end_of_line = true;
     return null;
 }
 
-fn skipLinespace(self: *Parser) void {
-    _ = self.tryToken(.linespace);
+fn skip_linespace(self: *Parser) void {
+    _ = self.try_token(.linespace);
 }
 
-fn tryToken(self: *Parser, kind: TokenKind) bool {
+fn try_token(self: *Parser, kind: Token_Kind) bool {
     if (self.token_kinds[self.next_token] == kind) {
         self.next_token += 1;
         return true;
@@ -986,7 +977,7 @@ fn tryToken(self: *Parser, kind: TokenKind) bool {
     }
 }
 
-fn recordError(self: *Parser, desc: []const u8) void {
+fn record_error(self: *Parser, desc: []const u8) void {
     self.errors.append(self.gpa, .{
         .file = self.handle,
         .context = .{ .token = self.next_token },
@@ -994,23 +985,29 @@ fn recordError(self: *Parser, desc: []const u8) void {
         .flags = .{},
     }) catch @panic("OOM");
 }
-fn recordErrorAbs(self: *Parser, desc: []const u8, token: Token.Handle) void {
+fn record_error_rel(self: *Parser, desc: []const u8, token_offset: i8) void {
     self.errors.append(self.gpa, .{
         .file = self.handle,
-        .context = .{ .token = token },
-        .desc = desc,
-        .flags = .{},
-    }) catch @panic("OOM");
-}
-fn recordErrorRel(self: *Parser, desc: []const u8, token_offset: i8) void {
-    self.errors.append(self.gpa, .{
-        .file = self.handle,
-        .context = .{ .token = @intCast(Token.Handle, @as(i32, self.next_token) + token_offset) },
+        .context = .{ .token = @intCast(@as(i32, self.next_token) + token_offset) },
         .desc = desc,
         .flags = .{},
     }) catch @panic("OOM");
 }
 
-fn tokenLocation(self: *Parser, handle: Token.Handle) []const u8 {
+fn token_location(self: *Parser, handle: Token.Handle) []const u8 {
     return self.out.tokens.get(handle).location(self.out.source);
 }
+
+const Parser = @This();
+const Source_File = @import("Source_File.zig");
+const Error = @import("Error.zig");
+const Instruction = @import("Instruction.zig");
+const Expression = @import("Expression.zig");
+const Token = lex.Token;
+const Token_Kind = lex.Token_Kind;
+const Mnemonic = isa.Mnemonic;
+const lex = @import("lex.zig");
+const Mnemonic_Suffix = isa.Mnemonic_Suffix;
+const isa = arch.isa;
+const arch = @import("lib_arch");
+const std = @import("std");

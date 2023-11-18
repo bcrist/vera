@@ -12,7 +12,7 @@
 // write_even: bool = false,
 // write_odd: bool = false,
 
-// pub const OffsetType = std.meta.Int(.unsigned, @bitSizeOf(bus.PageOffset) - 1);
+// pub const OffsetType = std.meta.Int(.unsigned, @bitSizeOf(hw.addr.Offset) - 1);
 
 // pub fn getForTransact(raw: SystemBusControl, inhibit_writes: bool) SystemBusControl {
 //     return .{

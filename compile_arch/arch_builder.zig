@@ -461,7 +461,7 @@ pub fn writeOpcodeTableLarge(writer: anytype) !void {
 pub fn writeInstructionEncodings(inner_writer: anytype) !void {
     const InnerWriter = @TypeOf(inner_writer);
     var writer = sx.Writer(InnerWriter).init(allocators.temp_arena.allocator(), inner_writer);
-    try writer.openExpanded();
+    try writer.open_expanded();
 
     for (instructions, descriptions, 0..) |maybe_insn, maybe_desc, opcode| {
         if (maybe_insn) |i| {

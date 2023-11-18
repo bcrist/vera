@@ -215,7 +215,7 @@ pub const Iterator = struct {
         return self;
     }
 
-    pub fn readByte(self: *Iterator) ?u8 {
+    pub fn read_byte(self: *Iterator) ?u8 {
         const chip: []const u16 = self.mem[self.group];
         if (self.offset >= chip.len) {
             return null;
@@ -239,7 +239,7 @@ pub const Iterator = struct {
     }
     pub fn readAll(self: *Iterator, out: []u8) bool {
         for (out) |*p| {
-            if (self.readByte()) |b| p.* = b else return false;
+            if (self.read_byte()) |b| p.* = b else return false;
         }
         return true;
     }
@@ -347,7 +347,7 @@ const FlashStateMachine = struct {
                         const sector_size: FlashAddress = 0x800;
                         const sector_mask = ~(sector_size - 1);
                         const sector = flash[(address & sector_mask)..][0..sector_size];
-                        std.mem.set(u16, sector, 0xFFFF);
+                        @memset(sector, 0xFFFF);
                     },
                     0x30 => {
                         // Block erase
@@ -362,19 +362,19 @@ const FlashStateMachine = struct {
                             0...14 => {
                                 const block_size: FlashAddress = 0x8000;
                                 const block = flash[(block_number * block_size)..][0..block_size];
-                                std.mem.set(u16, block, 0xFFFF);
+                                @memset(block, 0xFFFF);
                             },
-                            15 => std.mem.set(u16, flash[0x78000..0x7C000], 0xFFFF),
-                            16 => std.mem.set(u16, flash[0x7C000..0x7D000], 0xFFFF),
-                            17 => std.mem.set(u16, flash[0x7D000..0x7E000], 0xFFFF),
-                            18 => std.mem.set(u16, flash[0x7E000..0x80000], 0xFFFF),
+                            15 => @memset(flash[0x78000..0x7C000], 0xFFFF),
+                            16 => @memset(flash[0x7C000..0x7D000], 0xFFFF),
+                            17 => @memset(flash[0x7D000..0x7E000], 0xFFFF),
+                            18 => @memset(flash[0x7E000..0x80000], 0xFFFF),
                             else => {},
                         }
                     },
                     0x10 => {
                         if (command == 0x55510) {
                             // Chip erase
-                            std.mem.set(u16, flash, 0xFFFF);
+                            @memset(flash, 0xFFFF);
                         }
                     },
                     else => {},

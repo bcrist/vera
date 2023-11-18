@@ -1,34 +1,36 @@
-pub const Control_Signals = @import("Control_Signals.zig");
+pub const Control_Signals = @import("hardware/Control_Signals.zig");
 pub const Control_Signal = std.meta.FieldEnum(Control_Signals);
 
 // pub const Signed_Offset_For_Literal = i7; // note not all possible values are valid
 
-pub const Pipeline = enum(u2) {
+
+pub const Pipeline = enum (u2) {
     zero = 0,
     one = 1,
     two = 2,
     three = 3,
 
-    pub fn init(raw_value: u2) Pipeline {
+    pub fn init(raw_value: Raw) Pipeline {
         return @enumFromInt(raw_value);
     }
-    pub fn raw(self: Pipeline) u2 {
+    pub fn raw(self: Pipeline) Raw {
         return @intFromEnum(self);
     }
 
-    pub const count = 4;
+    pub const Raw = std.meta.Tag(Pipeline); 
+    pub const count = std.math.maxInt(Raw) + 1;
 };
 
-pub const Execution_Mode = enum(u2) {
+pub const Execution_Mode = enum (u2) {
     normal = 0,
     interrupt = 1,
     fault = 2,
     interrupt_fault = 3,
 
-    pub fn init(raw_value: u2) Execution_Mode {
+    pub fn init(raw_value: Raw) Execution_Mode {
         return @enumFromInt(raw_value);
     }
-    pub fn raw(self: Execution_Mode) u2 {
+    pub fn raw(self: Execution_Mode) Raw {
         return @intFromEnum(self);
     }
     pub fn is_fault(self: Execution_Mode) bool {
@@ -43,9 +45,11 @@ pub const Execution_Mode = enum(u2) {
             .interrupt, .interrupt_fault => true,
         };
     }
+    pub const Raw = std.meta.Tag(Execution_Mode); 
+    pub const count = std.math.maxInt(Raw) + 1;
 };
 
-pub const Power_Mode = enum(u1) {
+pub const Power_Mode = enum (u1) {
     run = 0,
     sleep = 1,
 };
@@ -61,16 +65,17 @@ pub const microcode = struct {
         double_fault = 6,
         interrupt = 7,
         _,
-        pub fn init(raw_value: u12) Slot {
+        pub fn init(raw_value: Raw) Slot {
             return @enumFromInt(raw_value);
         }
-        pub fn raw(self: Slot) u12 {
+        pub fn raw(self: Slot) Raw {
             return @intFromEnum(self);
         }
 
+        pub const Raw = std.meta.Tag(Slot); 
         pub const first = init(8);
-        pub const last = init(std.math.maxInt(u12));
-        pub const count = @as(usize, last) + 1;
+        pub const last = init(std.math.maxInt(Raw));
+        pub const count = std.math.maxInt(Raw) + 1;
     };
 
     pub const Slot_Source = enum (u2) {
@@ -87,10 +92,10 @@ pub const microcode = struct {
         v: bool,
         k: bool,
 
-        pub fn init(raw_value: u5) Flags {
+        pub fn init(raw_value: Raw) Flags {
             return @bitCast(raw_value);
         }
-        pub fn raw(self: Flags) u5 {
+        pub fn raw(self: Flags) Raw {
             return @bitCast(self);
         }
 
@@ -158,20 +163,23 @@ pub const microcode = struct {
                 return null;
             }
         };
+
+        pub const Raw = u5;
     };
 
     pub const Address = packed struct (u17) {
         flags: Flags,
         slot: Slot,
 
-        pub fn init(raw_value: u17) Address {
+        pub fn init(raw_value: Raw) Address {
             return @bitCast(raw_value);
         }
-        pub fn raw(self: Address) u17 {
+        pub fn raw(self: Address) Raw {
             return @bitCast(self);
         }
 
-        pub const count = std.math.maxInt(u17) + 1;
+        pub const Raw = u17;
+        pub const count = std.math.maxInt(Raw) + 1;
     };
 
     pub const Data = [Address.count]Control_Signals;
@@ -182,14 +190,15 @@ pub const decode = struct {
         d: D,
         mode: Control_Signals.ID_Mode,
 
-        pub fn init(raw_value: u17) Address {
+        pub fn init(raw_value: Raw) Address {
             return @bitCast(raw_value);
         }
-        pub fn raw(self: Address) u17 {
+        pub fn raw(self: Address) Raw {
             return @bitCast(self);
         }
 
-        pub const count = std.math.maxInt(u17) + 1;
+        pub const Raw = u17;
+        pub const count = std.math.maxInt(Raw) + 1;
     };
 
     pub const Result = packed struct (u24) {
@@ -197,181 +206,198 @@ pub const decode = struct {
         ij: IJ,
         ik: IK,
         iw: IW,
-        pub fn init(raw_value: u24) Result {
+        pub fn init(raw_value: Raw) Result {
             return @bitCast(raw_value);
         }
-        pub fn raw(self: Result) u24 {
+        pub fn raw(self: Result) Raw {
             return @bitCast(self);
         }
+        pub const Raw = u24;
     };
 };
 
 pub const RSN = enum (u6) {
     _,
-    pub fn init(raw_value: u6) RSN {
+    pub fn init(raw_value: Raw) RSN {
         return @enumFromInt(raw_value);
     }
-    pub fn raw(self: RSN) u6 {
+    pub fn raw(self: RSN) Raw {
         return @intFromEnum(self);
     }
 
-    pub const count = std.math.maxInt(u6) + 1;
+    pub const Raw = std.meta.Tag(RSN);
+    pub const count = std.math.maxInt(Raw) + 1;
 };
 
-pub const IJ = enum (arch.Register_Index) {
-    _,
-    pub fn init(raw_value: arch.Register_Index) IJ {
-        return @enumFromInt(raw_value);
-    }
-    pub fn raw(self: IJ) arch.Register_Index {
-        return @intFromEnum(self);
-    }
-};
+pub const Register_Index = u4;
+pub const register_count = std.math.maxInt(Register_Index) + 1;
 
-pub const IK = enum (arch.Register_Index) {
+pub const IJ = enum (Register_Index) {
     _,
-    pub fn init(raw_value: arch.Register_Index) IK {
+    pub fn init(raw_value: Register_Index) IJ {
         return @enumFromInt(raw_value);
     }
-    pub fn raw(self: IK) arch.Register_Index {
+    pub fn raw(self: IJ) Register_Index {
         return @intFromEnum(self);
     }
 };
 
-pub const IW = enum (arch.Register_Index) {
+pub const IK = enum (Register_Index) {
     _,
-    pub fn init(raw_value: arch.Register_Index) IW {
+    pub fn init(raw_value: Register_Index) IK {
         return @enumFromInt(raw_value);
     }
-    pub fn raw(self: IW) arch.Register_Index {
+    pub fn raw(self: IK) Register_Index {
         return @intFromEnum(self);
     }
 };
 
-pub const R = enum(u16) {
+pub const IW = enum (Register_Index) {
     _,
-    pub fn init(raw_value: u16) R {
+    pub fn init(raw_value: Register_Index) IW {
         return @enumFromInt(raw_value);
     }
-    pub fn raw(self: R) u16 {
+    pub fn raw(self: IW) Register_Index {
         return @intFromEnum(self);
     }
+};
+
+pub const R = enum (u16) {
+    _,
+    pub fn init(raw_value: Raw) R {
+        return @enumFromInt(raw_value);
+    }
+    pub fn raw(self: R) Raw {
+        return @intFromEnum(self);
+    }
+    pub const Raw = std.meta.Tag(R);
 };
 
 pub const SRL = enum (u16) {
     _,
-    pub fn init(raw_value: u16) SRL {
+    pub fn init(raw_value: Raw) SRL {
         return @enumFromInt(raw_value);
     }
-    pub fn raw(self: SRL) u16 {
+    pub fn raw(self: SRL) Raw {
         return @intFromEnum(self);
     }
+    pub const Raw = std.meta.Tag(SRL);
 };
 pub const SRH = enum (u16) {
     _,
-    pub fn init(raw_value: u16) SRH {
+    pub fn init(raw_value: Raw) SRH {
         return @enumFromInt(raw_value);
     }
-    pub fn raw(self: SRH) u16 {
+    pub fn raw(self: SRH) Raw {
         return @intFromEnum(self);
     }
+    pub const Raw = std.meta.Tag(SRH);
 };
 pub const SR = packed struct (u32) {
     lo: SRL,
     hi: SRH,
-    pub fn init(raw_value: u32) SR {
+    pub fn init(raw_value: Raw) SR {
         return @bitCast(raw_value);
     }
-    pub fn raw(self: SR) u32 {
+    pub fn raw(self: SR) Raw {
         return @bitCast(self);
     }
+    pub const Raw = u32;
 };
 
 pub const Register_Set = struct {
-    reg: [arch.register_count]R,
+    reg: [register_count]R,
     sr1: [Control_Signals.SR1_Index.count]SR,
     sr2: [Control_Signals.SR2_Index.count]SR,
 };
 
 pub const JL = enum (u16) {
     _,
-    pub fn init(raw_value: u16) JL {
+    pub fn init(raw_value: Raw) JL {
         return @enumFromInt(raw_value);
     }
-    pub fn raw(self: JL) u16 {
+    pub fn raw(self: JL) Raw {
         return @intFromEnum(self);
     }
+    pub const Raw = std.meta.Tag(JL);
 };
 pub const JH = enum (u16) {
     _,
-    pub fn init(raw_value: u16) JH {
+    pub fn init(raw_value: Raw) JH {
         return @enumFromInt(raw_value);
     }
-    pub fn raw(self: JH) u16 {
+    pub fn raw(self: JH) Raw {
         return @intFromEnum(self);
     }
+    pub const Raw = std.meta.Tag(JH);
 };
 pub const J = packed struct (u32) {
     lo: JL,
     hi: JH,
-    pub fn init(raw_value: u32) J {
+    pub fn init(raw_value: Raw) J {
         return @bitCast(raw_value);
     }
-    pub fn raw(self: J) u32 {
+    pub fn raw(self: J) Raw {
         return @bitCast(self);
     }
+    pub const Raw = u32;
 };
 
 pub const K = enum (u16) {
     _,
-    pub fn init(raw_value: u16) K {
+    pub fn init(raw_value: Raw) K {
         return @enumFromInt(raw_value);
     }
-    pub fn raw(self: K) u16 {
+    pub fn raw(self: K) Raw {
         return @intFromEnum(self);
     }
+    pub const Raw = std.meta.Tag(K);
 };
 
 pub const LL = enum (u16) {
     _,
-    pub fn init(raw_value: u16) LL {
+    pub fn init(raw_value: Raw) LL {
         return @enumFromInt(raw_value);
     }
-    pub fn raw(self: LL) u16 {
+    pub fn raw(self: LL) Raw {
         return @intFromEnum(self);
     }
+    pub const Raw = std.meta.Tag(LL);
 };
 pub const LH = enum (u16) {
     _,
-    pub fn init(raw_value: u16) LH {
+    pub fn init(raw_value: Raw) LH {
         return @enumFromInt(raw_value);
     }
-    pub fn raw(self: LH) u16 {
+    pub fn raw(self: LH) Raw {
         return @intFromEnum(self);
     }
+    pub const Raw = std.meta.Tag(LH);
 };
 pub const L = packed struct (u32) {
     lo: LL,
     hi: LH,
-    pub fn init(raw_value: u32) L {
+    pub fn init(raw_value: Raw) L {
         return @bitCast(raw_value);
     }
-    pub fn raw(self: L) u32 {
+    pub fn raw(self: L) Raw {
         return @bitCast(self);
     }
+    pub const Raw = u32;
 };
 
 pub const D = enum (u16) {
     _,
-    pub fn init(raw_value: u16) D {
+    pub fn init(raw_value: Raw) D {
         return @enumFromInt(raw_value);
     }
-    pub fn raw(self: D) u16 {
+    pub fn raw(self: D) Raw {
         return @intFromEnum(self);
     }
     pub fn raw8(self: D) u8 {
         return @truncate(@intFromEnum(self));
     }
+    pub const Raw = std.meta.Tag(D);
 };
 
 pub const Status = packed struct(u16) {
@@ -386,93 +412,102 @@ pub const Status = packed struct(u16) {
     exec: Execution_Mode,
     _unused: u5 = 0,
 
-    pub fn init(raw_value: u16) Status {
+    pub fn init(raw_value: Raw) Status {
         return @bitCast(raw_value);
     }
-    pub fn raw(self: Status) u16 {
+    pub fn raw(self: Status) Raw {
         return @bitCast(self);
     }
+    pub const Raw = u16;
 };
 
 pub const addr = struct {
     pub const Slot = enum (u6) {
         _,
-        pub fn init(raw_value: u6) Slot {
+        pub fn init(raw_value: Raw) Slot {
             return @enumFromInt(raw_value);
         }
-        pub fn raw(self: Slot) u6 {
+        pub fn raw(self: Slot) Raw {
             return @intFromEnum(self);
         }
+        pub const Raw = std.meta.Tag(Slot);
     };
 
     pub const Tag = enum (u14) {
         _,
-        pub fn init(raw_value: u14) Tag {
+        pub fn init(raw_value: Raw) Tag {
             return @enumFromInt(raw_value);
         }
-        pub fn raw(self: Tag) u14 {
+        pub fn raw(self: Tag) Raw {
             return @intFromEnum(self);
         }
+        pub const Raw = std.meta.Tag(Tag);
     };
 
     pub const Page = packed struct (u20) {
         slot: Slot,
         tag: Tag,
 
-        pub fn init(raw_value: u20) Page {
+        pub fn init(raw_value: Raw) Page {
             return @bitCast(raw_value);
         }
-        pub fn raw(self: Page) u20 {
+        pub fn raw(self: Page) Raw {
             return @bitCast(self);
         }
-
-        pub const num_addresses_per_page = @as(usize, Offset.max.raw()) + 1;
+        pub const Raw = u20; // why doesn't std.meta.Tag work on packed structs?
+        pub const zero = init(0);
+        pub const max = init(std.math.maxInt(Raw));
+        pub const count = std.math.maxInt(Raw) + 1;
+        pub const num_addresses_per_page = Offset.count;
     };
 
     pub const Offset = enum (u12) {
         _,
-        pub fn init(raw_value: u12) Offset {
+        pub fn init(raw_value: Raw) Offset {
             return @enumFromInt(raw_value);
         }
-        pub fn raw(self: Offset) u12 {
+        pub fn raw(self: Offset) Raw {
             return @intFromEnum(self);
         }
-
+        pub const Raw = std.meta.Tag(Offset);
         pub const zero = init(0);
-        pub const max = init(std.math.maxInt(u12));
+        pub const max = init(std.math.maxInt(Raw));
+        pub const count = std.math.maxInt(Raw) + 1;
     };
 
     pub const Frame = enum (u14) {
         _,
-        pub fn init(raw_value: u14) Frame {
+        pub fn init(raw_value: Raw) Frame {
             return @enumFromInt(raw_value);
         }
-        pub fn raw(self: Frame) u14 {
+        pub fn raw(self: Frame) Raw {
             return @intFromEnum(self);
         }
 
-        pub const num_addresses_per_frame = @as(usize, Offset.max.raw()) + 1;
+        pub const Raw = std.meta.Tag(Frame);
+        pub const num_addresses_per_frame = Offset.count;
     };
 
     pub const Virtual = packed struct (u32) {
         offset: Offset,
         page: Page,
-        pub fn init(raw_value: u32) Virtual {
+        pub fn init(raw_value: Raw) Virtual {
             return @bitCast(raw_value);
         }
-        pub fn raw(self: Virtual) u32 {
+        pub fn raw(self: Virtual) Raw {
             return @bitCast(self);
         }
+        pub const Raw = u32;
     };
 
     pub const Physical = packed struct (u26) {
         offset: Offset,
         frame: Frame,
 
-        pub fn init(raw_value: u26) Physical {
+        pub fn init(raw_value: Raw) Physical {
             return @bitCast(raw_value);
         }
-        pub fn raw(self: Physical) u26 {
+        pub fn raw(self: Physical) Raw {
             return @bitCast(self);
         }
 
@@ -480,6 +515,8 @@ pub const addr = struct {
             if (self.frame.raw() < device_0.frame.raw()) return null;
             return @intCast((self.frame.raw() - device_0.frame.raw()) / num_frames_per_device);
         }
+
+        pub const Raw = u26;
 
         pub const ram_start = init(0x0_000_000);
 
@@ -499,15 +536,16 @@ pub const addr = struct {
     pub const translation = struct {
         pub const ASN = enum (u4) {
             _,
-            pub fn init(raw_value: u4) ASN {
+            pub fn init(raw_value: Raw) ASN {
                 return @enumFromInt(raw_value);
             }
-            pub fn raw(self: ASN) u4 {
+            pub fn raw(self: ASN) Raw {
                 return @intFromEnum(self);
             }
+            pub const Raw = std.meta.Tag(ASN);
         };
 
-        pub const Access_Policy = enum(u2) {
+        pub const Access_Policy = enum (u2) {
             unprivileged = 0,
             kernel_entry_256 = 1,
             kernel_entry_4096 = 2,
@@ -526,12 +564,13 @@ pub const addr = struct {
             access: Access_Policy,
             tag: Tag,
 
-            pub fn init(raw_value: u32) Entry {
+            pub fn init(raw_value: Raw) Entry {
                 return @bitCast(raw_value);
             }
-            pub fn raw(self: Entry) u32 {
+            pub fn raw(self: Entry) Raw {
                 return @bitCast(self);
             }
+            pub const Raw = u32;
         };
 
         pub const Entry_Group = enum (u2) {
@@ -546,14 +585,15 @@ pub const addr = struct {
             group: Entry_Group,
             asn: ASN,
 
-            pub fn init(raw_value: u12) Entry_Address {
+            pub fn init(raw_value: Raw) Entry_Address {
                 return @bitCast(raw_value);
             }
-            pub fn raw(self: Entry_Address) u12 {
+            pub fn raw(self: Entry_Address) Raw {
                 return @bitCast(self);
             }
 
-            pub const count = std.math.maxInt(u12) + 1;
+            pub const Raw = u12;
+            pub const count = std.math.maxInt(Raw) + 1;
         };
 
         // Information saved when handling a fault;
@@ -568,12 +608,13 @@ pub const addr = struct {
             slot: Slot,
             tag: Tag,
 
-            pub fn init(raw_value: u32) Info {
+            pub fn init(raw_value: Raw) Info {
                 return @bitCast(raw_value);
             }
-            pub fn raw(self: Info) u32 {
+            pub fn raw(self: Info) Raw {
                 return @bitCast(self);
             }
+            pub const Raw = u32;
         };
     };
 };

@@ -432,7 +432,7 @@ pub fn doWindow(self: Pipeline_State) void {
 
 fn doRegisterLine(
     self: Pipeline_State,
-    comptime first_gpr: arch.Register_Index,
+    comptime first_gpr: hw.Register_Index,
     comptime sr1: Control_Signals.SR1_Index,
     comptime sr2: Control_Signals.SR2_Index,
     glyph_width: f32,

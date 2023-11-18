@@ -44,7 +44,7 @@ pub fn main() !void {
 
     // var ram_iter = sim.memory.flashIterator(0);
     // var i: usize = 0;
-    // while (ram_iter.readByte()) |b| {
+    // while (ram_iter.read_byte()) |b| {
     //     if (b != 0xFF) {
     //         std.debug.print("{X:0>4}: {X:0>2}\n", .{ i, b });
     //     }
@@ -56,7 +56,7 @@ pub fn main() !void {
 
     // ram_iter = sim.memory.sramIterator(0);
     // for (0..256) |_| {
-    //     std.debug.print(" {X:0>2}", .{ ram_iter.readByte().? });
+    //     std.debug.print(" {X:0>2}", .{ ram_iter.read_byte().? });
     // }
     // std.debug.print("\n", .{});
 
@@ -129,7 +129,6 @@ fn saveConfig(alloc: std.mem.Allocator, gui: *Gui) void {
 }
 
 
-// const ExpressionType = ie.Parameter.ExpressionType;
 const Gui = @import("microsim/gui/Gui.zig");
 const Config = @import("microsim/Config.zig");
 const sim = @import("lib_microsim");

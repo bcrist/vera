@@ -1,6 +1,4 @@
-const std = @import("std");
-
-pub const TokenKind = enum(u8) {
+pub const Token_Kind = enum (u8) {
     reserved,
     eof,
     linespace,
@@ -34,7 +32,7 @@ pub const TokenKind = enum(u8) {
 
 pub const Token = struct {
     offset: u32,
-    kind: TokenKind,
+    kind: Token_Kind,
 
     pub const Handle = u31;
     pub const Range = struct {
@@ -52,7 +50,7 @@ pub const Token = struct {
         }
     };
 
-    pub fn countNewlines(self: Token, source: []const u8) u32 {
+    pub fn count_new_lines(self: Token, source: []const u8) u32 {
         var remaining = source[self.offset..];
         return switch (self.kind) {
             .newline => 1,
@@ -268,10 +266,10 @@ pub const Token = struct {
         return remaining[0..token_len];
     }
 };
-pub const TokenList = std.MultiArrayList(Token);
+pub const Token_List = std.MultiArrayList(Token);
 
-pub fn lex(allocator: std.mem.Allocator, source: []const u8) TokenList {
-    var tokens = TokenList{};
+pub fn lex(allocator: std.mem.Allocator, source: []const u8) Token_List {
+    var tokens = Token_List{};
     tokens.setCapacity(allocator, source.len / 2 + 100) catch @panic("OOM");
 
     var i: u32 = 0;
@@ -330,11 +328,11 @@ pub fn lex(allocator: std.mem.Allocator, source: []const u8) TokenList {
         };
 
         tokens.append(allocator, token) catch @panic("OOM");
-        i += @intCast(u32, token.location(source).len);
+        i += @intCast(token.location(source).len);
     }
 
     tokens.append(allocator, .{
-        .offset = @intCast(u32, source.len),
+        .offset = @intCast(source.len),
         .kind = .eof,
     }) catch @panic("OOM");
 
@@ -346,61 +344,61 @@ pub fn lex(allocator: std.mem.Allocator, source: []const u8) TokenList {
     return tokens;
 }
 
-fn testLex(src: []const u8, expected_tokens: []const TokenKind) !void {
+fn test_lex(src: []const u8, expected_tokens: []const Token_Kind) !void {
     // try std.io.getStdOut().writer().print("Testing lex of '{s}'\n", .{ src });
     var tokens = lex(std.testing.allocator, src);
     defer tokens.deinit(std.testing.allocator);
-    try std.testing.expectEqualSlices(TokenKind, expected_tokens, tokens.items(.kind));
+    try std.testing.expectEqualSlices(Token_Kind, expected_tokens, tokens.items(.kind));
 }
 
 test "Lexer linespace" {
-    try testLex(" ", &.{ .linespace, .eof });
-    try testLex("\t", &.{ .linespace, .eof });
-    try testLex("\x00", &.{ .linespace, .eof });
-    try testLex("   \t", &.{ .linespace, .eof });
-    try testLex("  \\\n  ", &.{ .linespace, .eof });
-    try testLex("  \\ \t \n  ", &.{ .linespace, .eof });
+    try test_lex(" ", &.{ .linespace, .eof });
+    try test_lex("\t", &.{ .linespace, .eof });
+    try test_lex("\x00", &.{ .linespace, .eof });
+    try test_lex("   \t", &.{ .linespace, .eof });
+    try test_lex("  \\\n  ", &.{ .linespace, .eof });
+    try test_lex("  \\ \t \n  ", &.{ .linespace, .eof });
 }
 
 test "Lexer newline" {
-    try testLex("\n", &.{ .newline, .eof });
-    try testLex("\n\n", &.{ .newline, .newline, .eof });
+    try test_lex("\n", &.{ .newline, .eof });
+    try test_lex("\n\n", &.{ .newline, .newline, .eof });
 }
 
 test "Lexer ids" {
-    try testLex("abcd", &.{ .id, .eof });
-    try testLex("ab\\cd", &.{ .id, .eof });
-    try testLex("ab\\  \tcd", &.{ .id, .eof });
-    try testLex("abcd efg", &.{ .id, .linespace, .id, .eof });
+    try test_lex("abcd", &.{ .id, .eof });
+    try test_lex("ab\\cd", &.{ .id, .eof });
+    try test_lex("ab\\  \tcd", &.{ .id, .eof });
+    try test_lex("abcd efg", &.{ .id, .linespace, .id, .eof });
 }
 
 test "Lexer integers" {
-    try testLex("1234", &.{ .int_literal, .eof });
-    try testLex("0123 0x10fff", &.{ .int_literal, .linespace, .int_literal, .eof });
-    try testLex("0b1010111010101", &.{ .int_literal, .eof });
-    try testLex("0o14777", &.{ .int_literal, .eof });
+    try test_lex("1234", &.{ .int_literal, .eof });
+    try test_lex("0123 0x10fff", &.{ .int_literal, .linespace, .int_literal, .eof });
+    try test_lex("0b1010111010101", &.{ .int_literal, .eof });
+    try test_lex("0o14777", &.{ .int_literal, .eof });
 }
 
 test "Lexer comments" {
-    try testLex("// comment", &.{ .comment, .eof });
-    try testLex(
+    try test_lex("// comment", &.{ .comment, .eof });
+    try test_lex(
         \\//aasdf
         \\//asdf asdf a;sdlfkjasdf@#$%&^#@()(*&)
     , &.{ .comment, .newline, .comment, .eof });
 }
 
 test "Lexer strings" {
-    try testLex("\"abc\"", &.{ .str_literal, .eof });
-    try testLex("\"\\\"\"", &.{ .str_literal, .eof });
-    try testLex("\"\\( U+123 0x55 0b1010 =0123 )\"", &.{ .str_literal, .eof });
+    try test_lex("\"abc\"", &.{ .str_literal, .eof });
+    try test_lex("\"\\\"\"", &.{ .str_literal, .eof });
+    try test_lex("\"\\( U+123 0x55 0b1010 =0123 )\"", &.{ .str_literal, .eof });
 
-    try testLex(
+    try test_lex(
         \\    \\
         \\    \\
         \\\\
         , &.{ .linespace, .str_literal_raw, .linespace, .str_literal_raw, .str_literal_raw, .eof });
 
-    try testLex(
+    try test_lex(
         \\\\
         \\\\
         \\
@@ -408,7 +406,7 @@ test "Lexer strings" {
 }
 
 test "Lexer operators" {
-    try testLex(".,:->", &.{
+    try test_lex(".,:->", &.{
         .dot,
         .comma,
         .colon,
@@ -418,7 +416,7 @@ test "Lexer operators" {
 }
 
 test "Lexer examples" {
-    try testLex(
+    try test_lex(
         \\label:
         \\   addc r0, 15 -> r0 //comment
         \\   neg r0
@@ -434,3 +432,5 @@ test "Lexer examples" {
         .id, .colon, .linespace, .dot, .id, .linespace, .int_literal, .linespace, .int_literal, .linespace, .int_literal, .linespace, .int_literal, .eof
     });
 }
+
+const std = @import("std");

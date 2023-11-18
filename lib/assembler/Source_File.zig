@@ -1,37 +1,22 @@
-const std = @import("std");
-const lex = @import("lex.zig");
-const isa = @import("isa_types");
-const ie = @import("isa_encoding");
-const symbols = @import("symbols.zig");
-const Assembler = @import("Assembler.zig");
-const Instruction = @import("Instruction.zig");
-const Expression = @import("Expression.zig");
-const Section = @import("Section.zig");
-const Error = @import("Error.zig");
-const Parser = @import("Parser.zig");
-
-const Mnemonic = isa.Mnemonic;
-const SourceFile = @This();
-
 handle: Handle,
 name: []const u8,
 source: []const u8,
-tokens: lex.TokenList,
+tokens: lex.Token_List,
 instructions: std.MultiArrayList(Instruction),
 expressions: std.MultiArrayList(Expression),
 blocks: std.MultiArrayList(Block),
 
 // not populated during parsing:
-locals: std.StringHashMapUnmanaged(symbols.SymbolTarget),
+locals: std.StringHashMapUnmanaged(symbols.Symbol_Target),
 stacks: std.StringHashMapUnmanaged(Block.Handle),
 
 pub const Handle = u32;
 
-pub fn parse(gpa: std.mem.Allocator, handle: Handle, name: []const u8, source: []const u8, errors: *std.ArrayListUnmanaged(Error)) SourceFile {
+pub fn parse(gpa: std.mem.Allocator, handle: Handle, name: []const u8, source: []const u8, errors: *std.ArrayListUnmanaged(Error)) Source_File {
     const tokens = lex.lex(gpa, source);
     errdefer tokens.deinit(gpa);
 
-    var file = SourceFile{
+    var file = Source_File{
         .handle = handle,
         .name = name,
         .source = source,
@@ -47,7 +32,7 @@ pub fn parse(gpa: std.mem.Allocator, handle: Handle, name: []const u8, source: [
     defer temp.deinit();
 
     var p = Parser.init(temp.allocator(), gpa, handle, &file, errors);
-    while (p.parseInstruction()) {}
+    while (p.parse_instruction()) {}
 
     const operations = file.instructions.items(.operation);
     var block_begin: Instruction.Handle = 0;
@@ -55,8 +40,8 @@ pub fn parse(gpa: std.mem.Allocator, handle: Handle, name: []const u8, source: [
         .section, .boot, .code, .kcode, .entry, .kentry,
         .data, .kdata, .@"const", .kconst, .stack,
         => {
-            const new_block_begin = backtrackLabels(operations, @intCast(Instruction.Handle, insn_handle));
-            file.tryAddBlock(gpa, block_begin, new_block_begin);
+            const new_block_begin = backtrack_labels(operations, @intCast(insn_handle));
+            file.try_add_block(gpa, block_begin, new_block_begin);
             block_begin = new_block_begin;
         },
         .none, .nil, .org, .@"align", .keep,
@@ -66,12 +51,12 @@ pub fn parse(gpa: std.mem.Allocator, handle: Handle, name: []const u8, source: [
         => {},
     };
 
-    file.tryAddBlock(gpa, block_begin, @intCast(Instruction.Handle, operations.len));
+    file.try_add_block(gpa, block_begin, @intCast(operations.len));
 
     return file;
 }
 
-pub fn deinit(self: SourceFile, gpa: std.mem.Allocator, maybe_arena: ?std.mem.Allocator) void {
+pub fn deinit(self: Source_File, gpa: std.mem.Allocator, maybe_arena: ?std.mem.Allocator) void {
     for (self.blocks.items(.labels)) |*map| {
         map.deinit(gpa);
     }
@@ -93,14 +78,14 @@ pub const Block = struct {
     end_insn: Instruction.Handle,
 
     // not populated during parsing:
-    block_type: ?Instruction.OperationType = null,
+    block_type: ?Instruction.Operation_Type = null,
     section: ?Section.Handle = null,
     keep: bool = false,
     labels: std.StringHashMapUnmanaged(Instruction.Handle) = .{}, // only private and stack labels; not public labels
 
     pub const Handle = u32;
 };
-fn tryAddBlock(self: *SourceFile, gpa: std.mem.Allocator, first_insn: Instruction.Handle, end_insn: Instruction.Handle) void {
+fn try_add_block(self: *Source_File, gpa: std.mem.Allocator, first_insn: Instruction.Handle, end_insn: Instruction.Handle) void {
     if (first_insn >= end_insn) return;
 
     var first_token = self.instructions.items(.token)[first_insn];
@@ -116,19 +101,19 @@ fn tryAddBlock(self: *SourceFile, gpa: std.mem.Allocator, first_insn: Instructio
 }
 
 pub const Slices = struct {
-    file: *SourceFile,
+    file: *Source_File,
     insn: std.MultiArrayList(Instruction).Slice,
     expr: std.MultiArrayList(Expression).Slice,
     block: std.MultiArrayList(Block).Slice,
 
-    pub fn blockInstructions(self: Slices, block_handle: Block.Handle) Instruction.Iterator {
+    pub fn block_instructions(self: Slices, block_handle: Block.Handle) Instruction.Iterator {
         return .{
             .begin = self.block.items(.first_insn)[block_handle],
             .end = self.block.items(.end_insn)[block_handle],
         };
     }
 };
-pub fn slices(self: *SourceFile) Slices {
+pub fn slices(self: *Source_File) Slices {
     return .{
         .file = self,
         .insn = self.instructions.slice(),
@@ -139,10 +124,10 @@ pub fn slices(self: *SourceFile) Slices {
 
 pub const Chunk = struct {
     section: ?Section.Handle,
-    file: SourceFile.Handle,
+    file: Source_File.Handle,
     instructions: Instruction.Iterator,
 
-    pub fn getAddressRange(self: Chunk, a: *const Assembler) Assembler.AddressRange {
+    pub fn address_range(self: Chunk, a: *const Assembler) Assembler.Address_Range {
         const file = &a.files.items[self.file];
         const addresses = file.instructions.items(.address);
         const lengths = file.instructions.items(.length);
@@ -157,12 +142,12 @@ pub const Chunk = struct {
     }
 
 };
-pub const ChunkPair = struct {
+pub const Chunk_Pair = struct {
     a: Chunk,
     b: Chunk,
 
-    pub fn init(a: Chunk, b: Chunk) ChunkPair {
-        var self: ChunkPair = undefined;
+    pub fn init(a: Chunk, b: Chunk) Chunk_Pair {
+        var self: Chunk_Pair = undefined;
         if (a.file < b.file or a.file == b.file and a.instructions.begin < b.instructions.begin) {
             self.a = a;
             self.b = b;
@@ -174,8 +159,8 @@ pub const ChunkPair = struct {
     }
 };
 
-pub fn collectChunks(
-    self: *const SourceFile,
+pub fn collect_chunks(
+    self: *const Source_File,
     a: *Assembler,
     fixed_org: *std.ArrayListUnmanaged(Chunk),
     auto_org: *std.ArrayListUnmanaged(Chunk),
@@ -185,7 +170,7 @@ pub fn collectChunks(
     };
 
     const State = struct {
-        file: *const SourceFile,
+        file: *const Source_File,
         a: *Assembler,
         fixed_org_chunks: *std.ArrayListUnmanaged(Chunk),
         auto_org_chunks: *std.ArrayListUnmanaged(Chunk),
@@ -196,7 +181,7 @@ pub fn collectChunks(
         chunk_type: ?ChunkType = null,
         chunk_begin: Instruction.Handle = undefined,
 
-        fn tryAddChunk(state: *@This(), chunk_end: Instruction.Handle, ended_by_unconditional_control_flow: bool) void {
+        fn try_add_chunk(state: *@This(), chunk_end: Instruction.Handle, ended_by_unconditional_control_flow: bool) void {
             const is_fixed = state.is_fixed or state.section_handle == null;
             const dest = if (is_fixed) state.fixed_org_chunks else state.auto_org_chunks;
             if (chunk_end > state.chunk_begin) {
@@ -210,7 +195,7 @@ pub fn collectChunks(
                 }) catch @panic("OOM");
 
                 if (state.chunk_type) |t| if (t == .code and !ended_by_unconditional_control_flow) {
-                    state.a.recordInsnError(state.file.handle, chunk_end - 1, "Expected unconditional control flow to terminate this chunk", .{});
+                    state.a.record_insn_error(state.file.handle, chunk_end - 1, "Expected unconditional control flow to terminate this chunk", .{});
                 };
             }
 
@@ -219,10 +204,10 @@ pub fn collectChunks(
             state.chunk_begin = chunk_end;
         }
 
-        fn checkChunkType(state: *@This(), new_type: ChunkType, insn: Instruction.Handle) void {
+        fn check_chunk_type(state: *@This(), new_type: ChunkType, insn: Instruction.Handle) void {
             if (state.chunk_type) |t| {
                 if (t != new_type) {
-                    state.tryAddChunk(insn, false);
+                    state.try_add_chunk(insn, false);
                     state.chunk_type = new_type;
                 }
             } else {
@@ -254,22 +239,22 @@ pub fn collectChunks(
         while (block_iter.next()) |insn_handle| {
             switch (operations[insn_handle]) {
                 .org => {
-                    const new_chunk_begin = backtrackOrgHeaders(operations, insn_handle);
-                    state.tryAddChunk(new_chunk_begin, false);
+                    const new_chunk_begin = backtrack_org_headers(operations, insn_handle);
+                    state.try_add_chunk(new_chunk_begin, false);
                     state.is_fixed = true;
                 },
                 .insn => |i| {
-                    state.checkChunkType(.code, insn_handle);
-                    if (isa.getBranchKind(i.mnemonic, i.suffix) == .unconditional) {
-                        state.tryAddChunk(insn_handle + 1, true);
+                    state.check_chunk_type(.code, insn_handle);
+                    if (isa.branch_kind(i.mnemonic, i.suffix) == .unconditional) {
+                        state.try_add_chunk(insn_handle + 1, true);
                     }
                 },
                 .bound_insn => unreachable, // instructions should never be bound before we've collected chunks
                 .push, .pop => {
-                    state.checkChunkType(.code, insn_handle);
+                    state.check_chunk_type(.code, insn_handle);
                 },
                 .db, .dw, .dd, .zb, .zw, .zd => {
-                    state.checkChunkType(.data, insn_handle);
+                    state.check_chunk_type(.data, insn_handle);
                 },
 
                 .none, .nil, .@"align", .keep, .def, .undef, .local, .range,
@@ -279,7 +264,7 @@ pub fn collectChunks(
         }
 
         if (state.chunk_begin < end) {
-            state.tryAddChunk(end, false);
+            state.try_add_chunk(end, false);
         }
     }
 }
@@ -287,7 +272,7 @@ pub fn collectChunks(
 // Note this may not work correctly for a needle token in a label, which preceeds the main Instruction.token unless there is only a label on that line.
 // It's meant to be used when you know the token is from Instruction.token or an Expression.token being used as a parameter.
 // It will only work for tokens within a label expression if the operation for that line is `.none`
-pub fn findInstructionByToken(self: *const SourceFile, token_handle: lex.Token.Handle) Instruction.Handle {
+pub fn find_instruction_by_token(self: *const Source_File, token_handle: lex.Token.Handle) Instruction.Handle {
     var haystack = self.instructions.items(.token);
     var base: usize = 0;
 
@@ -307,17 +292,17 @@ pub fn findInstructionByToken(self: *const SourceFile, token_handle: lex.Token.H
             insn_index = base + offset;
         } else break;
     }
-    return @intCast(Instruction.Handle, insn_index orelse unreachable);
+    return @intCast(insn_index orelse unreachable);
 }
 
 // Note this may not work correctly for a needle expression in a label, which preceeds the main Instruction.token.
 // It's meant to be used when you know the expression is from an instruction's parameter or symbol definition expression.
-pub fn findInstructionByExpr(self: *const SourceFile, expr_handle: Expression.Handle) Instruction.Handle {
+pub fn find_instruction_by_expr(self: *const Source_File, expr_handle: Expression.Handle) Instruction.Handle {
     const token_handle = self.expressions.items(.token)[expr_handle];
-    return self.findInstructionByToken(token_handle);
+    return self.find_instruction_by_token(token_handle);
 }
 
-pub fn findBlockByToken(self: *const SourceFile, token_handle: lex.Token.Handle) Block.Handle {
+pub fn find_block_by_token(self: *const Source_File, token_handle: lex.Token.Handle) Block.Handle {
     var haystack = self.blocks.items(.first_token);
     var base: usize = 0;
 
@@ -338,10 +323,10 @@ pub fn findBlockByToken(self: *const SourceFile, token_handle: lex.Token.Handle)
         } else break;
     }
 
-    return @intCast(Block.Handle, block_index orelse unreachable);
+    return @intCast(block_index orelse unreachable);
 }
 
-pub fn findBlockByInstruction(self: *const SourceFile, insn_handle: Instruction.Handle) Block.Handle {
+pub fn find_block_by_instruction(self: *const Source_File, insn_handle: Instruction.Handle) Block.Handle {
     var haystack = self.blocks.items(.first_insn);
     var base: usize = 0;
 
@@ -362,10 +347,10 @@ pub fn findBlockByInstruction(self: *const SourceFile, insn_handle: Instruction.
         } else break;
     }
 
-    return @intCast(Block.Handle, block_index orelse unreachable);
+    return @intCast(block_index orelse unreachable);
 }
 
-fn backtrackLabels(operations: []const Instruction.Operation, handle: Instruction.Handle) Instruction.Handle {
+fn backtrack_labels(operations: []const Instruction.Operation, handle: Instruction.Handle) Instruction.Handle {
     var result = handle;
     while (result > 0 and operations[result - 1] == .none) {
         result -= 1;
@@ -373,9 +358,9 @@ fn backtrackLabels(operations: []const Instruction.Operation, handle: Instructio
     return result;
 }
 
-fn backtrackOrgHeaders(operations: []const Instruction.Operation, handle: Instruction.Handle) Instruction.Handle {
+fn backtrack_org_headers(operations: []const Instruction.Operation, handle: Instruction.Handle) Instruction.Handle {
     var result = handle;
-    while (result > 0 and Instruction.isOrgHeader(operations[result - 1])) {
+    while (result > 0 and Instruction.is_org_header(operations[result - 1])) {
         result -= 1;
     }
     return result;
@@ -419,3 +404,17 @@ test "Parser" {
     try std.testing.expectEqualStrings("asdf", insn.label.?);
     try std.testing.expectEqual(Mnemonic.PARK, insn.mnemonic);
 }
+
+const Source_File = @This();
+const lex = @import("lex.zig");
+const symbols = @import("symbols.zig");
+const Assembler = @import("Assembler.zig");
+const Instruction = @import("Instruction.zig");
+const Expression = @import("Expression.zig");
+const Section = @import("Section.zig");
+const Error = @import("Error.zig");
+const Parser = @import("Parser.zig");
+const Mnemonic = isa.Mnemonic;
+const isa = arch.isa;
+const arch = @import("lib_arch");
+const std = @import("std");

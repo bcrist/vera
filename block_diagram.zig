@@ -23,28 +23,28 @@ pub fn main() !void {
 
     const phase_label_y = d.y(-200);
 
-    const start = d.separatorV()
+    const start = d.separator_v()
         .label(phase_label_y, "Decode", .{ .alignment = .right, .baseline = .hanging })
         .x();
 
-    const end_of_decode = d.separatorV()
+    const end_of_decode = d.separator_v()
         .label(phase_label_y, "Decode", .{ .alignment = .right })
         .label(phase_label_y, "Setup", .{ .alignment = .right, .baseline = .hanging })
         .x();
 
-    const end_of_setup = d.separatorV()
+    const end_of_setup = d.separator_v()
         .label(phase_label_y, "Setup", .{ .alignment = .right })
         .label(phase_label_y, "Compute", .{ .alignment = .right, .baseline = .hanging })
-        .x().attachToOffset(end_of_decode, 100);
+        .x().attach_to_offset(end_of_decode, 100);
 
-    const end_of_compute = d.separatorV()
+    const end_of_compute = d.separator_v()
         .label(phase_label_y, "Compute", .{ .alignment = .right })
         .label(phase_label_y, "Transact", .{ .alignment = .right, .baseline = .hanging })
-        .x().attachToOffset(end_of_setup, 100);
+        .x().attach_to_offset(end_of_setup, 100);
 
-    const end_of_transact = d.separatorV()
+    const end_of_transact = d.separator_v()
         .label(phase_label_y, "Transact", .{ .alignment = .right })
-        .x().attachToOffset(end_of_compute, 100);
+        .x().attach_to_offset(end_of_compute, 100);
 
     const decode = Decode.init(d, start, end_of_decode);
     const setup = Setup.init(d, decode, end_of_setup);
@@ -55,242 +55,242 @@ pub fn main() !void {
 
     var f = try std.fs.cwd().createFile("doc/block_diagram.svg", .{});
     defer f.close();
-    try d.renderSvg(f.writer());
+    try d.render_svg(f.writer());
 }
 
 const Decode = struct {
     out: *Box,
 
-    pub fn init(d: *Drawing, begin: XRef, end: XRef) Decode {
+    pub fn init(d: *Drawing, begin: X_Ref, end: X_Ref) Decode {
         const in = d.box(.{ .class="pipeline" }).width(50);
         const out = d.box(.{ .class="pipeline" }).width(50);
 
-        _ = in.x().attachTo(begin);
-        _ = in.top().anchorAt(0);
+        _ = in.x().attach_to(begin);
+        _ = in.top().anchor_at(0);
 
         
 
 
         const seq = d.box(.{ .label = "SEQ" }).size(120, 240);
-        _ = seq.topLeft().attachToOffset(in.topRight(), 150, 100);
+        _ = seq.top_left().attach_to_offset(in.top_right(), 150, 100);
 
 
         const c_mask = d.box(.{ .label = "C MASK"}).size(120, 100);
-        _ = c_mask.topCenter().attachToOffset(seq.bottomCenter(), 0, 50);
+        _ = c_mask.top_center().attach_to_offset(seq.bottom_center(), 0, 50);
 
 
         const id_rom = d.box(.{ .label = "ID ROM"}).size(120, 100);
-        _ = id_rom.topCenter().attachToOffset(c_mask.bottomCenter(), 0, 40);
+        _ = id_rom.top_center().attach_to_offset(c_mask.bottom_center(), 0, 40);
 
 
         const uca_lit_zx = d.box(.{ .shape = .small, .label = "zx" });
 
         const uca_mux = d.box(.{ .shape = .mux }).height(80);
-        _ = uca_mux.left().attachToOffset(id_rom.right(), 160);
-        _ = uca_mux.y().attachBetween(c_mask.top(), id_rom.bottom(), 0.45);
+        _ = uca_mux.left().attach_to_offset(id_rom.right(), 160);
+        _ = uca_mux.y().attach_between(c_mask.top(), id_rom.bottom(), 0.45);
 
         const ij_mux = index_mux(d, in, out, id_rom, "IJ", "C[3:0]");
-        _ = ij_mux.topCenter().attachToOffset(uca_mux.bottomCenter(), 0, 100);
+        _ = ij_mux.top_center().attach_to_offset(uca_mux.bottom_center(), 0, 100);
 
         const ik_mux = index_mux(d, in, out, id_rom, "IK", "C[7:4]");
-        _ = ik_mux.topCenter().attachToOffset(ij_mux.bottomCenter(), 0, 60);
+        _ = ik_mux.top_center().attach_to_offset(ij_mux.bottom_center(), 0, 60);
 
         const iw_mux = index_mux(d, in, out, id_rom, "IW", "C[11:8]");
-        _ = iw_mux.topCenter().attachToOffset(ik_mux.bottomCenter(), 0, 60);
+        _ = iw_mux.top_center().attach_to_offset(ik_mux.bottom_center(), 0, 60);
 
 
 
         const uc_rom = d.box(.{ .label = "&#181;C ROM" }).width(120);
 
 
-        _ = seq.leftSide("")
-            .wireH(.{ .bits = 2 })
+        _ = seq.left_side("")
+            .wire_h(.{ .bits = 2 })
             .label("EXEC_MODE", .{})
-            .bitMarkAt(0.3)
-            .endAt(in.right());
-        _ = seq.rightSide("")
-            .wireH(.{ .bits = 2 })
+            .bit_mark_at(0.3)
+            .end_at(in.right());
+        _ = seq.right_side("")
+            .wire_h(.{ .bits = 2 })
             .label("EXEC_MODE", .{})
             .label("EXEC_MODE", .{ .alignment = .right })
-            .bitMark()
-            .endAt(out.left());
+            .bit_mark()
+            .end_at(out.left());
 
-        _ = seq.leftSide("")
-            .wireH(.{ .bits = 2, .class="control" })
+        _ = seq.left_side("")
+            .wire_h(.{ .bits = 2, .class="control" })
             .label("SEQ_OP", .{})
-            .bitMarkAt(0.3)
-            .endAt(in.right());
+            .bit_mark_at(0.3)
+            .end_at(in.right());
 
-        _ = seq.leftSide("").wireH(.{ .class="control" }).label("ALLOW_INT", .{}).endAt(in.right());
+        _ = seq.left_side("").wire_h(.{ .class="control" }).label("ALLOW_INT", .{}).end_at(in.right());
 
-        _ = seq.leftSide("").wireH(.{}).label("RESET", .{}).endAt(in.right());
-        _ = seq.leftSide("").wireH(.{}).label("WANT_ATOMIC", .{}).endAt(in.right());
-        _ = seq.leftSide("").wireH(.{}).label("STALL_ATOMIC", .{}).endAt(in.right());
-        _ = seq.leftSide("").wireH(.{}).label("PAGE_FAULT", .{}).endAt(in.right());
-        _ = seq.leftSide("").wireH(.{}).label("PAGE_ALIGN_FAULT", .{}).endAt(in.right());
-        _ = seq.leftSide("").wireH(.{}).label("ACCESS_FAULT", .{}).endAt(in.right());
-        _ = seq.leftSide("").wireH(.{}).label("INSN_FAULT", .{}).endAt(in.right());
-        _ = seq.leftSide("").wireH(.{}).label("INT_PEND", .{}).endAt(in.right());
+        _ = seq.left_side("").wire_h(.{}).label("RESET", .{}).end_at(in.right());
+        _ = seq.left_side("").wire_h(.{}).label("WANT_ATOMIC", .{}).end_at(in.right());
+        _ = seq.left_side("").wire_h(.{}).label("STALL_ATOMIC", .{}).end_at(in.right());
+        _ = seq.left_side("").wire_h(.{}).label("PAGE_FAULT", .{}).end_at(in.right());
+        _ = seq.left_side("").wire_h(.{}).label("PAGE_ALIGN_FAULT", .{}).end_at(in.right());
+        _ = seq.left_side("").wire_h(.{}).label("ACCESS_FAULT", .{}).end_at(in.right());
+        _ = seq.left_side("").wire_h(.{}).label("INSN_FAULT", .{}).end_at(in.right());
+        _ = seq.left_side("").wire_h(.{}).label("INT_PEND", .{}).end_at(in.right());
 
 
-        _ = seq.rightSide("")
-            .wireH(.{ .bits = 2 })
+        _ = seq.right_side("")
+            .wire_h(.{ .bits = 2 })
             .label("&#181;CA_SEL", .{})
-            .bitMark()
-            .turnAndEndAt(uca_mux.topSide(""));
+            .bit_mark()
+            .turn_and_end_at(uca_mux.top_side(""));
 
-        _ = seq.rightSide("")
-            .wireH(.{ .bits = 3 })
+        _ = seq.right_side("")
+            .wire_h(.{ .bits = 3 })
             .label("&#181;CA_LIT", .{})
             .turn()
-            .bitMark()
-            .endAtPoint(uca_lit_zx.topSide(""));
+            .bit_mark()
+            .end_at_point(uca_lit_zx.top_side(""));
 
-        _ = uca_lit_zx.bottomSide("")
-            .wireV(.{ .bits = 12 })
-            .bitMark()
-            .turnAndEndAt(uca_mux.leftSide(""));
-
-
+        _ = uca_lit_zx.bottom_side("")
+            .wire_v(.{ .bits = 12 })
+            .bit_mark()
+            .turn_and_end_at(uca_mux.left_side(""));
 
 
 
 
-        _ = id_rom.leftSide("")
-            .wireH(.{ .bits = 16 })
+
+
+        _ = id_rom.left_side("")
+            .wire_h(.{ .bits = 16 })
             .label("ID", .{})
-            .bitMark()
-            .endAt(in.right());
+            .bit_mark()
+            .end_at(in.right());
 
-        _ = id_rom.leftSide("")
-            .wireH(.{ .class = "control" })
+        _ = id_rom.left_side("")
+            .wire_h(.{ .class = "control" })
             .label("ID_MODE", .{})
-            .endAt(in.right());
+            .end_at(in.right());
 
-        const opcode = id_rom.rightSide("")
-            .wireH(.{ .bits = 12 })
+        const opcode = id_rom.right_side("")
+            .wire_h(.{ .bits = 12 })
             .label("OPCODE", .{})
-            .bitMark();
+            .bit_mark();
 
 
 
 
         const ii_columns = d.columns();
-        _ = ii_columns.center().attachBetween(id_rom.right(), uca_mux.left(), 0.5);
+        _ = ii_columns.center().attach_between(id_rom.right(), uca_mux.left(), 0.5);
 
-        _ = id_rom.rightSide("")
-            .wireH(.{ .bits = 4 })
+        _ = id_rom.right_side("")
+            .wire_h(.{ .bits = 4 })
             .label("IIJ", .{})
-            .bitMark()
-            .turnAt(ii_columns.push())
-            .turnAndEndAt(ij_mux.getLeftSide(0));
+            .bit_mark()
+            .turn_at(ii_columns.push())
+            .turn_and_end_at(ij_mux.get_left_side(0));
 
-        _ = id_rom.rightSide("")
-            .wireH(.{ .bits = 4 })
+        _ = id_rom.right_side("")
+            .wire_h(.{ .bits = 4 })
             .label("IIK", .{})
-            .bitMark()
-            .turnAt(ii_columns.push())
-            .turnAndEndAt(ik_mux.getLeftSide(0));
+            .bit_mark()
+            .turn_at(ii_columns.push())
+            .turn_and_end_at(ik_mux.get_left_side(0));
 
-        _ = id_rom.rightSide("")
-            .wireH(.{ .bits = 4 })
+        _ = id_rom.right_side("")
+            .wire_h(.{ .bits = 4 })
             .label("IIW", .{})
-            .bitMark()
-            .turnAt(ii_columns.push())
-            .turnAndEndAt(iw_mux.getLeftSide(0));
+            .bit_mark()
+            .turn_at(ii_columns.push())
+            .turn_and_end_at(iw_mux.get_left_side(0));
 
         ii_columns.interface.flip();
 
-        _ = uca_lit_zx.y().attachBetween(seq.bottom(), c_mask.top(), 0.9);
-        _ = uca_lit_zx.x().attachTo(ii_columns.get(2));
+        _ = uca_lit_zx.y().attach_between(seq.bottom(), c_mask.top(), 0.9);
+        _ = uca_lit_zx.x().attach_to(ii_columns.get(2));
 
 
-        _ = c_mask.leftSide("").wireH(.{ .bits = 12, .class="control" }).label("C", .{}).bitMarkAt(0.3).endAt(in.right());
-        _ = c_mask.leftSide("").wireH(.{ .bits = 2, .class="control" }).label("IJ_SEL", .{}).bitMarkAt(0.3).endAt(in.right());
-        _ = c_mask.leftSide("").wireH(.{ .bits = 2, .class="control" }).label("IK_SEL", .{}).bitMarkAt(0.3).endAt(in.right());
-        _ = c_mask.leftSide("").wireH(.{ .bits = 2, .class="control" }).label("IW_SEL", .{}).bitMarkAt(0.3).endAt(in.right());
-        _ = c_mask.rightSide("").wireH(.{ .bits = 12 }).label("C", .{}).bitMark().turnAt(ii_columns.get(1)).turnAndEndAt(uca_mux.leftSide(""));
-        _ = uca_mux.leftSide("").wireH(.{ .bits = 12 }).label("&#181;CA", .{}).bitMark().endAt(in.right());
-        _ = opcode.turnAt(ii_columns.get(2)).turnAndEndAt(uca_mux.leftSide(""));
+        _ = c_mask.left_side("").wire_h(.{ .bits = 12, .class="control" }).label("C", .{}).bit_mark_at(0.3).end_at(in.right());
+        _ = c_mask.left_side("").wire_h(.{ .bits = 2, .class="control" }).label("IJ_SEL", .{}).bit_mark_at(0.3).end_at(in.right());
+        _ = c_mask.left_side("").wire_h(.{ .bits = 2, .class="control" }).label("IK_SEL", .{}).bit_mark_at(0.3).end_at(in.right());
+        _ = c_mask.left_side("").wire_h(.{ .bits = 2, .class="control" }).label("IW_SEL", .{}).bit_mark_at(0.3).end_at(in.right());
+        _ = c_mask.right_side("").wire_h(.{ .bits = 12 }).label("C", .{}).bit_mark().turn_at(ii_columns.get(1)).turn_and_end_at(uca_mux.left_side(""));
+        _ = uca_mux.left_side("").wire_h(.{ .bits = 12 }).label("&#181;CA", .{}).bit_mark().end_at(in.right());
+        _ = opcode.turn_at(ii_columns.get(2)).turn_and_end_at(uca_mux.left_side(""));
 
 
         // TODO make a cleaner API for this in Interface
-//        d.state.constrainOffset(&uca_mux.getLeftInterface().span.end, uca_mux.bottom()._y, -20, "asdf");
+//        d.state.constrain_offset(&uca_mux.get_left_interface().span.end, uca_mux.bottom()._y, -20, "asdf");
 
 
 
-        _ = uc_rom.leftSide("")
-            .wireH(.{ .bits = 5 })
+        _ = uc_rom.left_side("")
+            .wire_h(.{ .bits = 5 })
             .length(-50)
-            .bitMark()
+            .bit_mark()
             .turn()
-            .turnAtOffset(seq.top(), -50)
+            .turn_at_offset(seq.top(), -50)
             .label("KVCNZ", .{})
-            .endAtMutablePoint(in.rightSide(""));
+            .end_at_mutable_point(in.right_side(""));
 
-        const uca_to_uc_rom = uca_mux.rightSide("")
-            .wireH(.{ .bits = 12 })
+        const uca_to_uc_rom = uca_mux.right_side("")
+            .wire_h(.{ .bits = 12 })
             .length(50)
-            .bitMark();
+            .bit_mark();
 
         _ = uca_to_uc_rom
             .turn()
             .turn()
-            .bitMark()
-            .endAtPoint(uc_rom.leftSide(""));
+            .bit_mark()
+            .end_at_point(uc_rom.left_side(""));
 
         _ = uca_to_uc_rom.endpoint()
-            .wireV(.{ .bits = 12, .dir = .junction_begin })
-            .turnAtOffset(uc_rom.bottom(), 25)
+            .wire_v(.{ .bits = 12, .dir = .junction_begin })
+            .turn_at_offset(uc_rom.bottom(), 25)
             .label("&#181;CA", .{ .alignment = .right })
-            .bitMark()
-            .endAt(out.left());
+            .bit_mark()
+            .end_at(out.left());
 
 
         _ = uc_rom.height(620);
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 6, .class="control" }).bitMarkAt(0.3).label("LITERAL", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 12, .class="control" }).bitMarkAt(0.3).label("C", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 1, .class="control" }).label("ID_MODE", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 2, .class="control" }).bitMarkAt(0.3).label("IJ_SEL", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 2, .class="control" }).bitMarkAt(0.3).label("IK_SEL", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 2, .class="control" }).bitMarkAt(0.3).label("IW_SEL", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 1, .class="control" }).label("JKR_WMODE", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 2, .class="control" }).bitMarkAt(0.3).label("JL_SRC", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 3, .class="control" }).bitMarkAt(0.3).label("JH_SRC", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 3, .class="control" }).bitMarkAt(0.3).label("K_SRC", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 3, .class="control" }).bitMarkAt(0.3).label("SR1_RI", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 3, .class="control" }).bitMarkAt(0.3).label("SR2_RI", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 3, .class="control" }).bitMarkAt(0.3).label("SR1_WI", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 3, .class="control" }).bitMarkAt(0.3).label("SR2_WI", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 2, .class="control" }).bitMarkAt(0.3).label("SR1_WSRC", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 2, .class="control" }).bitMarkAt(0.3).label("SR2_WSRC", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 4, .class="control" }).bitMarkAt(0.3).label("BASE", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 2, .class="control" }).bitMarkAt(0.3).label("OFFSET", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 4, .class="control" }).bitMarkAt(0.3).label("MODE", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 2, .class="control" }).bitMarkAt(0.3).label("BUS_MODE", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 1, .class="control" }).label("BUS_BYTE", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 1, .class="control" }).label("BUS_RW", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 2, .class="control" }).bitMarkAt(0.3).label("AT_OP", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 3, .class="control" }).bitMarkAt(0.3).label("SPECIAL", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 4, .class="control" }).bitMarkAt(0.3).label("LL_SRC", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 4, .class="control" }).bitMarkAt(0.3).label("LH_SRC", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 4, .class="control" }).bitMarkAt(0.3).label("STAT_OP", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 2, .class="control" }).bitMarkAt(0.3).label("IDR_OP", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 2, .class="control" }).bitMarkAt(0.3).label("SEQ_OP", .{ .alignment = .right }).endAt(out.left());
-        _ = uc_rom.rightSide("").wireH(.{ .bits = 1, .class="control" }).label("ALLOW_INT", .{ .alignment = .right }).endAt(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 6, .class="control" }).bit_mark_at(0.3).label("LITERAL", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 12, .class="control" }).bit_mark_at(0.3).label("C", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 1, .class="control" }).label("ID_MODE", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 2, .class="control" }).bit_mark_at(0.3).label("IJ_SEL", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 2, .class="control" }).bit_mark_at(0.3).label("IK_SEL", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 2, .class="control" }).bit_mark_at(0.3).label("IW_SEL", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 1, .class="control" }).label("JKR_WMODE", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 2, .class="control" }).bit_mark_at(0.3).label("JL_SRC", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 3, .class="control" }).bit_mark_at(0.3).label("JH_SRC", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 3, .class="control" }).bit_mark_at(0.3).label("K_SRC", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 3, .class="control" }).bit_mark_at(0.3).label("SR1_RI", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 3, .class="control" }).bit_mark_at(0.3).label("SR2_RI", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 3, .class="control" }).bit_mark_at(0.3).label("SR1_WI", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 3, .class="control" }).bit_mark_at(0.3).label("SR2_WI", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 2, .class="control" }).bit_mark_at(0.3).label("SR1_WSRC", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 2, .class="control" }).bit_mark_at(0.3).label("SR2_WSRC", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 4, .class="control" }).bit_mark_at(0.3).label("BASE", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 2, .class="control" }).bit_mark_at(0.3).label("OFFSET", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 4, .class="control" }).bit_mark_at(0.3).label("MODE", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 2, .class="control" }).bit_mark_at(0.3).label("BUS_MODE", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 1, .class="control" }).label("BUS_BYTE", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 1, .class="control" }).label("BUS_RW", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 2, .class="control" }).bit_mark_at(0.3).label("AT_OP", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 3, .class="control" }).bit_mark_at(0.3).label("SPECIAL", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 4, .class="control" }).bit_mark_at(0.3).label("LL_SRC", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 4, .class="control" }).bit_mark_at(0.3).label("LH_SRC", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 4, .class="control" }).bit_mark_at(0.3).label("STAT_OP", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 2, .class="control" }).bit_mark_at(0.3).label("IDR_OP", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 2, .class="control" }).bit_mark_at(0.3).label("SEQ_OP", .{ .alignment = .right }).end_at(out.left());
+        _ = uc_rom.right_side("").wire_h(.{ .bits = 1, .class="control" }).label("ALLOW_INT", .{ .alignment = .right }).end_at(out.left());
 
-        seq.getRightInterface().spacing = 100;
-        uc_rom.getLeftInterface().spacing = 200;
-        _ = uc_rom.top().anchorAt(0);
-        _ = uc_rom.left().attachToOffset(uca_mux.right(), 100);
+        seq.get_right_interface().spacing = 100;
+        uc_rom.get_left_interface().spacing = 200;
+        _ = uc_rom.top().anchor_at(0);
+        _ = uc_rom.left().attach_to_offset(uca_mux.right(), 100);
 
 
-        _ = out.left().attachToOffset(uc_rom.right(), 150);
-        _ = out.top().attachTo(in.top());
-        _ = out.bottom().attachToOffset(iw_mux.bottom(), 0);
+        _ = out.left().attach_to_offset(uc_rom.right(), 150);
+        _ = out.top().attach_to(in.top());
+        _ = out.bottom().attach_to_offset(iw_mux.bottom(), 0);
 
-        _ = in.bottom().attachToOffset(iw_mux.bottom(), 60);
-        _ = end.attachTo(out.x());
+        _ = in.bottom().attach_to_offset(iw_mux.bottom(), 60);
+        _ = end.attach_to(out.x());
 
         return .{
             .out = out,
@@ -300,45 +300,45 @@ const Decode = struct {
     fn index_mux(d: *Drawing, in: *Box, out: *Box, id_rom: *Box, comptime name: []const u8, continuation_bits: []const u8) *Box {
         const mux = d.box(.{ .shape = .mux }).height(80);
 
-        _ = mux.leftSide("");
-        _ = mux.leftSide("")
-            .wireH(.{ .bits = 4, .class = "control" })
-            .continueAt(id_rom.x())
+        _ = mux.left_side("");
+        _ = mux.left_side("")
+            .wire_h(.{ .bits = 4, .class = "control" })
+            .continue_at(id_rom.x())
             .label(continuation_bits, .{})
-            .bitMark()
-            .endAtMutablePoint(in.rightSide(""));
-        const wire = mux.leftSide("")
-            .wireH(.{ .bits = 4 })
-            .continueAt(id_rom.x())
+            .bit_mark()
+            .end_at_mutable_point(in.right_side(""));
+        const wire = mux.left_side("")
+            .wire_h(.{ .bits = 4 })
+            .continue_at(id_rom.x())
             .label(name, .{})
-            .bitMark()
-            .endAtMutablePoint(in.rightSide(""));
+            .bit_mark()
+            .end_at_mutable_point(in.right_side(""));
 
-        const xor_wire = mux.leftSide("")
-            .wireH(.{ .bits = 4 });
+        const xor_wire = mux.left_side("")
+            .wire_h(.{ .bits = 4 });
 
         const xor = d.box(.{ .shape = .small, .label = "^1" });
-        _ = xor.x().attachTo(id_rom.right());
-        _ = xor.y().attachTo(xor_wire.y());
+        _ = xor.x().attach_to(id_rom.right());
+        _ = xor.y().attach_to(xor_wire.y());
 
-        _ = xor_wire.endAt(xor.right());
+        _ = xor_wire.end_at(xor.right());
 
-        _ = xor.leftSide("")
-            .wireH(.{ .bits = 4, .dir = .junction_end })
-            .turnAndEndAt(wire.origin());
+        _ = xor.left_side("")
+            .wire_h(.{ .bits = 4, .dir = .junction_end })
+            .turn_and_end_at(wire.origin());
 
-        _ = mux.bottomSide("")
-            .wireV(.{ .bits = 2, .class = "control" })
+        _ = mux.bottom_side("")
+            .wire_v(.{ .bits = 2, .class = "control" })
             .length(30)
             .turn()
             .label(name ++ "_SEL", .{})
-            .bitMark()
-            .endAtMutablePoint(in.rightSide(""));
-        _ = mux.rightSide("")
-            .wireH(.{ .bits = 4 })
+            .bit_mark()
+            .end_at_mutable_point(in.right_side(""));
+        _ = mux.right_side("")
+            .wire_h(.{ .bits = 4 })
             .label(name, .{ .alignment = .right })
-            .bitMark()
-            .endAt(out.left());
+            .bit_mark()
+            .end_at(out.left());
 
         return mux;
     }
@@ -347,7 +347,7 @@ const Decode = struct {
 const Setup = struct {
     out: *Box,
 
-    pub fn init(d: *Drawing, decode: Decode, end: XRef) Setup {
+    pub fn init(d: *Drawing, decode: Decode, end: X_Ref) Setup {
         const in = decode.out;
         const out = d.box(.{ .class="pipeline" }).width(50);
 
@@ -377,58 +377,58 @@ const Setup = struct {
         const base_mux = d.box(.{ .shape = .mux }).size(40, 50);
         const agu = d.box(.{ .label = "+" }).size(80, 140); // TODO ALU shape?
 
-        _ = jr.left().attachToOffset(in.right(), 200);
-        _ = jr.top().anchorAt(50);
-        _ = sr1.topCenter().attachToOffset(jr.bottomCenter(), 0, 30);
-        _ = sr2.topCenter().attachToOffset(sr1.bottomCenter(), 0, 30);
-        _ = kr.topCenter().attachToOffset(sr2.bottomCenter(), 0, 75);
-        _ = sr1b.topCenter().attachToOffset(kr.bottomCenter(), 0, 300);
-        _ = sr2b.topCenter().attachToOffset(sr1b.bottomCenter(), 0, 25);
+        _ = jr.left().attach_to_offset(in.right(), 200);
+        _ = jr.top().anchor_at(50);
+        _ = sr1.top_center().attach_to_offset(jr.bottom_center(), 0, 30);
+        _ = sr2.top_center().attach_to_offset(sr1.bottom_center(), 0, 30);
+        _ = kr.top_center().attach_to_offset(sr2.bottom_center(), 0, 75);
+        _ = sr1b.top_center().attach_to_offset(kr.bottom_center(), 0, 300);
+        _ = sr2b.top_center().attach_to_offset(sr1b.bottom_center(), 0, 25);
 
-        _ = jhmux.left().attachToOffset(jr.right(), 360);
-        _ = jhmux.top().anchorAt(80);
-        _ = jlmux.topLeft().attachToOffset(jhmux.bottomLeft(), 0, 50);
-        _ = kmux.topLeft().attachToOffset(jlmux.bottomLeft(), 0, 125);
+        _ = jhmux.left().attach_to_offset(jr.right(), 360);
+        _ = jhmux.top().anchor_at(80);
+        _ = jlmux.top_left().attach_to_offset(jhmux.bottom_left(), 0, 50);
+        _ = kmux.top_left().attach_to_offset(jlmux.bottom_left(), 0, 125);
 
-        _ = jh_sx_jr.x().attachToOffset(jhmux.left(), -100);
-        _ = k_zx_ij_ik.x().attachTo(jh_sx_jr.x());
-        _ = k_zx_ik.right().attachToOffset(jhmux.left(), -50);
-        _ = k_bit_ik.x().attachTo(jh_sx_jr.x());
-        _ = k_zx_literal.x().attachToOffset(kr.left(), 0);
-        _ = k_1x_literal.x().attachToOffset(kr.left(), 50);
-        _ = offset_zx_literal.x().attachTo(k_zx_literal.x());
-        _ = offset_1x_literal.x().attachTo(k_1x_literal.x());
+        _ = jh_sx_jr.x().attach_to_offset(jhmux.left(), -100);
+        _ = k_zx_ij_ik.x().attach_to(jh_sx_jr.x());
+        _ = k_zx_ik.right().attach_to_offset(jhmux.left(), -50);
+        _ = k_bit_ik.x().attach_to(jh_sx_jr.x());
+        _ = k_zx_literal.x().attach_to_offset(kr.left(), 0);
+        _ = k_1x_literal.x().attach_to_offset(kr.left(), 50);
+        _ = offset_zx_literal.x().attach_to(k_zx_literal.x());
+        _ = offset_1x_literal.x().attach_to(k_1x_literal.x());
 
-        _ = offset_mux.left().attachToOffset(sr1b.right(), 100);
-        _ = base_mux.left().attachTo(offset_mux.left());
-        _ = base_mux.top().attachToOffset(sr1b.top(), 25);
-        _ = agu.y().attachBetween(offset_mux.y(), base_mux.y(), 0.5);
-        _ = agu.left().attachToOffset(offset_mux.right(), 100);
+        _ = offset_mux.left().attach_to_offset(sr1b.right(), 100);
+        _ = base_mux.left().attach_to(offset_mux.left());
+        _ = base_mux.top().attach_to_offset(sr1b.top(), 25);
+        _ = agu.y().attach_between(offset_mux.y(), base_mux.y(), 0.5);
+        _ = agu.left().attach_to_offset(offset_mux.right(), 100);
 
-        _ = jhmux.topSide("").wireV(.{ .bits = 3, .class="control" })
-            .turnAtOffset(jr.top(), -25)
-            .bitMark()
+        _ = jhmux.top_side("").wire_v(.{ .bits = 3, .class="control" })
+            .turn_at_offset(jr.top(), -25)
+            .bit_mark()
             .label("JH_SRC", .{})
-            .endAt(in.right());
+            .end_at(in.right());
 
-        _ = jlmux.bottomSide("").wireV(.{ .bits = 2, .class="control" })
-            .turnAtOffset(sr2.bottom(), 25)
-            .bitMark()
+        _ = jlmux.bottom_side("").wire_v(.{ .bits = 2, .class="control" })
+            .turn_at_offset(sr2.bottom(), 25)
+            .bit_mark()
             .label("JL_SRC", .{})
-            .endAt(in.right());
+            .end_at(in.right());
 
-        _ = kmux.topSide("").wireV(.{ .bits = 3, .class="control" })
-            .turnAtOffset(kr.top(), -25)
-            .bitMark()
+        _ = kmux.top_side("").wire_v(.{ .bits = 3, .class="control" })
+            .turn_at_offset(kr.top(), -25)
+            .bit_mark()
             .label("K_SRC", .{})
-            .endAt(in.right());
+            .end_at(in.right());
 
 
         const left_cols = d.columns();
-        _ = left_cols.right().attachToOffset(jr.left(), -60);
+        _ = left_cols.right().attach_to_offset(jr.left(), -60);
 
         const cols = d.columns();
-        _ = cols.center().attachToOffset(jr.right(), 150);
+        _ = cols.center().attach_to_offset(jr.right(), 150);
         _ = cols.push();
         _ = cols.push();
         _ = cols.push();
@@ -437,375 +437,375 @@ const Setup = struct {
         _ = cols.push();
 
         // JR inputs
-        _ = jr.leftSide("")
-            .wireH(.{ .bits = 6 })
-            .bitMark()
-            .continueAt(left_cols.push())
+        _ = jr.left_side("")
+            .wire_h(.{ .bits = 6 })
+            .bit_mark()
+            .continue_at(left_cols.push())
             .label("RSN", .{})
-            .endAt(in.right());
-        _ = jr.leftSide("")
-            .wireH(.{ .bits = 4 })
-            .bitMark()
-            .continueAt(left_cols.get(0))
+            .end_at(in.right());
+        _ = jr.left_side("")
+            .wire_h(.{ .bits = 4 })
+            .bit_mark()
+            .continue_at(left_cols.get(0))
             .label("IJ", .{})
-            .endAt(in.right());
+            .end_at(in.right());
 
         // SR2B inputs
-        const rsn_wire = sr2b.leftSide("")
-            .wireH(.{ .bits = 6, .dir = .junction_end })
+        const rsn_wire = sr2b.left_side("")
+            .wire_h(.{ .bits = 6, .dir = .junction_end })
             .label("RSN", .{ .alignment = .right })
-            .bitMark()
-            .turnAt(left_cols.get(0))
-            .endAt(jr.getLeftSide(0).y());
+            .bit_mark()
+            .turn_at(left_cols.get(0))
+            .end_at(jr.get_left_side(0).y());
 
         // KR inputs
-        _ = kr.leftSide("")
-            .wireH(.{ .bits = 6, .dir = .junction_end })
+        _ = kr.left_side("")
+            .wire_h(.{ .bits = 6, .dir = .junction_end })
             .label("RSN", .{ .alignment = .right })
-            .bitMark()
-            .endAt(rsn_wire.x());
-        _ = kr.leftSide("")
-            .wireH(.{ .bits = 4 })
-            .bitMark()
-            .continueAt(rsn_wire.x())
+            .bit_mark()
+            .end_at(rsn_wire.x());
+        _ = kr.left_side("")
+            .wire_h(.{ .bits = 4 })
+            .bit_mark()
+            .continue_at(rsn_wire.x())
             .label("IK", .{})
-            .endAt(in.right());
+            .end_at(in.right());
 
         // K mux inputs using IJ/IK/LITERAL
-        k_zx_ij_ik.getLeftInterface().spacing = 12;
-        _ = k_zx_ij_ik.leftSide("")
-            .wireH(.{ .bits = 4, .dir = .junction_end })
-            .turnAt(cols.get(4))
-            .turnAtOffset(kr.bottom(), 25)
+        k_zx_ij_ik.get_left_interface().spacing = 12;
+        _ = k_zx_ij_ik.left_side("")
+            .wire_h(.{ .bits = 4, .dir = .junction_end })
+            .turn_at(cols.get(4))
+            .turn_at_offset(kr.bottom(), 25)
             .label("IJ", .{ .alignment = .right })
-            .bitMark()
-            .turnAt(left_cols.push())
-            .endAt(jr.getLeftSide(1).y());
-        _ = k_bit_ik.leftSide("")
-            .wireH(.{ .bits = 4, .dir = .junction_end })
-            .continueAt(cols.get(5))
+            .bit_mark()
+            .turn_at(left_cols.push())
+            .end_at(jr.get_left_side(1).y());
+        _ = k_bit_ik.left_side("")
+            .wire_h(.{ .bits = 4, .dir = .junction_end })
+            .continue_at(cols.get(5))
             .label("IK", .{ .alignment = .right })
-            .bitMark()
-            .turnAt(left_cols.push())
-            .endAt(kr.getLeftSide(1).y());
-        _ = k_zx_ij_ik.leftSide("")
-            .wireH(.{ .bits = 4, .dir = .junction_end })
-            .turnAt(cols.get(5))
-            .endAt(k_bit_ik.getLeftSide(0).y());
-        _ = k_zx_ik.leftSide("")
-            .wireH(.{ .bits = 4, .dir = .junction_end })
-            .endAt(cols.get(5));
-        _ = k_zx_literal.leftSide("")
-            .wireH(.{ .bits = 6, .class="control" })
+            .bit_mark()
+            .turn_at(left_cols.push())
+            .end_at(kr.get_left_side(1).y());
+        _ = k_zx_ij_ik.left_side("")
+            .wire_h(.{ .bits = 4, .dir = .junction_end })
+            .turn_at(cols.get(5))
+            .end_at(k_bit_ik.get_left_side(0).y());
+        _ = k_zx_ik.left_side("")
+            .wire_h(.{ .bits = 4, .dir = .junction_end })
+            .end_at(cols.get(5));
+        _ = k_zx_literal.left_side("")
+            .wire_h(.{ .bits = 6, .class="control" })
             .label("LITERAL", .{})
-            .bitMark()
-            .endAt(in.right());
-        _ = k_1x_literal.leftSide("")
-            .wireH(.{ .bits = 6, .class="control", .dir = .junction_end })
+            .bit_mark()
+            .end_at(in.right());
+        _ = k_1x_literal.left_side("")
+            .wire_h(.{ .bits = 6, .class="control", .dir = .junction_end })
             .length(-75)
             .turn()
-            .endAt(k_zx_literal.getLeftSide(0).y());
+            .end_at(k_zx_literal.get_left_side(0).y());
 
         // OFFSET mux inputs using LITERAL
-        _ = offset_zx_literal.leftSide("")
-            .wireH(.{ .bits = 6, .class="control", .dir = .junction_end })
+        _ = offset_zx_literal.left_side("")
+            .wire_h(.{ .bits = 6, .class="control", .dir = .junction_end })
             .length(-25)
             .turn()
-            .endAt(k_1x_literal.getLeftSide(0).y());
-        _ = offset_1x_literal.leftSide("")
-            .wireH(.{ .bits = 6, .class="control", .dir = .junction_end })
+            .end_at(k_1x_literal.get_left_side(0).y());
+        _ = offset_1x_literal.left_side("")
+            .wire_h(.{ .bits = 6, .class="control", .dir = .junction_end })
             .length(-75)
             .turn()
-            .endAt(offset_zx_literal.getLeftSide(0).y());
+            .end_at(offset_zx_literal.get_left_side(0).y());
 
         // SR1 inputs
-        _ = sr1.leftSide("")
-            .wireH(.{ .bits = 6, .dir = .junction_end })
+        _ = sr1.left_side("")
+            .wire_h(.{ .bits = 6, .dir = .junction_end })
             .label("RSN", .{ .alignment = .right })
-            .bitMark()
-            .endAt(rsn_wire.x());
-        _ = sr1.leftSide("")
-            .wireH(.{ .bits = 3, .class="control" })
-            .bitMark()
-            .continueAt(rsn_wire.x())
+            .bit_mark()
+            .end_at(rsn_wire.x());
+        _ = sr1.left_side("")
+            .wire_h(.{ .bits = 3, .class="control" })
+            .bit_mark()
+            .continue_at(rsn_wire.x())
             .label("SR1_RI", .{})
-            .endAt(in.right());
+            .end_at(in.right());
 
         // SR2 inputs
-        _ = sr2.leftSide("")
-            .wireH(.{ .bits = 6, .dir = .junction_end })
+        _ = sr2.left_side("")
+            .wire_h(.{ .bits = 6, .dir = .junction_end })
             .label("RSN", .{ .alignment = .right })
-            .bitMark()
-            .endAt(rsn_wire.x());
-        _ = sr2.leftSide("")
-            .wireH(.{ .bits = 3, .class="control" })
-            .bitMark()
-            .continueAt(rsn_wire.x())
+            .bit_mark()
+            .end_at(rsn_wire.x());
+        _ = sr2.left_side("")
+            .wire_h(.{ .bits = 3, .class="control" })
+            .bit_mark()
+            .continue_at(rsn_wire.x())
             .label("SR2_RI", .{})
-            .endAt(in.right());
+            .end_at(in.right());
 
 
         // SR1B inputs
-        _ = sr1b.leftSide("")
-            .wireH(.{ .bits = 6, .dir = .junction_end })
+        _ = sr1b.left_side("")
+            .wire_h(.{ .bits = 6, .dir = .junction_end })
             .label("RSN", .{ .alignment = .right })
-            .bitMark()
-            .endAt(rsn_wire.x());
-        _ = sr1b.leftSide("")
-            .wireH(.{ .bits = 3, .class="control" })
-            .bitMark()
-            .continueAt(rsn_wire.x())
+            .bit_mark()
+            .end_at(rsn_wire.x());
+        _ = sr1b.left_side("")
+            .wire_h(.{ .bits = 3, .class="control" })
+            .bit_mark()
+            .continue_at(rsn_wire.x())
             .label("BASE[2:0]", .{})
-            .endAt(in.right());
+            .end_at(in.right());
 
         // SR2B inputs (again)
-        _ = sr2b.leftSide("")
-            .wireH(.{ .bits = 3, .class="control", .dir = .junction_end })
-            .bitMark()
-            .continueAt(rsn_wire.x())
-            .turnAt(left_cols.get(1))
-            .endAt(sr1b.getLeftSide(1).y());
+        _ = sr2b.left_side("")
+            .wire_h(.{ .bits = 3, .class="control", .dir = .junction_end })
+            .bit_mark()
+            .continue_at(rsn_wire.x())
+            .turn_at(left_cols.get(1))
+            .end_at(sr1b.get_left_side(1).y());
 
 
         const mux_left_50 = jhmux.left().offset(-50);
 
         // JH mux
-        _ = jhmux.leftSide("")
-            .wireH(.{ .bits = 16 })
+        _ = jhmux.left_side("")
+            .wire_h(.{ .bits = 16 })
             .label("0x0000", .{ .alignment = .right, .baseline = .middle })
-            .bitMark()
+            .bit_mark()
             .length(-50);
-        _ = jhmux.leftSide("")
-            .wireH(.{ .bits = 16 })
+        _ = jhmux.left_side("")
+            .wire_h(.{ .bits = 16 })
             .label("0xFFFF", .{ .alignment = .right, .baseline = .middle })
-            .bitMark()
+            .bit_mark()
             .length(-50);
-        _ = jr.rightSide("")
-            .wireH(.{ .bits = 16 })
+        _ = jr.right_side("")
+            .wire_h(.{ .bits = 16 })
             .label("JR[31:16]", .{})
-            .turnAt(cols.get(5))
-            .turnAt(jhmux.leftSide("").y())
-            .continueAt(mux_left_50)
-            .bitMark()
-            .endAt(jhmux.left());
-        _ = sr1.rightSide("")
-            .wireH(.{ .bits = 16 })
+            .turn_at(cols.get(5))
+            .turn_at(jhmux.left_side("").y())
+            .continue_at(mux_left_50)
+            .bit_mark()
+            .end_at(jhmux.left());
+        _ = sr1.right_side("")
+            .wire_h(.{ .bits = 16 })
             .label("SR1[31:16]", .{})
-            .turnAt(cols.get(0))
-            .turnAt(jhmux.leftSide("").y())
-            .continueAt(mux_left_50)
-            .bitMark()
-            .endAt(jhmux.left());
-        _ = sr2.rightSide("")
-            .wireH(.{ .bits = 16 })
+            .turn_at(cols.get(0))
+            .turn_at(jhmux.left_side("").y())
+            .continue_at(mux_left_50)
+            .bit_mark()
+            .end_at(jhmux.left());
+        _ = sr2.right_side("")
+            .wire_h(.{ .bits = 16 })
             .label("SR1[31:16]", .{})
-            .turnAt(cols.get(1))
-            .turnAt(jhmux.leftSide("").y())
-            .continueAt(mux_left_50)
-            .bitMark()
-            .endAt(jhmux.left());
-        _ = jhmux.leftSide("")
-            .wireH(.{ .bits = 16 })
-            .bitMark()
-            .continueAt(mux_left_50)
-            .endAt(jh_sx_jr.right())
+            .turn_at(cols.get(1))
+            .turn_at(jhmux.left_side("").y())
+            .continue_at(mux_left_50)
+            .bit_mark()
+            .end_at(jhmux.left());
+        _ = jhmux.left_side("")
+            .wire_h(.{ .bits = 16 })
+            .bit_mark()
+            .continue_at(mux_left_50)
+            .end_at(jh_sx_jr.right())
             .y().attach(jh_sx_jr.y());
 
-        _ = jh_sx_jr.leftSide("")
-            .wireH(.{ .dir = .junction_end })
+        _ = jh_sx_jr.left_side("")
+            .wire_h(.{ .dir = .junction_end })
             .label("JR[15]", .{ .alignment = .right })
-            .endAt(cols.get(4));
+            .end_at(cols.get(4));
 
 
         // JL mux
-        _ = jlmux.leftSide("")
-            .wireH(.{ .bits = 16 })
+        _ = jlmux.left_side("")
+            .wire_h(.{ .bits = 16 })
             .label("0x0000", .{ .alignment = .right, .baseline = .middle })
-            .bitMark()
+            .bit_mark()
             .length(-50);
-        _ = jr.rightSide("")
-            .wireH(.{ .bits = 16 })
+        _ = jr.right_side("")
+            .wire_h(.{ .bits = 16 })
             .label("JR[15:0]", .{})
-            .turnAt(cols.get(4))
-            .turnAt(jlmux.leftSide("").y())
-            .continueAt(mux_left_50)
-            .bitMark()
-            .endAt(jlmux.left());
-        _ = sr1.rightSide("")
-            .wireH(.{ .bits = 16 })
+            .turn_at(cols.get(4))
+            .turn_at(jlmux.left_side("").y())
+            .continue_at(mux_left_50)
+            .bit_mark()
+            .end_at(jlmux.left());
+        _ = sr1.right_side("")
+            .wire_h(.{ .bits = 16 })
             .label("SR1[15:0]", .{})
-            .turnAt(cols.get(3))
-            .turnAt(jlmux.leftSide("").y())
-            .continueAt(mux_left_50)
-            .bitMark()
-            .endAt(jlmux.left());
-        _ = sr2.rightSide("")
-            .wireH(.{ .bits = 16 })
+            .turn_at(cols.get(3))
+            .turn_at(jlmux.left_side("").y())
+            .continue_at(mux_left_50)
+            .bit_mark()
+            .end_at(jlmux.left());
+        _ = sr2.right_side("")
+            .wire_h(.{ .bits = 16 })
             .label("SR2[15:0]", .{})
-            .turnAt(cols.get(2))
-            .turnAt(jlmux.leftSide("").y())
-            .continueAt(mux_left_50)
-            .bitMark()
-            .endAt(jlmux.left());
+            .turn_at(cols.get(2))
+            .turn_at(jlmux.left_side("").y())
+            .continue_at(mux_left_50)
+            .bit_mark()
+            .end_at(jlmux.left());
 
         // K mux
-        _ = kr.rightSide("")
-            .wireH(.{ .bits = 16 })
+        _ = kr.right_side("")
+            .wire_h(.{ .bits = 16 })
             .label("KR", .{})
-            .turnAt(cols.get(0))
-            .turnAt(kmux.leftSide("").y())
-            .continueAt(mux_left_50)
-            .bitMark()
-            .endAt(kmux.left());
-        _ = kmux.leftSide("")
-            .wireH(.{ .bits = 16, .dir = .junction_end })
-            .bitMark()
-            .continueAt(mux_left_50)
-            .turnAt(cols.get(3))
-            .endAt(jlmux.getLeftSide(2).y());
-        _ = kmux.leftSide("")
-            .wireH(.{ .bits = 16, .dir = .junction_end })
-            .bitMark()
-            .continueAt(mux_left_50)
-            .turnAt(cols.get(2))
-            .endAt(jlmux.getLeftSide(3).y());
-        _ = kmux.leftSide("")
-            .wireH(.{ .bits = 16 })
-            .bitMark()
-            .continueAt(mux_left_50)
-            .endAt(k_zx_ij_ik.right())
+            .turn_at(cols.get(0))
+            .turn_at(kmux.left_side("").y())
+            .continue_at(mux_left_50)
+            .bit_mark()
+            .end_at(kmux.left());
+        _ = kmux.left_side("")
+            .wire_h(.{ .bits = 16, .dir = .junction_end })
+            .bit_mark()
+            .continue_at(mux_left_50)
+            .turn_at(cols.get(3))
+            .end_at(jlmux.get_left_side(2).y());
+        _ = kmux.left_side("")
+            .wire_h(.{ .bits = 16, .dir = .junction_end })
+            .bit_mark()
+            .continue_at(mux_left_50)
+            .turn_at(cols.get(2))
+            .end_at(jlmux.get_left_side(3).y());
+        _ = kmux.left_side("")
+            .wire_h(.{ .bits = 16 })
+            .bit_mark()
+            .continue_at(mux_left_50)
+            .end_at(k_zx_ij_ik.right())
             .y().attach(k_zx_ij_ik.y());
-        _ = kmux.leftSide("")
-            .wireH(.{ .bits = 16 })
-            .bitMark()
-            .continueAt(mux_left_50)
-            .endAt(k_zx_ik.right())
+        _ = kmux.left_side("")
+            .wire_h(.{ .bits = 16 })
+            .bit_mark()
+            .continue_at(mux_left_50)
+            .end_at(k_zx_ik.right())
             .y().attach(k_zx_ik.y());
-        _ = kmux.leftSide("")
-            .wireH(.{ .bits = 16 })
-            .bitMark()
-            .continueAt(mux_left_50)
-            .endAt(k_bit_ik.right())
+        _ = kmux.left_side("")
+            .wire_h(.{ .bits = 16 })
+            .bit_mark()
+            .continue_at(mux_left_50)
+            .end_at(k_bit_ik.right())
             .y().attach(k_bit_ik.y());
-        _ = kmux.leftSide("")
-            .wireH(.{ .bits = 16 })
-            .bitMark()
-            .continueAt(mux_left_50)
-            .endAt(k_zx_literal.right())
+        _ = kmux.left_side("")
+            .wire_h(.{ .bits = 16 })
+            .bit_mark()
+            .continue_at(mux_left_50)
+            .end_at(k_zx_literal.right())
             .y().attach(k_zx_literal.y());
-        _ = kmux.leftSide("")
-            .wireH(.{ .bits = 16 })
-            .bitMark()
-            .continueAt(mux_left_50)
-            .endAt(k_1x_literal.right())
+        _ = kmux.left_side("")
+            .wire_h(.{ .bits = 16 })
+            .bit_mark()
+            .continue_at(mux_left_50)
+            .end_at(k_1x_literal.right())
             .y().attach(k_1x_literal.y());
 
 
         // OFFSET mux
         const offset_mux_left_50 = offset_mux.left().offset(-50);
-        _ = offset_mux.top().attachToOffset(kmux.bottom(), 20);
-        _ = offset_mux.leftSide("")
-            .wireH(.{ .bits = 32 })
-            .bitMark()
-            .continueAt(offset_mux_left_50)
-            .endAt(offset_zx_literal.right())
+        _ = offset_mux.top().attach_to_offset(kmux.bottom(), 20);
+        _ = offset_mux.left_side("")
+            .wire_h(.{ .bits = 32 })
+            .bit_mark()
+            .continue_at(offset_mux_left_50)
+            .end_at(offset_zx_literal.right())
             .y().attach(offset_zx_literal.y());
-        _ = offset_mux.leftSide("")
-            .wireH(.{ .bits = 32 })
-            .bitMark()
-            .continueAt(offset_mux_left_50)
-            .endAt(offset_1x_literal.right())
+        _ = offset_mux.left_side("")
+            .wire_h(.{ .bits = 32 })
+            .bit_mark()
+            .continue_at(offset_mux_left_50)
+            .end_at(offset_1x_literal.right())
             .y().attach(offset_1x_literal.y());
-        _ = offset_mux.leftSide("")
-            .wireH(.{ .bits = 32 })
+        _ = offset_mux.left_side("")
+            .wire_h(.{ .bits = 32 })
             .label("0x00000000", .{ .alignment = .right, .baseline = .middle })
-            .bitMark()
+            .bit_mark()
             .length(-50);
-        _ = offset_mux.leftSide("")
-            .wireH(.{ .bits = 32 })
+        _ = offset_mux.left_side("")
+            .wire_h(.{ .bits = 32 })
             .label("0x00000002", .{ .alignment = .right, .baseline = .middle })
-            .bitMark()
+            .bit_mark()
             .length(-50);
 
-        _ = offset_mux.bottomSide("")
-            .wireV(.{ .bits = 2, .class="control" })
+        _ = offset_mux.bottom_side("")
+            .wire_v(.{ .bits = 2, .class="control" })
             .length(35)
             .turn()
             .label("OFFSET", .{})
-            .endAt(in.right());
+            .end_at(in.right());
 
 
 
         // BASE mux
-        _ = base_mux.leftSide("")
-            .wireH(.{ .bits = 32 })
-            .bitMark()
-            .turnAt(d.betweenX(sr1b.right(), base_mux.left(), 0.5))
-            .turnAndEndAt(sr1b.rightSide(""));
-        _ = base_mux.leftSide("")
-            .wireH(.{ .bits = 32 })
-            .bitMark()
-            .turnAt(d.betweenX(sr1b.right(), base_mux.left(), 0.5))
-            .turnAndEndAt(sr2b.rightSide(""));
-        _ = base_mux.topSide("")
-            .wireV(.{ .bits = 1, .class="control" })
-            .turnAtOffset(sr1b.top(), -25)
+        _ = base_mux.left_side("")
+            .wire_h(.{ .bits = 32 })
+            .bit_mark()
+            .turn_at(d.between_x(sr1b.right(), base_mux.left(), 0.5))
+            .turn_and_end_at(sr1b.right_side(""));
+        _ = base_mux.left_side("")
+            .wire_h(.{ .bits = 32 })
+            .bit_mark()
+            .turn_at(d.between_x(sr1b.right(), base_mux.left(), 0.5))
+            .turn_and_end_at(sr2b.right_side(""));
+        _ = base_mux.top_side("")
+            .wire_v(.{ .bits = 1, .class="control" })
+            .turn_at_offset(sr1b.top(), -25)
             .label("BASE[3]", .{})
-            .endAt(in.right());
+            .end_at(in.right());
 
         // AGU
-        const between_agu_and_muxes = d.betweenX(offset_mux.right(), agu.left(), 0.5);
-        agu.getLeftInterface().spacing = 75;
-        _ = offset_mux.rightSide("")
-            .wireH(.{ .bits = 32 })
-            .bitMark()
-            .turnAt(between_agu_and_muxes)
-            .turnAndEndAt(agu.leftSide(""));
-        _ = base_mux.rightSide("")
-            .wireH(.{ .bits = 32 })
-            .bitMark()
-            .turnAt(between_agu_and_muxes)
-            .turnAndEndAt(agu.leftSide(""));
+        const between_agu_and_muxes = d.between_x(offset_mux.right(), agu.left(), 0.5);
+        agu.get_left_interface().spacing = 75;
+        _ = offset_mux.right_side("")
+            .wire_h(.{ .bits = 32 })
+            .bit_mark()
+            .turn_at(between_agu_and_muxes)
+            .turn_and_end_at(agu.left_side(""));
+        _ = base_mux.right_side("")
+            .wire_h(.{ .bits = 32 })
+            .bit_mark()
+            .turn_at(between_agu_and_muxes)
+            .turn_and_end_at(agu.left_side(""));
 
         // Outputs
-        _ = jhmux.rightSide("")
-            .wireH(.{ .bits = 16 })
-            .bitMark()
+        _ = jhmux.right_side("")
+            .wire_h(.{ .bits = 16 })
+            .bit_mark()
             .label("JH", .{ .alignment = .right })
-            .endAt(out.left());
+            .end_at(out.left());
 
-        _ = jlmux.rightSide("")
-            .wireH(.{ .bits = 16 })
-            .bitMark()
+        _ = jlmux.right_side("")
+            .wire_h(.{ .bits = 16 })
+            .bit_mark()
             .label("JL", .{ .alignment = .right })
-            .endAt(out.left());
+            .end_at(out.left());
 
-        _ = kmux.rightSide("")
-            .wireH(.{ .bits = 16 })
-            .bitMark()
+        _ = kmux.right_side("")
+            .wire_h(.{ .bits = 16 })
+            .bit_mark()
             .label("K", .{ .alignment = .right })
-            .endAt(out.left());
+            .end_at(out.left());
 
-        agu.getRightInterface().spacing = 75;
-        _ = agu.rightSide("")
-            .wireH(.{ .bits = 20 })
-            .bitMark()
+        agu.get_right_interface().spacing = 75;
+        _ = agu.right_side("")
+            .wire_h(.{ .bits = 20 })
+            .bit_mark()
             .label("P", .{ .alignment = .right })
-            .endAt(out.left());
-        _ = agu.rightSide("")
-            .wireH(.{ .bits = 12 })
-            .bitMark()
+            .end_at(out.left());
+        _ = agu.right_side("")
+            .wire_h(.{ .bits = 12 })
+            .bit_mark()
             .label("N", .{ .alignment = .right })
-            .endAt(out.left());
+            .end_at(out.left());
 
 
         left_cols.interface.flip();
 
-        _ = out.left().attachToOffset(jhmux.right(), 150);
-        _ = out.top().attachTo(in.top());
-        _ = out.bottom().attachToOffset(agu.bottom(), 0);
+        _ = out.left().attach_to_offset(jhmux.right(), 150);
+        _ = out.top().attach_to(in.top());
+        _ = out.bottom().attach_to_offset(agu.bottom(), 0);
 
-        _ = end.attachTo(out.x());
+        _ = end.attach_to(out.x());
 
         return .{
             .out = out,
@@ -816,7 +816,7 @@ const Setup = struct {
 const Compute = struct {
     out: *Box,
 
-    pub fn init(d: *Drawing, setup: Setup, end: XRef) Compute {
+    pub fn init(d: *Drawing, setup: Setup, end: X_Ref) Compute {
         const in = setup.out;
         const out = d.box(.{ .class="pipeline" }).width(50);
 
@@ -824,15 +824,15 @@ const Compute = struct {
         const shifter_bottom = shifter(d, in, out, arith_bottom);
         _ = shifter_bottom;
 
-        _ = out.top().attachTo(in.top());
-        _ = end.attachTo(out.x());
+        _ = out.top().attach_to(in.top());
+        _ = end.attach_to(out.x());
 
         return .{
             .out = out,
         };
     }
 
-    fn arith(d: *Drawing, in: *Box, out: *Box) YRef {
+    fn arith(d: *Drawing, in: *Box, out: *Box) Y_Ref {
         const adder = d.box(.{ .label = "+" }).size(80, 140); // TODO ALU shape?
         const k_inv = d.box(.{ .shape = .small, .label = "^" });
         const k_mux = d.box(.{ .shape = .mux }).size(40, 80);
@@ -850,180 +850,180 @@ const Compute = struct {
         const znv_mux = d.box(.{ .shape = .mux }).size(40, 50);
 
         // Arith
-        const cin_wire = adder.topSide("C0")
-            .wireV(.{})
+        const cin_wire = adder.top_side("C0")
+            .wire_v(.{})
             .length(-25)
             .turn();
         _ = cin_wire.endpoint()
-            .attach(c_inv.middleRight())
-            .x().attachTo(k_inv.right());
-        _ = adder.leftSide("")
-            .wireH(.{ .bits = 16 })
-            .bitMark()
+            .attach(c_inv.middle_right())
+            .x().attach_to(k_inv.right());
+        _ = adder.left_side("")
+            .wire_h(.{ .bits = 16 })
+            .bit_mark()
             .label("JH", .{})
-            .endAt(in.right());
-        _ = adder.leftSide("")
-            .wireH(.{ .bits = 16 })
-            .bitMark()
+            .end_at(in.right());
+        _ = adder.left_side("")
+            .wire_h(.{ .bits = 16 })
+            .bit_mark()
             .label("JL", .{})
-            .endAt(in.right());
-        _ = adder.leftSide("");
-        _ = adder.leftSide("");
-        _ = adder.leftSide("");
-        _ = adder.leftSide("")
-            .wireH(.{ .bits = 32 })
-            .bitMark()
+            .end_at(in.right());
+        _ = adder.left_side("");
+        _ = adder.left_side("");
+        _ = adder.left_side("");
+        _ = adder.left_side("")
+            .wire_h(.{ .bits = 32 })
+            .bit_mark()
             .length(-40)
-            .endpoint().attach(k_inv.middleRight());
-        _ = k_inv.leftSide("")
-            .wireH(.{ .bits = 32 })
-            .bitMark()
+            .endpoint().attach(k_inv.middle_right());
+        _ = k_inv.left_side("")
+            .wire_h(.{ .bits = 32 })
+            .bit_mark()
             .length(-40)
-            .endpoint().attach(k_mux.middleRight());
+            .endpoint().attach(k_mux.middle_right());
 
         // Cin processing
-        _ = c_inv.leftSide("")
-            .wireH(.{})
+        _ = c_inv.left_side("")
+            .wire_h(.{})
             .length(-40)
-            .endpoint().attach(c_and.middleRight());
-        _ = c_and.leftSide("")
-            .wireH(.{})
+            .endpoint().attach(c_and.middle_right());
+        _ = c_and.left_side("")
+            .wire_h(.{})
             .label("STAT_C", .{})
-            .endAt(in.right());
-        _ = c_and.topSide("")
-            .wireV(.{ .class="control" })
+            .end_at(in.right());
+        _ = c_and.top_side("")
+            .wire_v(.{ .class="control" })
             .length(-25)
             .turn()
             .label("MODE[1]", .{})
-            .endAt(in.right());
-        _ = c_inv.bottomSide("")
-            .wireV(.{ .class="control" })
-            .endAt(k_inv.top());
+            .end_at(in.right());
+        _ = c_inv.bottom_side("")
+            .wire_v(.{ .class="control" })
+            .end_at(k_inv.top());
 
 
         // K Mux
-        _ = k_mux.leftSide("")
-            .wireH(.{ .bits = 32 })
-            .bitMark()
+        _ = k_mux.left_side("")
+            .wire_h(.{ .bits = 32 })
+            .bit_mark()
             .length(-40)
-            .endpoint().attach(k_zx.middleRight());
-        _ = k_mux.leftSide("")
-            .wireH(.{ .bits = 32 })
-            .bitMark()
-            .continueAt(k_mux.left().offset(-40))
+            .endpoint().attach(k_zx.middle_right());
+        _ = k_mux.left_side("")
+            .wire_h(.{ .bits = 32 })
+            .bit_mark()
+            .continue_at(k_mux.left().offset(-40))
             .length(-40)
-            .endpoint().attach(k_sx.middleRight());
-        _ = k_mux.leftSide("")
-            .wireH(.{ .bits = 32 })
-            .bitMark()
+            .endpoint().attach(k_sx.middle_right());
+        _ = k_mux.left_side("")
+            .wire_h(.{ .bits = 32 })
+            .bit_mark()
             .length(-40)
-            .endpoint().attach(k_1x.middleRight());
-        const mode32 = k_mux.bottomSide("")
-            .wireV(.{ .bits = 2, .class="control" })
+            .endpoint().attach(k_1x.middle_right());
+        const mode32 = k_mux.bottom_side("")
+            .wire_v(.{ .bits = 2, .class="control" })
             .length(75)
             .turn()
             .label("MODE[3:2]", .{})
-            .bitMark()
-            .endAt(in.right());
+            .bit_mark()
+            .end_at(in.right());
 
-        const k_wire = k_sx.leftSide("")
-            .wireH(.{ .bits = 16 })
+        const k_wire = k_sx.left_side("")
+            .wire_h(.{ .bits = 16 })
             .length(-25);
-        _ = k_wire.turn().turnAt(k_wire.y())
+        _ = k_wire.turn().turn_at(k_wire.y())
             .label("K", .{})
-            .bitMark()
-            .endAt(in.right());
+            .bit_mark()
+            .end_at(in.right());
 
-        _ = k_zx.leftSide("")
-            .wireH(.{ .bits = 16, .dir = .junction_end })
-            .turnAndEndAt(k_wire.endpoint());
-        _ = k_1x.leftSide("")
-            .wireH(.{ .bits = 16, .dir = .junction_end })
-            .turnAndEndAt(k_wire.endpoint());
+        _ = k_zx.left_side("")
+            .wire_h(.{ .bits = 16, .dir = .junction_end })
+            .turn_and_end_at(k_wire.endpoint());
+        _ = k_1x.left_side("")
+            .wire_h(.{ .bits = 16, .dir = .junction_end })
+            .turn_and_end_at(k_wire.endpoint());
 
 
-        _ = adder.rightSide("")
-            .wireH(.{ .bits = 16 })
+        _ = adder.right_side("")
+            .wire_h(.{ .bits = 16 })
             .label("ARITH_H", .{ .alignment = .right })
-            .bitMark()
-            .endAt(out.left());
-        _ = adder.rightSide("")
-            .wireH(.{ .bits = 16 })
+            .bit_mark()
+            .end_at(out.left());
+        _ = adder.right_side("")
+            .wire_h(.{ .bits = 16 })
             .label("ARITH_L", .{ .alignment = .right })
-            .bitMark()
-            .endAt(out.left());
+            .bit_mark()
+            .end_at(out.left());
 
-        _ = adder.bottomSide("C16")
-            .wireV(.{})
-            .turnAndEndAt(cout_mux.leftSide(""));
-        _ = adder.bottomSide("C32")
-            .wireV(.{})
-            .turnAndEndAt(cout_mux.leftSide(""));
+        _ = adder.bottom_side("C16")
+            .wire_v(.{})
+            .turn_and_end_at(cout_mux.left_side(""));
+        _ = adder.bottom_side("C32")
+            .wire_v(.{})
+            .turn_and_end_at(cout_mux.left_side(""));
 
-        _ = cout_mux.bottomSide("")
-            .wireV(.{})
-            .turnAt(mode32.y())
+        _ = cout_mux.bottom_side("")
+            .wire_v(.{})
+            .turn_at(mode32.y())
             .length(-100)
-            .endpoint().attach(cout_dec.middleRight());
-        _ = cout_dec.leftSide("")
-            .wireH(.{ .bits = 2, .class="control", .dir = .junction_end })
-            .endAt(mode32.origin().x());
+            .endpoint().attach(cout_dec.middle_right());
+        _ = cout_dec.left_side("")
+            .wire_h(.{ .bits = 2, .class="control", .dir = .junction_end })
+            .end_at(mode32.origin().x());
 
-        _ = cout_mux.topLeft().attachToOffset(adder.bottomRight(), 50, 10);
-        cout_mux.getLeftInterface().flip();
+        _ = cout_mux.top_left().attach_to_offset(adder.bottom_right(), 50, 10);
+        cout_mux.get_left_interface().flip();
 
-        _ = cout_mux.rightSide("")
-            .wireH(.{})
+        _ = cout_mux.right_side("")
+            .wire_h(.{})
             .length(25)
-            .endpoint().attach(cout_inv.middleLeft());
-        _ = cout_inv.rightSide("")
-            .wireH(.{})
+            .endpoint().attach(cout_inv.middle_left());
+        _ = cout_inv.right_side("")
+            .wire_h(.{})
             .label("ARITH_C", .{ .alignment = .right })
-            .endAt(out.left());
+            .end_at(out.left());
 
-        const mode0 = cout_inv.bottomSide("")
-            .wireV(.{ .class="control" })
-            .turnAtOffset(mode32.y(), 20)
+        const mode0 = cout_inv.bottom_side("")
+            .wire_v(.{ .class="control" })
+            .turn_at_offset(mode32.y(), 20)
             .label("MODE[0]", .{})
-            .endAt(in.right());
-        _ = k_inv.bottomSide("")
-            .wireV(.{ .class="control", .dir = .junction_end })
-            .endAt(mode0.y());
+            .end_at(in.right());
+        _ = k_inv.bottom_side("")
+            .wire_v(.{ .class="control", .dir = .junction_end })
+            .end_at(mode0.y());
 
 
-        _ = znv_mux.bottomCenter().attachToOffset(cout_mux.topCenter(), 0, -30);
-        _ = znv_mux.leftSide("")
-            .wireH(.{ .bits = 2 })
-            .bitMark()
-            .endAtMutablePoint(adder.rightSide("ZNV32"));
-        _ = znv_mux.leftSide("")
-            .wireH(.{ .bits = 2 })
-            .bitMark()
-            .endAtMutablePoint(adder.rightSide("ZNV16"));
-        _ = znv_mux.rightSide("")
-            .wireH(.{ .bits = 2 })
+        _ = znv_mux.bottom_center().attach_to_offset(cout_mux.top_center(), 0, -30);
+        _ = znv_mux.left_side("")
+            .wire_h(.{ .bits = 2 })
+            .bit_mark()
+            .end_at_mutable_point(adder.right_side("ZNV32"));
+        _ = znv_mux.left_side("")
+            .wire_h(.{ .bits = 2 })
+            .bit_mark()
+            .end_at_mutable_point(adder.right_side("ZNV16"));
+        _ = znv_mux.right_side("")
+            .wire_h(.{ .bits = 2 })
             .label("ARITH_ZNV", .{ .alignment = .right })
-            .bitMark()
-            .endAt(out.left());
-        _ = znv_mux.bottomSide("")
-            .wireV(.{})
-            .endAt(cout_mux.top());
+            .bit_mark()
+            .end_at(out.left());
+        _ = znv_mux.bottom_side("")
+            .wire_v(.{})
+            .end_at(cout_mux.top());
 
-        _ = adder.rightSide("");
-        _ = adder.rightSide("");
-        _ = adder.rightSide("");
-        _ = adder.rightSide(""); // TODO box interface alignment
+        _ = adder.right_side("");
+        _ = adder.right_side("");
+        _ = adder.right_side("");
+        _ = adder.right_side(""); // TODO box interface alignment
 
 
-        _ = adder.topLeft().attachToOffset(in.topRight(), 350, 90);
+        _ = adder.top_left().attach_to_offset(in.top_right(), 350, 90);
 
-        _ = out.left().attachToOffset(cout_inv.right(), 75);
-        _ = out.bottom().attachToOffset(cout_inv.bottom(), 0);
+        _ = out.left().attach_to_offset(cout_inv.right(), 75);
+        _ = out.bottom().attach_to_offset(cout_inv.bottom(), 0);
 
         return mode0.y();
     }
 
-    fn shifter(d: *Drawing, in: *Box, out: *Box, top: YRef) YRef {
+    fn shifter(d: *Drawing, in: *Box, out: *Box, top: Y_Ref) Y_Ref {
         _ = out;
         const early_reverse_h = d.box(.{ .label = "rev" }).width(50);
         const early_reverse_l = d.box(.{ .label = "rev" }).width(50);
@@ -1043,27 +1043,27 @@ const Compute = struct {
 
         const top_y = top.offset(100);
 
-        _ = early_reverse_h.top().attachTo(top_y);
-        _ = early_reverse_l.top().attachTo(early_reverse_h.bottom());
-        _ = early_swap16.top().attachTo(top_y);
-        _ = early_swap16.bottom().attachTo(early_reverse_l.bottom());
-        _ = early_mask_high.top().attachTo(top_y);
-        _ = shift.top().attachTo(top_y);
-        _ = shift.bottom().attachTo(early_swap16.bottom());
-        _ = late_swap16.top().attachTo(top_y);
-        _ = late_swap16.bottom().attachTo(early_reverse_l.bottom());
-        _ = late_reverse_h.top().attachTo(top_y);
-        _ = late_reverse_l.top().attachTo(early_reverse_h.bottom());
+        _ = early_reverse_h.top().attach_to(top_y);
+        _ = early_reverse_l.top().attach_to(early_reverse_h.bottom());
+        _ = early_swap16.top().attach_to(top_y);
+        _ = early_swap16.bottom().attach_to(early_reverse_l.bottom());
+        _ = early_mask_high.top().attach_to(top_y);
+        _ = shift.top().attach_to(top_y);
+        _ = shift.bottom().attach_to(early_swap16.bottom());
+        _ = late_swap16.top().attach_to(top_y);
+        _ = late_swap16.bottom().attach_to(early_reverse_l.bottom());
+        _ = late_reverse_h.top().attach_to(top_y);
+        _ = late_reverse_l.top().attach_to(early_reverse_h.bottom());
 
-        _ = early_reverse_h.left().attachToOffset(in.right(), 100);
-        _ = early_reverse_l.left().attachToOffset(in.right(), 100);
-        _ = early_swap16.left().attachToOffset(early_reverse_h.right(), 40);
-        _ = early_mask_high.left().attachToOffset(early_swap16.right(), 40);
-        _ = shift.left().attachToOffset(early_mask_high.right(), 40);
+        _ = early_reverse_h.left().attach_to_offset(in.right(), 100);
+        _ = early_reverse_l.left().attach_to_offset(in.right(), 100);
+        _ = early_swap16.left().attach_to_offset(early_reverse_h.right(), 40);
+        _ = early_mask_high.left().attach_to_offset(early_swap16.right(), 40);
+        _ = shift.left().attach_to_offset(early_mask_high.right(), 40);
 
-        _ = late_swap16.left().attachToOffset(shift.right(), 40);
-        _ = late_reverse_h.left().attachToOffset(late_swap16.right(), 40);
-        _ = late_reverse_l.left().attachToOffset(late_swap16.right(), 40);
+        _ = late_swap16.left().attach_to_offset(shift.right(), 40);
+        _ = late_reverse_h.left().attach_to_offset(late_swap16.right(), 40);
+        _ = late_reverse_l.left().attach_to_offset(late_swap16.right(), 40);
 
         
 
@@ -1073,7 +1073,7 @@ const Compute = struct {
 };
 
 const Transact = struct {
-    pub fn init(d: *Drawing, compute: Compute, end: XRef) Transact {
+    pub fn init(d: *Drawing, compute: Compute, end: X_Ref) Transact {
         _ = compute;
         _ = end;
         _ = d;
@@ -1085,8 +1085,8 @@ const Transact = struct {
 
 const Drawing = zbox.Drawing;
 const Box = zbox.Box;
-const XRef = zbox.XRef;
-const YRef = zbox.YRef;
+const X_Ref = zbox.X_Ref;
+const Y_Ref = zbox.Y_Ref;
 
 const zbox = @import("zbox");
 const std = @import("std");

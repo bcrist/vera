@@ -1,9 +1,4 @@
-const std = @import("std");
-const console = @import("console");
-const ie = @import("isa_encoding");
-const Assembler = @import("Assembler.zig");
-const dump = @import("dump.zig");
-const output = @import("output.zig");
+// TODO fix std.mem.set in console
 
 // --ssx filename.ext --ssx-no-list
 // --srec filename.ext --split <num>:<width> --offset <address offset> --range min-max --merge --pretty
@@ -15,10 +10,15 @@ pub fn main() !void {
     defer console.deinit();
 
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    var temp = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
 
-    var temp = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    const edb = try ie.data.EncoderDatabase.init(arena.allocator(), temp.allocator());
+    var pd: arch.isa.Instruction_Encoding.Parser_Data = .{
+        .data_allocator = arena.allocator(),
+        .temp_allocator = gpa.allocator(),
+    };
+
+    const edb = try arch.isa.Encoding_Database.init(&pd, ""); // TODO
 
     var a = Assembler.init(gpa.allocator(), arena.allocator(), edb);
 
@@ -28,7 +28,7 @@ pub fn main() !void {
     _ = arg_iter.next(); // ignore assemble command name
     while (arg_iter.next()) |arg| {
         const source = try std.fs.cwd().readFileAlloc(arena.allocator(), arg, 100_000_000);
-        _ = a.adoptSource(try arena.allocator().dupe(u8, arg), source);
+        _ = a.adopt_source(try arena.allocator().dupe(u8, arg), source);
         if (output_file.items.len == 0) {
             try output_file.appendSlice(arg);
         } else {
@@ -40,16 +40,16 @@ pub fn main() !void {
 
     a.assemble();
 
-    var list = output.createListing(&a, gpa.allocator(), .{});
+    var list = output.create_listing(&a, gpa.allocator(), .{});
     defer list.deinit();
 
-    try list.writeAll(*Assembler, &a, std.io.getStdOut().writer());
+    try list.write_all(*Assembler, &a, std.io.getStdOut().writer());
 
     //try dump.dump(&a, std.io.getStdOut().writer());
 
-    try a.printErrors(std.io.getStdErr().writer());
+    try a.print_errors(std.io.getStdErr().writer());
 
-    // try output.writeHex(&a, std.fs.cwd(), output_file.items, .{
+    // try output.write_hex(&a, std.fs.cwd(), output_file.items, .{
     //     .merge_all_sections = true,
     // });
 
@@ -57,6 +57,14 @@ pub fn main() !void {
     var f = try std.fs.cwd().createFile(simsx_filename, .{});
     defer f.close();
     var writer = f.writer();
-    try output.writeSimSx(&a, gpa.allocator(), writer, .{});
+    try output.write_sim_sx(&a, gpa.allocator(), writer, .{});
 
 }
+
+const arch = @import("lib_arch");
+const dump = assembler.dump;
+const output = assembler.output;
+const Assembler = assembler.Assembler;
+const assembler = @import("lib_assembler");
+const console = @import("console");
+const std = @import("std");

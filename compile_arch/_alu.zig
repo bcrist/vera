@@ -55,6 +55,88 @@ const L_to_reg32 = cb.L_to_reg32;
 
 const CF = ?*const fn() CF;
 
+// Instruction name - struct name? (must be unique)
+// Flags affected - maybe compute from microcode?
+// List of asm instruction patterns, with optional named placeholders
+// Set of valid values each placeholder can take, as list of ranges (may degenerate into a list of single item ranges)
+// Set of constraints among 2 or more placeholders
+//      X != Y
+//      X > Y
+//      X >= Y
+// Set of functions to map placeholder values to an instruction encoding
+//      This also defines the length of the instruction.
+//      Each function may "consume" zero or more of the placeholders.
+//      Exactly one function must consume each placeholder.
+//      If there are multiple functions, their results are ORed together.
+// Set of functions for definition of initial IJ/IK/IW values, and the function defining the first microcode cycle of the instruction
+//      May use constants, placeholder values, or values from the encoding.
+//      If placeholder values are used, the final result must be the same for every permutation of those placeholders which maps to the same encoding.
+// TODO: how to specify IJ/IK/IW/entry mappings for alt-mode decoder?
+
+pub const @"Negate 32-bit register" = .{
+    struct {
+        pub const spec =
+            \\ NEG Xsrc -> Xdest
+            \\ SUB 0, Xsrc -> Xdest
+            \\ SUB R0, Xsrc -> Xdest
+            ;
+
+        const _src = Any_Reg(.src);
+        const _dest = Any_Reg(.dest);
+
+        pub const constraints = .{
+            .{ .not_equal = .{ .src, .dest } },
+        };
+
+        pub const encoding = Op_Lo8.negate_32b;
+        pub const encode_src = encoders.shl(_src, 8);
+        pub const encode_dest = encoders.shl(_dest, 12);
+
+        pub const ij = encoders.id(_src);
+        pub const ik: u4 = 0; // could probably default to 0 if unspecified
+        pub const iw = encoders.id(_dest);
+        // other encoders helpers:
+        // encoders.shl(value, bits)
+        // encoders.shr(value, bits)
+        // encoders.sum(base, offset)
+
+        pub const entry = negate32_low_half;
+    },
+    struct {
+        pub const spec =
+            \\ NEG Xsd
+            \\ NEG Xsd -> Xsd
+            \\ SUB 0, Xsd -> Xsd
+            \\ SUB R0, Xsd -> Xsd
+            ;
+
+        const _sd = Any_Reg(.sd);
+
+        pub const encoding = Op_Lo12.negate_32b;
+        pub const encode_sd = encoders.shl(_sd, 12);
+
+        pub const ij = encoders.value(_sd);
+        pub const iw = encoders.value(_sd);
+        pub const entry = negate32_low_half;
+    },
+};
+
+fn negate32_low_half() CF {
+    zero_minus_ij_reg_to_LL(.fresh, .flags);
+    LL_to_iw_reg();
+    xor_ij();
+    xor_iw();
+    return negate32_high_half;
+}
+fn negate32_high_half() void {
+    zero_minus_ij_reg_to_LL(.cont, .flags);
+    LL_to_iw_reg();
+    load_and_exec_next_insn();
+}
+
+
+
+
 
 pub const instructions = .{
     struct {
@@ -78,32 +160,7 @@ pub const instructions = .{
         }
 
     },
-    struct {
-        pub const spec =
-        \\ NEG Xsrc -> Xdest
-        \\ SUB 0, Xsrc -> Xdest
-        \\ SUB R0, Xsrc -> Xdest
-        \\
-        \\ src:  K0 xxx0
-        \\ dest: W0 xxx0
-        ;
-    },
-    struct {
-        pub const spec =
-        \\ NEG Xsd
-        \\ NEG Xsrc -> Xdest
-        \\ SUB 0, Xsrc -> Xdest
-        \\ SUB R0, Xsrc -> Xdest
-        \\
-        \\      sd: K0, W0
-        \\      src: K0
-        \\      dest: W0
-        \\      K0: xxx0
-        \\      W0: xxx0
-        \\
-        \\      reg32[W0] = 
-        ;
-    },
+ 
 
 };
 
