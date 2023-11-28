@@ -47,6 +47,8 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
             const ik_fn = if (@hasDecl(Struct, "ik")) comptime resolve_encoders(Struct.ik) else no_encoders;
             const iw_fn = if (@hasDecl(Struct, "iw")) comptime resolve_encoders(Struct.iw) else no_encoders;
 
+            const constraints = if (@hasDecl(Struct, "constraints")) comptime resolve_constraints(Struct.constraints) else &.{};
+
             if (@hasDecl(Struct, "spec")) {
                 var parser = Spec_Parser.init(alloc, Struct.spec);
                 while (parser.next()) |parsed| {
@@ -71,7 +73,7 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
                         .signature = parsed.signature,
                         .encoding_len = encoding_length(encoders),
                         .next_insn_loaded = false,
-                    }, encoders, ij_encoders, ik_encoders, iw_encoders, &lookup);
+                    }, constraints, encoders, ij_encoders, ik_encoders, iw_encoders, &lookup);
 
                     // self.encoding_list.append(.{
                     //     .signature = parsed.signature,
@@ -84,7 +86,7 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
                 const ij_encoders = ij_fn(alloc, null);
                 const ik_encoders = ik_fn(alloc, null);
                 const iw_encoders = iw_fn(alloc, null);
-                self.process_instruction(&Struct.entry, null, encoders, ij_encoders, ik_encoders, iw_encoders, &lookup);
+                self.process_instruction(&Struct.entry, null, constraints, encoders, ij_encoders, ik_encoders, iw_encoders, &lookup);
             }
         } else if (@hasDecl(Struct, "slot")) {
             const slot_handle = Microcode_Processor.process(.{
@@ -106,6 +108,7 @@ fn process_instruction(
     self: *Processor,
     entry_fn: *const anyopaque,
     maybe_ctx: ?Slot_Info.Impl_Context,
+    constraints: []const Constraint,
     encoders: []const Encoder,
     ij_encoders: []const Encoder,
     ik_encoders: []const Encoder,
@@ -121,7 +124,7 @@ fn process_instruction(
     });
     self.resolve_cycles(slot_handle, lookup);
 
-    var iter = Initial_Word_Encoding_Iterator.init(self.temp.allocator(), encoders, .normal); // TODO ID_Mode.alt
+    var iter = Initial_Word_Encoding_Iterator.init(self.temp.allocator(), constraints, encoders, .normal); // TODO ID_Mode.alt
     while (iter.next()) |base_addr| {
         const entry: Decode_ROM_Builder.Entry = .{
             .slot_handle = slot_handle,
@@ -137,6 +140,87 @@ fn process_instruction(
         while (undefined_bits_iter.next()) |addr| {
             self.decode_rom.add_entry(addr, entry);
         }
+    }
+}
+
+fn resolve_constraints(comptime constraints: anytype) []const Constraint {
+    switch (@typeInfo(@TypeOf(constraints))) {
+        .Struct => |info| if (info.is_tuple) {
+            comptime var out: [constraints.len]Constraint = undefined;
+            inline for (constraints, &out) |in, *constraint| {
+                constraint.* = comptime resolve_single_constraint(in);
+            }
+            return &out;
+        },
+        else => {},
+    }
+
+    return &.{ resolve_single_constraint(constraints) };
+}
+
+fn resolve_single_constraint(comptime constraint: anytype) Constraint {
+    const T = @TypeOf(constraint);
+    if (T == Constraint) return constraint;
+    switch (@typeInfo(T)) {
+        .Struct => |info| {
+            std.debug.assert(info.is_tuple);
+            std.debug.assert(constraint.len == 3);
+
+            const Extended_Kind = enum {
+                equal,
+                not_equal,
+                greater,
+                greater_than,
+                greater_or_equal,
+                less,
+                less_than,
+                less_or_equal
+            };
+            const ext_kind: Extended_Kind = constraint[1];
+            const kind: Constraint.Kind = switch (ext_kind) {
+                .equal => .equal,
+                .not_equal => .not_equal,
+                .greater, .greater_than, .less, .less_than => .greater,
+                .greater_or_equal, .less_or_equal => .greater_or_equal,
+            };
+
+            var left = resolve_constraint_value(constraint[0]);
+            var right = resolve_constraint_value(constraint[2]);
+
+            switch (ext_kind) {
+                .less, .less_than, .less_or_equal => {
+                    const temp = left;
+                    left = right;
+                    right = temp;
+                },
+                else => {},
+            }
+
+            return .{
+                .left = left,
+                .right = right,
+                .kind = kind,
+            };
+        },
+        else => @compileError("Expected .{ left, .op, right } or Constraint"),
+    }
+}
+
+fn resolve_constraint_value(comptime value: anytype) Value {
+    const T = @TypeOf(value);
+    if (T == Value) return value;
+    switch (@typeInfo(T)) {
+        .Int, .ComptimeInt => {
+            return .{ .constant = @intCast(value) };
+        },
+        .EnumLiteral => {
+            return .{ .placeholder = .{
+                .index = .invalid,
+                .kind = .param_constant,
+                .name = @tagName(value),
+            }};
+        },
+        else => @compileError("Expected integer, enum literal, or Value"),
     }
 }
 
@@ -210,10 +294,11 @@ fn encoding_length(encoders: []const Encoder) Encoded_Instruction.Length_Type {
 pub const Initial_Word_Encoding_Iterator = struct {
     first: bool = true,
     undefined_bits: hw.D,
+    constraints: []const Constraint,
     value_iters: []Encoder.Value_Iterator,
     id_mode: hw.Control_Signals.ID_Mode,
 
-    pub fn init(allocator: std.mem.Allocator, encoders: []const Encoder, id_mode: hw.Control_Signals.ID_Mode) Initial_Word_Encoding_Iterator {
+    pub fn init(allocator: std.mem.Allocator, constraints: []const Constraint, encoders: []const Encoder, id_mode: hw.Control_Signals.ID_Mode) Initial_Word_Encoding_Iterator {
         const out = allocator.alloc(Encoder.Value_Iterator, encoders.len) catch @panic("OOM");
         var undefined_bits = ~@as(hw.D.Raw, 0);
         var n: usize = 0;
@@ -229,12 +314,22 @@ pub const Initial_Word_Encoding_Iterator = struct {
         return .{
             .first = true,
             .undefined_bits = hw.D.init(undefined_bits),
+            .constraints = constraints,
             .value_iters = out[0..n],
             .id_mode = id_mode,
         };
     }
 
     pub fn next(self: *Initial_Word_Encoding_Iterator) ?hw.decode.Address {
+        while (self.next_internal()) |val| {
+            for (self.constraints) |constraint| {
+                if (!self.constraint_matches(constraint)) break;
+            } else return val;
+        }
+        return null;
+    }
+
+    fn next_internal(self: *Initial_Word_Encoding_Iterator) ?hw.decode.Address {
         if (self.first) {
             var encoded: isa.Encoded_Instruction.Data = 0;
             for (self.value_iters) |*value_iter| {
@@ -268,6 +363,24 @@ pub const Initial_Word_Encoding_Iterator = struct {
             }
         }
         return null;
+    }
+
+    fn constraint_matches(self: *Initial_Word_Encoding_Iterator, constraint: Constraint) bool {
+        const left = self.constraint_value(constraint.left) orelse return true;
+        const right = self.constraint_value(constraint.right) orelse return true;
+        return switch (constraint.kind) {
+            .equal => left == right,
+            .not_equal => left != right,
+            .greater => left > right,
+            .greater_or_equal => left >= right,
+        };
+    }
+
+    fn constraint_value(self: Initial_Word_Encoding_Iterator, val: Value) ?i64 {
+        return switch (val) {
+            .constant => |k| k,
+            .placeholder => |info| self.value(info.name),
+        };
     }
 
     pub fn value(self: Initial_Word_Encoding_Iterator, placeholder: []const u8) ?i64 {
@@ -520,6 +633,8 @@ const Slot_Data = Microcode_Builder.Slot_Data;
 const Slot_Location = Microcode_Builder.Slot_Location;
 const Microcode_Builder = @import("Microcode_Builder.zig");
 const Decode_ROM_Builder = @import("Decode_ROM_Builder.zig");
+const Value = isa.Instruction_Encoding.Value;
+const Constraint = isa.Instruction_Encoding.Constraint;
 const Encoder = isa.Instruction_Encoding.Encoder;
 const Encoded_Instruction = isa.Encoded_Instruction;
 const isa = arch.isa;
