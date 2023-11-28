@@ -14,8 +14,9 @@ pub const placeholders = @import("compile_arch/placeholders.zig");
 
 pub fn main() !void {
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .{};
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     var temp = try TempAllocator.init(0x1000_0000);
-    var processor = Processor.init(gpa.allocator(), &temp);
+    var processor = Processor.init(gpa.allocator(), arena.allocator(), &temp);
 
     processor.process(@import("compile_arch/_reset.zig").instructions);
     processor.process(@import("compile_arch/_fault.zig").instructions);
@@ -83,11 +84,17 @@ pub fn main() !void {
     // try arch.analyzeControlSignalUsage(&allocators.temp_arena, &.{ .allow_int, .seq_op }, stdout);
     // try arch.analyzeControlSignalUsage(&allocators.temp_arena, &.{ .ll_src, .lh_src }, stdout);
 
-    // {
-    //     var f = try std.fs.cwd().createFile("arch/isa_encoding/isa.sx", .{});
-    //     defer f.close();
-    //     try arch.writeInstructionEncodings(f.writer());
-    // }
+    {
+        var f = try std.fs.cwd().createFile("lib/arch/isa/instructions.sx", .{});
+        defer f.close();
+
+        var writer = sx.writer(gpa.allocator(), f.writer());
+        defer writer.deinit();
+
+        for (processor.encoding_list.items) |encoding| {
+            try encoding.write(@TypeOf(writer.inner), &writer, false);
+        }
+    }
 
     // var rom_data = try uc_roms.writeCompressedRoms(allocators.temp_arena.allocator(), allocators.temp_arena.allocator(), &arch.microcode);
 
@@ -116,4 +123,5 @@ pub fn main() !void {
 const hw = arch.hw;
 const arch = @import("lib_arch");
 const TempAllocator = @import("TempAllocator");
+const sx = @import("sx");
 const std = @import("std");

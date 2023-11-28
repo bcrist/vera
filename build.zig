@@ -80,6 +80,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "lib_arch", .module = lib_arch },
             .{ .name = "lib_assembler", .module = lib_assembler },
             .{ .name = "console", .module = ext.console },
+            .{ .name = "sx", .module = ext.sx },
         },
     });
 

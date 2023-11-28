@@ -344,36 +344,36 @@ pub fn write(self: Instruction_Encoding, comptime W: type, writer: *sx.Writer(W)
         switch (enc.domain) {
             .int => |info| {
                 try writer.expression(@tagName(info.signedness));
-                try writer.int(info.bits, 0);
+                try writer.int(info.bits, 10);
                 if (info.multiple != 1) {
                     try writer.expression("multiple");
-                    try writer.int(info.multiple, 0);
+                    try writer.int(info.multiple, 10);
                     _ = try writer.close();
                 }
                 _ = try writer.close();
             },
             .range => |range| {
                 try writer.expression("range");
-                try writer.int(range.min, 0);
-                try writer.int(range.max, 0);
+                try writer.int(range.min, 10);
+                try writer.int(range.max, 10);
                 _ = try writer.close();
             },
             .enumerated => |values| {
                 try writer.expression("values");
-                for (values) |v| try writer.int(v, 0);
+                for (values) |v| try writer.int(v, 10);
                 _ = try writer.close();
             },
         }
 
         if (enc.arithmetic_offset > 0) {
             try writer.expression("base");
-            try writer.int(enc.arithmetic_offset, 0);
+            try writer.int(enc.arithmetic_offset, 10);
             _ = try writer.close();
         }
 
         if (enc.bit_offset > 0) {
             try writer.expression("shift");
-            try writer.int(enc.bit_offset, 0);
+            try writer.int(enc.bit_offset, 10);
             _ = try writer.close();
         }
 

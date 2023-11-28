@@ -56,7 +56,7 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = "ldrs .d x(src) -> r(registerset)";
+    struct { pub const spec = "ldrs .d x(src) -> b(registerset)";
         pub const encoding = .{
             opcodes.Lo8.load_registerset,
             Encoder.shifted(8, Reg(.src)),
@@ -189,7 +189,7 @@ pub const instructions = .{
         }
 
     },
-    struct { pub const spec = "strs r(registerset) -> .d x(dest)";
+    struct { pub const spec = "strs b(registerset) -> .d x(dest)";
         pub const encoding = .{
             opcodes.Lo8.store_registerset,
             Encoder.shifted(8, Reg(.dest)),

@@ -1,10 +1,12 @@
+arena: std.mem.Allocator,
 temp: *TempAllocator,
 microcode: Microcode_Builder,
 decode_rom: Decode_ROM_Builder,
 encoding_list: std.ArrayList(isa.Instruction_Encoding),
 
-pub fn init(gpa: std.mem.Allocator, temp: *TempAllocator) Processor {
+pub fn init(gpa: std.mem.Allocator, arena: std.mem.Allocator, temp: *TempAllocator) Processor {
     return .{
+        .arena = arena,
         .temp = temp,
         .microcode = Microcode_Builder.init(gpa),
         .decode_rom = Decode_ROM_Builder.init(gpa),
@@ -49,6 +51,8 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
 
             const constraints = if (@hasDecl(Struct, "constraints")) comptime resolve_constraints(Struct.constraints) else &.{};
 
+            const id_mode: hw.Control_Signals.ID_Mode = if (@hasDecl(Struct, "decode_mode")) Struct.decode_mode else .normal;
+
             if (@hasDecl(Struct, "spec")) {
                 var parser = Spec_Parser.init(alloc, Struct.spec);
                 while (parser.next()) |parsed| {
@@ -73,20 +77,18 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
                         .signature = parsed.signature,
                         .encoding_len = encoding_length(encoders),
                         .next_insn_loaded = false,
-                    }, constraints, encoders, ij_encoders, ik_encoders, iw_encoders, &lookup);
+                    }, constraints, encoders, ij_encoders, ik_encoders, iw_encoders, id_mode, &lookup);
 
-                    // self.encoding_list.append(.{
-                    //     .signature = parsed.signature,
-                    //     .constraints = &.{}, // TODO constraints
-                    //     .encoders = self.convert_encoders(encoders, ,
-                    // }) catch @panic("OOM");
+                    self.encoding_list.append(self.finalize_encoding(parsed, constraints, encoders)) catch @panic("OOM");
                 }
             } else {
                 const encoders = encoders_fn(alloc, null);
                 const ij_encoders = ij_fn(alloc, null);
                 const ik_encoders = ik_fn(alloc, null);
                 const iw_encoders = iw_fn(alloc, null);
-                self.process_instruction(&Struct.entry, null, constraints, encoders, ij_encoders, ik_encoders, iw_encoders, &lookup);
+                self.process_instruction(&Struct.entry, null, constraints,
+                    encoders, ij_encoders, ik_encoders, iw_encoders,
+                    id_mode, &lookup);
             }
         } else if (@hasDecl(Struct, "slot")) {
             const slot_handle = Microcode_Processor.process(.{
@@ -113,6 +115,7 @@ fn process_instruction(
     ij_encoders: []const Encoder,
     ik_encoders: []const Encoder,
     iw_encoders: []const Encoder,
+    id_mode: hw.Control_Signals.ID_Mode,
     lookup: *Slot_Info.Lookup,
 ) void {
     const slot_handle = Microcode_Processor.process(.{
@@ -124,7 +127,7 @@ fn process_instruction(
     });
     self.resolve_cycles(slot_handle, lookup);
 
-    var iter = Initial_Word_Encoding_Iterator.init(self.temp.allocator(), constraints, encoders, .normal); // TODO ID_Mode.alt
+    var iter = Initial_Word_Encoding_Iterator.init(self.temp.allocator(), constraints, encoders, id_mode);
     while (iter.next()) |base_addr| {
         const entry: Decode_ROM_Builder.Entry = .{
             .slot_handle = slot_handle,
@@ -624,6 +627,95 @@ pub const Slot_Info = struct {
     }
 };
 
+fn finalize_encoding(self: *Processor, parsed: Instruction_Encoding, constraints: []const Constraint, encoders: []const Encoder) Instruction_Encoding {
+    const final_encoders = self.arena.dupe(Encoder, encoders) catch @panic("OOM");
+    for (final_encoders) |*encoder| {
+        fixup_placeholder_value(&encoder.value, parsed.encoders);
+    }
+
+    const final_constraints = self.arena.alloc(Constraint, parsed.constraints.len + constraints.len) catch @panic("OOM");
+    @memcpy(final_constraints.ptr, parsed.constraints);
+    @memcpy(final_constraints[parsed.constraints.len..], constraints);
+
+    for (final_constraints) |*constraint| {
+        fixup_placeholder_value(&constraint.left, parsed.encoders);
+        fixup_placeholder_value(&constraint.right, parsed.encoders);
+    }
+
+    for (parsed.encoders) |parsed_encoder| {
+        const placeholder = parsed_encoder.value.placeholder.name;
+
+        if (find_placeholder_info(placeholder, final_encoders) != null) continue;
+
+        for (final_constraints) |constraint| {
+            if (constraint.kind != .equal) continue;
+            if (is_placeholder(placeholder, constraint.left)) {
+                if (get_placeholder(constraint.right)) |other_placeholder| {
+                    if (find_placeholder_info(other_placeholder, final_encoders) != null) break;
+                }
+            } else if (is_placeholder(placeholder, constraint.right)) {
+                if (get_placeholder(constraint.left)) |other_placeholder| {
+                    if (find_placeholder_info(other_placeholder, final_encoders) != null) break;
+                }
+            }
+        } else {
+            std.debug.panic("Placeholder '{s}' is not encoded or constrained equal to an encoded placeholder", .{ placeholder });
+        }
+    }
+
+    const final_param_signatures = self.arena.dupe(isa.Parameter.Signature, parsed.signature.params) catch @panic("OOM");
+
+    return .{
+        .signature = .{
+            .mnemonic = parsed.signature.mnemonic,
+            .suffix = parsed.signature.suffix,
+            .params = final_param_signatures,
+        },
+        .constraints = final_constraints,
+        .encoders = final_encoders,
+    };
+}
+
+fn fixup_placeholder_value(value: *Value, parsed_encoders: []const Encoder) void {
+    switch (value.*) {
+        .constant => {},
+        .placeholder => |*info| if (info.index == .invalid) {
+            if (find_placeholder_info(info.name, parsed_encoders)) |parsed_info| {
+                info.index = parsed_info.index;
+                info.kind = parsed_info.kind;
+            } else {
+                std.debug.panic("Encoder {s} not found in parsed instruction", .{ info.name });
+            }
+        },
+    }
+}
+
+fn find_placeholder_info(needle: []const u8, haystack: []const Encoder) ?Instruction_Encoding.Placeholder_Info {
+    for (haystack) |encoder| switch (encoder.value) {
+        .constant => {},
+        .placeholder => |info| {
+            if (std.mem.eql(u8, info.name, needle)) {
+                return info;
+            }
+        },
+    };
+    return null;
+}
+
+fn get_placeholder(value: Value) ?[]const u8 {
+    switch (value) {
+        .constant => return null,
+        .placeholder => |info| return info.name,
+    }
+}
+
+fn is_placeholder(needle: []const u8, value: Value) bool {
+    return switch (value) {
+        .constant => false,
+        .placeholder => |info| std.mem.eql(u8, info.name, needle),
+    };
+}
+
 const log = std.log.scoped(.compile_arch);
 
 const Processor = @This();
@@ -633,9 +725,10 @@ const Slot_Data = Microcode_Builder.Slot_Data;
 const Slot_Location = Microcode_Builder.Slot_Location;
 const Microcode_Builder = @import("Microcode_Builder.zig");
 const Decode_ROM_Builder = @import("Decode_ROM_Builder.zig");
-const Value = isa.Instruction_Encoding.Value;
-const Constraint = isa.Instruction_Encoding.Constraint;
-const Encoder = isa.Instruction_Encoding.Encoder;
+const Value = Instruction_Encoding.Value;
+const Constraint = Instruction_Encoding.Constraint;
+const Encoder = Instruction_Encoding.Encoder;
+const Instruction_Encoding = isa.Instruction_Encoding;
 const Encoded_Instruction = isa.Encoded_Instruction;
 const isa = arch.isa;
 const hw = arch.hw;
