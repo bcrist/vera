@@ -14,12 +14,12 @@ pub fn print_mnemonic_and_suffix(mnemonic: Mnemonic, suffix: Mnemonic_Suffix, wr
 }
 
 pub fn print_encoding(encoding: Instruction_Encoding, writer: anytype) !void {
-    var len = try print_mnemonic_and_suffix(encoding.mnemonic, encoding.suffix, writer);
+    var len = try print_mnemonic_and_suffix(encoding.signature.mnemonic, encoding.signature.suffix, writer);
     if (len < 5) {
         try writer.writeByteNTimes(' ', 5 - len);
     }
     var skip_comma = true;
-    for (encoding.params) |param| {
+    for (encoding.signature.params) |param| {
         if (param.base == .arrow) {
             skip_comma = true;
         } else if (skip_comma) {

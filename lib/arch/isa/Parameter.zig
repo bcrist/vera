@@ -20,6 +20,7 @@ pub const Kind = union (enum) {
 };
 
 pub const Index = enum (u4) {
+    invalid = 0xF,
     _,
     pub fn init(raw_value: u4) Index {
         return @enumFromInt(raw_value);

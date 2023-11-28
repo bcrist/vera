@@ -1,353 +1,419 @@
-const assert = @import("std").debug.assert;
-const ib = @import("instruction_builder.zig");
-const cb = @import("cycle_builder.zig");
-const ControlSignals = @import("ControlSignals");
-const misc = @import("misc");
-const uc = @import("microcode");
-
-const addr = ib.addr;
-const encoding = ib.encoding;
-const desc = ib.desc;
-const next_cycle = ib.next_cycle;
-const next_cycle_force_normal_execution = ib.next_cycle_force_normal_execution;
-const fault_return = ib.fault_return;
-const uc_address = ib.uc_address;
-const kernel = ib.kernel;
-
-const SR_plus_literal_to_L = cb.SR_plus_literal_to_L;
-const last_translation_info_to_L = cb.last_translation_info_to_L;
-const op_reg32_to_L = cb.op_reg32_to_L;
-const SR1_to_L = cb.SR1_to_L;
-const OB_OA_to_LL = cb.OB_OA_to_LL;
-const STAT_to_LL = cb.STAT_to_LL;
-const DL_to_LL = cb.DL_to_LL;
-const JH_to_LH = cb.JH_to_LH;
-const JH_to_LL = cb.JH_to_LL;
-const JL_to_LL = cb.JL_to_LL;
-const SRH_to_LL = cb.SRH_to_LL;
-const op_reg_to_LL = cb.op_reg_to_LL;
-const L_to_SR = cb.L_to_SR;
-const L_to_SR1 = cb.L_to_SR1;
-const L_to_SR2 = cb.L_to_SR2;
-const L_to_reg32 = cb.L_to_reg32;
-const LL_to_STAT = cb.LL_to_STAT;
-const LL_to_D = cb.LL_to_D;
-const LL_to_RSN = cb.LL_to_RSN;
-const LL_to_op_reg = cb.LL_to_op_reg;
-const SR1H_to_LH = cb.SR1H_to_LH;
-const SR1H_to_LL = cb.SR1H_to_LL;
-const SR2H_to_LL = cb.SR2H_to_LL;
-const SR1L_to_LL = cb.SR1L_to_LL;
-const SR2L_to_LL = cb.SR2L_to_LL;
-const SR1_to_J = cb.SR1_to_J;
-const SR2_to_J = cb.SR2_to_J;
-const SR2_to_SR2 = cb.SR2_to_SR2;
-const read_to_D = cb.read_to_D;
-const write_from_LL = cb.write_from_LL;
-const D_to_L = cb.D_to_L;
-const D_to_LL = cb.D_to_LL;
-const D_to_LH = cb.D_to_LH;
-const D_to_DL = cb.D_to_DL;
-const D_to_OB_OA = cb.D_to_OB_OA;
-const reload_ASN = cb.reload_ASN;
-const toggle_rsn = cb.toggle_rsn;
-const RSN_to_SR1H = cb.RSN_to_SR1H;
-const branch = cb.branch;
-const illegal_instruction = cb.illegal_instruction;
-const load_and_exec_next_insn = cb.load_and_exec_next_insn;
-const atomic_next_cycle_until_end = cb.atomic_next_cycle_until_end;
-const clear_OB = cb.clear_OB;
-const increment_OB = cb.increment_OB;
-const prev_UA_to_LH = cb.prev_UA_to_LH;
-
-fn vectored_fault_handler(zeropage_vector: u5) void {
-    // Store the UC address of the faulted cycle and the contents of DL into SR1:
-    prev_UA_to_LH();
-    DL_to_LL();
-    L_to_SR1(.fault_ua_dl);
-    next_cycle();
-
-    // Store STAT into SR1 (without disturbing high byte):
-    SR1H_to_LH(.fault_rsn_stat);
-    STAT_to_LL();
-    L_to_SR1(.fault_rsn_stat);
-    next_cycle();
-
-    // Store OB/OA into SR1 (without disturbing high byte):
-    SR1H_to_LH(.int_rsn_fault_ob_oa);
-    OB_OA_to_LL();
-    L_to_SR1(.int_rsn_fault_ob_oa);
-    next_cycle();
-
-    // Switch to fault registerset:
-    toggle_rsn();
-    // Copy data about last MMU op into X0
-    // For page faults, this is critical for knowing what page to load
-    last_translation_info_to_L();
-    L_to_reg32(0);
-    next_cycle();
-
-    // May need to update ASN after changing RSN
-    reload_ASN();
-    // Read the fault vector
-    read_to_D(.zero, zeropage_vector, .word, .raw);
-    D_to_L(.zx);
-    L_to_SR(.temp_1);
-    next_cycle();
-
-    // Begin executing handler
-    branch(.temp_1, 0);
-}
-
-pub fn _handler_1() void {
-    // page fault
-    //desc("Triggered when address translation is performed but there is no matching entry");
-    assert(uc_address() == @enumToInt(uc.Vectors.page_fault));
-    vectored_fault_handler(@intCast(u5, @offsetOf(misc.ZeropageVectorTable, "page_fault")));
-}
-
-pub fn _handler_2() void {
-    // access fault
-    //desc("Triggered when address translation is performed in user-mode, and the matching entry does not have the user flag set");
-    assert(uc_address() == @enumToInt(uc.Vectors.access_fault));
-    vectored_fault_handler(@intCast(u5, @offsetOf(misc.ZeropageVectorTable, "access_fault")));
-}
-
-pub fn _handler_3() void {
-    // page align fault
-    //desc("Triggered when reading or writing a word that stradles the boundary between two 4KB pages");
-    assert(uc_address() == @enumToInt(uc.Vectors.page_align_fault));
-    vectored_fault_handler(@intCast(u5, @offsetOf(misc.ZeropageVectorTable, "page_align_fault")));
-}
-
-pub fn _handler_4() void {
-    // instruction protection fault
-    //desc("Triggered when attempting to execute a kernel-only instruction in user mode");
-    assert(uc_address() == @enumToInt(uc.Vectors.instruction_protection_fault));
-    vectored_fault_handler(@intCast(u5, @offsetOf(misc.ZeropageVectorTable, "instruction_protection_fault")));
-}
-
-pub fn _handler_5() void {
-    // invalid instruction
-    //desc("Triggered when attempting to execute an opcode that does not correspond to a valid instruction");
-    assert(uc_address() == @enumToInt(uc.Vectors.invalid_instruction));
-    vectored_fault_handler(@intCast(u5, @offsetOf(misc.ZeropageVectorTable, "invalid_instruction")));
-}
-
-pub fn _handler_6() void {
-    // double fault
-    //desc("Triggered when a fault occurs, but exec_state is already .fault or .interrupt_fault");
-    assert(uc_address() == @enumToInt(uc.Vectors.double_fault));
-    vectored_fault_handler(@intCast(u5, @offsetOf(misc.ZeropageVectorTable, "double_fault")));
-}
-
-pub fn _018D() void {
-    encoding(.FRET, .{});
-    desc("Return from fault handler and retry operation");
-
-    if (!kernel()) {
-        illegal_instruction();
-        return;
-    }
-
-    toggle_rsn();
-    next_cycle();
-
-    reload_ASN();
-    SR1_to_L(.fault_rsn_stat);
-    LL_to_STAT();
-    next_cycle();
-
-    SR1_to_L(.int_rsn_fault_ob_oa);
-    LL_to_D();
-    D_to_OB_OA();
-    next_cycle();
-
-    SR1_to_L(.fault_ua_dl);
-    LL_to_D();
-    D_to_DL();
-    // If a page fault occurs during an instruction preceeded by SYNC,
-    // we want to make sure it's still atomic when we retry.
-    // It doesn't hurt to "upgrade" a non-atomic instruction, so we
-    // just assume all faults happen during atomic instructions
-    atomic_next_cycle_until_end();
-    fault_return();
-}
-
-pub fn _018E() void {
-    encoding(.IFEX, .{});
-    desc("Exit interrupt or fault handler without changing registersets or retrying the faulted operation");
-
-    if (!kernel()) {
-        illegal_instruction();
-        return;
-    }
-
-    next_cycle_force_normal_execution();
-
-    load_and_exec_next_insn(2);
-}
-
-pub fn _FD00_FDFF() void {
-    encoding(.LDRS, .{ addr(.data, .Xa), .to, .Rb });
-    desc("Load registerset");
-
-    if (!kernel()) {
-        illegal_instruction();
-        return;
-    }
-
-    // Move the base address into SR2 so that we can move it to .RS_reserved without using L:
-    op_reg32_to_L(.OA);
-    L_to_SR2(.temp_2);
-    next_cycle();
-
-    // switch RSN, copy base address to .RS_reserved:
-    RSN_to_SR1H(.fault_rsn_stat);
-    op_reg_to_LL(.OB);
-    LL_to_RSN();
-    SR2_to_SR2(.temp_2, .rs_reserved);
-    clear_OB();
-    next_cycle();
-
-    // Load the GPR data
-    var r: u5 = 0;
-    while (r < 16) : (r += 1) {
-        read_to_D(.rs_reserved, r * 2, .word, .data);
-        D_to_LL();
-        LL_to_op_reg(.OB);
-        increment_OB();
-        next_cycle();
-    }
-
-    // offset .RS_reserved to avoid overflowing the literal offset:
-    SR_plus_literal_to_L(.rs_reserved, 32, .fresh, .no_flags);
-    L_to_SR(.rs_reserved);
-    next_cycle();
-
-    // Load the SR data
-    inline for ([_][]const u8{
-        "rp", "sp", "bp", "fault_ua_dl", "fault_rsn_stat", "int_rsn_fault_ob_oa",
-        "ip", "next_ip", "asn", "kxp", "uxp", "temp_2", "temp_1",
-    }) |reg| {
-        const offset = @offsetOf(misc.RegistersetState, reg) - 32;
-
-        read_to_D(.rs_reserved, offset, .word, .data);
-        D_to_L(.zx);
-        L_to_SR1(.temp_1);
-        next_cycle();
-
-        read_to_D(.rs_reserved, offset + 2, .word, .data);
-        SR1L_to_LL(.temp_1);
-        D_to_LH();
-        if (@hasField(ControlSignals.SR1Index, reg)) {
-            L_to_SR1(@field(ControlSignals.SR1Index, reg));
-        } else {
-            L_to_SR2(@field(ControlSignals.SR2Index, reg));
+pub const instructions = .{
+    Fault_Handler(.page_fault),
+    Fault_Handler(.access_fault),
+    Fault_Handler(.page_align_fault),
+    Fault_Handler(.instruction_protection_fault),
+    Fault_Handler(.invalid_instruction_fault),
+    Fault_Handler(.double_fault),
+    struct { pub const slot = .invalid_instruction;
+        pub fn entry(c: *Cycle) void {
+            c.invalid_instruction();
         }
-        next_cycle();
-    }
+    },
+    struct { pub const spec = "fret";
+        pub const encoding = opcodes.Lo16.return_from_fault;
 
-    // Restore RSN from SR1.fault_rsn_stat
-    SRH_to_LL(.fault_rsn_stat);
-    LL_to_RSN();
-    next_cycle();
-
-    load_and_exec_next_insn(2);
-}
-
-pub fn _FE00_FEFF() void {
-    encoding(.STRS, .{ .Rb, .to, addr(.data, .Xa) });
-    desc("Store registerset");
-
-    if (!kernel()) {
-        illegal_instruction();
-        return;
-    }
-
-    // Move the base address into SR2 so that we can move it to .RS_reserved without using L:
-    op_reg32_to_L(.OA);
-    L_to_SR2(.temp_2);
-    next_cycle();
-
-    // switch RSN, copy base address to .RS_reserved:
-    RSN_to_SR1H(.fault_rsn_stat);
-    op_reg_to_LL(.OB);
-    LL_to_RSN();
-    SR2_to_SR2(.temp_2, .rs_reserved);
-    clear_OB();
-    next_cycle();
-
-    // Store the GPR data
-    var r: u5 = 0;
-    while (r < 16) : (r += 1) {
-        op_reg_to_LL(.OB);
-        write_from_LL(.rs_reserved, r * 2, .word, .data);
-        increment_OB();
-        next_cycle();
-    }
-
-    // offset .rs_reserved to avoid overflowing the literal offset:
-    SR_plus_literal_to_L(.rs_reserved, 32, .fresh, .no_flags);
-    L_to_SR(.rs_reserved);
-    next_cycle();
-
-    // Store the SR data
-    inline for ([_][]const u8{
-        "rp", "sp", "bp", "fault_ua_dl", "fault_rsn_stat", "int_rsn_fault_ob_oa",
-        "ip", "next_ip", "asn", "kxp", "uxp", "temp_2", "temp_1",
-    }) |reg| {
-        const offset = @offsetOf(misc.RegistersetState, reg) - 32;
-
-        if (@hasField(ControlSignals.SR1Index, reg)) {
-            SR1L_to_LL(@field(ControlSignals.SR1Index, reg));
-        } else {
-            SR2L_to_LL(@field(ControlSignals.SR2Index, reg));
+        pub fn entry(c: *Cycle, flags: Flags) void {
+            if (!flags.kernel()) return c.illegal_instruction();
+            c.toggle_rsn();
+            c.next(restore_stat);
         }
-        write_from_LL(.rs_reserved, offset, .word, .data);
-        next_cycle();
 
-        if (@hasField(ControlSignals.SR1Index, reg)) {
-            SR1H_to_LL(@field(ControlSignals.SR1Index, reg));
-        } else {
-            SR2H_to_LL(@field(ControlSignals.SR2Index, reg));
+        pub fn restore_stat(c: *Cycle) void {
+            c.reload_asn();
+            c.sr_to_l(.fault_rsn_stat);
+            c.ll_to_stat();
+            c.next(restore_ij_ik_iw);
         }
-        write_from_LL(.rs_reserved, offset + 2, .word, .data);
-        next_cycle();
-    }
 
-    // Restore RSN from SR1.fault_rsn_stat
-    SRH_to_LL(.fault_rsn_stat);
-    LL_to_RSN();
-    next_cycle();
+        pub fn restore_ij_ik_iw(c: *Cycle) void {
+            c.sr_to_l(.int_rsn_fault_iw_ik_ij);
+            c.ll_to_dr();
+            c.decode_dr_to_ij_ik_iw(.alt); // TODO alt decoding
+            c.next(restore_dr_and_retry);
+        }
 
-    load_and_exec_next_insn(2);
+        pub fn restore_dr_and_retry(c: *Cycle) void {
+            c.sr_to_l(.fault_uc_slot_dr);
+            c.ll_to_dr();
+            // If a page fault occurs during an instruction preceeded by SYNC,
+            // we want to make sure it's still atomic when we retry.
+            // It doesn't hurt to "upgrade" a non-atomic instruction, so we
+            // just assume all faults happen during atomic instructions
+            c.atomic_next_cycle_until_end();
+            c.fault_return();
+        }
+    },
+    struct { pub const spec = "ifex"; // Exit interrupt or fault handler without changing registersets or retrying the faulted operation
+        pub const encoding = opcodes.Lo16.exit_handler;
+
+        pub fn entry(c: *Cycle, flags: Flags) void {
+            if (!flags.kernel()) return c.illegal_instruction();
+            c.force_normal_execution(load_next_insn);
+        }
+
+        pub fn load_next_insn(c: *Cycle) void {
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = "ldrs .d x(src) -> r(registerset)";
+        pub const encoding = .{
+            opcodes.Lo8.load_registerset,
+            Encoder.shifted(8, Reg(.src)),
+            Encoder.shifted(12, Reg(.registerset)),
+        };
+        pub const ij = Reg(.src);
+        pub const ik = Reg(.registerset);
+
+        const LDRS = @This();
+
+        pub fn entry(c: *Cycle, flags: Flags) void {
+            if (!flags.kernel()) return c.illegal_instruction();
+
+            // Move the base address into SR2 so that we can move it to .RS_reserved without using L:
+            c.reg32_to_l(); // x(src)
+            c.l_to_sr(.temp_2);
+            c.next(switch_rsn);
+        }
+
+        pub fn switch_rsn(c: *Cycle) void {
+            c.rsn_to_sr1h(.fault_rsn_stat);
+            c.reg_to_k(); // r(registerset)
+            c.ll_to_rsn();
+            c.sr2_to_sr2(.temp_2, .rs_reserved);
+            c.next(load_r0);
+        }
+
+        pub const load_r0 = load_gpr(0);
+        pub const load_r1 = load_gpr(1);
+        pub const load_r2 = load_gpr(2);
+        pub const load_r3 = load_gpr(3);
+        pub const load_r4 = load_gpr(4);
+        pub const load_r5 = load_gpr(5);
+        pub const load_r6 = load_gpr(6);
+        pub const load_r7 = load_gpr(7);
+        pub const load_r8 = load_gpr(8);
+        pub const load_r9 = load_gpr(9);
+        pub const load_r10 = load_gpr(10);
+        pub const load_r11 = load_gpr(11);
+        pub const load_r12 = load_gpr(12);
+        pub const load_r13 = load_gpr(13);
+        pub const load_r14 = load_gpr(14);
+        pub const load_r15 = load_gpr(15);
+
+        fn load_gpr(comptime n: hw.Register_Index) fn(c: *Cycle)void {
+            return struct {
+                pub fn func(c: *Cycle) void {
+                    c.read_to_d(.rs_reserved, @as(Cycle.Address_Offset, n) * 2, .word, .data);
+                    c.d_to_l(.zx);
+                    c.ll_to_reg();
+                    if (n < 15) {
+                        c.next_iw(n + 1);
+                        c.next(@field(LDRS, std.fmt.comptimePrint("load_r{}", .{ n + 1 })));
+                    } else {
+                        c.next_ik_bit(hw.register_count * @sizeOf(hw.R));
+                        c.next(offset_rs_reserved);
+                    }
+                }
+            }.func;
+        }
+
+        pub fn offset_rs_reserved(c: *Cycle) void {
+            c.sr_to_j(.rs_reserved);
+            c.ik_bit_to_k();
+            c.j_plus_k_to_l(.zx, .fresh, .no_flags);
+            c.l_to_sr(.rs_reserved);
+            c.next(load_rp);
+        }
+
+        pub const load_rp                      = load_sr_pt1(.rp);
+        pub const load_sp                      = load_sr_pt1(.sp);
+        pub const load_bp                      = load_sr_pt1(.bp);
+        pub const load_fault_uc_slot_dr        = load_sr_pt1(.fault_uc_slot_dr);
+        pub const load_fault_rsn_stat          = load_sr_pt1(.fault_rsn_stat);
+        pub const load_int_rsn_fault_iw_ik_ij  = load_sr_pt1(.int_rsn_fault_iw_ik_ij);
+        pub const load_ip                      = load_sr_pt1(.ip);
+        pub const load_next_ip                 = load_sr_pt1(.next_ip);
+        pub const load_asn                     = load_sr_pt1(.asn);
+        pub const load_kxp                     = load_sr_pt1(.kxp);
+        pub const load_uxp                     = load_sr_pt1(.uxp);
+        pub const load_temp_2                  = load_sr_pt1(.temp_2);
+        pub const load_temp_1                  = load_sr_pt1(.temp_1);
+
+        pub const load_rp_2                      = load_sr_pt2(.rp, load_sp);
+        pub const load_sp_2                      = load_sr_pt2(.sp, load_bp);
+        pub const load_bp_2                      = load_sr_pt2(.bp, load_fault_uc_slot_dr);
+        pub const load_fault_uc_slot_dr_2        = load_sr_pt2(.fault_uc_slot_dr, load_fault_rsn_stat);
+        pub const load_fault_rsn_stat_2          = load_sr_pt2(.fault_rsn_stat, load_int_rsn_fault_iw_ik_ij);
+        pub const load_int_rsn_fault_iw_ik_ij_2  = load_sr_pt2(.int_rsn_fault_iw_ik_ij, load_ip);
+        pub const load_ip_2                      = load_sr_pt2(.ip, load_next_ip);
+        pub const load_next_ip_2                 = load_sr_pt2(.next_ip, load_asn);
+        pub const load_asn_2                     = load_sr_pt2(.asn, load_kxp);
+        pub const load_kxp_2                     = load_sr_pt2(.kxp, load_uxp);
+        pub const load_uxp_2                     = load_sr_pt2(.uxp, load_temp_2);
+        pub const load_temp_2_2                  = load_sr_pt2(.temp_2, load_temp_1);
+        pub const load_temp_1_2                  = load_sr_pt2(.temp_1, restore_rsn);
+
+        fn load_sr_pt1(comptime sr: hw.Control_Signals.Any_SR_Index) fn(c: *Cycle)void {
+            const offset = @offsetOf(arch.Context_State, @tagName(sr)) - (hw.register_count * @sizeOf(hw.R));
+            return struct {
+                pub fn func(c: *Cycle) void {
+                    c.read_to_d(.rs_reserved, offset + 2, .word, .data);
+                    c.d_to_l(.zx);
+                    c.l_to_sr(.temp_1);
+                    c.next(@field(LDRS, "load_" ++ @tagName(sr) ++ "_2"));
+                }
+            }.func;
+        }
+        fn load_sr_pt2(comptime sr: hw.Control_Signals.Any_SR_Index, comptime next: *const anyopaque) fn(c: *Cycle)void {
+            const offset = @offsetOf(arch.Context_State, @tagName(sr)) - (hw.register_count * @sizeOf(hw.R));
+            return struct {
+                pub fn func(c: *Cycle) void {
+                    c.read_to_d(.rs_reserved, offset, .word, .data);
+                    c.srl_to_lh(.temp_1);
+                    c.d_to_ll();
+                    c.l_to_sr(sr);
+                    c.next(next);
+                }
+            }.func;
+        }
+
+        pub fn restore_rsn(c: *Cycle) void {
+            c.srh_to_ll(.fault_rsn_stat);
+            c.ll_to_rsn();
+            c.next(load_next_insn);
+        }
+
+        pub fn load_next_insn(c: *Cycle) void {
+            c.load_and_exec_next_insn();
+        }
+
+    },
+    struct { pub const spec = "strs r(registerset) -> .d x(dest)";
+        pub const encoding = .{
+            opcodes.Lo8.store_registerset,
+            Encoder.shifted(8, Reg(.dest)),
+            Encoder.shifted(12, Reg(.registerset)),
+        };
+        pub const ij = Reg(.dest);
+        pub const ik = Reg(.registerset);
+
+        const STRS = @This();
+
+        pub fn entry(c: *Cycle, flags: Flags) void {
+            if (!flags.kernel()) return c.illegal_instruction();
+            // Move the base address into .temp_2 so that we can move it to .rs_reserved without using L:
+            c.reg32_to_l();
+            c.l_to_sr(.temp_2);
+            c.next(switch_rsn);
+        }
+
+        pub fn switch_rsn(c: *Cycle) void {
+            // switch RSN, copy base address to .RS_reserved:
+            c.rsn_to_sr1h(.fault_rsn_stat);
+            c.reg_to_k(); // r(registerset)
+            c.k_to_ll();
+            c.ll_to_rsn();
+            c.sr2_to_sr2(.temp_2, .rs_reserved);
+            c.next_ik(0);
+            c.next(store_r0);
+        }
+
+        pub const store_r0 = store_gpr(0);
+        pub const store_r1 = store_gpr(1);
+        pub const store_r2 = store_gpr(2);
+        pub const store_r3 = store_gpr(3);
+        pub const store_r4 = store_gpr(4);
+        pub const store_r5 = store_gpr(5);
+        pub const store_r6 = store_gpr(6);
+        pub const store_r7 = store_gpr(7);
+        pub const store_r8 = store_gpr(8);
+        pub const store_r9 = store_gpr(9);
+        pub const store_r10 = store_gpr(10);
+        pub const store_r11 = store_gpr(11);
+        pub const store_r12 = store_gpr(12);
+        pub const store_r13 = store_gpr(13);
+        pub const store_r14 = store_gpr(14);
+        pub const store_r15 = store_gpr(15);
+
+        fn store_gpr(comptime n: hw.Register_Index) fn(c: *Cycle)void {
+            return struct {
+                pub fn func(c: *Cycle) void {
+                    c.reg_to_k();
+                    c.k_to_ll();
+                    c.write_from_ll(.rs_reserved, @as(Cycle.Address_Offset, n) * 2, .word, .data);
+                    if (n < 15) {
+                        c.next_ik(n + 1);
+                        c.next(@field(STRS, std.fmt.comptimePrint("store_r{}", .{ n + 1 })));
+                    } else {
+                        c.next_ik_bit(hw.register_count * @sizeOf(hw.R));
+                        c.next(offset_rs_reserved);
+                    }
+                }
+            }.func;
+        }
+
+        pub fn offset_rs_reserved(c: *Cycle) void {
+            c.sr_to_j(.rs_reserved);
+            c.ik_bit_to_k();
+            c.j_plus_k_to_l(.zx, .fresh, .no_flags);
+            c.l_to_sr(.rs_reserved);
+            c.next(store_rp);
+        }
+
+        pub const store_rp                      = store_sr_pt1(.rp);
+        pub const store_sp                      = store_sr_pt1(.sp);
+        pub const store_bp                      = store_sr_pt1(.bp);
+        pub const store_fault_uc_slot_dr        = store_sr_pt1(.fault_uc_slot_dr);
+        pub const store_fault_rsn_stat          = store_sr_pt1(.fault_rsn_stat);
+        pub const store_int_rsn_fault_iw_ik_ij  = store_sr_pt1(.int_rsn_fault_iw_ik_ij);
+        pub const store_ip                      = store_sr_pt1(.ip);
+        pub const store_next_ip                 = store_sr_pt1(.next_ip);
+        pub const store_asn                     = store_sr_pt1(.asn);
+        pub const store_kxp                     = store_sr_pt1(.kxp);
+        pub const store_uxp                     = store_sr_pt1(.uxp);
+        pub const store_temp_2                  = store_sr_pt1(.temp_2);
+        pub const store_temp_1                  = store_sr_pt1(.temp_1);
+
+        pub const store_rp_2                      = store_sr_pt2(.rp, store_sp);
+        pub const store_sp_2                      = store_sr_pt2(.sp, store_bp);
+        pub const store_bp_2                      = store_sr_pt2(.bp, store_fault_uc_slot_dr);
+        pub const store_fault_uc_slot_dr_2        = store_sr_pt2(.fault_uc_slot_dr, store_fault_rsn_stat);
+        pub const store_fault_rsn_stat_2          = store_sr_pt2(.fault_rsn_stat, store_int_rsn_fault_iw_ik_ij);
+        pub const store_int_rsn_fault_iw_ik_ij_2  = store_sr_pt2(.int_rsn_fault_iw_ik_ij, store_ip);
+        pub const store_ip_2                      = store_sr_pt2(.ip, store_next_ip);
+        pub const store_next_ip_2                 = store_sr_pt2(.next_ip, store_asn);
+        pub const store_asn_2                     = store_sr_pt2(.asn, store_kxp);
+        pub const store_kxp_2                     = store_sr_pt2(.kxp, store_uxp);
+        pub const store_uxp_2                     = store_sr_pt2(.uxp, store_temp_2);
+        pub const store_temp_2_2                  = store_sr_pt2(.temp_2, store_temp_1);
+        pub const store_temp_1_2                  = store_sr_pt2(.temp_1, restore_rsn);
+
+        fn store_sr_pt1(comptime sr: hw.Control_Signals.Any_SR_Index) fn(c: *Cycle)void {
+            const offset = @offsetOf(arch.Context_State, @tagName(sr)) - (hw.register_count * @sizeOf(hw.R));
+            return struct {
+                pub fn func(c: *Cycle) void {
+                    c.srh_to_ll(sr);
+                    c.write_from_ll(.rs_reserved, offset + 2, .word, .data);
+                    c.next(@field(STRS, "store_" ++ @tagName(sr) ++ "_2"));
+                }
+            }.func;
+        }
+        fn store_sr_pt2(comptime sr: hw.Control_Signals.Any_SR_Index, comptime next: *const anyopaque) fn(c: *Cycle)void {
+            const offset = @offsetOf(arch.Context_State, @tagName(sr)) - (hw.register_count * @sizeOf(hw.R));
+            return struct {
+                pub fn func(c: *Cycle) void {
+                    c.srl_to_ll(sr);
+                    c.write_from_ll(.rs_reserved, offset, .word, .data);
+                    c.next(next);
+                }
+            }.func;
+        }
+
+        pub fn restore_rsn(c: *Cycle) void {
+            c.srh_to_ll(.fault_rsn_stat);
+            c.ll_to_rsn();
+            c.next(load_next_insn);
+        }
+
+        pub fn load_next_insn(c: *Cycle) void {
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = "srs r(reg)";
+        pub const encoding = .{
+            opcodes.Lo12.switch_to_registerset,
+            Encoder.shifted(12, Reg(.reg)),
+        };
+
+        pub fn entry(c: *Cycle, flags: Flags) void {
+            if (!flags.kernel()) return c.illegal_instruction();
+            // Increment IP so that if/when someone switches back to this registerset,
+            // this instruction doesn't get executed a second time.
+            c.sr_to_j(.ip);
+            c.literal_to_k(2);
+            c.j_plus_k_to_l(.zx, .fresh, .no_flags);
+            c.l_to_sr(.ip);
+            c.next(switch_rsn);
+        }
+
+        pub fn switch_rsn(c: *Cycle) void {
+            c.reg_to_jl();
+            c.jl_to_ll();
+            c.ll_to_rsn();
+            c.next(reload_asn);
+        }
+
+        pub fn reload_asn(c: *Cycle) void {
+            c.reload_asn();
+            c.next(branch);
+        }
+
+        pub fn branch(c: *Cycle) void {
+            c.branch(.ip, 0);
+        }
+    },
+};
+
+fn Fault_Handler(comptime handler: hw.microcode.Slot) type {
+    return struct {
+        pub const slot = handler;
+
+        pub const entry = store_faulted_slot_and_dr;
+
+        pub fn store_faulted_slot_and_dr(c: *Cycle) void {
+            c.prev_uc_slot_to_lh();
+            c.dr_to_ll();
+            c.l_to_sr(.fault_uc_slot_dr);
+            c.next(store_stat);
+        }
+
+        pub fn store_stat(c: *Cycle) void {
+            c.srh_to_lh(.fault_rsn_stat);
+            c.stat_to_ll();
+            c.l_to_sr(.fault_rsn_stat);
+            c.next(store_ij_ik_iw);
+        }
+
+        pub fn store_ij_ik_iw(c: *Cycle) void {
+            c.srh_to_lh(.int_rsn_fault_iw_ik_ij);
+            c.iw_ik_ij_zx_to_ll();
+            c.l_to_sr(.int_rsn_fault_iw_ik_ij);
+            c.next_iw(0);
+            c.next(read_last_translation_info);
+        }
+
+        pub fn read_last_translation_info(c: *Cycle) void {
+            c.toggle_rsn();
+            c.last_translation_info_to_l();
+            c.l_to_reg32();
+            c.next(load_vector);
+        }
+
+        pub fn load_vector(c: *Cycle) void {
+            c.reload_asn();
+            c.read_to_d(.zero, @offsetOf(arch.Vector_Table, @tagName(handler)), .word, .raw);
+            c.d_to_l(.zx);
+            c.l_to_sr(.temp_1);
+            c.next(branch);
+        }
+
+        pub fn branch(c: *Cycle) void {
+            c.branch(.temp_1, 0);
+        }
+
+    };
 }
 
-pub fn _FA00_FA0F() void {
-    encoding(.SRS, .{ .Ra });
-    desc("Switch to registerset");
-
-    if (!kernel()) {
-        illegal_instruction();
-        return;
-    }
-
-    // Increment IP so that if/when someone switches back to this registerset,
-    // this instruction doesn't get executed a second time.
-    SR_plus_literal_to_L(.ip, 2, .fresh, .no_flags);
-    L_to_SR(.ip);
-    next_cycle();
-
-    // switch RSN, copy base address to .RS_reserved:
-    op_reg_to_LL(.OA);
-    LL_to_RSN();
-    next_cycle();
-
-    // Address space may have changed when we switched RSN:
-    reload_ASN();
-    next_cycle();
-
-    // Assume IP points to the first instruction that we want to execute in the new registerset:
-    branch(.ip, 0);
-}
+const Cycle = @import("Cycle.zig");
+const Encoder = isa.Instruction_Encoding.Encoder;
+const Int = placeholders.Int;
+const Range = placeholders.Range;
+const Reg = placeholders.Reg;
+const placeholders = @import("placeholders.zig");
+const opcodes = @import("opcodes.zig");
+const Flags = hw.microcode.Flags;
+const hw = arch.hw;
+const isa = arch.isa;
+const arch = @import("lib_arch");
+const std = @import("std");

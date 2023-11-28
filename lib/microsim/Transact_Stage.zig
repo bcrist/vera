@@ -124,6 +124,8 @@ pub fn simulate(
     // out.next_k = in.next_k;
     // out.want_atomic = in.want_atomic;
 
+    out.inhibit_writes = in.inhibit_writes;
+
     return .{
         .l = l,
         .d = d,
@@ -155,8 +157,8 @@ fn compute_l(in: Transact_Stage, d: hw.D, at_info: at.Info, power: hw.Power_Mode
                 .pipeline = in.pipeline,
                 .exec = in.exec_mode,
             }).raw(),
+            .iw_ik_ij_zx => bits.concat(.{ in.ij.raw(), in.ik.raw(), in.iw.raw() }),
             .pipeline => in.pipeline.raw(),
-            _ => 0xBADC,
         }),
         .hi = hw.LH.init(switch (in.cs.lh_src) {
             .zero => 0,
@@ -166,6 +168,7 @@ fn compute_l(in: Transact_Stage, d: hw.D, at_info: at.Info, power: hw.Power_Mode
                 .mult => in.mult_data.hi,
                 .count => in.count_data.hi,
             }.raw(),
+            .d_sx => bits.sx(u16, @as(u1, @truncate(d.raw() >> 15))),
             .d8_sx => bits.sx(u16, @as(u1, @truncate(d.raw8() >> 7))),
             .translation_info_h => @truncate(at_info.raw() >> 16),
             .jh => in.jh.raw(),
@@ -198,7 +201,8 @@ fn simulate_register_file(in: Transact_Stage, out: *Decode_Stage, l: hw.L, regis
     const rs = &registers[out.rsn.raw()];
     const iw = in.iw.raw();
 
-    switch (in.cs.reg_width) {
+    switch (in.cs.reg_write) {
+        .no_write => {},
         .write_16 => {
             rs.reg[iw] = hw.R.init(if (iw == 0) 0 else l.lo.raw());
         },
@@ -210,6 +214,7 @@ fn simulate_register_file(in: Transact_Stage, out: *Decode_Stage, l: hw.L, regis
             rs.reg[iw] = hw.R.init(ll);
             rs.reg[iw^1] = hw.R.init(lh);
         },
+        _ => {},
     }
 
     switch (in.cs.sr1_wsrc) {
@@ -232,6 +237,9 @@ fn simulate_register_file(in: Transact_Stage, out: *Decode_Stage, l: hw.L, regis
         .no_write => {},
         .sr2 => {
             rs.sr2[in.cs.sr2_wi.raw()] = in.sr2;
+            if (in.cs.sr2_wi == .asn) {
+                out.asn = at.ASN.init(@truncate(in.sr2.raw()));
+            }
         },
         .l => {
             rs.sr2[in.cs.sr2_wi.raw()] = hw.SR.init(l.raw());
@@ -241,6 +249,9 @@ fn simulate_register_file(in: Transact_Stage, out: *Decode_Stage, l: hw.L, regis
         },
         .virtual_addr => {
             rs.sr2[in.cs.sr2_wi.raw()] = hw.SR.init(in.virtual_addr.raw());
+            if (in.cs.sr2_wi == .asn) {
+                out.asn = at.ASN.init(@truncate(in.virtual_addr.raw()));
+            }
         },
     }
 }

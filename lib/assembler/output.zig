@@ -455,7 +455,7 @@ fn add_listing_for_chunk(a: *Assembler, listing: *Listing, chunk: Source_File.Ch
             },
 
             .bound_insn => |encoding| {
-                const insn = a.build_instruction(s, addresses[i], encoding.mnemonic, encoding.suffix, params[i], false).?;
+                const insn = a.build_instruction(s, addresses[i], encoding.signature.mnemonic, encoding.signature.suffix, params[i], false).?;
                 listing.add_instruction_line(addresses[i], lengths[i], .{
                     .encoding = encoding.*,
                     .params = insn.params,

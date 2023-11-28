@@ -61,9 +61,10 @@ pub const microcode = struct {
         access_fault = 2,
         page_align_fault = 3,
         instruction_protection_fault = 4,
-        invalid_instruction = 5,
+        invalid_instruction_fault = 5,
         double_fault = 6,
         interrupt = 7,
+        invalid_instruction = 0xFFF,
         _,
         pub fn init(raw_value: Raw) Slot {
             return @enumFromInt(raw_value);
@@ -71,12 +72,39 @@ pub const microcode = struct {
         pub fn raw(self: Slot) Raw {
             return @intFromEnum(self);
         }
+        pub fn ij(self: Slot) IJ {
+            return IJ.init(@truncate(self.raw()));
+        }
+        pub fn ik(self: Slot) IK {
+            const raw_ik = self.raw() >> @bitSizeOf(IJ);
+            return IK.init(@truncate(raw_ik));
+        }
+        pub fn iw(self: Slot) IW {
+            const raw_iw = self.raw() >> (@bitSizeOf(IJ) + @bitSizeOf(IK));
+            return IW.init(@truncate(raw_iw));
+        }
 
         pub const Raw = std.meta.Tag(Slot); 
         pub const first = init(8);
         pub const last = init(std.math.maxInt(Raw));
         pub const count = std.math.maxInt(Raw) + 1;
     };
+
+    pub fn continuation_mask(cs: Control_Signals) Slot.Raw {
+        return bits.concat(.{
+            @as(IJ.Raw, if (cs.ij_op == .from_continuation) 0xF else 0),
+            @as(IK.Raw, if (cs.ik_op == .from_continuation) 0xF else 0),
+            @as(IW.Raw, if (cs.iw_op == .from_continuation) 0xF else 0),
+        });
+    }
+
+    pub fn unmasked_continuation(cs: Control_Signals) Slot.Raw {
+        return bits.concat(.{ cs.c_ij.raw(), cs.c_ik.raw(), cs.c_iw.raw() });
+    }
+
+    pub fn continuation(cs: Control_Signals) Slot {
+        return Slot.init(unmasked_continuation(cs) | continuation_mask(cs));
+    }
 
     pub const Slot_Source = enum (u2) {
         hold = 0,
@@ -110,60 +138,6 @@ pub const microcode = struct {
         pub fn signed_less_than(self: Flags) bool { return !self.z and self.n != self.v; }
         pub fn signed_greater_than(self: Flags) bool { return !self.z and self.n == self.v; }
 
-        pub fn inverted(self: Flags) Flags {
-            return @bitCast(~self.raw());
-        }
-
-        pub fn combined_with(self: Flags, other: Flags) Flags {
-            const self_raw: u5 = @bitCast(self);
-            const other_raw: u5 = @bitCast(other);
-            return @bitCast(self_raw | other_raw);
-        }
-
-        pub fn permutations(permutable_bits: Flags) Permutation_Iterator {
-            return .{
-                .permutable_bits = permutable_bits,
-                .next_permutation = init(0),
-            };
-        }
-        pub const Permutation_Iterator = struct {
-            permutable_bits: Flags,
-            next_permutation: ?Flags,
-
-            pub fn next(self: *Permutation_Iterator) ?Flags {
-                if (self.next_permutation) |p| {
-                    self.next_permutation = increment(p, self.permutable_bits);
-                    return p;
-                }
-                return null;
-            }
-
-            fn increment(p: Flags, permutable_bits: Flags) ?Flags {
-                var result = p;
-                if (permutable_bits.z) {
-                    result.z = !result.z;
-                    if (!p.z) return result;
-                }
-                if (permutable_bits.n) {
-                    result.n = !result.n;
-                    if (!p.n) return result;
-                }
-                if (permutable_bits.c) {
-                    result.c = !result.c;
-                    if (!p.c) return result;
-                }
-                if (permutable_bits.v) {
-                    result.v = !result.v;
-                    if (!p.v) return result;
-                }
-                if (permutable_bits.k) {
-                    result.k = !result.k;
-                    if (!p.k) return result;
-                }
-                return null;
-            }
-        };
-
         pub const Raw = u5;
     };
 
@@ -180,6 +154,7 @@ pub const microcode = struct {
 
         pub const Raw = u17;
         pub const count = std.math.maxInt(Raw) + 1;
+        pub const count_per_slot = std.math.maxInt(Flags.Raw) + 1;
     };
 
     pub const Data = [Address.count]Control_Signals;
@@ -240,6 +215,9 @@ pub const IJ = enum (Register_Index) {
     pub fn raw(self: IJ) Register_Index {
         return @intFromEnum(self);
     }
+
+    pub const Raw = std.meta.Tag(IJ);
+    pub const max = std.math.maxInt(Raw);
 };
 
 pub const IK = enum (Register_Index) {
@@ -250,6 +228,9 @@ pub const IK = enum (Register_Index) {
     pub fn raw(self: IK) Register_Index {
         return @intFromEnum(self);
     }
+
+    pub const Raw = std.meta.Tag(IK);
+    pub const max = std.math.maxInt(Raw);
 };
 
 pub const IW = enum (Register_Index) {
@@ -260,6 +241,9 @@ pub const IW = enum (Register_Index) {
     pub fn raw(self: IW) Register_Index {
         return @intFromEnum(self);
     }
+
+    pub const Raw = std.meta.Tag(IW);
+    pub const max = std.math.maxInt(Raw);
 };
 
 pub const R = enum (u16) {
@@ -512,15 +496,18 @@ pub const addr = struct {
         }
 
         pub fn device_slot(self: Physical) ?u3 {
-            if (self.frame.raw() < device_0.frame.raw()) return null;
-            return @intCast((self.frame.raw() - device_0.frame.raw()) / num_frames_per_device);
+            if (self.frame.raw() < interrupt_controller.frame.raw()) return null;
+            return @intCast((self.frame.raw() - interrupt_controller.frame.raw()) / num_frames_per_device);
         }
 
         pub const Raw = u26;
 
         pub const ram_start = init(0x0_000_000);
 
-        pub const device_0 = init(0x2_000_000);
+        pub const interrupt_controller        = init(0x2_000_000);
+        pub const block_transfer_controller_0 = init(0x2_001_000);
+        pub const block_transfer_controller_1 = init(0x2_002_000);
+        pub const frame_tracker               = init(0x2_003_000);
         pub const device_1 = init(0x2_400_000);
         pub const device_2 = init(0x2_800_000);
         pub const device_3 = init(0x2_C00_000);
@@ -620,4 +607,5 @@ pub const addr = struct {
 };
 
 const arch = @import("lib_arch");
+const bits = @import("bits");
 const std = @import("std");

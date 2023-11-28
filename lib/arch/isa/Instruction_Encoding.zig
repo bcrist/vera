@@ -1,39 +1,51 @@
-mnemonic: Mnemonic,
-suffix: Mnemonic_Suffix,
-params: []const Parameter.Signature,
+signature: Instruction_Signature,
 constraints: []const Constraint,
 encoders: []const Encoder, // If there are multiple encoders, each must correspond to a unique subset of the bits of the instruction.
 
 pub const Value = union (enum) {
     constant: i64,
-    param_constant: Parameter.Index,
-    param_base_register: Parameter.Index,
-    param_offset_register: Parameter.Index,
+    placeholder: Placeholder_Info,
 
     pub fn evaluate(self: Value, params: []const Parameter) i64 {
         return switch (self) {
             .constant => |v| v,
-            .param_base_register => |i| params[@intFromEnum(i)].base_register_index,
-            .param_offset_register => |i| params[@intFromEnum(i)].offset_register_index,
-            .param_constant => |i| params[@intFromEnum(i)].constant,
+            .placeholder => |info| switch (info.kind) {
+                .param_constant => params[info.index.raw()].constant,
+                .param_base_register => params[info.index.raw()].base_register_index,
+                .param_offset_register => params[info.index.raw()].offset_register_index,
+            },
         };
     }
 
     pub fn assign(self: Value, value: i64, out: []Parameter) bool {
         switch (self) {
             .constant => |v| return v == value,
-            .param_constant => |i| out[@intFromEnum(i)].constant = value,
-            .param_base_register => |i| {
-                if (value < 0 or value >= arch.hw.register_count) return false;
-                out[@intFromEnum(i)].base_register_index = @intCast(value);
-            },
-            .param_offset_register => |i| {
-                if (value < 0 or value >= arch.hw.register_count) return false;
-                out[@intFromEnum(i)].offset_register_index = @intCast(value);
+            .placeholder => |info| switch (info.kind) {
+                .param_constant => out[info.index.raw()].constant = value,
+                .param_base_register => {
+                    if (value < 0 or value >= arch.hw.register_count) return false;
+                    out[info.index.raw()].base_register_index = @intCast(value);
+                },
+                .param_offset_register => {
+                    if (value < 0 or value >= arch.hw.register_count) return false;
+                    out[info.index.raw()].offset_register_index = @intCast(value);
+                },
             },
         }
         return true;
     }
+};
+
+pub const Placeholder_Info = struct {
+    index: isa.Parameter.Index,
+    kind: Placeholder_Kind,
+    name: []const u8,
+};
+
+pub const Placeholder_Kind = enum {
+    param_constant,
+    param_base_register,
+    param_offset_register,
 };
 
 pub const Constraint = struct {
@@ -42,6 +54,7 @@ pub const Constraint = struct {
     kind: Kind,
 
     pub const Kind = enum {
+        equal,
         not_equal,
         greater,
         greater_or_equal,
@@ -51,6 +64,7 @@ pub const Constraint = struct {
         const left = self.left.evaluate(params);
         const right = self.left.evaluate(params);
         return switch (self.kind) {
+            .equal => left == right,
             .not_equal => left != right,
             .greater => left > right,
             .greater_or_equal => left >= right,
@@ -143,34 +157,7 @@ pub const Domain = union (enum) {
     }
 };
 
-pub const Encoder = struct {
-    value: Value,
-    domain: Domain,
-    arithmetic_offset: u64,
-    bit_offset: Encoded_Instruction.Bit_Length_Type,
-
-    pub fn required_bits(self: Encoder) Encoded_Instruction.Bit_Length_Type {
-        const n = std.math.log2_int_ceil(u64, self.domain.max_encoded() + self.arithmetic_offset);
-        return self.bit_offset + n;
-    }
-
-    pub fn encode(self: Encoder, insn: Instruction, out: *Encoded_Instruction.Data) bool {
-        const raw = self.domain.encode(self.value.evaluate(insn.params)) orelse return false;
-        const n: Encoded_Instruction.Data = raw + self.arithmetic_offset;
-        out.* |= @shlExact(n, self.bit_offset);
-        return true;
-    }
-
-    pub fn decode(self: Encoder, data: Encoded_Instruction.Data, out: []Parameter) bool {
-        const shifted = data >> self.bit_offset;
-        const mask = (@as(u64, 1) << self.domain.bits()) - 1;
-        const raw = (shifted - self.arithmetic_offset) & mask;
-        if (self.domain.decode(raw)) |value| {
-            return self.value.assign(value, out);
-        }
-        return false;
-    }
-};
+pub const Encoder = @import("Encoder.zig");
 
 pub fn bits(self: Instruction_Encoding) Encoded_Instruction.Bit_Length_Type {
     var n: Encoded_Instruction.Bit_Length_Type = 0;
@@ -185,10 +172,10 @@ pub fn len(self: Instruction_Encoding) Encoded_Instruction.Length_Type {
 }
 
 pub fn matches(self: Instruction_Encoding, insn: Instruction) bool {
-    if (self.mnemonic != insn.mnemonic) return false;
-    if (self.suffix != insn.suffix) return false;
-    if (self.params.len != insn.params.len) return false;
-    for (self.params, insn.params) |ps, param| {
+    if (self.signature.mnemonic != insn.mnemonic) return false;
+    if (self.signature.suffix != insn.suffix) return false;
+    if (self.signature.params.len != insn.params.len) return false;
+    for (self.signature.params, insn.params) |ps, param| {
         if (!std.meta.eql(ps, param.signature)) return false;
     }
     for (self.encoders) |enc| {
@@ -202,11 +189,11 @@ pub fn matches(self: Instruction_Encoding, insn: Instruction) bool {
 }
 
 pub fn encode(self: Instruction_Encoding, insn: Instruction) Encoded_Instruction {
-    std.debug.assert(self.mnemonic == insn.mnemonic);
-    std.debug.assert(self.suffix == insn.suffix);
+    std.debug.assert(self.signature.mnemonic == insn.mnemonic);
+    std.debug.assert(self.signature.suffix == insn.suffix);
 
-    std.debug.assert(self.params.len == insn.params.len);
-    for (self.params, insn.params) |ps, param| {
+    std.debug.assert(self.signature.params.len == insn.params.len);
+    for (self.signature.params, insn.params) |ps, param| {
         std.debug.assert(std.meta.eql(ps, param.signature));
     }
 
@@ -290,19 +277,14 @@ pub fn write(self: Instruction_Encoding, comptime W: type, writer: *sx.Writer(W)
                     try w.int(k, 10);
                     _ = try w.close();
                 },
-                .param_constant => |i| {
-                    try w.expression("param-constant");
-                    try w.int(i.raw(), 10);
-                    _ = try w.close();
-                },
-                .param_base_register => |i| {
-                    try w.expression("param-base-reg");
-                    try w.int(i.raw(), 10);
-                    _ = try w.close();
-                },
-                .param_offset_register => |i| {
-                    try w.expression("param-offset-reg");
-                    try w.int(i.raw(), 10);
+                .placeholder => |info| {
+                    try w.expression(switch (info.kind) {
+                        .param_constant => "param-constant",
+                        .param_base_register => "param-base-reg",
+                        .param_offset_register => "param-offset-reg",
+                    });
+                    try w.int(info.index.raw(), 10);
+                    try w.string(info.name);
                     _ = try w.close();
                 },
             }
@@ -310,17 +292,17 @@ pub fn write(self: Instruction_Encoding, comptime W: type, writer: *sx.Writer(W)
     };
 
     try writer.open();
-    try writer.tag(self.mnemonic);
-    if (self.suffix != .none) {
-        try writer.tag(self.suffix);
+    try writer.tag(self.signature.mnemonic);
+    if (self.signature.suffix != .none) {
+        try writer.tag(self.signature.suffix);
     }
 
     writer.set_compact(compact);
 
-    if (self.params.len > 0) {
+    if (self.signature.params.len > 0) {
         try writer.expression("params");
 
-        for (self.params) |signature| {
+        for (self.signature.params) |signature| {
             try writer.open();
 
             if (signature.address_space) |as| {
@@ -343,6 +325,7 @@ pub fn write(self: Instruction_Encoding, comptime W: type, writer: *sx.Writer(W)
         try writer.expression("constrain");
         try helpers.write_value_source(constraint.left, writer);
         try writer.string(switch (constraint.kind) {
+            .equal => "==",
             .not_equal => "!=",
             .greater_or_equal => ">=",
             .greater => ">",
@@ -406,8 +389,8 @@ pub const Parser_Data = struct {
     temp_allocator: std.mem.Allocator,
 
     param_signatures: deep_hash_map.DeepAutoHashMapUnmanaged([]const Parameter.Signature, void) = .{},
-    constraints: deep_hash_map.DeepAutoHashMapUnmanaged([]const Constraint, void) = .{},
-    encoders: deep_hash_map.DeepAutoHashMapUnmanaged([]const Encoder, void) = .{},
+    constraints: deep_hash_map.DeepRecursiveAutoHashMapUnmanaged([]const Constraint, void) = .{},
+    encoders: deep_hash_map.DeepRecursiveAutoHashMapUnmanaged([]const Encoder, void) = .{},
     enumerated_values: deep_hash_map.DeepAutoHashMapUnmanaged([]const i64, void) = .{},
 
     temp_param_signatures: std.ArrayListUnmanaged(Parameter.Signature) = .{},
@@ -435,11 +418,27 @@ pub const Parser_Data = struct {
 
         var constraints_iter = self.constraints.keyIterator();
         while (constraints_iter.next()) |k| {
+            for (k.*) |constraint| {
+                switch (constraint.left) {
+                    .placeholder => |info| self.data_allocator.free(info.name),
+                    else => {},
+                }
+                switch (constraint.right) {
+                    .placeholder => |info| self.data_allocator.free(info.name),
+                    else => {},
+                }
+            }
             self.data_allocator.free(k.*);
         }
 
         var encoders_iter = self.encoders.keyIterator();
         while (encoders_iter.next()) |k| {
+            for (k.*) |encoder| {
+                switch (encoder.value) {
+                    .placeholder => |info| self.data_allocator.free(info.name),
+                    else => {},
+                }
+            }
             self.data_allocator.free(k.*);
         }
 
@@ -464,7 +463,18 @@ pub const Parser_Data = struct {
         defer self.temp_constraints.clearRetainingCapacity();
         const result = try self.constraints.getOrPut(self.temp_allocator, constraints);
         if (!result.found_existing) {
-            result.key_ptr.* = try self.data_allocator.dupe(Constraint, constraints);
+            const dupe_constraints = try self.data_allocator.dupe(Constraint, constraints);
+            for (dupe_constraints) |*constraint| {
+                switch (constraint.left) {
+                    .placeholder => |*info| info.name = try self.data_allocator.dupe(u8, info.name), // TODO string intern pool
+                    else => {},
+                }
+                switch (constraint.right) {
+                    .placeholder => |*info| info.name = try self.data_allocator.dupe(u8, info.name), // TODO string intern pool
+                    else => {},
+                }
+            }
+            result.key_ptr.* = dupe_constraints;
         }
         return result.key_ptr.*;
     }
@@ -474,7 +484,14 @@ pub const Parser_Data = struct {
         defer self.temp_encoders.clearRetainingCapacity();
         const result = try self.encoders.getOrPut(self.temp_allocator, encoders);
         if (!result.found_existing) {
-            result.key_ptr.* = try self.data_allocator.dupe(Constraint, encoders);
+            const dupe_encoders = try self.data_allocator.dupe(Constraint, encoders);
+            for (dupe_encoders) |*encoder| {
+                switch (encoder.value) {
+                    .placeholder => |*info| info.name = try self.data_allocator.dupe(u8, info.name), // TODO string intern pool
+                    else => {},
+                }
+            }
+            result.key_ptr.* = dupe_encoders;
         }
         return result.key_ptr.*;
     }
@@ -710,20 +727,35 @@ pub fn Parser(comptime Reader: type) type {
 
             if (try self.reader.expression("param-constant")) {
                 const index = Parameter.Index.init(try self.reader.require_any_int(Parameter.Index.Raw, 0));
+                const name = try self.data.temp_allocator.dupe(u8, try self.reader.require_any_string());
                 try self.reader.require_close();
-                return .{ .param_constant = index };
+                return .{ .placeholder = .{
+                    .kind = .param_constant,
+                    .index = index,
+                    .name = name,
+                }};
             }
 
             if (try self.reader.expression("param-base-reg")) {
                 const index = Parameter.Index.init(try self.reader.require_any_int(Parameter.Index.Raw, 0));
+                const name = try self.data.temp_allocator.dupe(u8, try self.reader.require_any_string());
                 try self.reader.require_close();
-                return .{ .param_base_register = index };
+                return .{ .placeholder = .{
+                    .kind = .param_base_register,
+                    .index = index,
+                    .name = name,
+                }};
             }
 
             if (try self.reader.expression("param-offset-reg")) {
                 const index = Parameter.Index.init(try self.reader.require_any_int(Parameter.Index.Raw, 0));
+                const name = try self.data.temp_allocator.dupe(u8, try self.reader.require_any_string());
                 try self.reader.require_close();
-                return .{ .param_offset_register = index };
+                return .{ .placeholder = .{
+                    .kind = .param_offset_register,
+                    .index = index,
+                    .name = name,
+                 }};
             }
 
             return error.SExpressionSyntaxError;
@@ -737,6 +769,7 @@ const Parameter = @import("Parameter.zig");
 const Mnemonic = isa.Mnemonic;
 const Mnemonic_Suffix = isa.Mnemonic_Suffix;
 const Encoded_Instruction = isa.Encoded_Instruction;
+const Instruction_Signature = isa.Instruction_Signature;
 const isa = arch.isa;
 const arch = @import("lib_arch");
 const sx = @import("sx");

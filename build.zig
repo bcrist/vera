@@ -73,13 +73,15 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    // _ = makeExe("compile_arch", .{
-    //     .source_file = .{ .path = "compile_arch.zig" },
-    //     .dependencies = &.{
-    //         .{ .name = "TempAllocator", .module = ext.TempAllocator },
-    //         .{ .name = "lib_arch", .module = lib_arch },
-    //     },
-    // });
+    _ = makeExe("compile_arch", .{
+        .source_file = .{ .path = "compile_arch.zig" },
+        .dependencies = &.{
+            .{ .name = "TempAllocator", .module = ext.TempAllocator },
+            .{ .name = "lib_arch", .module = lib_arch },
+            .{ .name = "lib_assembler", .module = lib_assembler },
+            .{ .name = "console", .module = ext.console },
+        },
+    });
 
     const zgui_pkg = zgui.package(b, target, optimize, .{
         .options = .{ .backend = .glfw_wgpu },
@@ -131,6 +133,9 @@ fn makeExe(comptime name: []const u8, options: std.build.CreateModuleOptions) *s
     var run = builder.addRunArtifact(exe);
     run.step.dependOn(builder.getInstallStep());
     builder.step(name, "run " ++ name).dependOn(&run.step);
+    if (builder.args) |args| {
+        run.addArgs(args);
+    }
 
     _ = makeTest(name, options);
 

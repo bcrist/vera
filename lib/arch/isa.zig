@@ -77,6 +77,20 @@ pub const Mnemonic_Suffix = enum {
     r, // data-read
 };
 
+pub const Instruction_Signature = struct {
+    mnemonic: Mnemonic,
+    suffix: Mnemonic_Suffix,
+    params: []const Parameter.Signature,
+
+    pub fn eql(self: Instruction_Signature, other: Instruction_Signature) bool {
+        if (self.mnemonic != other.mnemonic or self.suffix != other.suffix or self.params.len != other.params.len) return false;
+        for (self.params, other.params) |sp, op| {
+            if (!std.meta.eql(sp, op)) return false;
+        }
+        return true;
+    }
+};
+
 pub const Special_Register = enum {
     ip,
     sp,
@@ -145,7 +159,7 @@ pub const Encoded_Instruction = struct {
 
     pub const Data = u128;
     pub const Bit_Length_Type = std.math.Log2Int(Data);
-    pub const Length_Type = std.meta.Int(.unsigned, @bitSizeOf(Bit_Length_Type) / 8);
+    pub const Length_Type = std.meta.Int(.unsigned, @bitSizeOf(Bit_Length_Type) - 3);
 
     pub fn as_bytes(self: *const Encoded_Instruction) []const u8 {
         return std.mem.asBytes(&self.data)[0..self.len];

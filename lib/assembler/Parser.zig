@@ -8,12 +8,8 @@ sync_to_end_of_line: bool,
 token_kinds: []Token_Kind,
 token_offsets: []u32,
 
-mnemonic_map: std.StringHashMapUnmanaged(Mnemonic),
-suffix_map: std.StringHashMapUnmanaged(Mnemonic_Suffix),
 directive_map: std.StringHashMapUnmanaged(Instruction.Operation_Type),
 
-const max_mnemonic_length = 8;
-const max_suffix_length = 4;
 const max_directive_length = 8;
 
 pub fn init(
@@ -23,57 +19,7 @@ pub fn init(
     out: *Source_File,
     errors: *std.ArrayListUnmanaged(Error),
 ) Parser {
-    var mnemonic_map = std.StringHashMapUnmanaged(Mnemonic) {};
-    var suffix_map = std.StringHashMapUnmanaged(Mnemonic_Suffix) {};
     var directive_map = std.StringHashMapUnmanaged(Instruction.Operation_Type) {};
-
-    const mnemonics = comptime std.enums.values(Mnemonic);
-    mnemonic_map.ensureUnusedCapacity(temp, mnemonics.len) catch @panic("OOM");
-    errdefer mnemonic_map.deinit(temp);
-
-    inline for (mnemonics) |mnemonic| {
-        if (mnemonic == ._reserved) continue;
-        const lower = comptime blk: {
-            @setEvalBranchQuota(10_000);
-            var buf = [_]u8{0} ** max_mnemonic_length;
-            break :blk std.ascii.lowerString(&buf, @tagName(mnemonic));
-        };
-        mnemonic_map.putAssumeCapacityNoClobber(lower, mnemonic);
-    }
-
-    const suffixes = comptime std.enums.values(Mnemonic_Suffix);
-    suffix_map.ensureUnusedCapacity(temp, @intCast(suffixes.len + 20)) catch @panic("OOM");
-    errdefer suffix_map.deinit(temp);
-
-    inline for (suffixes) |suffix| {
-        if (suffix == .none or comptime std.mem.indexOfScalar(u8, @tagName(suffix), '_') != null) continue;
-        const lower = comptime blk: {
-            var buf = [_]u8{0} ** max_suffix_length;
-            break :blk std.ascii.lowerString(&buf, @tagName(suffix));
-        };
-        suffix_map.putAssumeCapacityNoClobber(lower, suffix);
-    }
-
-    suffix_map.putAssumeCapacityNoClobber("eq", .z);
-    suffix_map.putAssumeCapacityNoClobber("neq", .nz);
-    suffix_map.putAssumeCapacityNoClobber("ltu", .lu);
-    suffix_map.putAssumeCapacityNoClobber("lts", .ls);
-    suffix_map.putAssumeCapacityNoClobber("leu", .ngu);
-    suffix_map.putAssumeCapacityNoClobber("les", .ngs);
-    suffix_map.putAssumeCapacityNoClobber("gtu", .gu);
-    suffix_map.putAssumeCapacityNoClobber("gts", .gs);
-    suffix_map.putAssumeCapacityNoClobber("geu", .nlu);
-    suffix_map.putAssumeCapacityNoClobber("ges", .nls);
-    suffix_map.putAssumeCapacityNoClobber("nltu", .nlu);
-    suffix_map.putAssumeCapacityNoClobber("nlts", .nls);
-    suffix_map.putAssumeCapacityNoClobber("nleu", .gu);
-    suffix_map.putAssumeCapacityNoClobber("nles", .gs);
-    suffix_map.putAssumeCapacityNoClobber("ngtu", .ngu);
-    suffix_map.putAssumeCapacityNoClobber("ngts", .ngs);
-    suffix_map.putAssumeCapacityNoClobber("ngeu", .lu);
-    suffix_map.putAssumeCapacityNoClobber("nges", .ls);
-    suffix_map.putAssumeCapacityNoClobber("dw", .w);
-    suffix_map.putAssumeCapacityNoClobber("dr", .r);
 
     const directives = comptime std.enums.values(Instruction.Operation_Type);
     directive_map.ensureUnusedCapacity(temp, directives.len) catch @panic("OOM");
@@ -102,8 +48,6 @@ pub fn init(
         .sync_to_end_of_line = false,
         .token_kinds = out.tokens.items(.kind),
         .token_offsets = out.tokens.items(.offset),
-        .mnemonic_map = mnemonic_map,
-        .suffix_map = suffix_map,
         .directive_map = directive_map,
     };
 }
@@ -160,10 +104,10 @@ pub fn parse_instruction(self: *Parser) bool {
                 self.add_instruction(label, directive_token, op, params);
             },
         }
-    } else if (self.parse_mnemonic()) |mnemonic| {
+    } else if (parse_helpers.parse_mnemonic(self)) |mnemonic| {
         const mnemonic_token = self.next_token - 1;
         var swap_params = false;
-        const suffix = self.parse_suffix(&swap_params);
+        const suffix = parse_helpers.parse_suffix(self, &swap_params);
         const params = self.parse_expr_list(swap_params);
         self.add_instruction(label, mnemonic_token, .{ .insn = .{
             .mnemonic = mnemonic,
@@ -208,134 +152,6 @@ fn add_instruction(self: *Parser, label: ?Expression.Handle, token: Token.Handle
         .params = params,
         .line_number = start_line,
     }) catch @panic("OOM");
-}
-
-fn try_suffix(self: *Parser) Mnemonic_Suffix {
-    if (self.try_token(.dot)) {
-        if (self.try_token(.id)) {
-            const suffix_str = self.token_location(self.next_token - 1);
-            if (suffix_str.len <= max_suffix_length) {
-                var buf = [_]u8 {0} ** max_suffix_length;
-                const lower = std.ascii.lowerString(&buf, suffix_str);
-                if (self.suffix_map.get(lower)) |suffix| {
-                    return suffix;
-                }
-            }
-            self.record_error_rel("Unrecognized mnemonic suffix", -1);
-        } else {
-            self.record_error("Expected mnemonic suffix");
-        }
-    }
-    return .none;
-}
-
-fn parse_suffix(self: *Parser, swap_params: *bool) Mnemonic_Suffix {
-    const suffix1 = self.try_suffix();
-    const suffix2 = self.try_suffix();
-    return switch (suffix1) {
-        .none => suffix2,
-        .lu => switch (suffix2) {
-            .none => suffix1,
-            .gu => .lu_gu,
-            .z => .lu_z,
-            else => blk: {
-                self.record_error_rel("Invalid mnemonic suffix combination", -1);
-                break :blk suffix1;
-            },
-        },
-        .gu => switch (suffix2) {
-            .none => suffix1,
-            .lu => blk: {
-                swap_params.* = true;
-                break :blk .lu_gu;
-            },
-            .z => .gu_z,
-            else => blk: {
-                self.record_error_rel("Invalid mnemonic suffix combination", -1);
-                break :blk suffix1;
-            },
-        },
-        .z => switch (suffix2) {
-            .none => suffix1,
-            .lu => blk: {
-                swap_params.* = true;
-                break :blk .lu_z;
-            },
-            .gu => blk: {
-                swap_params.* = true;
-                break :blk .gu_z;
-            },
-            .ls => blk: {
-                swap_params.* = true;
-                break :blk .ls_z;
-            },
-            .gs => blk: {
-                swap_params.* = true;
-                break :blk .gs_z;
-            },
-            .n => blk: {
-                swap_params.* = true;
-                break :blk .n_z;
-            },
-            .p => blk: {
-                swap_params.* = true;
-                break :blk .p_z;
-            },
-            else => blk: {
-                self.record_error_rel("Invalid mnemonic suffix combination", -1);
-                break :blk suffix1;
-            },
-        },
-        .ls => switch (suffix2) {
-            .none => suffix1,
-            .gs => .ls_gs,
-            .z => .ls_z,
-            else => blk: {
-                self.record_error_rel("Invalid mnemonic suffix combination", -1);
-                break :blk suffix1;
-            },
-        },
-        .gs =>  switch (suffix2) {
-            .none => suffix1,
-            .ls => blk: {
-                swap_params.* = true;
-                break :blk .ls_gs;
-            },
-            .z => .gs_z,
-            else => blk: {
-                self.record_error_rel("Invalid mnemonic suffix combination", -1);
-                break :blk suffix1;
-            },
-        },
-        .n => switch (suffix2) {
-            .none => suffix1,
-            .z => .n_z,
-            .p => .n_p,
-            else => blk: {
-                self.record_error_rel("Invalid mnemonic suffix combination", -1);
-                break :blk suffix1;
-            },
-        },
-        .p => switch (suffix2) {
-            .none => suffix1,
-            .z => .p_z,
-            .n => blk: {
-                swap_params.* = true;
-                break :blk .n_p;
-            },
-            else => blk: {
-                self.record_error_rel("Invalid mnemonic suffix combination", -1);
-                break :blk suffix1;
-            },
-        },
-        else => switch (suffix2) {
-            .none => suffix1,
-            else => blk: {
-                self.record_error_rel("Invalid mnemonic suffix combination", -1);
-                break :blk suffix1;
-            },
-        }
-    };
 }
 
 fn parse_expr_list(self: *Parser, swap_params: bool) ?Expression.Handle {
@@ -632,7 +448,7 @@ fn parse_register_literal(self: *Parser) ?Expression.Handle {
 }
 
 fn parse_special_literal(self: *Parser) ?Expression.Handle {
-        const begin = self.next_token;
+    const begin = self.next_token;
     self.skip_linespace();
     const token = self.next_token;
     if (self.try_token(.money)) {
@@ -927,23 +743,6 @@ fn add_binary_expression(self: *Parser, kind: Expression.Kind, token: Token.Hand
     });
 }
 
-fn parse_mnemonic(self: *Parser) ?Mnemonic {
-    if (self.sync_to_end_of_line or !self.try_token(.id)) return null;
-
-    const mnemonic_str = self.token_location(self.next_token - 1);
-    if (mnemonic_str.len <= max_mnemonic_length) {
-        var buf = [_]u8 {0} ** max_mnemonic_length;
-        const lower = std.ascii.lowerString(&buf, mnemonic_str);
-        if (self.mnemonic_map.get(lower)) |mnemonic| {
-            return mnemonic;
-        }
-    }
-
-    self.record_error_rel("Unrecognized mnemonic", -1);
-    self.sync_to_end_of_line = true;
-    return null;
-}
-
 fn parse_directive(self: *Parser) ?Instruction.Operation_Type {
     if (self.sync_to_end_of_line or !self.try_token(.dot)) return null;
 
@@ -964,11 +763,11 @@ fn parse_directive(self: *Parser) ?Instruction.Operation_Type {
     return null;
 }
 
-fn skip_linespace(self: *Parser) void {
+pub fn skip_linespace(self: *Parser) void {
     _ = self.try_token(.linespace);
 }
 
-fn try_token(self: *Parser, kind: Token_Kind) bool {
+pub fn try_token(self: *Parser, kind: Token_Kind) bool {
     if (self.token_kinds[self.next_token] == kind) {
         self.next_token += 1;
         return true;
@@ -977,7 +776,7 @@ fn try_token(self: *Parser, kind: Token_Kind) bool {
     }
 }
 
-fn record_error(self: *Parser, desc: []const u8) void {
+pub fn record_error(self: *Parser, desc: []const u8) void {
     self.errors.append(self.gpa, .{
         .file = self.handle,
         .context = .{ .token = self.next_token },
@@ -985,7 +784,7 @@ fn record_error(self: *Parser, desc: []const u8) void {
         .flags = .{},
     }) catch @panic("OOM");
 }
-fn record_error_rel(self: *Parser, desc: []const u8, token_offset: i8) void {
+pub fn record_error_rel(self: *Parser, desc: []const u8, token_offset: i8) void {
     self.errors.append(self.gpa, .{
         .file = self.handle,
         .context = .{ .token = @intCast(@as(i32, self.next_token) + token_offset) },
@@ -994,7 +793,7 @@ fn record_error_rel(self: *Parser, desc: []const u8, token_offset: i8) void {
     }) catch @panic("OOM");
 }
 
-fn token_location(self: *Parser, handle: Token.Handle) []const u8 {
+pub fn token_location(self: *Parser, handle: Token.Handle) []const u8 {
     return self.out.tokens.get(handle).location(self.out.source);
 }
 
@@ -1003,10 +802,11 @@ const Source_File = @import("Source_File.zig");
 const Error = @import("Error.zig");
 const Instruction = @import("Instruction.zig");
 const Expression = @import("Expression.zig");
+const parse_helpers = @import("parse_helpers.zig");
 const Token = lex.Token;
 const Token_Kind = lex.Token_Kind;
-const Mnemonic = isa.Mnemonic;
 const lex = @import("lex.zig");
+const Mnemonic = isa.Mnemonic;
 const Mnemonic_Suffix = isa.Mnemonic_Suffix;
 const isa = arch.isa;
 const arch = @import("lib_arch");

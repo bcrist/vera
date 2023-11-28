@@ -1,10 +1,12 @@
 literal: Literal,
-c: Continuation,
+c_ij: hw.IJ,
+c_ik: hw.IK,
+c_iw: hw.IW,
 id_mode: ID_Mode,
 ij_op: Operand_Index_Op,
 ik_op: Operand_Index_Op,
 iw_op: Operand_Index_Op,
-reg_width: Register_Write_Width,
+reg_write: Register_Write_Mode,
 sr1_ri: SR1_Index,
 sr2_ri: SR2_Index,
 sr1_wi: SR1_Index,
@@ -29,8 +31,6 @@ seq_op: Sequencer_Op,
 special: Special_Op,
 allow_int: bool,
 
-//pub const zero = std.mem.zeroInit(Control_Signals, .{ .mode = Compute_Mode.init(0) });
-
 pub const Literal = enum (u6) {
     _,
     pub fn init(raw_value: u6) Literal {
@@ -38,25 +38,6 @@ pub const Literal = enum (u6) {
     }
     pub fn raw(self: Literal) u6 {
         return @intFromEnum(self);
-    }
-};
-
-pub const Continuation = packed struct (u12) {
-    ij: hw.IJ,
-    ik: hw.IK,
-    iw: hw.IW,
-    pub fn init(raw_value: u12) Continuation {
-        return @bitCast(raw_value);
-    }
-    pub fn raw(self: Continuation) u12 {
-        return @bitCast(self);
-    }
-    pub fn mask(ij_op: Operand_Index_Op, ik_op: Operand_Index_Op, iw_op: Operand_Index_Op) Continuation {
-        return .{
-            .ij = hw.IJ.init(if (ij_op == .from_continuation) 0xF else 0),
-            .ik = hw.IK.init(if (ik_op == .from_continuation) 0xF else 0),
-            .iw = hw.IW.init(if (iw_op == .from_continuation) 0xF else 0),
-        };
     }
 };
 
@@ -72,17 +53,19 @@ pub const Operand_Index_Op = enum (u2) {
     from_decode = 3,
 };
 
-pub const Register_Write_Width = enum (u1) {
-    write_16 = 0,
-    write_32 = 1,
+pub const Register_Write_Mode = enum (u2) {
+    no_write = 0,
+    write_16 = 1,
+    write_32 = 3,
+    _,
 };
 
 pub const SR1_Index = enum (u3) {
-    zero = 0,           // 0x0000_0000 (currently not used for anything)
+    one = 0,            // 0x0000_0001 (must never be overwritten)
     rp = 1,             // return pointer
     sp = 2,             // stack pointer
     bp = 3,             // stack base pointer
-    fault_ua_dr = 4,            // UA (high 16b) and DR (low 16b) copied when entering a fault handler.
+    fault_uc_slot_dr = 4,       // Fault microcode slot (high 16b) and DR (low 16b) copied when entering a fault handler.
     fault_rsn_stat = 5,         // STAT (bits 15:0) copied when entering a fault handler.  previous RSN (bits 21:16) stored when using STRS/LDRS.
     int_rsn_fault_iw_ik_ij = 6, // IW/IK/IJ (bits 11:0) copied when entering a fault handler.  previous RSN (bits 21:16) stored when entering an interrupt handler.
     temp_1 = 7,
@@ -135,21 +118,21 @@ pub const Any_SR_Index = enum (u4) {
     rs_reserved = @intFromEnum(SR2_Index.rs_reserved),
     temp_2 = @intFromEnum(SR2_Index.temp_2),
 
-    sr1_zero = @as(u4, @intFromEnum(SR1_Index.zero)) + 8,
+    one = @as(u4, @intFromEnum(SR1_Index.one)) + 8,
     rp = @as(u4, @intFromEnum(SR1_Index.rp)) + 8,
     sp = @as(u4, @intFromEnum(SR1_Index.sp)) + 8,
     bp = @as(u4, @intFromEnum(SR1_Index.bp)) + 8,
-    fault_ua_dr = @as(u4, @intFromEnum(SR1_Index.fault_ua_dr)) + 8,
+    fault_uc_slot_dr = @as(u4, @intFromEnum(SR1_Index.fault_uc_slot_dr)) + 8,
     fault_rsn_stat = @as(u4, @intFromEnum(SR1_Index.fault_rsn_stat)) + 8,
     int_rsn_fault_iw_ik_ij = @as(u4, @intFromEnum(SR1_Index.int_rsn_fault_iw_ik_ij)) + 8,
     temp_1 = @as(u4, @intFromEnum(SR1_Index.temp_1)) + 8,
 
-    pub fn to_SR1_Index(self: Any_SR_Index) ?SR1_Index {
+    pub fn to_sr1_index(self: Any_SR_Index) ?SR1_Index {
         const ord = @intFromEnum(self);
         return if (ord >= 8) @enumFromInt(ord - 8) else null;
     }
 
-    pub fn to_SR2_Index(self: Any_SR_Index) ?SR2_Index {
+    pub fn to_sr2_index(self: Any_SR_Index) ?SR2_Index {
         const ord = @intFromEnum(self);
         return if (ord >= 8) null else @enumFromInt(ord);
     }
@@ -182,14 +165,14 @@ pub const JH_Source = enum (u3) {
 };
 
 pub const K_Source = enum (u3) {
-    kr = 0,
-    ik_bit = 1,
-    ik_zx = 2,
-    ij_ik_zx = 3,
-    literal = 4,
-    literal_minus_64 = 5,
-    sr1l = 6,
-    sr2l = 7,
+    zero = 0,
+    literal_sx = 1,
+    sr1l = 2,
+    sr2l = 3,
+    kr = 4,
+    ik_bit = 5,
+    ik_zx = 6,
+    ij_ik_zx = 7,
 };
 
 pub const Compute_Unit = enum (u2) {
@@ -275,12 +258,12 @@ pub const Shift_Mode = packed struct (u6) {
     wide: bool,
     _unused: u2 = 0,
 
-    pub const jl_shr_k4 = Shift_Mode { .left = false, .early_swap16 = false, .late_swap16 = false, .wide = false };
-    pub const jl_shl_k4 = Shift_Mode { .left = true,  .early_swap16 = false, .late_swap16 = false, .wide = false };
-    pub const jh_shr_k4 = Shift_Mode { .left = false, .early_swap16 = true,  .late_swap16 = false, .wide = false };
-    pub const jh_shl_k4 = Shift_Mode { .left = true,  .early_swap16 = true,  .late_swap16 = false, .wide = false };
-    pub const j_shr_k5  = Shift_Mode { .left = false, .early_swap16 = false, .late_swap16 = false, .wide = true };
-    pub const j_shl_k5  = Shift_Mode { .left = true,  .early_swap16 = true,  .late_swap16 = true,  .wide = true };
+    pub const jl_shr_k4      = Shift_Mode { .left = false, .early_swap16 = false, .late_swap16 = false, .wide = false };
+    pub const jl_shl_k4      = Shift_Mode { .left = true,  .early_swap16 = false, .late_swap16 = false, .wide = false };
+    pub const jh_shr_k4      = Shift_Mode { .left = false, .early_swap16 = true,  .late_swap16 = false, .wide = false };
+    pub const jh_shl_k4      = Shift_Mode { .left = true,  .early_swap16 = true,  .late_swap16 = false, .wide = false };
+    pub const j_shr_k5       = Shift_Mode { .left = false, .early_swap16 = false, .late_swap16 = false, .wide = true };
+    pub const j_shl_k5       = Shift_Mode { .left = true,  .early_swap16 = true,  .late_swap16 = true,  .wide = true };
 };
 
 pub const Multiply_Mode = packed struct (u6) {
@@ -325,13 +308,14 @@ pub const LL_Source = enum (u3) {
     d8_sx = 3,
     translation_info_l = 4,
     stat = 5,
+    iw_ik_ij_zx = 6,
     pipeline = 7,
-    _,
 };
 
 pub const LH_Source = enum (u3) {
     zero = 0,
     compute_h = 1,
+    d_sx = 2,
     d8_sx = 3,
     translation_info_h = 4,
     jh = 6,
@@ -398,10 +382,50 @@ pub const Special_Op = enum (u3) {
     atomic_this = 1, // This cycle is atomic, but the next one is not, unless it is also .atomic_this
     atomic_next = 2, // All upcoming cycles are atomic, until the next cycle that's .atomic_this or .atomic_end
     atomic_end = 3, // The next cycle is not atomic, unless it's .atomic_this.  If this cycle wasn't atomic to begin with, this has no effect.
+    block_transfer = 4,
     load_rsn_from_ll = 5,
     toggle_rsn = 6,
     trigger_fault = 7,
 };
+
+pub fn eql(self: Control_Signals, other: Control_Signals) bool {
+    inline for (comptime std.enums.values(hw.Control_Signal)) |field| switch (field) {
+        .mode => {
+            const self_value = self.mode.raw();
+            const other_value = other.mode.raw();
+            if (self_value != other_value) return false;
+        },
+        .c_ij => {
+            const self_c_raw = hw.microcode.unmasked_continuation(self);
+            const self_mask = hw.microcode.continuation_mask(self);
+
+            const other_c_raw = hw.microcode.unmasked_continuation(other);
+            const other_mask = hw.microcode.continuation_mask(other);
+
+            if ((self_c_raw & self_mask) != (other_c_raw & other_mask)) return false;
+        },
+        .c_ik, .c_iw => {},
+        else => {
+            const self_value = @field(self, @tagName(field));
+            const other_value = @field(other, @tagName(field));
+            if (!std.meta.eql(self_value, other_value)) return false;
+        },
+    };
+    return true;
+}
+
+pub fn hash(self: Control_Signals, hasher: anytype) void {
+    inline for (comptime std.enums.values(hw.Control_Signal)) |field| switch (field) {
+        .c_ij => {
+            const c_raw = hw.microcode.unmasked_continuation(self);
+            const mask = hw.microcode.continuation_mask(self);
+            std.hash.autoHash(hasher, c_raw & mask);
+        },
+        .c_ik, .c_iw => {},
+        .mode => std.hash.autoHash(hasher, self.mode.raw()),
+        else => std.hash.autoHash(hasher, @field(self, @tagName(field))),
+    };
+}
 
 const Control_Signals = @This();
 const hw = @import("lib_arch").hw;

@@ -343,11 +343,11 @@ pub fn doWindow(self: Pipeline_State) void {
         zgui.text("{s}{s}{s}{s}{s}{s}{s}", .{ c, v, n, z, nk, k, a, });
     }
 
-    self.doRegisterLine(0,  .zero,                   .zero,          glyph_width);
+    self.doRegisterLine(0,  .one,                    .zero,          glyph_width);
     self.doRegisterLine(2,  .rp,                     .ip,            glyph_width);
     self.doRegisterLine(4,  .sp,                     .next_ip,       glyph_width);
     self.doRegisterLine(6,  .bp,                     .asn,           glyph_width);
-    self.doRegisterLine(8,  .fault_ua_dr,            .kxp,           glyph_width);
+    self.doRegisterLine(8,  .fault_uc_slot_dr,       .kxp,           glyph_width);
     self.doRegisterLine(10, .fault_rsn_stat,         .uxp,           glyph_width);
     self.doRegisterLine(12, .int_rsn_fault_iw_ik_ij, .rs_reserved,   glyph_width);
     self.doRegisterLine(14, .temp_1,                 .temp_2,        glyph_width);
@@ -447,11 +447,11 @@ fn doRegisterLine(
     const label0 = std.fmt.comptimePrint(fmt, .{ first_gpr + 1 });
     const label1 = std.fmt.comptimePrint(fmt, .{ first_gpr });
     const label2 = comptime switch (sr1) {
-        .zero => "    Z",
+        .one => "  ONE",
         .rp => "   RP",
         .sp => "   SP",
         .bp => "   BP",
-        .fault_ua_dr => " UADR",
+        .fault_uc_slot_dr => " FSDR",
         .fault_rsn_stat => "  FRS",
         .int_rsn_fault_iw_ik_ij => " IRFI",
         .temp_1 => "   T1",
@@ -476,7 +476,8 @@ fn doRegisterLine(
         zgui.textUnformattedColored(colors.label, label0);
 
         var write_label = "  ";
-        if (second_gpr != 0) switch (cs.reg_width) {
+        if (second_gpr != 0) switch (cs.reg_write) {
+            .no_write => {},
             .write_16 => {
                 if (second_gpr == iw) write_label = "LL";
             },
@@ -484,6 +485,7 @@ fn doRegisterLine(
                 if (second_gpr == iw) write_label = "LL";
                 if (second_gpr == (iw ^ 1)) write_label = "LH";
             },
+            _ => {},
         };
         zgui.sameLine(.{});
         zgui.textUnformattedColored(w_color, write_label);
@@ -509,7 +511,8 @@ fn doRegisterLine(
         zgui.textUnformattedColored(colors.label, label1);
 
         var write_label = "  ";
-        if (first_gpr != 0) switch (cs.reg_width) {
+        if (first_gpr != 0) switch (cs.reg_write) {
+            .no_write => {},
             .write_16 => {
                 if (first_gpr == iw) write_label = "LL";
             },
@@ -517,6 +520,7 @@ fn doRegisterLine(
                 if (first_gpr == iw) write_label = "LL";
                 if (first_gpr == (iw ^ 1)) write_label = "LH";
             },
+            _ => {},
         };
         zgui.sameLine(.{});
         zgui.textUnformattedColored(w_color, write_label);
@@ -562,7 +566,7 @@ fn doRegisterLine(
                 reads[1] = 'K';
             }
         }
-        if (cs.base_ri.to_SR1_Index()) |sr1b| {
+        if (cs.base_ri.to_sr1_index()) |sr1b| {
             if (sr1b == sr1) {
                 reads[2] = 'B';
             }
@@ -595,7 +599,7 @@ fn doRegisterLine(
                 reads[1] = 'K';
             }
         }
-        if (cs.base_ri.to_SR2_Index()) |sr2b| {
+        if (cs.base_ri.to_sr2_index()) |sr2b| {
             if (sr2b == sr2) {
                 reads[2] = 'B';
             }

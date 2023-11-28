@@ -3,34 +3,67 @@
 //  - Mappings between assembly syntax and machine code and vice-versa; used by the assembler and disassembler
 //  - HTML instruction set documentation
 
-const std = @import("std");
-const TempAllocator = @import("TempAllocator");
-const allocators = @import("compile_arch/allocators.zig");
-const ib = @import("compile_arch/instruction_builder.zig");
-const cb = @import("compile_arch/cycle_builder.zig");
-const arch = @import("lib_arch");
+// TODO compute flags affected by each instruction, include in encoding data/documentation
+
+pub const Cycle = @import("compile_arch/Cycle.zig");
+pub const Processor = @import("compile_arch/Processor.zig");
+pub const Microcode_Builder = @import("compile_arch/Microcode_Builder.zig");
+pub const Decode_ROM_Builder = @import("compile_arch/Decode_ROM_Builder.zig");
+pub const opcodes = @import("compile_arch/opcodes.zig");
+pub const placeholders = @import("compile_arch/placeholders.zig");
 
 pub fn main() !void {
-    allocators.temp_arena = try TempAllocator.init(0x1000_0000);
+    var gpa: std.heap.GeneralPurposeAllocator(.{}) = .{};
+    var temp = try TempAllocator.init(0x1000_0000);
+    var processor = Processor.init(gpa.allocator(), &temp);
 
-    try ib.processScope(@import("_reset.zig"));
-    try ib.processScope(@import("_fault.zig"));
-    try ib.processScope(@import("_interrupt.zig"));
-    try ib.processScope(@import("_alu.zig"));
-    try ib.processScope(@import("_copy.zig"));
-    try ib.processScope(@import("_branch.zig"));
-    try ib.processScope(@import("_call.zig"));
-    try ib.processScope(@import("_load_store.zig"));
-    try ib.processScope(@import("_stack.zig"));
-    try ib.processScope(@import("_address_translator.zig"));
-    try ib.processScope(@import("_sync.zig"));
+    processor.process(@import("compile_arch/_reset.zig").instructions);
+    processor.process(@import("compile_arch/_fault.zig").instructions);
+    processor.process(@import("compile_arch/_interrupt.zig").instructions);
+    processor.process(@import("compile_arch/_alu.zig").instructions);
+    // processor.process(@import("compile_arch/_copy.zig").instructions);
+    // processor.process(@import("compile_arch/_branch.zig").instructions);
+    processor.process(@import("compile_arch/_call.zig").instructions);
+    // processor.process(@import("compile_arch/_load_store.zig").instructions);
+    // processor.process(@import("compile_arch/_stack.zig").instructions);
+    processor.process(@import("compile_arch/_address_translator.zig").instructions);
+    // processor.process(@import("compile_arch/_sync.zig").instructions);
 
-    try arch.validateAliases();
+    processor.microcode.assign_slots();
 
-    var stdout = std.io.getStdOut().writer();
-    try arch.writeOpcodeTableSmall(stdout);
+    var microcode_address_usage: usize = 0;
 
-    try assignReservedOpcodes();
+    const uc = processor.microcode.generate_microcode(gpa.allocator());
+    for (uc, 0..) |maybe_cs, addr| {
+        _ = addr;
+        if (maybe_cs) |cs| {
+            _ = cs;
+            //std.log.warn("{}", .{ addr });
+            microcode_address_usage += 1;
+        }
+    }
+
+    var normal_decode_usage: usize = 0;
+    var alt_decode_usage: usize = 0;
+
+    const decode = processor.decode_rom.generate_rom_data(gpa.allocator(), &processor.microcode);
+    for (0.., decode) |addr, result| {
+        if (result.slot != .invalid_instruction) {
+            // std.log.info("{X:0>5}: {any}", .{ addr, result });
+            switch (hw.decode.Address.init(@intCast(addr)).mode) {
+                .normal => normal_decode_usage += 1,
+                .alt => alt_decode_usage += 1,
+            }
+        }
+    }
+
+    std.log.info("Microcode Slot Usage: {} ({d:.1}%)", .{ microcode_address_usage / 32, @as(f32, @floatFromInt(microcode_address_usage)) / 1310.72 });
+    std.log.info("Normal Decode Space Usage: {} ({d:.1}%)", .{ normal_decode_usage, @as(f32, @floatFromInt(normal_decode_usage)) / 655.36 });
+    std.log.info("Alt Decode Space Usage: {} ({d:.1}%)", .{ alt_decode_usage, @as(f32, @floatFromInt(alt_decode_usage)) / 655.36 });
+
+    // var stdout = std.io.getStdOut().writer();
+    // _ = stdout;
+    // try arch.writeOpcodeTableSmall(stdout);
 
     // try arch.analyzeCustom(&allocators.temp_arena, stdout);
     
@@ -50,13 +83,11 @@ pub fn main() !void {
     // try arch.analyzeControlSignalUsage(&allocators.temp_arena, &.{ .allow_int, .seq_op }, stdout);
     // try arch.analyzeControlSignalUsage(&allocators.temp_arena, &.{ .ll_src, .lh_src }, stdout);
 
-    // std.debug.print("{} continuations left\n", .{ arch.getContinuationsLeft() });
-
-    {
-        var f = try std.fs.cwd().createFile("arch/isa_encoding/isa.sx", .{});
-        defer f.close();
-        try arch.writeInstructionEncodings(f.writer());
-    }
+    // {
+    //     var f = try std.fs.cwd().createFile("arch/isa_encoding/isa.sx", .{});
+    //     defer f.close();
+    //     try arch.writeInstructionEncodings(f.writer());
+    // }
 
     // var rom_data = try uc_roms.writeCompressedRoms(allocators.temp_arena.allocator(), allocators.temp_arena.allocator(), &arch.microcode);
 
@@ -82,19 +113,7 @@ pub fn main() !void {
     // }
 }
 
-fn reserved() void {
-    ib.encoding(._reserved, .{});
-    ib.desc("Reserved for future use");
-    cb.invalid_instruction();
-}
-
-fn assignReservedOpcodes() !void {
-    // var opIter = uc.opcodeIterator(0x0000, 0xFFFF);
-    // while (opIter.next()) |cur_opcode| {
-    //     if (arch.getMicrocodeCycle(uc.getAddressForOpcode(cur_opcode, .{})) == null) {
-    //         const granularity = uc.getOpcodeGranularity(cur_opcode);
-    //         const last_opcode = cur_opcode +% granularity -% 1;
-    //         try ib.processOpcodes(cur_opcode, last_opcode, reserved, false);
-    //     }
-    // }
-}
+const hw = arch.hw;
+const arch = @import("lib_arch");
+const TempAllocator = @import("TempAllocator");
+const std = @import("std");

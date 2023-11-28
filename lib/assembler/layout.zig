@@ -271,8 +271,8 @@ fn do_chunk_layout(a: *Assembler, chunk: Source_File.Chunk, initial_address: u32
                 if (insn_flags[insn_handle].contains(.depends_on_layout)) {
                     const old_encoding = encoding;
                     insn_operations[insn_handle] = .{ .insn = .{
-                        .mnemonic = old_encoding.mnemonic,
-                        .suffix = old_encoding.suffix,
+                        .mnemonic = old_encoding.signature.mnemonic,
+                        .suffix = old_encoding.signature.suffix,
                     }};
                     const length = resolve_insn_encoding(a, s, address, insn_handle, &insn_operations[insn_handle], insn_params[insn_handle]);
                     address += length;
@@ -959,7 +959,7 @@ fn resolve_symbol_ref_expr_constant(a: *Assembler, s: Source_File.Slices, ip: u3
     }
 }
 
-fn resolve_insn_encoding(a: *Assembler, s: Source_File.Slices, ip: u32, insn_handle: Instruction.Handle, op: *Instruction.Operation, params: ?Expression.Handle) u3 {
+fn resolve_insn_encoding(a: *Assembler, s: Source_File.Slices, ip: u32, insn_handle: Instruction.Handle, op: *Instruction.Operation, params: ?Expression.Handle) Encoded_Instruction.Length_Type {
     const insn = a.build_instruction(s, ip, op.insn.mnemonic, op.insn.suffix, params, true) orelse return 0;
     const best_encoding = find_best_insn_encoding(a, insn);
     a.params_temp.clearRetainingCapacity();
@@ -977,7 +977,7 @@ fn resolve_insn_encoding(a: *Assembler, s: Source_File.Slices, ip: u32, insn_han
 pub fn find_best_insn_encoding(a: *Assembler, insn: isa.Instruction) ?*const isa.Instruction_Encoding {
     var iter = a.edb.matching_encodings(insn);
 
-    var best_length: ?u3 = null;
+    var best_length: ?isa.Encoded_Instruction.Length_Type = null;
     var best_encoding: ?*const isa.Instruction_Encoding = null;
     while (iter.next_ptr()) |enc| {
         const length = enc.len();
@@ -1071,7 +1071,7 @@ pub fn encode_page_data(a: *Assembler, file: *Source_File) void {
             .bound_insn => |encoding| {
                 const address = insn_addresses[insn_handle];
                 const params = insn_params[insn_handle];
-                const insn = a.build_instruction(s, address, encoding.mnemonic, encoding.suffix, params, false).?;
+                const insn = a.build_instruction(s, address, encoding.signature.mnemonic, encoding.signature.suffix, params, false).?;
                 encode_instruction(a, s, insn_handle, address, insn_lengths[insn_handle], insn, encoding, page_datas);
             },
 
@@ -1240,6 +1240,7 @@ const Instruction = @import("Instruction.zig");
 const Expression = @import("Expression.zig");
 const Page_Data = @import("Page_Data.zig");
 const Error = @import("Error.zig");
+const Encoded_Instruction = isa.Encoded_Instruction;
 const isa = arch.isa;
 const hw = arch.hw;
 const arch = @import("lib_arch");

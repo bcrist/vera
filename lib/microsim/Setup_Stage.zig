@@ -35,6 +35,8 @@ pub fn simulate(
 
     const ij = in.ij.raw();
     const ik = in.ik.raw();
+    const iw = in.iw.raw();
+    _ = iw;
 
     const sr1 = rs.sr1[in.cs.sr1_ri.raw()];
     const sr2 = rs.sr2[in.cs.sr2_ri.raw()];
@@ -60,19 +62,19 @@ pub fn simulate(
     });
 
     out.k = hw.K.init(switch (in.cs.k_src) {
+        .zero => 0,
+        .literal_sx => bits.sx(u16, in.cs.literal.raw()),
+        .sr1l => sr1.lo.raw(),
+        .sr2l => sr2.lo.raw(),
         .kr => rs.reg[ik].raw(),
         .ik_bit => @as(u16, 1) << ik,
         .ik_zx => ik,
         .ij_ik_zx => bits.concat(.{ ik, ij }),
-        .literal => in.cs.literal.raw(),
-        .literal_minus_64 => bits._1x(u16, in.cs.literal.raw()),
-        .sr1l => sr1.lo.raw(),
-        .sr2l => sr2.lo.raw(),
     });
 
     const addr_base: u32 =
-        if (in.cs.base_ri.to_SR1_Index()) |sr1b| rs.sr1[sr1b.raw()].raw()
-        else if (in.cs.base_ri.to_SR2_Index()) |sr2b| rs.sr2[sr2b.raw()].raw()
+        if (in.cs.base_ri.to_sr1_index()) |sr1b| rs.sr1[sr1b.raw()].raw()
+        else if (in.cs.base_ri.to_sr2_index()) |sr2b| rs.sr2[sr2b.raw()].raw()
         else 0;
 
     const addr_offset: u32 = switch (in.cs.offset_src) {

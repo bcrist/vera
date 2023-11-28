@@ -1,98 +1,139 @@
-const ib = @import("instruction_builder.zig");
-const cb = @import("cycle_builder.zig");
+pub const instructions = .{
+    struct { pub const spec = "call .i ip + (imm)";
+        pub const encoding = .{
+            opcodes.Lo8.ip_relative_call__forward,
+            Encoder.shifted(8, Int(.imm, u16)),
+        };
 
-const encoding = ib.encoding;
-const addr = ib.addr;
-const IP_relative = ib.IP_relative;
-const desc = ib.desc;
-const next_cycle = ib.next_cycle;
+        pub const entry = read_imm;
 
-const IP_read_to_D = cb.IP_read_to_D;
-const read_to_D = cb.read_to_D;
-const D_to_L = cb.D_to_L;
-const D_to_LH = cb.D_to_LH;
-const L_to_SR = cb.L_to_SR;
-const SRL_to_LL = cb.SRL_to_LL;
-const SR_plus_SRL_to_L = cb.SR_plus_SRL_to_L;
-const SR_plus_literal_to_L = cb.SR_plus_literal_to_L;
-const branch = cb.branch;
-const op_reg32_to_L = cb.op_reg32_to_L;
-const zero_to_L = cb.zero_to_L;
+        pub fn read_imm(c: *Cycle) void {
+            c.ip_read_to_d(1, .word);
+            c.d_to_l(.zx);
+            c.l_to_sr(.temp_1);
+            c.next(compute_next_ip);
+        }
 
-pub fn _0181() void {
-    encoding(.CALL, .{ IP_relative(.insn, .imm16u) });
-    desc("Call IP-relative subroutine");
+        pub fn compute_next_ip(c: *Cycle) void {
+            c.sr_to_j(.ip);
+            c.srl_to_k(.temp_1);
+            c.j_plus_k_to_l(.zx, .fresh, .no_flags);
+            c.l_to_sr(.next_ip);
+            c.next(save_return_address_and_branch);
+        }
 
-    IP_read_to_D(2, .word);
-    D_to_L(.zx);
-    L_to_SR(.temp_1);
-    next_cycle();
+        pub fn save_return_address_and_branch(c: *Cycle) void {
+            c.sr_to_j(.ip);
+            c.literal_to_k(3);
+            c.j_plus_k_to_l(.sx, .fresh, .no_flags);
+            c.l_to_sr(.rp);
+            c.branch(.next_ip, 0);
+        }
+    },
+    struct { pub const spec = "call .i ip + (imm)";
+        pub const encoding = .{
+            opcodes.Lo8.ip_relative_call__back,
+            Encoder.shifted(8, Range(.imm, -0x10000, -1)),
+        };
 
-    SR_plus_SRL_to_L(.ip, .temp_1, .zx, .fresh, .no_flags);
-    L_to_SR(.next_ip);
-    next_cycle();
+        pub const entry = read_imm;
 
-    SR_plus_literal_to_L(.ip, 4, .fresh, .no_flags);
-    L_to_SR(.rp);
-    branch(.next_ip, 0);
-}
+        pub fn read_imm(c: *Cycle) void {
+            c.ip_read_to_d(1, .word);
+            c.d_to_l(.zx);
+            c.l_to_sr(.temp_1);
+            c.next(compute_next_ip);
+        }
 
-pub fn _0182() void {
-    encoding(.CALL, .{ IP_relative(.insn, .imm16n) });
-    desc("Call IP-relative subroutine");
+        pub fn compute_next_ip(c: *Cycle) void {
+            c.sr_to_j(.ip);
+            c.srl_to_k(.temp_1);
+            c.j_plus_k_to_l(._1x, .fresh, .no_flags);
+            c.l_to_sr(.next_ip);
+            c.next(save_return_address_and_branch);
+        }
 
-    IP_read_to_D(2, .word);
-    D_to_L(.zx);
-    L_to_SR(.temp_1);
-    next_cycle();
+        pub fn save_return_address_and_branch(c: *Cycle) void {
+            c.sr_to_j(.ip);
+            c.literal_to_k(3);
+            c.j_plus_k_to_l(.zx, .fresh, .no_flags);
+            c.l_to_sr(.rp);
+            c.branch(.next_ip, 0);
+        }
+    },
+    struct { pub const spec = "call .i (imm)";
+        pub const encoding = .{
+            opcodes.Lo16.absolute_call,
+            Encoder.shifted(16, Int(.imm, u32)),
+        };
 
-    SR_plus_SRL_to_L(.ip, .temp_1, ._1x, .fresh, .no_flags);
-    L_to_SR(.next_ip);
-    next_cycle();
+        pub const entry = read_imm_hi;
 
-    SR_plus_literal_to_L(.ip, 4, .fresh, .no_flags);
-    L_to_SR(.rp);
-    branch(.next_ip, 0);
-}
+        pub fn read_imm_hi(c: *Cycle) void {
+            c.ip_read_to_d(4, .word);
+            c.d_to_l(.zx);
+            c.l_to_sr(.temp_1);
+            c.next(read_imm_lo);
+        }
 
-pub fn _0183() void {
-    encoding(.CALL, .{ addr(.insn, .imm32u) });
-    desc("Call absolute-addressed subroutine");
+        pub fn read_imm_lo(c: *Cycle) void {
+            c.ip_read_to_d(2, .word);
+            c.d_to_ll();
+            c.srl_to_lh(.temp_1);
+            c.l_to_sr(.next_ip);
+            c.next(save_return_address_and_branch);
+        }
 
-    IP_read_to_D(2, .word);
-    D_to_L(.zx);
-    L_to_SR(.temp_1);
-    next_cycle();
+        pub fn save_return_address_and_branch(c: *Cycle) void {
+            c.sr_to_j(.ip);
+            c.literal_to_k(6);
+            c.j_plus_k_to_l(.zx, .fresh, .no_flags);
+            c.l_to_sr(.rp);
+            c.branch(.next_ip, 0);
+        }
+    },
+    struct { pub const spec = // call .i x(r)
+        \\call .i x(r)
+        \\call .i x(r) .unsigned
+        \\call .i x(r) .signed
+        ;
+        pub const encoding = .{
+            opcodes.Lo12.register_call,
+            Encoder.shifted(12, Reg(.r)),
+        };
+        pub const ij = Reg(.r);
 
-    IP_read_to_D(4, .word);
-    D_to_LH();
-    SRL_to_LL(.temp_1);
-    L_to_SR(.next_ip);
-    next_cycle();
+        pub fn entry(c: *Cycle) void {
+            c.reg32_to_l();
+            c.l_to_sr(.next_ip);
+            c.next(save_return_address_and_branch);
+        }
 
-    SR_plus_literal_to_L(.ip, 6, .fresh, .no_flags);
-    L_to_SR(.rp);
-    branch(.next_ip, 0);
-}
+        pub fn save_return_address_and_branch(c: *Cycle) void {
+            c.sr_to_j(.ip);
+            c.literal_to_k(2);
+            c.j_plus_k_to_l(.zx, .fresh, .no_flags);
+            c.l_to_sr(.rp);
+            c.branch(.next_ip, 0);
+        }
+    },
+    struct { pub const spec = "ret";
+        pub const encoding = opcodes.Lo8.call_return;
+        pub fn entry(c: *Cycle) void {
+            c.zero_to_l();
+            c.l_to_sr(.rp);
+            c.branch(.rp, 0);
+        }
+    },
+};
 
-pub fn _FA80_FA8F() void {
-    encoding(.CALL, .{ addr(.insn, .Xa) });
-    desc("Call register-addressed subroutine");
 
-    op_reg32_to_L(.OA);
-    L_to_SR(.next_ip);
-    next_cycle();
-
-    SR_plus_literal_to_L(.ip, 2, .fresh, .no_flags);
-    L_to_SR(.rp);
-    branch(.next_ip, 0);
-}
-
-pub fn _018F() void {
-    encoding(.RET, .{});
-    desc("Return from subroutine");
-
-    zero_to_L();
-    L_to_SR(.rp);
-    branch(.rp, 0);
-}
+const Cycle = @import("Cycle.zig");
+const Encoder = isa.Instruction_Encoding.Encoder;
+const Int = placeholders.Int;
+const Range = placeholders.Range;
+const Reg = placeholders.Reg;
+const placeholders = @import("placeholders.zig");
+const opcodes = @import("opcodes.zig");
+const isa = arch.isa;
+const arch = @import("lib_arch");

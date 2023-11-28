@@ -48,8 +48,8 @@ pub fn print(self: Error, a: *Assembler, writer: anytype) !void {
         const mn: Instruction.MnemonicAndSuffix = switch (s.insn.items(.operation)[insn_handle]) {
             .insn => |info| info,
             .bound_insn => |encoding| .{
-                .mnemonic = encoding.mnemonic,
-                .suffix = encoding.suffix,
+                .mnemonic = encoding.signature.mnemonic,
+                .suffix = encoding.signature.suffix,
             },
             else => unreachable,
         };

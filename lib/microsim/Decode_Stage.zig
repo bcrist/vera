@@ -21,6 +21,7 @@ want_atomic: bool,
 
 seq_literal: hw.microcode.Slot,
 uc_slot_src: hw.microcode.Slot_Source,
+inhibit_writes: bool,
 
 pub const Debug = struct {};
 
@@ -33,35 +34,29 @@ pub fn simulate(
 ) Debug {
     const id_result = decode_rom[in.dr.raw()];
 
-    out.ij = switch (in.cs.ij_op) {
+    out.ij = if (in.inhibit_writes) in.ij else switch (in.cs.ij_op) {
         .hold => in.ij,
         .xor1 => hw.IJ.init(in.ij.raw() ^ 1),
-        .from_continuation => in.cs.c.ij,
+        .from_continuation => in.cs.c_ij,
         .from_decode => id_result.ij,
     };
-    out.ik = switch (in.cs.ik_op) {
+    out.ik = if (in.inhibit_writes) in.ik else switch (in.cs.ik_op) {
         .hold => in.ik,
         .xor1 => hw.IK.init(in.ik.raw() ^ 1),
-        .from_continuation => in.cs.c.ik,
+        .from_continuation => in.cs.c_ik,
         .from_decode => id_result.ik,
     };
-    out.iw = switch (in.cs.iw_op) {
+    out.iw = if (in.inhibit_writes) in.iw else switch (in.cs.iw_op) {
         .hold => in.iw,
         .xor1 => hw.IW.init(in.iw.raw() ^ 1),
-        .from_continuation => in.cs.c.iw,
+        .from_continuation => in.cs.c_iw,
         .from_decode => id_result.iw,
     };
 
     out.uc_slot = switch (in.uc_slot_src) {
         .hold => in.uc_slot,
         .insn_decoder => id_result.slot,
-        .continuation => blk: {
-            const ij_op = in.cs.ij_op;
-            const ik_op = in.cs.ik_op;
-            const iw_op = in.cs.iw_op;
-            const mask = Control_Signals.Continuation.mask(ij_op, ik_op, iw_op);
-            break :blk hw.microcode.Slot.init(in.cs.c.raw() | mask.raw());
-        },
+        .continuation => hw.microcode.continuation(in.cs.*),
         .seq_literal => in.seq_literal,
     };
 

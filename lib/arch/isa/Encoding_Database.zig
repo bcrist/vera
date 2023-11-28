@@ -1,5 +1,5 @@
 allocator: std.mem.Allocator,
-lookup: deep_hash_map.DeepAutoHashMap(Key, []const Instruction_Encoding),
+lookup: deep_hash_map.DeepAutoHashMap(Instruction_Signature, []const Instruction_Encoding),
 
 pub fn init(data: *Instruction_Encoding.Parser_Data, source: []const u8) !Encoding_Database {
     var stream = std.io.fixedBufferStream(source);
@@ -8,7 +8,7 @@ pub fn init(data: *Instruction_Encoding.Parser_Data, source: []const u8) !Encodi
     defer data.deinit();
     errdefer data.free_data();
 
-    var temp_lookup = deep_hash_map.DeepAutoHashMap(Key, std.ArrayListUnmanaged(Instruction_Encoding)).init(data.temp_allocator);
+    var temp_lookup = deep_hash_map.DeepAutoHashMap(Instruction_Signature, std.ArrayListUnmanaged(Instruction_Encoding)).init(data.temp_allocator);
     defer {
         var iter = temp_lookup.valueIterator();
         while (iter.next()) |list| {
@@ -28,11 +28,7 @@ pub fn init(data: *Instruction_Encoding.Parser_Data, source: []const u8) !Encodi
     }) |encoding| {
         var result = try temp_lookup.getOrPutAdapted(encoding, Encoding_Context{});
         if (!result.found_existing) {
-            result.key_ptr.* = .{
-                .mnemonic = encoding.mnemonic,
-                .suffix = encoding.suffix,
-                .params = encoding.params,
-            };
+            result.key_ptr.* = encoding.signature;
             result.value_ptr.* = .{};
         }
         try result.value_ptr.append(data.temp_allocator, encoding);
@@ -40,7 +36,7 @@ pub fn init(data: *Instruction_Encoding.Parser_Data, source: []const u8) !Encodi
 
     var self: Encoding_Database = .{
         .allocator = data.data_allocator,
-        .lookup = deep_hash_map.DeepAutoHashMap(Key, []const Instruction_Encoding).init(data.data_allocator),
+        .lookup = deep_hash_map.DeepAutoHashMap(Instruction_Signature, []const Instruction_Encoding).init(data.data_allocator),
     };
     errdefer self.deinit();
     try self.lookup.ensureTotalCapacity(temp_lookup.count());
@@ -107,31 +103,16 @@ pub const Iterator = struct {
     }
 };
 
-const Key = struct {
-    mnemonic: isa.Mnemonic,
-    suffix: isa.Mnemonic_Suffix,
-    params: []const Parameter.Signature,
-};
-
 const Encoding_Context = struct {
     pub fn hash(_: Encoding_Context, key: Instruction_Encoding) u64 {
         var hasher = std.hash.Wyhash.init(0);
-        std.hash.autoHash(&hasher, key.mnemonic);
-        std.hash.autoHash(&hasher, key.suffix);
-        std.hash.autoHashStrat(&hasher, key.params, .Deep);
+        std.hash.autoHash(&hasher, key.signature.mnemonic);
+        std.hash.autoHash(&hasher, key.signature.suffix);
+        std.hash.autoHashStrat(&hasher, key.signature.params, .Deep);
         return hasher.final();
     }
-    pub fn eql(_: Encoding_Context, a: Instruction_Encoding, b: Key) bool {
-        if (a.mnemonic != b.mnemonic
-            or a.suffix != b.suffix
-            or a.params.len != b.params.len
-        ) return false;
-
-        for (a.params, b.params) |aps, bps| {
-            if (!std.meta.eql(aps, bps)) return false;
-        }
-
-        return true;
+    pub fn eql(_: Encoding_Context, a: Instruction_Encoding, b: Instruction_Signature) bool {
+        return a.signature.eql(b);
     }
 };
 
@@ -146,7 +127,7 @@ const Instruction_Context = struct {
         std.hash.autoHash(&hasher, key.params.len);
         return hasher.final();
     }
-    pub fn eql(_: Instruction_Context, a: Instruction, b: Key) bool {
+    pub fn eql(_: Instruction_Context, a: Instruction, b: Instruction_Signature) bool {
         if (a.mnemonic != b.mnemonic or a.suffix != b.suffix or a.params.len != b.params.len) return false;
         for (a.params, b.params) |param, ps| {
             if (!std.meta.eql(param.signature, ps)) return false;
@@ -159,6 +140,7 @@ const Encoding_Database = @This();
 const Instruction = @import("Instruction.zig");
 const Parameter = @import("Parameter.zig");
 const Instruction_Encoding = @import("Instruction_Encoding.zig");
+const Instruction_Signature = isa.Instruction_Signature;
 const isa = @import("lib_arch").isa;
 const deep_hash_map = @import("deep_hash_map");
 const std = @import("std");

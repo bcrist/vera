@@ -1,87 +1,76 @@
-const assert = @import("std").debug.assert;
-const ib = @import("instruction_builder.zig");
-const cb = @import("cycle_builder.zig");
-const misc = @import("misc");
-const uc = @import("microcode");
-const physical_address = @import("physical_address");
+pub const instructions = .{
+    struct { pub const slot = hw.microcode.Slot.interrupt;
+        const vector_register = hw.addr.Physical.interrupt_controller;
+        pub const entry = persist_stat;
 
-const encoding = ib.encoding;
-const desc = ib.desc;
-const next_cycle = ib.next_cycle;
-const next_cycle_force_normal_execution = ib.next_cycle_force_normal_execution;
-const kernel = ib.kernel;
-const uc_address = ib.uc_address;
+        fn persist_stat(c: *Cycle) void {
+            c.srh_to_lh(.fault_rsn_stat);
+            c.stat_to_ll();
+            c.l_to_sr(.fault_rsn_stat);
+            c.next(swap_rsn);
+        }
 
-const zero_to_LL = cb.zero_to_LL;
-const pipe_id_to_LL = cb.pipe_id_to_LL;
-const STAT_to_LL = cb.STAT_to_LL;
-const SRL_to_LL = cb.SRL_to_LL;
-const SRH_to_LL = cb.SRH_to_LL;
-const SRH_to_LH = cb.SRH_to_LH;
-const literal_to_LH = cb.literal_to_LH;
-const LL_to_STAT = cb.LL_to_STAT;
-const LL_to_RSN = cb.LL_to_RSN;
-const L_to_SR = cb.L_to_SR;
-const L_to_SR1 = cb.L_to_SR1;
-const L_to_SR2 = cb.L_to_SR2;
-const RSN_to_SR1H = cb.RSN_to_SR1H;
-const reload_ASN = cb.reload_ASN;
-const read_to_D = cb.read_to_D;
-const D_to_L = cb.D_to_L;
-const branch = cb.branch;
-const illegal_instruction = cb.illegal_instruction;
+        pub fn swap_rsn(c: *Cycle) void {
+            c.rsn_to_sr1h(.int_rsn_fault_iw_ik_ij);
+            c.pipeline_id_to_ll();
+            c.ll_to_rsn();
+            c.next_ij_ik_zx(@truncate(vector_register.raw() >> 16));
+            c.next(compute_vector_address);
+        }
 
-pub fn _handler_7() void {
-        //desc("Interrupt handler");
-    assert(uc_address() == @enumToInt(uc.Vectors.interrupt));
-    const vector_register = physical_address.fromFrame(@enumToInt(physical_address.DeviceFrame.sys_interrupt_controller));
+        pub fn compute_vector_address(c: *Cycle) void {
+            c.reload_asn();
+            c.srl_to_jl(.one);
+            c.ij_ik_zx_to_k();
+            c.jl_times_k__swap_result_halves(.zx, .zx);
+            c.compute_to_l(.fresh, .no_flags);
+            c.l_to_sr(.temp_1);
+            c.next(read_vector);
+        }
 
-    // Persist STAT for when we return
-    SRH_to_LH(.fault_rsn_stat);
-    STAT_to_LL();
-    L_to_SR1(.fault_rsn_stat);
-    next_cycle();
+        pub fn read_vector(c: *Cycle) void {
+            c.read_to_d(.temp_1, @intCast(vector_register.raw() & 0xFFFF), .word, .raw);
+            c.d_to_l(.zx);
+            c.l_to_sr(.next_ip);
+            c.next(branch);
+        }
 
-    // Switch to RSN 0/1/2 depending on which pipe we're in, storing the old RSN in SR1
-    RSN_to_SR1H(.int_rsn_fault_ob_oa);
-    pipe_id_to_LL();
-    LL_to_RSN();
-    next_cycle();
+        pub fn branch(c: *Cycle) void {
+            c.branch(.next_ip, 0);
+        }
+    },
+    struct { pub const spec = "iret";
+        pub const encoding = .{ opcodes.Lo16.return_from_interrupt };
 
-    // Reload ASN since it may have changed, and calculate the base address of the interrupt controller
-    reload_ASN();
-    literal_to_LH(@intCast(i17, vector_register >> 16));
-    zero_to_LL();
-    L_to_SR(.temp_1);
-    next_cycle();
+        pub fn entry(c: *Cycle, flags: hw.microcode.Flags) void {
+            if (!flags.kernel()) return c.illegal_instruction();
 
-    // Read the interrupt vector from the interrupt controller
-    read_to_D(.temp_1, @intCast(i7, vector_register & 0xFFFF), .word, .raw);
-    D_to_L(.zx);
-    L_to_SR2(.next_ip);
-    next_cycle();
+            c.srh_to_ll(.int_rsn_fault_iw_ik_ij);
+            c.ll_to_rsn();
+            c.next(restore_stat);
+        }
 
-    // Start executing the interrupt handler
-    branch(.next_ip, 0);
-}
+        pub fn restore_stat(c: *Cycle) void {
+            c.reload_asn();
+            c.srl_to_ll(.fault_rsn_stat);
+            c.ll_to_stat();
+            c.force_normal_execution(branch);
+        }
 
-pub fn _018C() void {
-    encoding(.IRET, .{});
-    desc("Return from interrupt");
+        pub fn branch(c: *Cycle) void {
+            c.branch(.ip, 0);
+        }
+    },
+};
 
-    if (!kernel()) {
-        illegal_instruction();
-        return;
-    }
-
-    SRH_to_LL(.int_rsn_fault_ob_oa);
-    LL_to_RSN();
-    next_cycle();
-
-    reload_ASN();
-    SRL_to_LL(.fault_rsn_stat);
-    LL_to_STAT();
-    next_cycle_force_normal_execution();
-
-    branch(.ip, 0);
-}
+const Cycle = @import("Cycle.zig");
+const Encoder = isa.Instruction_Encoding.Encoder;
+const Int = placeholders.Int;
+const Range = placeholders.Range;
+const Reg = placeholders.Reg;
+const placeholders = @import("placeholders.zig");
+const opcodes = @import("opcodes.zig");
+const hw = arch.hw;
+const isa = arch.isa;
+const arch = @import("lib_arch");
+const std = @import("std");

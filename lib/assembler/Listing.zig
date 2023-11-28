@@ -289,8 +289,8 @@ fn write_instruction_line(
 
     try buf_writer.print("{X:0>8} ", .{ address });
     const isa_insn = isa.Instruction{
-        .mnemonic = insn.encoding.mnemonic,
-        .suffix = insn.encoding.suffix,
+        .mnemonic = insn.encoding.signature.mnemonic,
+        .suffix = insn.encoding.signature.suffix,
         .params = insn.params,
     };
 
