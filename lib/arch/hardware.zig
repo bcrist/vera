@@ -1,3 +1,5 @@
+pub const microcode_roms = @import("hardware/microcode_roms.zig");
+pub const decode_roms = @import("hardware/decode_roms.zig");
 pub const Control_Signals = @import("hardware/Control_Signals.zig");
 pub const Control_Signal = std.meta.FieldEnum(Control_Signals);
 

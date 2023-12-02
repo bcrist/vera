@@ -1,47 +1,30 @@
-const ib = @import("instruction_builder.zig");
-const cb = @import("cycle_builder.zig");
+pub const instructions = .{
+    struct { pub const spec =
+        \\c x(src) -> sp
+        \\c x(src) -> sp
+        \\c x(src) -> sp
+        ;
+        // pub const encoding = .{
+        //     opcode,
+        //     Encoder.shifted(12, Reg(.src)),
+        // };
 
-const encoding = ib.encoding;
-const desc = ib.desc;
-const next_cycle = ib.next_cycle;
-const OB = ib.OB;
+        // fn opcode(params: []const Parameter.Signature) opcodes.Lo12 {
+        //     return switch (params[1].base.sr) {
+        //         .sp => .copy_reg32_to_sp,
+        //     };
+        // }
 
-const write_from_LL = cb.write_from_LL;
-const read_to_D = cb.read_to_D;
-const IP_read_to_D = cb.IP_read_to_D;
-const D_to_L = cb.D_to_L;
-const D_to_LL = cb.D_to_LL;
-const D_to_LH = cb.D_to_LH;
-const D8_to_LL = cb.D8_to_LL;
-const op_reg_to_LL = cb.op_reg_to_LL;
-const L_to_SR = cb.L_to_SR;
-const L_to_op_reg32 = cb.L_to_op_reg32;
-const LL_to_op_reg = cb.LL_to_op_reg;
-const OB_OA_to_K = cb.OB_OA_to_K;
-const op_reg32_to_L = cb.op_reg32_to_L;
-const SR_to_J = cb.SR_to_J;
-const SR_to_L = cb.SR_to_L;
-const SRL_to_K = cb.SRL_to_K;
-const SRL_to_LL = cb.SRL_to_LL;
-const SRH_to_LL = cb.SRH_to_LL;
-const SR_plus_literal_to_L = cb.SR_plus_literal_to_L;
-const SR_plus_reg_to_L = cb.SR_plus_reg_to_L;
-const SR_minus_reg_to_L = cb.SR_minus_reg_to_L;
-const SR_minus_literal_to_L = cb.SR_minus_literal_to_L;
-const add_to_L = cb.add_to_L;
-const sub_to_L = cb.sub_to_L;
-const load_next_insn = cb.load_next_insn;
-const exec_next_insn = cb.exec_next_insn;
-const load_and_exec_next_insn = cb.load_and_exec_next_insn;
+        // pub fn entry(c: *Cycle, params: []const Parameter.Signature) void {
+        //     c.reg32_to_l();
+        //     c.l_to_sr(switch (params[1].base.sr) {
+        //         .sp => .sp,
+        //     });
+        //     c.load_and_exec_next_insn();
+        // }
+    },
+};
 
-pub fn _FB80_FB8F() void {
-    encoding(.C, .{ .Xa, .to, .SP });
-    desc("Copy 32b register to stack pointer");
-
-    op_reg32_to_L(.OA);
-    L_to_SR(.sp);
-    load_and_exec_next_insn(2);
-}
 
 pub fn _0008() void {
     encoding(.UNFRAME, .{ .R0U });
@@ -217,3 +200,14 @@ pub fn _E4E0_E4EF() void {
     L_to_SR(.sp);
     load_and_exec_next_insn(2);
 }
+
+const Cycle = @import("Cycle.zig");
+const Encoder = isa.Instruction_Encoding.Encoder;
+const Parameter = isa.Parameter;
+const Int = placeholders.Int;
+const Range = placeholders.Range;
+const Reg = placeholders.Reg;
+const placeholders = @import("placeholders.zig");
+const opcodes = @import("opcodes.zig");
+const isa = arch.isa;
+const arch = @import("lib_arch");

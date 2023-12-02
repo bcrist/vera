@@ -66,7 +66,7 @@ pub const SR1_Index = enum (u3) {
     sp = 2,             // stack pointer
     bp = 3,             // stack base pointer
     fault_uc_slot_dr = 4,       // Fault microcode slot (high 16b) and DR (low 16b) copied when entering a fault handler.
-    fault_rsn_stat = 5,         // STAT (bits 15:0) copied when entering a fault handler.  previous RSN (bits 21:16) stored when using STRS/LDRS.
+    fault_rsn_stat = 5,         // STAT (bits 15:0) copied when entering a fault or interrupt handler.  previous RSN (bits 21:16) stored when using STRS/LDRS.
     int_rsn_fault_iw_ik_ij = 6, // IW/IK/IJ (bits 11:0) copied when entering a fault handler.  previous RSN (bits 21:16) stored when entering an interrupt handler.
     temp_1 = 7,
 
@@ -353,13 +353,13 @@ pub const Address_Translator_Op = enum (u2) {
 
 pub const Status_Op = enum (u4) {
     hold = 0,
-    load_zncv = 1,
+    // 1 unused
     clear_a = 2,
     set_a = 3,
     zncv_from_arith = 4,
     zncv_from_arith_no_set_z = 5,
-    // 6 unused
-    // 7 unused
+    load_zncv = 6,
+    load_zncvka = 7,
     zn_16 = 8, // compute ZN from LL only
     zn_16_no_set_z = 9, // compute ZN from LL only
     zn_16__c_from_shift = 10,
@@ -368,6 +368,7 @@ pub const Status_Op = enum (u4) {
     zn_32_no_set_z = 13, // compute ZN from LL + LH
     zn_32__c_from_shift = 14,
     zn_32_no_set_z__c_from_shift = 15,
+    _,
 };
 
 pub const Sequencer_Op = enum (u2) {

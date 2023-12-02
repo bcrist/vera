@@ -34,6 +34,9 @@ pub fn build(b: *std.Build) void {
             .{ .name = "bits", .module = ext.bits },
             .{ .name = "deep_hash_map", .module = ext.deep_hash_map },
             .{ .name = "sx", .module = ext.sx },
+            .{ .name = "srec", .module = ext.srec },
+            .{ .name = "rom_compress", .module = ext.rom_compress },
+            .{ .name = "rom_decompress", .module = ext.rom_decompress },
         },
     });
 

@@ -94,8 +94,6 @@ pub const instructions = .{
     },
     struct { pub const spec = // call .i x(r)
         \\call .i x(r)
-        \\call .i x(r) .unsigned
-        \\call .i x(r) .signed
         ;
         pub const encoding = .{
             opcodes.Lo12.register_call,

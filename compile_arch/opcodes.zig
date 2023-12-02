@@ -5,7 +5,10 @@ pub const Lo8 = enum (u8) {
     call_return,
     load_registerset,
     store_registerset,
-
+    copy_reg16_reg16,
+    copy_reg32_reg32,
+    copy_reg16u_reg32,
+    copy_reg16s_reg32,
     add_reg32_s8,
     add_reg32_u16,
     add_reg32_n16,
@@ -17,22 +20,41 @@ pub const Lo8 = enum (u8) {
     add_reg16_i16_with_carry,
     add_reg16_reg16,
     add_reg16_reg16_with_carry,
-
+    subtract_reg32_reg16u,
+    subtract_reg32_reg16s,
+    subtract_s8_reg16,
+    subtract_s8_reg16_with_borrow,
+    subtract_i16_reg16,
+    subtract_i16_reg16_with_borrow,
+    subtract_reg16_reg16,
+    subtract_reg16_reg16_with_borrow,
     compare_reg16_reg16,
     compare_reg16_reg16_with_borrow,
     compare_reg32_reg16s,
     compare_reg32_reg16u,
+    xor_reg16_reg16,
+    xnor_reg16_reg16,
+    or_reg16_reg16,
+    nor_reg16_reg16,
+    and_reg16_reg16,
+    nand_reg16_reg16,
+    andnot_reg16_reg16,
+    copy_u4_reg16,
+    copy_n4_reg16,
 
 };
 
 pub const Lo12 = enum (u12) {
-    register_call = 0x0_FE,
-    switch_to_registerset = 0x1_FE,
 
-    compare_reg16_i16 = 0x2_FE,
-    compare_reg16_i16_with_borrow = 0x3_FE,
-    compare_reg32_u16 = 0x4_FE,
-    compare_reg32_n16 = 0x5_FE,
+    compare_reg16_i16 = 0x0_FE,
+    compare_reg16_i16_with_borrow = 0x1_FE,
+    compare_reg32_u16 = 0x2_FE,
+    compare_reg32_n16 = 0x3_FE,
+
+    copy_ip_relative_u16_reg32 = 0x4_FE,
+    copy_sp_relative_u16_reg32 = 0x5_FE,
+    copy_ip_relative_n16_reg32 = 0x6_FE,
+    copy_sp_relative_n16_reg32 = 0x7_FE,
 
     update_address_translation__data_write = 0x8_FE,
     update_address_translation__data_read = 0x9_FE,
@@ -42,6 +64,23 @@ pub const Lo12 = enum (u12) {
     invalidate_address_translation__data_read = 0xD_FE,
     invalidate_address_translation__stack = 0xE_FE,
     invalidate_address_translation__insn = 0xF_FE,
+
+    copy_reg32_to_sp = 0x0_FD,
+    copy_reg32_to_rp = 0x1_FD,
+    copy_reg32_to_bp = 0x2_FD,
+    copy_reg32_to_uxp = 0x3_FD,
+    copy_reg32_to_kxp = 0x4_FD,
+    copy_reg32_to_asn = 0x5_FD,
+
+    register_call = 0x6_FD,
+    switch_to_registerset = 0x7_FD,
+
+    copy_sp_to_reg32 = 0x8_FD,
+    copy_rp_to_reg32 = 0x9_FD,
+    copy_bp_to_reg32 = 0xA_FD,
+    copy_uxp_to_reg32 = 0xB_FD,
+    copy_kxp_to_reg32 = 0xC_FD,
+    copy_asn_to_reg32 = 0xD_FD,
 };
 
 pub const Lo16 = enum (u16) {

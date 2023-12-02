@@ -198,7 +198,7 @@ pub fn generate_microcode(self: *Microcode_Builder, allocator: std.mem.Allocator
 
     for (self.slot_data.items, 0..) |slot_data, raw_slot_data_handle| {
         const slot = handle_to_slot[raw_slot_data_handle];
-        std.log.info("Slot {}: {s}", .{ slot.raw(), cycles[@intFromEnum(slot_data.cycles[0])].func_name });
+        log.info("Slot {}: {s}", .{ slot.raw(), cycles[@intFromEnum(slot_data.cycles[0])].func_name });
         for (slot_data.cycles, 0..) |cycle_handle, raw_flags| {
             const address = hw.microcode.Address {
                 .flags = hw.microcode.Flags.init(@intCast(raw_flags)),
@@ -387,6 +387,8 @@ const Cycle_Hash_Context = struct {
 //     }
 //     try writer.writeAll("\n");
 // }
+
+const log = std.log.scoped(.microcode_builder);
 
 const Microcode_Builder = @This();
 const Cycle = @import("Cycle.zig");

@@ -4,9 +4,16 @@ assigned_signals: std.EnumSet(Control_Signal),
 recursion_ptr: ?*const anyopaque, // alternative to `next` for breaking microcode loop dependencies
 next_slot: ?Microcode_Builder.Slot_Data.Handle,
 encoding_len: ?Encoded_Instruction.Length_Type,
-next_insn_loaded: bool,
+flags: std.EnumSet(Cycle_Flags),
 
-pub fn init(name: []const u8, encoding_len: ?Encoded_Instruction.Length_Type, next_insn_loaded: bool) Cycle {
+pub const Cycle_Flags = enum {
+    next_insn_loaded,
+    ij_valid,
+    ik_valid,
+    iw_valid,
+};
+
+pub fn init(name: []const u8, encoding_len: ?Encoded_Instruction.Length_Type, flags: std.EnumSet(Cycle_Flags)) Cycle {
     return .{
         .func_name = name,
         .signals = std.mem.zeroInit(Control_Signals, .{ .mode = Control_Signals.Compute_Mode.init(0) }),
@@ -14,7 +21,7 @@ pub fn init(name: []const u8, encoding_len: ?Encoded_Instruction.Length_Type, ne
         .recursion_ptr = null,
         .next_slot = null,
         .encoding_len = encoding_len,
-        .next_insn_loaded = next_insn_loaded,
+        .flags = flags,
     };
 }
 
@@ -44,7 +51,12 @@ pub fn finish(cycle: *Cycle) void {
     }
 
     switch (cycle.signals.ll_src) {
-        .zero, .translation_info_l, .stat, .iw_ik_ij_zx, .pipeline => {},
+        .zero, .translation_info_l, .stat, .pipeline => {},
+        .iw_ik_ij_zx => {
+            cycle.validate_ij();
+            cycle.validate_ik();
+            cycle.validate_iw();
+        },
         .compute_l => cycle.validate_compute_mode(null),
         .d        => cycle.validate_bus_read(.word),
         .d8_sx    => cycle.validate_bus_read(.byte),
@@ -56,6 +68,30 @@ pub fn finish(cycle: *Cycle) void {
         .d_sx => if (cycle.signals.ll_src != .d) cycle.warn("Expected LL source to be d when LH source is d_sx", .{}),
         .d8_sx => if (cycle.signals.ll_src != .d8_sx) cycle.warn("Expected LL source to be d8_sx when LH source is d8_sx", .{}),
         _ => cycle.warn("Unrecognized LH source", .{}),
+    }
+
+    switch (cycle.signals.jl_src) {
+        .zero, .sr1l, .sr2l => {},
+        .jrl => cycle.validate_ij(),
+    }
+
+    switch (cycle.signals.jh_src) {
+        .zero, .sr1h, .sr2h, .neg_one => {},
+        .jrh, .jrl_sx => cycle.validate_ij(),
+        _ => {},
+    }
+
+    switch (cycle.signals.k_src) {
+        .zero, .literal_sx, .sr1l, .sr2l => {},
+        .kr, .ik_bit, .ik_zx => cycle.validate_ik(),
+        .ij_ik_zx => {
+            cycle.validate_ij();
+            cycle.validate_ik();
+        },
+    }
+
+    if (cycle.signals.reg_write != .no_write) {
+        cycle.validate_iw();
     }
 
     if (cycle.signals.sr1_wsrc == .rsn_sr1 and !cycle.is_set(.sr1_ri)) {
@@ -75,6 +111,7 @@ pub fn finish(cycle: *Cycle) void {
     switch (cycle.signals.stat_op) {
         .hold,
         .load_zncv,
+        .load_zncvka,
         .clear_a, .set_a,
         .zn_16, .zn_16_no_set_z,
         .zn_32, .zn_32_no_set_z,
@@ -84,11 +121,13 @@ pub fn finish(cycle: *Cycle) void {
         .zn_32__c_from_shift, .zn_32_no_set_z__c_from_shift => cycle.validate_compute_mode(.shift),
 
         .zncv_from_arith, .zncv_from_arith_no_set_z => cycle.validate_compute_mode(.alu),
+
+        _ => {},
     }
 
     switch (cycle.signals.seq_op) {
         .next_instruction, .fault_return => {
-            cycle.next_insn_loaded = false;
+            cycle.flags.remove(.next_insn_loaded);
             if (cycle.recursion_ptr != null) {
                 cycle.warn("next() is not allowed when decoding/executing a new instruction", .{});
             }
@@ -102,14 +141,27 @@ pub fn finish(cycle: *Cycle) void {
         cycle.warn("Expected allow_int when seq_op is .next_instruction", .{});
     }
 
-    if (cycle.signals.ij_op == .from_continuation and ! cycle.is_set(.c_ij)) {
+    if (cycle.signals.ij_op == .from_continuation and !cycle.is_set(.c_ij)) {
         cycle.warn(".c_ij must be set when .ij_op is .from_continuation", .{});
     }
-    if (cycle.signals.ik_op == .from_continuation and ! cycle.is_set(.c_ik)) {
+    if (cycle.signals.ik_op == .from_continuation and !cycle.is_set(.c_ik)) {
         cycle.warn(".c_ik must be set when .ik_op is .from_continuation", .{});
     }
-    if (cycle.signals.iw_op == .from_continuation and ! cycle.is_set(.c_iw)) {
+    if (cycle.signals.iw_op == .from_continuation and !cycle.is_set(.c_iw)) {
         cycle.warn(".c_iw must be set when .iw_op is .from_continuation", .{});
+    }
+
+    switch (cycle.signals.ij_op) {
+        .from_continuation, .from_decode => cycle.flags.insert(.ij_valid),
+        .hold, .xor1 => {},
+    }
+    switch (cycle.signals.ik_op) {
+        .from_continuation, .from_decode => cycle.flags.insert(.ik_valid),
+        .hold, .xor1 => {},
+    }
+    switch (cycle.signals.iw_op) {
+        .from_continuation, .from_decode => cycle.flags.insert(.iw_valid),
+        .hold, .xor1 => {},
     }
 
     if (!cycle.is_set(.unit)) cycle.set_control_signal(.unit, .count);
@@ -133,6 +185,22 @@ fn is_set(cycle: *Cycle, signal: Control_Signal) bool {
 fn ensure_set(cycle: *Cycle, signal: Control_Signal) void {
     if (!cycle.is_set(signal)) {
         cycle.warn("Expected {s} to be assigned", .{ @tagName(signal) });
+    }
+}
+
+fn validate_ij(cycle: *Cycle) void {
+    if (!cycle.flags.contains(.ij_valid)) {
+        cycle.warn("IJ is undefined for this cycle!", .{});
+    }
+}
+fn validate_ik(cycle: *Cycle) void {
+    if (!cycle.flags.contains(.ik_valid)) {
+        cycle.warn("IK is undefined for this cycle!", .{});
+    }
+}
+fn validate_iw(cycle: *Cycle) void {
+    if (!cycle.flags.contains(.iw_valid)) {
+        cycle.warn("IW is undefined for this cycle!", .{});
     }
 }
 
@@ -258,7 +326,7 @@ fn set_control_signal(c: *Cycle, comptime signal: Control_Signal, raw_value: any
     switch (signal) {
         .bus_dir => if (value == .read_to_dr) {
             // if this was for a load_next_insn() then this will be overwritten after set_control_signal returns.
-            c.next_insn_loaded = false; 
+            c.flags.remove(.next_insn_loaded);
         },
         else => {},
     }
@@ -904,9 +972,11 @@ pub fn sr2_to_sr2(c: *Cycle, src_index: Control_Signals.SR2_Index, dest_index: C
     c.set_control_signal(.sr2_wsrc, .sr2);
 }
 
-pub fn ll_to_stat(c: *Cycle) void {
-    // TODO do we need to be able to load KA flags for fault return?
+pub fn ll_to_stat_zncv(c: *Cycle) void {
     c.set_control_signal(.stat_op, .load_zncv);
+}
+pub fn ll_to_stat_zncvka(c: *Cycle) void {
+    c.set_control_signal(.stat_op, .load_zncvka);
 }
 
 pub fn zn_flags_from_l(c: *Cycle, freshness: Freshness) void {
@@ -1245,11 +1315,11 @@ pub fn load_next_insn(c: *Cycle) void {
 }
 
 pub fn assume_next_insn_loaded(c: *Cycle) void {
-    c.next_insn_loaded = true;
+    c.flags.insert(.next_insn_loaded);
 }
 
 pub fn exec_next_insn(c: *Cycle) void {
-    if (!c.next_insn_loaded) {
+    if (!c.flags.contains(.next_insn_loaded)) {
         c.warn("Cycle executes next instruction, but it has not been loaded yet, or has been clobbered", .{});
     }
 
@@ -1322,6 +1392,16 @@ pub fn decode_dr_to_ik(c: *Cycle, id_mode: Control_Signals.ID_Mode) void {
 pub fn decode_dr_to_iw(c: *Cycle, id_mode: Control_Signals.ID_Mode) void {
     c.set_control_signal(.id_mode, id_mode);
     c.set_control_signal(.iw_op, .from_decode);
+}
+
+pub fn assume_ij_valid(c: *Cycle) void {
+    c.flags.insert(.ij_valid);
+}
+pub fn assume_ik_valid(c: *Cycle) void {
+    c.flags.insert(.ik_valid);
+}
+pub fn assume_iw_valid(c: *Cycle) void {
+    c.flags.insert(.iw_valid);
 }
 
 pub fn next(c: *Cycle, func: *const anyopaque) void {

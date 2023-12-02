@@ -29,7 +29,7 @@ pub const Index = enum (u4) {
         return @intFromEnum(self);
     }
     pub const Raw = std.meta.Tag(Index);
-    pub const count = std.math.maxInt(Index) + 1;
+    pub const count = std.math.maxInt(Raw) + 1;
 };
 
 const Parameter = @This();

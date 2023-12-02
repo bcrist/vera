@@ -13,12 +13,12 @@ pub fn main() !void {
     var temp = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
 
-    var pd: arch.isa.Instruction_Encoding.Parser_Data = .{
-        .data_allocator = arena.allocator(),
-        .temp_allocator = gpa.allocator(),
+    var pd: arch.isa.read_database.Parser_Data = .{
+        .arena = arena.allocator(),
+        .temp = gpa.allocator(),
     };
 
-    const edb = try arch.isa.Encoding_Database.init(&pd, ""); // TODO
+    const edb = try arch.isa.read_database.parse_encoding_db(&pd, ""); // TODO
 
     var a = Assembler.init(gpa.allocator(), arena.allocator(), edb);
 

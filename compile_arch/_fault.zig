@@ -22,14 +22,14 @@ pub const instructions = .{
         pub fn restore_stat(c: *Cycle) void {
             c.reload_asn();
             c.sr_to_l(.fault_rsn_stat);
-            c.ll_to_stat();
+            c.ll_to_stat_zncvka();
             c.next(restore_ij_ik_iw);
         }
 
         pub fn restore_ij_ik_iw(c: *Cycle) void {
             c.sr_to_l(.int_rsn_fault_iw_ik_ij);
             c.ll_to_dr();
-            c.decode_dr_to_ij_ik_iw(.alt); // TODO alt decoding
+            c.decode_dr_to_ij_ik_iw(.alt);
             c.next(restore_dr_and_retry);
         }
 
@@ -64,6 +64,7 @@ pub const instructions = .{
         };
         pub const ij = Reg(.src);
         pub const ik = Reg(.registerset);
+        pub const iw: u4 = 0;
 
         const LDRS = @This();
 
@@ -325,6 +326,7 @@ pub const instructions = .{
             opcodes.Lo12.switch_to_registerset,
             Encoder.shifted(12, Reg(.reg)),
         };
+        pub const ij = Reg(.reg);
 
         pub fn entry(c: *Cycle, flags: Flags) void {
             if (!flags.kernel()) return c.illegal_instruction();
@@ -376,6 +378,9 @@ fn Fault_Handler(comptime handler: hw.microcode.Slot) type {
         }
 
         pub fn store_ij_ik_iw(c: *Cycle) void {
+            c.assume_ij_valid();
+            c.assume_ik_valid();
+            c.assume_iw_valid();
             c.srh_to_lh(.int_rsn_fault_iw_ik_ij);
             c.iw_ik_ij_zx_to_ll();
             c.l_to_sr(.int_rsn_fault_iw_ik_ij);

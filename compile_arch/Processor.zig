@@ -3,6 +3,7 @@ temp: *TempAllocator,
 microcode: Microcode_Builder,
 decode_rom: Decode_ROM_Builder,
 encoding_list: std.ArrayList(isa.Instruction_Encoding),
+transform_list: std.ArrayList(isa.Instruction_Transform),
 
 pub fn init(gpa: std.mem.Allocator, arena: std.mem.Allocator, temp: *TempAllocator) Processor {
     return .{
@@ -11,6 +12,7 @@ pub fn init(gpa: std.mem.Allocator, arena: std.mem.Allocator, temp: *TempAllocat
         .microcode = Microcode_Builder.init(gpa),
         .decode_rom = Decode_ROM_Builder.init(gpa),
         .encoding_list = std.ArrayList(isa.Instruction_Encoding).init(gpa),
+        .transform_list = std.ArrayList(isa.Instruction_Transform).init(gpa),
     };
 }
 
@@ -27,6 +29,62 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
             log.debug("Beginning processing of {s}:\n    {}", .{ @typeName(Struct), Struct.slot });
         } else {
             log.debug("Beginning processing of {s}", .{ @typeName(Struct) });
+        }
+
+        if (@hasDecl(Struct, "transformed")) {
+            var transformed_parser = Spec_Parser.init(alloc, Struct.transformed);
+            const dest = transformed_parser.next().?;
+            const dest_signature = self.finalize_instruction_signature(dest.signature);
+            const dest_constant_values = self.convert_constraints_to_constant_values(dest);
+            const raw_src_constraints = if (@hasDecl(Struct, "constraints")) comptime resolve_constraints(Struct.constraints) else &.{};
+            const raw_transforms = if (@hasDecl(Struct, "conversions")) comptime resolve_transforms(Struct.conversions) else &.{};
+
+            for (dest.encoders) |encoder| {
+                const placeholder = encoder.value.placeholder.name;
+                for (raw_transforms) |transform| {
+                    if (std.mem.eql(u8, transform.dest.name, placeholder)) {
+                        break;
+                    }
+                } else {
+                    // maybe it would be better to automatically create a conversion for the same name and with no ops instead?
+                    std.debug.panic("Transformed placeholder '{s}' does not have an associated conversion", .{ placeholder });
+                }
+            }
+
+            var parser = Spec_Parser.init(alloc, Struct.spec);
+            while (parser.next()) |parsed| {
+                const src_signature = self.finalize_instruction_signature(parsed.signature);
+                const src_constraints = self.arena.dupe(Constraint, raw_src_constraints) catch @panic("OOM");
+                for (src_constraints) |*constraint| {
+                    fixup_placeholder_value(&constraint.left, parsed.encoders);
+                    fixup_placeholder_value(&constraint.right, parsed.encoders);
+                }
+                const transforms = self.arena.dupe(Transform, raw_transforms) catch @panic("OOM");
+                for (transforms) |*transform| {
+                    fixup_placeholder_info(&transform.src, parsed.encoders);
+                    fixup_placeholder_info(&transform.dest, dest.encoders);
+                }
+                for (parsed.encoders) |encoder| {
+                    const placeholder = encoder.value.placeholder.name;
+                    for (raw_transforms) |transform| {
+                        if (std.mem.eql(u8, transform.dest.name, placeholder)) {
+                            break;
+                        }
+                    } else {
+                        std.debug.panic("Source placeholder '{s}' does not have an associated conversion", .{ placeholder });
+                    }
+                }
+                self.transform_list.append(.{
+                    .src_signature = src_signature,
+                    .src_constraints = src_constraints,
+                    .dest_signature = dest_signature,
+                    .dest_constant_values = dest_constant_values,
+                    .transforms = transforms,
+                }) catch @panic("OOM");
+            }
+
+            std.debug.assert(transformed_parser.next() == null);
+            continue;
         }
 
         var lookup = Slot_Info.Lookup.init(alloc);
@@ -57,27 +115,12 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
                 var parser = Spec_Parser.init(alloc, Struct.spec);
                 while (parser.next()) |parsed| {
                     const encoders = encoders_fn(alloc, parsed.signature);
-                    // for (encoders) |encoder| {
-                    //     log.debug("Encoder: {any}", .{ encoder });
-                    // }
                     const ij_encoders = ij_fn(alloc, parsed.signature);
-                    // for (ij_encoders) |ij_encoder| {
-                    //     log.debug("IJ: {any}", .{ ij_encoder });
-                    // }
                     const ik_encoders = ik_fn(alloc, parsed.signature);
-                    // for (ik_encoders) |ik_encoder| {
-                    //     log.debug("IK: {any}", .{ ik_encoder });
-                    // }
                     const iw_encoders = iw_fn(alloc, parsed.signature);
-                    // for (iw_encoders) |iw_encoder| {
-                    //     log.debug("IW: {any}", .{ iw_encoder });
-                    // }
 
-                    self.process_instruction(&Struct.entry, .{
-                        .signature = parsed.signature,
-                        .encoding_len = encoding_length(encoders),
-                        .next_insn_loaded = false,
-                    }, constraints, encoders, ij_encoders, ik_encoders, iw_encoders, id_mode, &lookup);
+                    self.process_instruction(&Struct.entry, parsed.signature, constraints,
+                        encoders, ij_encoders, ik_encoders, iw_encoders, id_mode, &lookup);
 
                     self.encoding_list.append(self.finalize_encoding(parsed, constraints, encoders)) catch @panic("OOM");
                 }
@@ -87,18 +130,23 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
                 const ik_encoders = ik_fn(alloc, null);
                 const iw_encoders = iw_fn(alloc, null);
                 self.process_instruction(&Struct.entry, null, constraints,
-                    encoders, ij_encoders, ik_encoders, iw_encoders,
-                    id_mode, &lookup);
+                    encoders, ij_encoders, ik_encoders, iw_encoders, id_mode, &lookup);
             }
         } else if (@hasDecl(Struct, "slot")) {
-            const slot_handle = Microcode_Processor.process(.{
+            const result = Microcode_Processor.process(.{
                 .processor = self,
                 .ptr = &Struct.entry,
-                .ctx = null,
+                .ctx = .{
+                    .allocator = self.temp.allocator(),
+                    .cycle_flags = Cycle_Flag_Set.initEmpty(),
+                    .initial_word_encoding = null,
+                    .signature = null,
+                    .encoding_len = null,
+                },
                 .slot = .{ .exact = Struct.slot },
                 .lookup = &lookup,
             });
-            self.resolve_cycles(slot_handle, &lookup);
+            self.resolve_cycles(result.slot_handle, &lookup);
         } else {
             @compileLog(Struct);
             @compileError("Expected either encoding or slot declaration");
@@ -109,7 +157,7 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
 fn process_instruction(
     self: *Processor,
     entry_fn: *const anyopaque,
-    maybe_ctx: ?Slot_Info.Impl_Context,
+    signature: ?isa.Instruction_Signature,
     constraints: []const Constraint,
     encoders: []const Encoder,
     ij_encoders: []const Encoder,
@@ -118,17 +166,38 @@ fn process_instruction(
     id_mode: hw.Control_Signals.ID_Mode,
     lookup: *Slot_Info.Lookup,
 ) void {
-    const slot_handle = Microcode_Processor.process(.{
-        .processor = self,
-        .ptr = entry_fn,
-        .ctx = maybe_ctx,
-        .slot = .{ .forced_bits = 0 },
-        .lookup = lookup,
-    });
-    self.resolve_cycles(slot_handle, lookup);
+    var cycle_flags = Cycle_Flag_Set.initEmpty();
+    if (ij_encoders.len > 0) cycle_flags.insert(.ij_valid);
+    if (ik_encoders.len > 0) cycle_flags.insert(.ik_valid);
+    if (iw_encoders.len > 0) cycle_flags.insert(.iw_valid);
 
+    var encoding_len = if (signature == null) null else encoding_length(encoders);
+
+    var maybe_slot_handle: ?Slot_Data.Handle = null;
     var iter = Initial_Word_Encoding_Iterator.init(self.temp.allocator(), constraints, encoders, id_mode);
     while (iter.next()) |base_addr| {
+        const slot_handle = maybe_slot_handle orelse handle: {
+            const result = Microcode_Processor.process(.{
+                .processor = self,
+                .ptr = entry_fn,
+                .ctx = .{
+                    .allocator = self.temp.allocator(),
+                    .cycle_flags = cycle_flags,
+                    .initial_word_encoding = &iter,
+                    .signature = signature,
+                    .encoding_len = encoding_len,
+                },
+                .slot = .{ .forced_bits = 0 },
+                .lookup = lookup,
+            });
+            self.resolve_cycles(result.slot_handle, lookup);
+
+            if (!result.uses_placeholders) {
+                maybe_slot_handle = result.slot_handle;
+            }
+            break :handle result.slot_handle;
+        };
+
         const entry: Decode_ROM_Builder.Entry = .{
             .slot_handle = slot_handle,
             .ij = hw.IJ.init(@intCast(iter.encode(ij_encoders, "IJ"))),
@@ -143,6 +212,50 @@ fn process_instruction(
         while (undefined_bits_iter.next()) |addr| {
             self.decode_rom.add_entry(addr, entry);
         }
+    }
+}
+
+fn resolve_transforms(comptime transforms: anytype) []const Transform {
+    switch (@typeInfo(@TypeOf(transforms))) {
+        .Struct => |info| if (info.is_tuple) {
+            comptime var out: [transforms.len]Transform = undefined;
+            inline for (transforms, &out) |in, *transform| {
+                transform.* = comptime resolve_single_transform(in);
+            }
+            return &out;
+        },
+        else => {},
+    }
+
+    return &.{ resolve_single_transform(transforms) };
+}
+
+fn resolve_single_transform(comptime transform: anytype) Transform {
+    const T = @TypeOf(transform);
+    if (T == Transform) return transform;
+    switch (@typeInfo(T)) {
+        .Struct => |info| {
+            std.debug.assert(info.is_tuple);
+            std.debug.assert(transform.len >= 2);
+            comptime var ops: [transform.len - 2]Instruction_Transform.Op = undefined;
+            inline for (2..transform.len) |i| {
+                ops[i - 2] = transform[i];
+            }
+            return .{
+                .src = .{
+                    .index = .invalid,
+                    .kind = .param_constant,
+                    .name = @tagName(transform[0]),
+                },
+                .dest = .{
+                    .index = .invalid,
+                    .kind = .param_constant,
+                    .name = @tagName(transform[1]),
+                },
+                .ops = &ops,
+            };
+        },
+        else => @compileError("Expected .{ src, dest, ops... } or Transform"),
     }
 }
 
@@ -305,8 +418,15 @@ pub const Initial_Word_Encoding_Iterator = struct {
         const out = allocator.alloc(Encoder.Value_Iterator, encoders.len) catch @panic("OOM");
         var undefined_bits = ~@as(hw.D.Raw, 0);
         var n: usize = 0;
-        for (encoders) |*encoder| {
-            const encoder_bits: hw.D.Raw = @truncate(encoder.bit_mask());
+        for (encoders, 0..) |*encoder, i| {
+            const mask = encoder.bit_mask();
+            for (encoders[0..i], 0..) |other_encoder, j| {
+                if ((mask & other_encoder.bit_mask()) != 0) {
+                    std.debug.panic("Encoder #{}'s bit mask overlaps with encoder #{}", .{ i, j });
+                }
+            }
+
+            const encoder_bits: hw.D.Raw = @truncate(mask);
             undefined_bits &= ~encoder_bits;
 
             if (encoder.bit_offset < @bitSizeOf(hw.D)) {
@@ -467,16 +587,23 @@ pub const Microcode_Processor = struct {
     processor: *Processor,
     prev: ?*const Microcode_Processor = null,
     ptr: *const anyopaque,
-    ctx: ?Slot_Info.Impl_Context,
+    ctx: Slot_Info.Impl_Context,
     slot: Slot_Location,
     lookup: *Slot_Info.Lookup,
 
-    pub fn process(self: Microcode_Processor) Slot_Data.Handle {
+    pub const Result = struct {
+        slot_handle: Slot_Data.Handle,
+        uses_placeholders: bool,
+    };
+
+    pub fn process(self: Microcode_Processor) Result {
         const gop = self.lookup.getOrPut(self.ptr) catch @panic("Microcode function not found");
         if (!gop.found_existing) @panic("Found c.next() for a function not puplicly visible within the instruction struct");
-        const cycles = gop.value_ptr.impl(self.processor.temp.allocator(), self.ctx);
+        const slot_info = gop.value_ptr.*;
+        const cycles = slot_info.impl(self.ctx);
         log.debug("Processed microcode function {s}", .{ cycles[0].func_name });
 
+        var uses_placeholders = slot_info.uses_placeholders;
         var cycle_recursion_ptrs: [hw.microcode.Address.count_per_slot]?*const anyopaque = undefined;
         var slot_data: Slot_Data = undefined;
         slot_data.slot = self.slot;
@@ -501,10 +628,8 @@ pub const Microcode_Processor = struct {
                         }
                     } else {
                         var ctx = self.ctx;
-                        if (ctx != null) {
-                            ctx.?.next_insn_loaded = cycle.next_insn_loaded;
-                        }
-                        const next = Microcode_Processor.process(.{
+                        ctx.cycle_flags = cycle.flags;
+                        const result = Microcode_Processor.process(.{
                             .processor = self.processor,
                             .prev = &self,
                             .ptr = next_ptr,
@@ -512,9 +637,10 @@ pub const Microcode_Processor = struct {
                             .slot = Slot_Location.for_continuation(cycle.signals),
                             .lookup = self.lookup,
                         });
-                        cycle.next_slot = next;
+                        if (result.uses_placeholders) uses_placeholders = true;
+                        cycle.next_slot = result.slot_handle;
                         cycle.recursion_ptr = null;
-                        if (slot_data.acyclic and !self.processor.microcode.slot_data.items[@intFromEnum(next)].acyclic) {
+                        if (slot_data.acyclic and !self.processor.microcode.slot_data.items[result.slot_handle.raw()].acyclic) {
                             slot_data.acyclic = false;
                         }
                     }
@@ -529,7 +655,10 @@ pub const Microcode_Processor = struct {
 
         const slot_handle = self.processor.microcode.intern_slot_data(slot_data);
         gop.value_ptr.slot = slot_handle;
-        return slot_handle;
+        return .{
+            .slot_handle = slot_handle,
+            .uses_placeholders = uses_placeholders,
+        };
     }
 
     // returns true if `needle` is a pointer to a function that's already been processed,
@@ -547,15 +676,18 @@ pub const Microcode_Processor = struct {
 
 pub const Slot_Info = struct {
     impl: Impl,
+    uses_placeholders: bool,
     slot: Slot_Data.Handle, // filled in by build_microcode
 
     pub const Lookup = std.AutoHashMap(*const anyopaque, Slot_Info);
 
-    pub const Impl = *const fn (allocator: std.mem.Allocator, ctx: ?Impl_Context) []Cycle;
+    pub const Impl = *const fn (ctx: Impl_Context) []Cycle;
     pub const Impl_Context = struct {
-        signature: isa.Instruction_Signature,
-        encoding_len: Encoded_Instruction.Length_Type,
-        next_insn_loaded: bool,
+        allocator: std.mem.Allocator,
+        cycle_flags: Cycle_Flag_Set,
+        initial_word_encoding: ?*const Initial_Word_Encoding_Iterator,
+        signature: ?isa.Instruction_Signature,
+        encoding_len: ?Encoded_Instruction.Length_Type,
     };
 
     pub fn init(comptime func: anytype, comptime name: []const u8) Slot_Info {
@@ -564,36 +696,38 @@ pub const Slot_Info = struct {
         const params = @typeInfo(Func).Fn.params;
 
         comptime var has_flags = false;
+        comptime var uses_placeholders = false;
         inline for (params) |arg| {
-            if (arg.type.? == hw.microcode.Flags) {
+            const Arg = arg.type.?;
+            if (Arg == hw.microcode.Flags) {
                 has_flags = true;
+            } else if (@typeInfo(Arg) == .Struct and @hasDecl(Arg, "placeholder")) {
+                uses_placeholders = true;
             }
         }
 
         const temp = struct {
-            pub fn unconditional(allocator: std.mem.Allocator, ctx: ?Impl_Context) []Cycle {
-                const cycle = allocator.create(Cycle) catch @panic("OOM");
-                const encoding_len = if (ctx) |c| c.encoding_len else null;
-                const next_insn_loaded = if (ctx) |c| c.next_insn_loaded else false;
-                cycle.* = Cycle.init(name, encoding_len, next_insn_loaded);
+            pub fn unconditional(ctx: Impl_Context) []Cycle {
+                const cycle = ctx.allocator.create(Cycle) catch @panic("OOM");
+                const encoding_len = if (ctx.encoding_len) |len| len else null;
+                cycle.* = Cycle.init(name, encoding_len, ctx.cycle_flags);
                 @call(.auto, func, build_args(cycle, hw.microcode.Flags.init(0), ctx));
                 cycle.finish();
                 return @as(*[1]Cycle, cycle);
             }
 
-            pub fn conditional(allocator: std.mem.Allocator, ctx: ?Impl_Context) []Cycle {
-                const cycles = allocator.alloc(Cycle, hw.microcode.Address.count_per_slot) catch @panic("OOM");
-                const encoding_len = if (ctx) |c| c.encoding_len else null;
-                const next_insn_loaded = if (ctx) |c| c.next_insn_loaded else false;
+            pub fn conditional(ctx: Impl_Context) []Cycle {
+                const cycles = ctx.allocator.alloc(Cycle, hw.microcode.Address.count_per_slot) catch @panic("OOM");
+                const encoding_len = if (ctx.encoding_len) |len| len else null;
                 for (cycles, 0..) |*cycle, raw_flags| {
-                    cycle.* = Cycle.init(name, encoding_len, next_insn_loaded);
+                    cycle.* = Cycle.init(name, encoding_len, ctx.cycle_flags);
                     @call(.auto, func, build_args(cycle, hw.microcode.Flags.init(@intCast(raw_flags)), ctx));
                     cycle.finish();
                 }
                 return cycles;
             }
 
-            fn build_args(cycle: *Cycle, flags: hw.microcode.Flags, ctx: ?Impl_Context) Args {
+            fn build_args(cycle: *Cycle, flags: hw.microcode.Flags, ctx: Impl_Context) Args {
                 var args: Args = undefined;
                 inline for (&args) |*a| {
                     const Arg = @TypeOf(a.*);
@@ -602,18 +736,23 @@ pub const Slot_Info = struct {
                     } else if (Arg == hw.microcode.Flags) {
                         a.* = flags;
                     } else if (Arg == isa.Instruction_Signature) {
-                        a.* = ctx.?.signature;
+                        a.* = ctx.signature.?;
                     } else if (Arg == isa.Mnemonic) {
-                        a.* = ctx.?.signature.mnemonic;
+                        a.* = ctx.signature.?.mnemonic;
                     } else if (Arg == isa.Mnemonic_Suffix) {
-                        a.* = ctx.?.signature.suffix;
+                        a.* = ctx.signature.?.suffix;
                     } else if (Arg == []const isa.Parameter.Signature) {
-                        a.* = ctx.?.signature.params;
-                    } else switch (@typeInfo(Arg)) {
-                        else => {
-                            @compileLog(Arg);
-                            @compileError("Unsupported argument for microcode function");
-                        },
+                        a.* = ctx.signature.?.params;
+                    } else {
+                        if (ctx.initial_word_encoding) |encoding| {
+                            if (encoding.value(Arg.placeholder)) |value| {
+                                a.* = Arg { .value = value };
+                            } else {
+                                std.debug.panic("Placeholder {s} is not found within the initial word of this instruction's encoding", .{ Arg.placeholder });
+                            }
+                        } else {
+                            std.debug.panic("Placeholder {s} is not available because this microcode sequence doesn't have an associated encoding", .{ Arg.placeholder });
+                        }
                     }
                 }
                 return args;
@@ -621,8 +760,9 @@ pub const Slot_Info = struct {
         };
 
         return .{
-            .slot = undefined,
             .impl = if (has_flags) &temp.conditional else &temp.unconditional,
+            .uses_placeholders = uses_placeholders,
+            .slot = undefined,
         };
     }
 };
@@ -663,30 +803,37 @@ fn finalize_encoding(self: *Processor, parsed: Instruction_Encoding, constraints
         }
     }
 
-    const final_param_signatures = self.arena.dupe(isa.Parameter.Signature, parsed.signature.params) catch @panic("OOM");
-
     return .{
-        .signature = .{
-            .mnemonic = parsed.signature.mnemonic,
-            .suffix = parsed.signature.suffix,
-            .params = final_param_signatures,
-        },
+        .signature = self.finalize_instruction_signature(parsed.signature),
         .constraints = final_constraints,
         .encoders = final_encoders,
+    };
+}
+
+fn finalize_instruction_signature(self: *Processor, signature: Instruction_Signature) Instruction_Signature {
+    const final_param_signatures = self.arena.dupe(isa.Parameter.Signature, signature.params) catch @panic("OOM");
+    return .{
+        .mnemonic = signature.mnemonic,
+        .suffix = signature.suffix,
+        .params = final_param_signatures,
     };
 }
 
 fn fixup_placeholder_value(value: *Value, parsed_encoders: []const Encoder) void {
     switch (value.*) {
         .constant => {},
-        .placeholder => |*info| if (info.index == .invalid) {
-            if (find_placeholder_info(info.name, parsed_encoders)) |parsed_info| {
-                info.index = parsed_info.index;
-                info.kind = parsed_info.kind;
-            } else {
-                std.debug.panic("Encoder {s} not found in parsed instruction", .{ info.name });
-            }
-        },
+        .placeholder => |*info| fixup_placeholder_info(info, parsed_encoders),
+    }
+}
+
+fn fixup_placeholder_info(info: *Placeholder_Info, parsed_encoders: []const Encoder) void {
+    if (info.index == .invalid) {
+        if (find_placeholder_info(info.name, parsed_encoders)) |parsed_info| {
+            info.index = parsed_info.index;
+            info.kind = parsed_info.kind;
+        } else {
+            std.debug.panic("Encoder {s} not found in parsed instruction", .{ info.name });
+        }
     }
 }
 
@@ -716,19 +863,40 @@ fn is_placeholder(needle: []const u8, value: Value) bool {
     };
 }
 
+/// Note this only works with .equal constraints where the left is a placeholder and the right is a constant,
+/// such as those that are generated by Spec_Parser for hardcoded numbers that can't be encoded in the instruction signature.
+fn convert_constraints_to_constant_values(self: *Processor, parsed: Instruction_Encoding) []const Constant_Value {
+    const constant_values = self.arena.alloc(Constant_Value, parsed.constraints.len) catch @panic("OOM");
+    for (parsed.constraints, constant_values) |constraint, *value| {
+        std.debug.assert(constraint.kind == .equal);
+        value.* = .{
+            .placeholder = constraint.left.placeholder,
+            .constant = constraint.right.constant,
+        };
+        fixup_placeholder_info(&value.placeholder, parsed.encoders);
+    }
+    return constant_values;
+}
+
 const log = std.log.scoped(.compile_arch);
 
 const Processor = @This();
 const Spec_Parser = @import("Spec_Parser.zig");
+const Cycle_Flag_Set = std.EnumSet(Cycle.Cycle_Flags);
 const Cycle = @import("Cycle.zig");
 const Slot_Data = Microcode_Builder.Slot_Data;
 const Slot_Location = Microcode_Builder.Slot_Location;
 const Microcode_Builder = @import("Microcode_Builder.zig");
 const Decode_ROM_Builder = @import("Decode_ROM_Builder.zig");
+const Transform = Instruction_Transform.Transform;
+const Constant_Value = Instruction_Transform.Constant_Value;
+const Instruction_Transform = isa.Instruction_Transform;
 const Value = Instruction_Encoding.Value;
 const Constraint = Instruction_Encoding.Constraint;
+const Placeholder_Info = Instruction_Encoding.Placeholder_Info;
 const Encoder = Instruction_Encoding.Encoder;
 const Instruction_Encoding = isa.Instruction_Encoding;
+const Instruction_Signature = isa.Instruction_Signature;
 const Encoded_Instruction = isa.Encoded_Instruction;
 const isa = arch.isa;
 const hw = arch.hw;

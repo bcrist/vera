@@ -1,3 +1,5 @@
+[assembler/design] is it impossible to replace `SUBB $a, imm` with `ADDC $a, ~imm`?  Is this a reason to prefer SUBC over SUBB?  How would this affect conditional instructions?
+[assembler] single-byte instructions will still be loaded using a word width; need to adjust page alignment error detection to account for this
 [assembler] CLI
 [assembler] Consider allowing things that expect constant expressions to also accept absolute addresses (.db/.dw/.dd, length casts, etc.)
 [assembler] Don't allow branches across .push/.pop boundaries
@@ -22,7 +24,6 @@
 [compile_arch] HTML instruction documentation with "disassembly" of control signals
 [compile_arch] HTML instruction opcode table
 [compile_arch] cycle_builder.branch(): check that either base is .zero, or RSN is not being loaded this cycle
-[compile_arch] Add more cycle validation in cycle_builder.finish()
 
 [microsim] Memory view - raw (may open multiple for different locations)
 [microsim] disassembly view of memory around IP
@@ -34,8 +35,6 @@
 [microsim] Error console - Access to invalid memory, Faults
 [microsim] Improve SST39VF802C emulation accuracy in memory.zig (timing, status polling, IDs, write protection, etc.)
 
-[design] Consider 4-stage pipeline - decode, setup, compute, transact - https://docs.google.com/spreadsheets/d/1_xl9B7BJLWpqTMbn8he2iQ_lS243-ZuMIOb7IzA7xuk/edit#gid=1349858639
-[design] Add bit to address translator entries? - allow pages to disallow kernel access - extra layer of protection to avoid kernel accidentally running user code with privilege.
 [design] Consider Shifter overflow flag - if any shifted out bits differ from the last bit that wasn't shifted out
 [design] Consider removing wait states
 [design] count zeroes with mask instruction?

@@ -60,7 +60,7 @@ pub fn print(self: Error, a: *Assembler, writer: anytype) !void {
         try isa.print.print_instruction(insn, address, writer);
         try writer.writeByte('\n');
 
-        var iter = a.edb.similar_encodings(insn);
+        var iter = a.edb.similar_encodings(insn, 10);
         var first_alternative = true;
         if (iter.next()) |enc| {
             if (first_alternative) {

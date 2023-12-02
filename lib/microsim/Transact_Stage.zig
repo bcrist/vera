@@ -283,6 +283,15 @@ fn simulate_status_register(in: Transact_Stage, out: *Decode_Stage, l: hw.L) voi
             out.stat_v = ll_bits.v;
             out.stat_c = ll_bits.c;
         },
+        .load_zncvka => {
+            const ll_bits = hw.Status.init(l.lo.raw());
+            out.stat_z = ll_bits.z;
+            out.stat_n = ll_bits.n;
+            out.stat_v = ll_bits.v;
+            out.stat_c = ll_bits.c;
+            out.stat_k = ll_bits.k;
+            out.stat_a = ll_bits.a;
+        },
         .clear_a => {
             out.stat_a = false;
         },
@@ -337,6 +346,7 @@ fn simulate_status_register(in: Transact_Stage, out: *Decode_Stage, l: hw.L) voi
             out.stat_n = (l.hi.raw() >> 15) == 1;
             out.stat_c = in.shift_c;
         },
+        _ => unreachable,
     }
 }
 

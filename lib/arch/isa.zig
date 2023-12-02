@@ -1,8 +1,11 @@
 pub const Instruction = @import("isa/Instruction.zig");
 pub const Parameter = @import("isa/Parameter.zig");
 pub const Instruction_Encoding = @import("isa/Instruction_Encoding.zig");
+pub const Instruction_Transform = @import("isa/Instruction_Transform.zig");
 pub const Encoding_Database = @import("isa/Encoding_Database.zig");
 pub const Decoding_Database = @import("isa/Decoding_Database.zig");
+pub const read_database = @import("isa/read_database.zig");
+pub const write_database = @import("isa/write_database.zig");
 pub const print = @import("isa/print.zig");
 
 pub const Mnemonic = enum {

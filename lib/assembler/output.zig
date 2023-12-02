@@ -218,7 +218,7 @@ pub fn write_sim_sx(a: *Assembler, temp_alloc: std.mem.Allocator, writer: anytyp
                     try sx_writer.expression("insn");
                     try sx_writer.print_value("{X:0>8}", .{ addresses[l] });
                     try sx_writer.int(lengths[l], 10);
-                    try insn.encoding.write(@TypeOf(writer), &sx_writer, true);
+                    try isa.write_database.write_encoding(@TypeOf(writer), &sx_writer, true, insn.encoding);
                     try write_listing_sx_line_and_source(line_number, source, &sx_writer);
                     try sx_writer.close();
                 },

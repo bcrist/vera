@@ -4,6 +4,9 @@ pub const instructions = .{
         pub const entry = persist_stat;
 
         fn persist_stat(c: *Cycle) void {
+            // N.B. although fault_rsn_stat says it's for fault handlers, we also use it for interrupt handlers.
+            // This is okay because the interrupt handler switches to a different RSN, so it shouldn't be
+            // possible for a fault to happen before IRET is called.
             c.srh_to_lh(.fault_rsn_stat);
             c.stat_to_ll();
             c.l_to_sr(.fault_rsn_stat);
@@ -53,7 +56,7 @@ pub const instructions = .{
         pub fn restore_stat(c: *Cycle) void {
             c.reload_asn();
             c.srl_to_ll(.fault_rsn_stat);
-            c.ll_to_stat();
+            c.ll_to_stat_zncvka();
             c.force_normal_execution(branch);
         }
 

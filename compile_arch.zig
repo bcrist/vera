@@ -22,13 +22,15 @@ pub fn main() !void {
     processor.process(@import("compile_arch/_fault.zig").instructions);
     processor.process(@import("compile_arch/_interrupt.zig").instructions);
     processor.process(@import("compile_arch/_alu.zig").instructions);
-    // processor.process(@import("compile_arch/_copy.zig").instructions);
+    processor.process(@import("compile_arch/_copy.zig").instructions);
     // processor.process(@import("compile_arch/_branch.zig").instructions);
     processor.process(@import("compile_arch/_call.zig").instructions);
     // processor.process(@import("compile_arch/_load_store.zig").instructions);
     // processor.process(@import("compile_arch/_stack.zig").instructions);
     processor.process(@import("compile_arch/_address_translator.zig").instructions);
     // processor.process(@import("compile_arch/_sync.zig").instructions);
+
+    processor.process(@import("compile_arch/_alt.zig").instructions);
 
     processor.microcode.assign_slots();
 
@@ -39,7 +41,7 @@ pub fn main() !void {
         _ = addr;
         if (maybe_cs) |cs| {
             _ = cs;
-            //std.log.warn("{}", .{ addr });
+            //log.warn("{}", .{ addr });
             microcode_address_usage += 1;
         }
     }
@@ -50,7 +52,7 @@ pub fn main() !void {
     const decode = processor.decode_rom.generate_rom_data(gpa.allocator(), &processor.microcode);
     for (0.., decode) |addr, result| {
         if (result.slot != .invalid_instruction) {
-            // std.log.info("{X:0>5}: {any}", .{ addr, result });
+            // log.info("{X:0>5}: {any}", .{ addr, result });
             switch (hw.decode.Address.init(@intCast(addr)).mode) {
                 .normal => normal_decode_usage += 1,
                 .alt => alt_decode_usage += 1,
@@ -58,9 +60,9 @@ pub fn main() !void {
         }
     }
 
-    std.log.info("Microcode Slot Usage: {} ({d:.1}%)", .{ microcode_address_usage / 32, @as(f32, @floatFromInt(microcode_address_usage)) / 1310.72 });
-    std.log.info("Normal Decode Space Usage: {} ({d:.1}%)", .{ normal_decode_usage, @as(f32, @floatFromInt(normal_decode_usage)) / 655.36 });
-    std.log.info("Alt Decode Space Usage: {} ({d:.1}%)", .{ alt_decode_usage, @as(f32, @floatFromInt(alt_decode_usage)) / 655.36 });
+    log.info("Microcode Slot Usage: {} ({d:.1}%)", .{ microcode_address_usage / 32, @as(f32, @floatFromInt(microcode_address_usage)) / 1310.72 });
+    log.info("Normal Decode Space Usage: {} ({d:.1}%)", .{ normal_decode_usage, @as(f32, @floatFromInt(normal_decode_usage)) / 655.36 });
+    log.info("Alt Decode Space Usage: {} ({d:.1}%)", .{ alt_decode_usage, @as(f32, @floatFromInt(alt_decode_usage)) / 655.36 });
 
     // var stdout = std.io.getStdOut().writer();
     // _ = stdout;
@@ -85,42 +87,80 @@ pub fn main() !void {
     // try arch.analyzeControlSignalUsage(&allocators.temp_arena, &.{ .ll_src, .lh_src }, stdout);
 
     {
-        var f = try std.fs.cwd().createFile("lib/arch/isa/instructions.sx", .{});
+        var f = try std.fs.cwd().createFile("lib/arch/isa/database.sx", .{});
         defer f.close();
 
         var writer = sx.writer(gpa.allocator(), f.writer());
         defer writer.deinit();
 
-        for (processor.encoding_list.items) |encoding| {
-            try encoding.write(@TypeOf(writer.inner), &writer, false);
-        }
+        try isa.write_database.write(@TypeOf(writer.inner), &writer, false,
+            processor.transform_list.items,
+            processor.encoding_list.items
+        );
     }
 
-    // var rom_data = try uc_roms.writeCompressedRoms(allocators.temp_arena.allocator(), allocators.temp_arena.allocator(), &arch.microcode);
+    var uc_rom_data = try hw.microcode_roms.write_compressed_roms(gpa.allocator(), temp.allocator(), uc);
+    for (uc_rom_data, 0..) |data, n| {
+        log.info("Microcode ROM {}: {} bytes compressed", .{ n, data.len });
 
-    // for (rom_data, 0..) |data, n| {
-    //     std.debug.print("ROM {}: {} bytes compressed\n", .{ n, data.len });
+        var path_buf: [32]u8 = undefined;
+        var path = try std.fmt.bufPrint(&path_buf, "roms/compressed/microcode_{}", .{ n });
+        if (std.fs.path.dirname(path)) |dir| {
+            try std.fs.cwd().makePath(dir);
+        }
+        var af = try std.fs.cwd().atomicFile(path, .{});
+        defer af.deinit();
+        try af.file.writeAll(data);
+        try af.finish();
+    }
 
-    //     var path_buf: [32]u8 = undefined;
-    //     var path = try std.fmt.bufPrint(&path_buf, "arch/microcode_roms/rom_{}", .{ n });
-    //     var af = try std.fs.cwd().atomicFile(path, .{});
-    //     defer af.deinit();
-    //     try af.file.writeAll(data);
-    //     try af.finish();
-    // }
+    uc_rom_data = try hw.microcode_roms.write_srec_roms(gpa.allocator(), temp.allocator(), uc);
+    for (uc_rom_data, 0..) |data, n| {
+        var path_buf: [32]u8 = undefined;
+        var path = try std.fmt.bufPrint(&path_buf, "roms/srec/microcode_{}.srec", .{ n });
+        if (std.fs.path.dirname(path)) |dir| {
+            try std.fs.cwd().makePath(dir);
+        }
+        var af = try std.fs.cwd().atomicFile(path, .{});
+        defer af.deinit();
+        try af.file.writeAll(data);
+        try af.finish();
+    }
 
-    // rom_data = try uc_roms.writeSRecRoms(allocators.temp_arena.allocator(), allocators.temp_arena.allocator(), &arch.microcode);
-    // for (rom_data, 0..) |data, n| {
-    //     var path_buf: [32]u8 = undefined;
-    //     var path = try std.fmt.bufPrint(&path_buf, "arch/microcode_roms/rom_{}.srec", .{ n });
-    //     var af = try std.fs.cwd().atomicFile(path, .{});
-    //     defer af.deinit();
-    //     try af.file.writeAll(data);
-    //     try af.finish();
-    // }
+    var decode_rom_data = try hw.decode_roms.write_compressed_roms(gpa.allocator(), temp.allocator(), decode);
+    for (decode_rom_data, 0..) |data, n| {
+        log.info("Decode ROM {}: {} bytes compressed", .{ n, data.len });
+
+        var path_buf: [32]u8 = undefined;
+        var path = try std.fmt.bufPrint(&path_buf, "roms/compressed/decode_{}", .{ n });
+        if (std.fs.path.dirname(path)) |dir| {
+            try std.fs.cwd().makePath(dir);
+        }
+        var af = try std.fs.cwd().atomicFile(path, .{});
+        defer af.deinit();
+        try af.file.writeAll(data);
+        try af.finish();
+    }
+
+    decode_rom_data = try hw.decode_roms.write_srec_roms(gpa.allocator(), temp.allocator(), decode);
+    for (decode_rom_data, 0..) |data, n| {
+        var path_buf: [32]u8 = undefined;
+        var path = try std.fmt.bufPrint(&path_buf, "roms/srec/decode_{}.srec", .{ n });
+        if (std.fs.path.dirname(path)) |dir| {
+            try std.fs.cwd().makePath(dir);
+        }
+        var af = try std.fs.cwd().atomicFile(path, .{});
+        defer af.deinit();
+        try af.file.writeAll(data);
+        try af.finish();
+    }
+
 }
 
+const log = std.log.scoped(.compile_arch);
+
 const hw = arch.hw;
+const isa = arch.isa;
 const arch = @import("lib_arch");
 const TempAllocator = @import("TempAllocator");
 const sx = @import("sx");
