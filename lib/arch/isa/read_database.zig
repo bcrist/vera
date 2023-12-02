@@ -1,6 +1,6 @@
 pub fn parse_decoding_db(data: *Parser_Data, source: []const u8) !Decoding_Database {
     var stream = std.io.fixedBufferStream(source);
-    var p = Instruction_Encoding.parser(data, stream.reader());
+    var p = parser(data, stream.reader());
     defer p.deinit();
 
     var temp_8b = std.AutoHashMap(u8, std.ArrayListUnmanaged(Instruction_Encoding)).init(data.temp);
@@ -27,7 +27,7 @@ pub fn parse_decoding_db(data: *Parser_Data, source: []const u8) !Decoding_Datab
     while (p.next_encoding_or_transform() catch |err| {
         if (err == error.SExpressionSyntaxError) {
             var stderr = std.io.getStdErr().writer();
-            const context = parser.reader.token_context() catch return err;
+            const context = p.reader.token_context() catch return err;
             stderr.writeAll("Syntax error in instruction encoding data:\n") catch return err;
             context.print_for_string(source, stderr, 150) catch return err;
         }
@@ -38,7 +38,8 @@ pub fn parse_decoding_db(data: *Parser_Data, source: []const u8) !Decoding_Datab
             for (encoding.encoders) |enc| {
                 if (enc.value == .constant and enc.bit_offset == 0 and enc.arithmetic_offset == 0) {
                     var encoded: Encoded_Instruction.Data = 0;
-                    enc.encode(.{ .mnemonic = ._reserved, .suffix = .none, .params = &.{} }, &encoded);
+                    const ok = enc.encode(.{ .mnemonic = ._reserved, .suffix = .none, .params = &.{} }, &encoded);
+                    std.debug.assert(ok);
                     const bits = enc.required_bits();
                     if (bits >= 16) {
                         const prefix: u16 = @truncate(encoded);
@@ -47,7 +48,7 @@ pub fn parse_decoding_db(data: *Parser_Data, source: []const u8) !Decoding_Datab
                             result.key_ptr.* = prefix;
                             result.value_ptr.* = .{};
                         }
-                        try result.value_ptr.append(data.temp_allocator, encoding);
+                        try result.value_ptr.append(data.temp, encoding);
                         break;
                     } else if (bits >= 12) {
                         const prefix: u12 = @truncate(encoded);
@@ -56,7 +57,7 @@ pub fn parse_decoding_db(data: *Parser_Data, source: []const u8) !Decoding_Datab
                             result.key_ptr.* = prefix;
                             result.value_ptr.* = .{};
                         }
-                        try result.value_ptr.append(data.temp_allocator, encoding);
+                        try result.value_ptr.append(data.temp, encoding);
                         break;
                     } else if (bits >= 8) {
                         const prefix: u8 = @truncate(encoded);
@@ -65,12 +66,12 @@ pub fn parse_decoding_db(data: *Parser_Data, source: []const u8) !Decoding_Datab
                             result.key_ptr.* = prefix;
                             result.value_ptr.* = .{};
                         }
-                        try result.value_ptr.append(data.temp_allocator, encoding);
+                        try result.value_ptr.append(data.temp, encoding);
                         break;
                     }
                 }
             } else {
-                try temp_extra.append(data.temp_allocator, encoding);
+                try temp_extra.append(encoding);
             }
         },
     };
@@ -87,20 +88,20 @@ pub fn parse_decoding_db(data: *Parser_Data, source: []const u8) !Decoding_Datab
 
     var iter8 = temp_8b.iterator();
     while (iter8.next()) |entry| {
-        const encodings = try data.arena.dupe(Instruction_Encoding, entry.value.items);
-        self.lookup_8b.putAssumeCapacity(entry.key, encodings);
+        const encodings = try data.arena.dupe(Instruction_Encoding, entry.value_ptr.items);
+        self.lookup_8b.putAssumeCapacity(entry.key_ptr.*, encodings);
     }
 
     var iter12 = temp_12b.iterator();
     while (iter12.next()) |entry| {
-        const encodings = try data.arena.dupe(Instruction_Encoding, entry.value.items);
-        try self.lookup_12b.putAssumeCapacity(entry.key, encodings);
+        const encodings = try data.arena.dupe(Instruction_Encoding, entry.value_ptr.items);
+        self.lookup_12b.putAssumeCapacity(entry.key_ptr.*, encodings);
     }
 
     var iter16 = temp_16b.iterator();
     while (iter16.next()) |entry| {
-        const encodings = try data.arena.dupe(Instruction_Encoding, entry.value.items);
-        try self.lookup_16b.putAssumeCapacity(entry.key, encodings);
+        const encodings = try data.arena.dupe(Instruction_Encoding, entry.value_ptr.items);
+        self.lookup_16b.putAssumeCapacity(entry.key_ptr.*, encodings);
     }
 
     return self;
@@ -245,7 +246,7 @@ pub fn Parser(comptime Reader: type) type {
         }
 
         pub fn next_encoding_or_transform(self: *Self) !?Encoding_Or_Transform {
-            if (try self.next_transform()) |transform| {
+            if (try self.next_transform_optional()) |transform| {
                 return .{ .transform = transform };
             }
             if (try self.next_encoding()) |encoding| {
@@ -654,7 +655,7 @@ fn Array_Intern_Pool(comptime T: type) type {
 }
 
 const Encoding_Database = @import("Encoding_Database.zig");
-const Decoding_Database = @import("Encoding_Database.zig");
+const Decoding_Database = @import("Decoding_Database.zig");
 const Transform = Instruction_Transform.Transform;
 const Constant_Value = Instruction_Transform.Constant_Value;
 const Instruction_Transform = @import("Instruction_Transform.zig");

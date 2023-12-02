@@ -32,8 +32,8 @@ const Matching_Encoding_Iterator = struct {
     transformed_params: [Parameter.Index.count]Parameter,
 
     pub fn next(self: *Matching_Encoding_Iterator) ?Instruction_Encoding {
-        if (self.transformed.insn.params.ptr != self.transformed_params.ptr) {
-            self.transformed.insn.params.ptr = self.transformed_params.ptr;
+        if (self.transformed.insn.params.ptr != &self.transformed_params) {
+            self.transformed.insn.params.ptr = &self.transformed_params;
         }
         if (self.direct.next()) |direct| {
             if (self.transformed.next()) |transformed| {

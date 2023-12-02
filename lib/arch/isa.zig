@@ -8,6 +8,8 @@ pub const read_database = @import("isa/read_database.zig");
 pub const write_database = @import("isa/write_database.zig");
 pub const print = @import("isa/print.zig");
 
+pub const database_source = @embedFile("isa/database.sx");
+
 pub const Mnemonic = enum {
     _reserved,
     // Arithmetic:

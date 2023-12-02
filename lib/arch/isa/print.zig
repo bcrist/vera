@@ -127,8 +127,8 @@ pub fn print_parameter_kind(kind: Parameter.Kind, register_index: ?Register_Inde
             }
             if (sign) |s| {
                 try writer.writeAll(switch (s) {
-                    .signed => ".signed",
-                    .unsigned => ".unsigned",
+                    .signed => " .signed",
+                    .unsigned => " .unsigned",
                 });
             }
         },

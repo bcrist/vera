@@ -16,7 +16,7 @@ pub const Value = union (enum) {
     pub fn assign(self: Value, value: i64, out: []Parameter) bool {
         switch (self) {
             .constant => |v| return v == value,
-            .placeholder => |info| info.assign(value, out),
+            .placeholder => |info| return info.assign(value, out),
         }
         return true;
     }
@@ -224,7 +224,7 @@ pub fn encode(self: Instruction_Encoding, insn: Instruction) Encoded_Instruction
 }
 
 pub fn matches_data(self: Instruction_Encoding, data: Encoded_Instruction.Data) bool {
-    var temp = [_]Parameter { .{ .expr_type = .unknown } } ** Parameter.Index.count;
+    var temp: [Parameter.Index.count]Parameter = undefined;
 
     for (self.encoders) |enc| {
         if (!enc.decode(data, &temp)) return false;
@@ -240,10 +240,10 @@ pub fn matches_data(self: Instruction_Encoding, data: Encoded_Instruction.Data) 
 pub fn decode_params(self: Instruction_Encoding, data: Encoded_Instruction.Data, params: []Parameter) void {
     // N.B. this assumes that .base_register, .offset_register, and .constant have been set to 0 for all parameters
 
-    std.debug.assert(self.params.len == params.len);
+    std.debug.assert(self.signature.params.len == params.len);
 
-    for (self.params, params) |ps, param| {
-        std.debug.assert(std.meta.eql(ps, param.expr_type));
+    for (self.signature.params, params) |ps, param| {
+        std.debug.assert(std.meta.eql(ps, param.signature));
     }
 
     for (self.encoders) |enc| {

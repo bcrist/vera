@@ -28,8 +28,9 @@ pub fn encode_value(self: Encoder, value: i64, out: *Encoded_Instruction.Data) b
 
 pub fn decode(self: Encoder, data: Encoded_Instruction.Data, out: []isa.Parameter) bool {
     const shifted_data = data >> self.bit_offset;
-    const mask = (@as(u64, 1) << self.domain.bits()) - 1;
-    const raw = (shifted_data - self.arithmetic_offset) & mask;
+    const bits = self.required_bits() - self.bit_offset;
+    const mask = (@as(u64, 1) << @intCast(bits)) - 1;
+    const raw: u64 = @intCast((shifted_data - self.arithmetic_offset) & mask);
     if (self.domain.decode(raw)) |value| {
         return self.value.assign(value, out);
     }

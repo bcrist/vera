@@ -39,6 +39,12 @@ pub fn build(b: *std.Build) void {
             .{ .name = "rom_decompress", .module = ext.rom_decompress },
         },
     });
+    _ = makeTest("lib_arch", .{
+        .source_file = .{ .path = "test/arch.zig" },
+        .dependencies = &.{
+            .{ .name = "lib_arch", .module = lib_arch },
+        },
+    });
 
     const lib_assembler = makeModule("assembler", .{
         .source_file = .{ .path = "lib/assembler.zig" },
@@ -49,6 +55,12 @@ pub fn build(b: *std.Build) void {
             .{ .name = "sx", .module = ext.sx },
             .{ .name = "ihex", .module = ext.ihex },
             .{ .name = "srec", .module = ext.srec },
+        },
+    });
+    _ = makeTest("lib_assembler", .{
+        .source_file = .{ .path = "test/assembler.zig" },
+        .dependencies = &.{
+            .{ .name = "lib_assembler", .module = lib_assembler },
         },
     });
 
@@ -117,7 +129,6 @@ pub fn build(b: *std.Build) void {
 fn makeModule(comptime name: []const u8, options: std.build.CreateModuleOptions) *std.build.Module {
     const mod = builder.createModule(options);
     mod.dependencies.put(name, mod) catch @panic("OOM");
-    _ = makeTest(name, options);
     return mod;
 }
 

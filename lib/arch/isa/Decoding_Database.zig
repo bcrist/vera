@@ -41,50 +41,64 @@ pub const Iterator = struct {
     }
 };
 
-pub fn decoder(self: *const Decoding_Database, allocator: std.mem.Allocator, program_memory: []const u8) Decoder {
+pub fn decoder(self: *const Decoding_Database, allocator: ?std.mem.Allocator, program_memory: []const u8) Decoder {
     return .{
         .db = self,
         .allocator = allocator,
         .remaining = program_memory,
         .last_instruction = &.{},
+        .params_buffer = undefined,
     };
 }
 
 pub const Decoder = struct {
     db: *const Decoding_Database,
-    allocator: std.mem.Allocator,
+    allocator: ?std.mem.Allocator,
     remaining: []const u8,
     last_instruction: []const u8,
+    params_buffer: [Parameter.Index.count]Parameter,
 
-    pub fn decode(self: *Decoder) !Instruction {
+    pub fn decode(self: *Decoder) !?Instruction {
         var data: Encoded_Instruction.Data = 0;
-        const available_len = @min(@sizeOf(data), self.remaining.len);
+        const available_len = @min(@sizeOf(Encoded_Instruction.Data), self.remaining.len);
+        if (available_len == 0) return null;
         @memcpy(std.mem.asBytes(&data)[0..available_len], self.remaining.ptr);
 
         var iter = self.db.matching_encodings(data);
-        if (iter.next()) |encoding| { // we just use the first matching interpretation
-            var insn: Instruction = .{
-                .mnemonic = encoding.mnemonic,
-                .suffix = encoding.suffix,
-                .params = try self.allocator.alloc(Instruction.Parameter, encoding.params.len),
+        const encoding = iter.next() orelse return error.InvalidInstruction;
+        const param_signatures = encoding.signature.params;
+
+        var params = if (self.allocator) |alloc| try alloc.alloc(Parameter, param_signatures.len) else self.params_buffer[0..param_signatures.len];
+        errdefer if (self.allocator) |alloc| alloc.free(params);
+
+        var insn: Instruction = .{
+            .mnemonic = encoding.signature.mnemonic,
+            .suffix = encoding.signature.suffix,
+            .params = params,
+        };
+
+        for (param_signatures, params) |param_signature, *param| {
+            param.* = .{
+                .signature = param_signature,
+                .base_register_index = 0,
+                .offset_register_index = 0,
+                .constant = 0,
             };
-            errdefer self.allocator.free(insn.params);
+        }
+        encoding.decode_params(data, params);
+        const len = encoding.len();
 
-            @memset(insn.params, .{ .expr_type = .unknown });
-            encoding.decode_params(data, insn.params);
-            const len = encoding.len();
+        self.last_instruction = self.remaining[0..len];
+        self.remaining = self.remaining[len..];
 
-            self.last_instruction = self.remaining[0..len];
-            self.remaining = self.remaining[len..];
-
-            return insn;
-        } else return error.InvalidInstruction;
+        return insn;
     }
 };
 
 const Decoding_Database = @This();
 const Instruction_Encoding = @import("Instruction_Encoding.zig");
 const Instruction = @import("Instruction.zig");
+const Parameter = @import("Parameter.zig");
 const Encoded_Instruction = isa.Encoded_Instruction;
 const isa = arch.isa;
 const arch = @import("lib_arch");
