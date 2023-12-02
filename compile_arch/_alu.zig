@@ -240,8 +240,8 @@ pub const instructions = .{
         \\addc r(a), r(b) -> r(a)
         \\sub r(a), r(b)
         \\sub r(a), r(b) -> r(a)
-        \\subb r(a), r(b)
-        \\subb r(a), r(b) -> r(a)
+        \\subc r(a), r(b)
+        \\subc r(a), r(b) -> r(a)
         \\xor r(a), r(b)
         \\xor r(a), r(b) -> r(a)
         \\xnor r(a), r(b)
@@ -271,7 +271,7 @@ pub const instructions = .{
                 .add => .add_reg16_reg16,
                 .addc => .add_reg16_reg16_with_carry,
                 .sub => .subtract_reg16_reg16,
-                .subb => .subtract_reg16_reg16_with_borrow,
+                .subc => .subtract_reg16_reg16_with_carry,
                 .xor => .xor_reg16_reg16,
                 .xnor => .xnor_reg16_reg16,
                 .@"or" => .or_reg16_reg16,
@@ -291,7 +291,7 @@ pub const instructions = .{
                 .add  => c.jl_plus_k_to_ll(.fresh, .flags),
                 .addc => c.jl_plus_k_to_ll(.cont, .flags),
                 .sub  => c.jl_minus_k_to_ll(.fresh, .flags),
-                .subb => c.jl_minus_k_to_ll(.cont, .flags),
+                .subc => c.jl_minus_k_to_ll(.cont, .flags),
                 .xor => c.jlm_logic_km_to_ll(.xor, .fresh, .flags),
                 .xnor => c.jlm_logic_km_to_ll(.xnor, .fresh, .flags),
                 .@"or" => c.jlm_logic_km_to_ll(._or, .fresh, .flags),
@@ -305,9 +305,9 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = // cmp[b] r(a), r(b)
+    struct { pub const spec = // cmp[c] r(a), r(b)
         \\cmp r(a), r(b)
-        \\cmpb r(a), r(b)
+        \\cmpc r(a), r(b)
         ;
         pub const encoding = .{
             opcode,
@@ -320,7 +320,7 @@ pub const instructions = .{
         fn opcode(mnemonic: isa.Mnemonic) opcodes.Lo8 {
             return switch (mnemonic) {
                 .cmp => .compare_reg16_reg16,
-                .cmpb => .compare_reg16_reg16_with_borrow,
+                .cmpc => .compare_reg16_reg16_with_carry,
                 else => unreachable,
             };
         }
@@ -330,7 +330,7 @@ pub const instructions = .{
             c.reg_to_k();
             c.jl_minus_k(switch (mnemonic) {
                 .cmp => .fresh,
-                .cmpb => .cont,
+                .cmpc => .cont,
                 else => unreachable,
             }, .flags);
             c.load_and_exec_next_insn();
@@ -365,9 +365,9 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = // cmp[b] r(a), (imm16u)
+    struct { pub const spec = // cmp[c] r(a), (imm16u)
         \\cmp r(a), (imm)
-        \\cmpb r(a), (imm)
+        \\cmpc r(a), (imm)
         ;
         pub const encoding = .{
             opcode,
@@ -379,7 +379,7 @@ pub const instructions = .{
         fn opcode(mnemonic: isa.Mnemonic) opcodes.Lo12 {
             return switch (mnemonic) {
                 .cmp => .compare_reg16_i16,
-                .cmpb => .compare_reg16_i16_with_borrow,
+                .cmpc => .compare_reg16_i16_with_carry,
                 else => unreachable,
             };
         }
@@ -396,15 +396,15 @@ pub const instructions = .{
             c.srl_to_k(.temp_1);
             c.jl_minus_k(switch (mnemonic) {
                 .cmp => .fresh,
-                .cmpb => .cont,
+                .cmpc => .cont,
                 else => unreachable,
             }, .flags);
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = // cmp[b] r(a), (imm16s)
+    struct { pub const spec = // cmp[c] r(a), (imm16s)
         \\cmp r(a), (imm)
-        \\cmpb r(a), (imm)
+        \\cmpc r(a), (imm)
         ;
         pub const encoding = .{
             opcode,
@@ -416,7 +416,7 @@ pub const instructions = .{
         fn opcode(mnemonic: isa.Mnemonic) opcodes.Lo12 {
             return switch (mnemonic) {
                 .cmp => .compare_reg16_i16,
-                .cmpb => .compare_reg16_i16_with_borrow,
+                .cmpc => .compare_reg16_i16_with_carry,
                 else => unreachable,
             };
         }
@@ -433,7 +433,7 @@ pub const instructions = .{
             c.srl_to_k(.temp_1);
             c.jl_minus_k(switch (mnemonic) {
                 .cmp => .fresh,
-                .cmpb => .cont,
+                .cmpc => .cont,
                 else => unreachable,
             }, .flags);
             c.load_and_exec_next_insn();
@@ -519,9 +519,9 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = // sub[b] (imm8s), r(src) -> r(dest)
+    struct { pub const spec = // sub[c] (imm8s), r(src) -> r(dest)
         \\sub (imm), r(src) -> r(dest)
-        \\subb (imm), r(src) -> r(dest)
+        \\subc (imm), r(src) -> r(dest)
         ;
         pub const encoding = .{
             opcode,
@@ -535,7 +535,7 @@ pub const instructions = .{
         fn opcode(mnemonic: isa.Mnemonic) opcodes.Lo8 {
             return switch (mnemonic) {
                 .sub => .subtract_s8_reg16,
-                .subb => .subtract_s8_reg16_with_borrow,
+                .subc => .subtract_s8_reg16_with_carry,
                 else => unreachable,
             };
         }
@@ -552,15 +552,15 @@ pub const instructions = .{
             c.reg_to_k();
             c.jl_minus_k_to_ll(switch (mnemonic) {
                 .sub => .fresh,
-                .subb => .cont,
+                .subc => .cont,
                 else => unreachable,
             }, .flags);
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = // sub[b] (imm16u), r(src) -> r(dest)
+    struct { pub const spec = // sub[c] (imm16u), r(src) -> r(dest)
         \\sub (imm), r(src) -> r(dest)
-        \\subb (imm), r(src) -> r(dest)
+        \\subc (imm), r(src) -> r(dest)
         ;
         pub const encoding = .{
             opcode,
@@ -574,7 +574,7 @@ pub const instructions = .{
         fn opcode(mnemonic: isa.Mnemonic) opcodes.Lo8 {
             return switch (mnemonic) {
                 .sub => .subtract_i16_reg16,
-                .subb => .subtract_i16_reg16_with_borrow,
+                .subc => .subtract_i16_reg16_with_carry,
                 else => unreachable,
             };
         }
@@ -591,15 +591,15 @@ pub const instructions = .{
             c.reg_to_k();
             c.jl_minus_k_to_ll(switch (mnemonic) {
                 .sub => .fresh,
-                .subb => .cont,
+                .subc => .cont,
                 else => unreachable,
             }, .flags);
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = // sub[b] (imm16s), r(src) -> r(dest)
+    struct { pub const spec = // sub[c] (imm16s), r(src) -> r(dest)
         \\sub (imm), r(src) -> r(dest)
-        \\subb (imm), r(src) -> r(dest)
+        \\subc (imm), r(src) -> r(dest)
         ;
         pub const encoding = .{
             opcode,
@@ -613,7 +613,7 @@ pub const instructions = .{
         fn opcode(mnemonic: isa.Mnemonic) opcodes.Lo8 {
             return switch (mnemonic) {
                 .sub => .subtract_i16_reg16,
-                .subb => .subtract_i16_reg16_with_borrow,
+                .subc => .subtract_i16_reg16_with_carry,
                 else => unreachable,
             };
         }
@@ -630,7 +630,7 @@ pub const instructions = .{
             c.reg_to_k();
             c.jl_minus_k_to_ll(switch (mnemonic) {
                 .sub => .fresh,
-                .subb => .cont,
+                .subc => .cont,
                 else => unreachable,
             }, .flags);
             c.load_and_exec_next_insn();
@@ -642,6 +642,14 @@ pub const instructions = .{
             .{ .src, .src },
             .{ .dest, .dest },
             .{ .imm, .imm, .negate },
+        };
+    },
+    struct { pub const spec = "subc r(src), (imm) -> r(dest)";
+        pub const transform = "addc r(src), (imm) -> r(dest)";
+        pub const conversions = .{
+            .{ .src, .src },
+            .{ .dest, .dest },
+            .{ .imm, .imm, .negate, .{ .offset = -1 } },
         };
     },
 };

@@ -340,10 +340,7 @@ fn set_control_signal(c: *Cycle, comptime signal: Control_Signal, raw_value: any
 
 pub fn jl_plus_k(c: *Cycle, freshness: Freshness, flags: Flags_Mode) void {
     var mode = Control_Signals.Arithmetic_Mode.jl_plus_k;
-    switch (freshness) {
-        .fresh => {},
-        .cont => mode.carry_borrow = true,
-    }
+    mode.carry = freshness == .cont;
     c.set_control_signal(.unit, .alu);
     c.set_control_signal(.mode, .{ .arith = mode });
     switch (flags) {
@@ -356,10 +353,7 @@ pub fn jl_plus_k(c: *Cycle, freshness: Freshness, flags: Flags_Mode) void {
 }
 pub fn jl_minus_k(c: *Cycle, freshness: Freshness, flags: Flags_Mode) void {
     var mode = Control_Signals.Arithmetic_Mode.jl_minus_k;
-    switch (freshness) {
-        .fresh => {},
-        .cont => mode.carry_borrow = true,
-    }
+    mode.carry = freshness == .cont;
     c.set_control_signal(.unit, .alu);
     c.set_control_signal(.mode, .{ .arith = mode });
     switch (flags) {
@@ -372,7 +366,7 @@ pub fn jl_minus_k(c: *Cycle, freshness: Freshness, flags: Flags_Mode) void {
 }
 pub fn j_plus_k(c: *Cycle, k_ext: Zero_Sign_Or_One_Extension, freshness: Freshness, flags: Flags_Mode) void {
     const mode: Control_Signals.Arithmetic_Mode = .{
-        .carry_borrow = freshness == .cont,
+        .carry = freshness == .cont,
         .subtract = false,
         .k_ext = switch (k_ext) {
             .zx => .zx,
@@ -392,7 +386,7 @@ pub fn j_plus_k(c: *Cycle, k_ext: Zero_Sign_Or_One_Extension, freshness: Freshne
 }
 pub fn j_minus_k(c: *Cycle, k_ext: Zero_Sign_Or_One_Extension, freshness: Freshness, flags: Flags_Mode) void {
     const mode: Control_Signals.Arithmetic_Mode = .{
-        .carry_borrow = freshness == .cont,
+        .carry = freshness == .cont,
         .subtract = true,
         .k_ext = switch (k_ext) {
             .zx => .zx,

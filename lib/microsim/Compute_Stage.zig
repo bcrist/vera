@@ -91,12 +91,9 @@ fn simulate_alu(in: Compute_Stage, out: *Transact_Stage) void {
             .sx => bits.sx(u32, in.k.raw()),
             .@"1x" => bits._1x(u32, in.k.raw()),
         };
-        var c_in: u1 = if (mode.carry_borrow) @intFromBool(in.stat_c) else 0;
+        var c_in: u1 = if (mode.carry) @intFromBool(in.stat_c) else if (mode.subtract) 1 else 0;
 
-        if (mode.subtract) {
-            k = ~k;
-            c_in = ~c_in;
-        }
+        if (mode.subtract) k = ~k;
 
         const raw = @as(u33, j) +% k +% c_in;
         out.alu_data = .{
@@ -124,9 +121,6 @@ fn simulate_alu(in: Compute_Stage, out: *Transact_Stage) void {
             out.alu_c = @as(u1, @truncate(raw >> 32)) != 0;
         }
 
-        if (mode.subtract) {
-            out.alu_c = !out.alu_c;
-        }
     } else {
         const mode = in.cs.mode.logic;
 

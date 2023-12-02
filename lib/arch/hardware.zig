@@ -132,11 +132,11 @@ pub const microcode = struct {
         pub fn zero(self: Flags) bool { return self.z; }
         pub fn negative(self: Flags) bool { return self.n; }
         pub fn positive(self: Flags) bool { return !self.z and !self.n; }
-        pub fn carry_or_borrow(self: Flags) bool { return self.c; }
+        pub fn carry(self: Flags) bool { return self.c; }
         pub fn overflow(self: Flags) bool { return self.v; }
         pub fn kernel(self: Flags) bool { return self.k; }
-        pub fn unsigned_less_than(self: Flags) bool { return self.c and !self.z; }
-        pub fn unsigned_greater_than(self: Flags) bool { return !self.c and !self.z; }
+        pub fn unsigned_less_than(self: Flags) bool { return !self.c and !self.z; }
+        pub fn unsigned_greater_than(self: Flags) bool { return self.c and !self.z; }
         pub fn signed_less_than(self: Flags) bool { return !self.z and self.n != self.v; }
         pub fn signed_greater_than(self: Flags) bool { return !self.z and self.n == self.v; }
 

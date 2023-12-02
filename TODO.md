@@ -1,4 +1,3 @@
-[assembler/design] is it impossible to replace `SUBB $a, imm` with `ADDC $a, ~imm`?  Is this a reason to prefer SUBC over SUBB?  How would this affect conditional instructions?
 [assembler] single-byte instructions will still be loaded using a word width; need to adjust page alignment error detection to account for this
 [assembler] CLI
 [assembler] Consider allowing things that expect constant expressions to also accept absolute addresses (.db/.dw/.dd, length casts, etc.)

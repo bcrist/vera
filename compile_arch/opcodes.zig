@@ -23,13 +23,13 @@ pub const Lo8 = enum (u8) {
     subtract_reg32_reg16u,
     subtract_reg32_reg16s,
     subtract_s8_reg16,
-    subtract_s8_reg16_with_borrow,
+    subtract_s8_reg16_with_carry,
     subtract_i16_reg16,
-    subtract_i16_reg16_with_borrow,
+    subtract_i16_reg16_with_carry,
     subtract_reg16_reg16,
-    subtract_reg16_reg16_with_borrow,
+    subtract_reg16_reg16_with_carry,
     compare_reg16_reg16,
-    compare_reg16_reg16_with_borrow,
+    compare_reg16_reg16_with_carry,
     compare_reg32_reg16s,
     compare_reg32_reg16u,
     xor_reg16_reg16,
@@ -47,7 +47,7 @@ pub const Lo8 = enum (u8) {
 pub const Lo12 = enum (u12) {
 
     compare_reg16_i16 = 0x0_FE,
-    compare_reg16_i16_with_borrow = 0x1_FE,
+    compare_reg16_i16_with_carry = 0x1_FE,
     compare_reg32_u16 = 0x2_FE,
     compare_reg32_n16 = 0x3_FE,
 

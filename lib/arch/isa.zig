@@ -11,7 +11,7 @@ pub const print = @import("isa/print.zig");
 pub const Mnemonic = enum {
     _reserved,
     // Arithmetic:
-    add, addc, cmp, cmpb, sub, subb, inc, incc, dec, decb, neg, negb,
+    add, addc, cmp, cmpc, sub, subc, inc, incc, dec, decc, neg, negc,
     // Logical:
     not, xor, xnor, @"or", nor, @"and", nand, andnot, @"test", testz,
     // Single bit:
@@ -130,7 +130,7 @@ pub fn branch_kind(mnemonic: Mnemonic, suffix: Mnemonic_Suffix) Branch_Kind {
     return switch (mnemonic) {
         ._reserved => unreachable,
 
-        .add, .addc, .cmp, .cmpb, .sub, .subb, .inc, .incc, .dec, .decb, .neg, .negb,
+        .add, .addc, .cmp, .cmpc, .sub, .subc, .inc, .incc, .dec, .decc, .neg, .negc,
         .not, .xor, .xnor, .@"or", .nor, .@"and", .nand, .andnot, .@"test", .testz,
         .testb, .testbz, .clrb, .setb, .tglb,
         .shr, .shl, .shrc, .shlc,

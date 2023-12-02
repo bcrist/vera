@@ -199,7 +199,7 @@ pub const Compute_Mode = packed union {
 
 pub const Arithmetic_Mode = packed struct (u6) {
     _reserved: u2 = 3,
-    carry_borrow: bool,
+    carry: bool,
     subtract: bool,
     k_ext: enum (u2) {
         zx = 0,
@@ -207,22 +207,22 @@ pub const Arithmetic_Mode = packed struct (u6) {
         sx = 2,
         none = 3, // 16 bit arithmetic
     },
-    pub const jl_plus_k            = Arithmetic_Mode { .subtract = false, .carry_borrow = false, .k_ext = .none };
-    pub const jl_minus_k           = Arithmetic_Mode { .subtract = true,  .carry_borrow = false, .k_ext = .none };
-    pub const jl_plus_k_plus_c     = Arithmetic_Mode { .subtract = false, .carry_borrow = true,  .k_ext = .none };
-    pub const jl_minus_k_minus_c   = Arithmetic_Mode { .subtract = true,  .carry_borrow = true,  .k_ext = .none };
-    pub const j_plus_k_zx          = Arithmetic_Mode { .subtract = false, .carry_borrow = false, .k_ext = .zx };
-    pub const j_minus_k_zx         = Arithmetic_Mode { .subtract = true,  .carry_borrow = false, .k_ext = .zx };
-    pub const j_plus_k_zx_plus_c   = Arithmetic_Mode { .subtract = false, .carry_borrow = true,  .k_ext = .zx };
-    pub const j_minus_k_zx_minus_c = Arithmetic_Mode { .subtract = true,  .carry_borrow = true,  .k_ext = .zx };
-    pub const j_plus_k_sx          = Arithmetic_Mode { .subtract = false, .carry_borrow = false, .k_ext = .sx };
-    pub const j_minus_k_sx         = Arithmetic_Mode { .subtract = true,  .carry_borrow = false, .k_ext = .sx };
-    pub const j_plus_k_sx_plus_c   = Arithmetic_Mode { .subtract = false, .carry_borrow = true,  .k_ext = .sx };
-    pub const j_minus_k_sx_minus_c = Arithmetic_Mode { .subtract = true,  .carry_borrow = true,  .k_ext = .sx };
-    pub const j_plus_k_1x          = Arithmetic_Mode { .subtract = false, .carry_borrow = false, .k_ext = .@"1x" };
-    pub const j_minus_k_1x         = Arithmetic_Mode { .subtract = true,  .carry_borrow = false, .k_ext = .@"1x" };
-    pub const j_plus_k_1x_plus_c   = Arithmetic_Mode { .subtract = false, .carry_borrow = true,  .k_ext = .@"1x" };
-    pub const j_minus_k_1x_minus_c = Arithmetic_Mode { .subtract = true,  .carry_borrow = true,  .k_ext = .@"1x" };
+    pub const jl_plus_k            = Arithmetic_Mode { .subtract = false, .carry = false, .k_ext = .none };
+    pub const jl_minus_k           = Arithmetic_Mode { .subtract = true,  .carry = false, .k_ext = .none };
+    pub const jl_plus_k_plus_c     = Arithmetic_Mode { .subtract = false, .carry = true,  .k_ext = .none };
+    pub const jl_minus_k_minus_c   = Arithmetic_Mode { .subtract = true,  .carry = true,  .k_ext = .none };
+    pub const j_plus_k_zx          = Arithmetic_Mode { .subtract = false, .carry = false, .k_ext = .zx };
+    pub const j_minus_k_zx         = Arithmetic_Mode { .subtract = true,  .carry = false, .k_ext = .zx };
+    pub const j_plus_k_zx_plus_c   = Arithmetic_Mode { .subtract = false, .carry = true,  .k_ext = .zx };
+    pub const j_minus_k_zx_minus_c = Arithmetic_Mode { .subtract = true,  .carry = true,  .k_ext = .zx };
+    pub const j_plus_k_sx          = Arithmetic_Mode { .subtract = false, .carry = false, .k_ext = .sx };
+    pub const j_minus_k_sx         = Arithmetic_Mode { .subtract = true,  .carry = false, .k_ext = .sx };
+    pub const j_plus_k_sx_plus_c   = Arithmetic_Mode { .subtract = false, .carry = true,  .k_ext = .sx };
+    pub const j_minus_k_sx_minus_c = Arithmetic_Mode { .subtract = true,  .carry = true,  .k_ext = .sx };
+    pub const j_plus_k_1x          = Arithmetic_Mode { .subtract = false, .carry = false, .k_ext = .@"1x" };
+    pub const j_minus_k_1x         = Arithmetic_Mode { .subtract = true,  .carry = false, .k_ext = .@"1x" };
+    pub const j_plus_k_1x_plus_c   = Arithmetic_Mode { .subtract = false, .carry = true,  .k_ext = .@"1x" };
+    pub const j_minus_k_1x_minus_c = Arithmetic_Mode { .subtract = true,  .carry = true,  .k_ext = .@"1x" };
 };
 
 pub const Logic_Mode = packed struct (u6) {
