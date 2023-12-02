@@ -31,8 +31,8 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
             log.debug("Beginning processing of {s}", .{ @typeName(Struct) });
         }
 
-        if (@hasDecl(Struct, "transformed")) {
-            var transformed_parser = Spec_Parser.init(alloc, Struct.transformed);
+        if (@hasDecl(Struct, "transform")) {
+            var transformed_parser = Spec_Parser.init(alloc, Struct.transform);
             const dest = transformed_parser.next().?;
             const dest_signature = self.finalize_instruction_signature(dest.signature);
             const dest_constant_values = self.convert_constraints_to_constant_values(dest);

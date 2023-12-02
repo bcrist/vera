@@ -637,7 +637,7 @@ pub const instructions = .{
         }
     },
     struct { pub const spec = "sub r(src), (imm) -> r(dest)";
-        pub const transformed = "add r(src), (imm) -> r(dest)";
+        pub const transform = "add r(src), (imm) -> r(dest)";
         pub const conversions = .{
             .{ .src, .src },
             .{ .dest, .dest },
