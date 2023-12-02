@@ -21,52 +21,6 @@ pub fn analyzeCustom(temp_arena: *TempAllocator, writer: anytype) !void {
     }
 }
 
-pub fn analyzeControlSignalUsage(temp_arena: *TempAllocator, comptime signals: []const ControlSignals.SignalName, writer: anytype) !void {
-    temp_arena.reset();
-    var temp = std.ArrayList(u8).init(temp_arena.allocator());
-    var data = std.StringHashMap(u16).init(temp_arena.allocator());
-
-    for (microcode, 0..) |maybe_cycle, ua| {
-        if (maybe_cycle) |cycle| {
-            temp.clearRetainingCapacity();
-            const signals_used_in_cycle = used_signals[ua];
-            inline for (signals) |signal| {
-                if (signals_used_in_cycle.contains(signal)) {
-                    const v = @field(cycle, @tagName(signal));
-                    var w = temp.writer();
-                    switch (@typeInfo(@TypeOf(v))) {
-                        .Enum  => try w.print("{s: <20} ", .{ @tagName(v) }),
-                        .Bool  => try w.print("{: <20} ", .{ v }),
-                        .Union => try w.print("{X: <20} ", .{ v.raw() }),
-                        .Int   => try w.print("0x{X: <18} ", .{ v }),
-                        else   => try w.print("{s: <20} ", .{ "?????" }),
-                    }
-                } else {
-                    try temp.appendSlice("---                  ");
-                }
-            }
-
-            var result = try data.getOrPut(temp.items);
-            if (result.found_existing) {
-                result.value_ptr.* += 1;
-            } else {
-                result.key_ptr.* = try temp_arena.allocator().dupe(u8, temp.items);
-                result.value_ptr.* = 1;
-            }
-        }
-    }
-
-    try writer.writeAll("-------- ");
-    inline for (signals) |signal| {
-        try writer.print(" {s: <20}", .{ @tagName(signal) });
-    }
-    try writer.writeAll("\n");
-    var iter = data.iterator();
-    while (iter.next()) |entry| {
-        try writer.print("{: >8}: {s}\n", .{ entry.value_ptr.*, entry.key_ptr.* });
-    }
-    try writer.writeAll("\n");
-}
 
 
 

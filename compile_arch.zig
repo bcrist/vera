@@ -64,24 +64,6 @@ pub fn main() !void {
     log.info("Normal Decode Space Usage: {} ({d:.1}%)", .{ normal_decode_usage, @as(f32, @floatFromInt(normal_decode_usage)) / 655.36 });
     log.info("Alt Decode Space Usage: {} ({d:.1}%)", .{ alt_decode_usage, @as(f32, @floatFromInt(alt_decode_usage)) / 655.36 });
 
-    // try arch.analyzeCustom(&allocators.temp_arena, stdout);
-    
-    // inline for (comptime std.enums.values(ControlSignals.SignalName)) |signal| {
-    //     try arch.analyzeControlSignalUsage(&allocators.temp_arena, &.{ signal }, stdout);
-    // }
-
-    // try arch.analyzeControlSignalUsage(&allocators.temp_arena, &.{ .jl_src, .jh_src }, stdout);
-    // try arch.analyzeControlSignalUsage(&allocators.temp_arena, &.{ .jr_rsel, .kr_rsel }, stdout);
-    // try arch.analyzeControlSignalUsage(&allocators.temp_arena, &.{ .sr1_ri, .sr2_ri }, stdout);
-    // try arch.analyzeControlSignalUsage(&allocators.temp_arena, &.{ .sr1_wi, .sr2_wi }, stdout);
-    // try arch.analyzeControlSignalUsage(&allocators.temp_arena, &.{ .sr1_wsrc, .sr2_wsrc }, stdout);
-    // try arch.analyzeControlSignalUsage(&allocators.temp_arena, &.{ .sr1_wi, .sr1_wsrc }, stdout);
-    // try arch.analyzeControlSignalUsage(&allocators.temp_arena, &.{ .sr2_wi, .sr2_wsrc }, stdout);
-    // try arch.analyzeControlSignalUsage(&allocators.temp_arena, &.{ .bus_mode, .bus_byte, .bus_rw }, stdout);
-    // try arch.analyzeControlSignalUsage(&allocators.temp_arena, &.{ .dl_op, .ob_oa_op }, stdout);
-    // try arch.analyzeControlSignalUsage(&allocators.temp_arena, &.{ .allow_int, .seq_op }, stdout);
-    // try arch.analyzeControlSignalUsage(&allocators.temp_arena, &.{ .ll_src, .lh_src }, stdout);
-
     {
         var f = try std.fs.cwd().createFile("lib/arch/isa/database.sx", .{});
         defer f.close();
