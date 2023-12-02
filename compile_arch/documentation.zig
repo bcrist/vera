@@ -6,6 +6,8 @@ pub fn generate(gpa: std.mem.Allocator, processor: *Processor, microcode: []cons
 }
 
 fn generate_control_signal_analysis(processor: *Processor, microcode: []const ?Control_Signals) !void {
+    _ = microcode;
+
 
     var f = try std.fs.cwd().createFile("doc/isa/control_signal_usage.html", .{});
     defer f.close();
@@ -23,24 +25,24 @@ fn generate_control_signal_analysis(processor: *Processor, microcode: []const ?C
         , .{ style });
 
     inline for (comptime std.enums.values(Control_Signal)) |signal| {
-        try analyze_control_signal_usage(processor, microcode, &.{ signal }, w);
+        try analyze_control_signal_usage(processor, &.{ signal }, w);
     }
 
-    try analyze_control_signal_usage(processor, microcode, &.{ .ij, .ik }, w);
-    try analyze_control_signal_usage(processor, microcode, &.{ .ij, .ik, .iw }, w);
-    try analyze_control_signal_usage(processor, microcode, &.{ .jl_src, .jh_src }, w);
-    try analyze_control_signal_usage(processor, microcode, &.{ .sr1_ri, .sr2_ri }, w);
-    try analyze_control_signal_usage(processor, microcode, &.{ .sr1_wi, .sr2_wi }, w);
-    try analyze_control_signal_usage(processor, microcode, &.{ .sr1_wsrc, .sr2_wsrc }, w);
-    try analyze_control_signal_usage(processor, microcode, &.{ .sr1_wi, .sr1_wsrc }, w);
-    try analyze_control_signal_usage(processor, microcode, &.{ .sr2_wi, .sr2_wsrc }, w);
-    try analyze_control_signal_usage(processor, microcode, &.{ .addr_space, .bus_width, .bus_dir }, w);
-    try analyze_control_signal_usage(processor, microcode, &.{ .ij_op, .ik_op, .iw_op }, w);
-    try analyze_control_signal_usage(processor, microcode, &.{ .bus_dir, .ij_op, .ik_op, .iw_op }, w);
-    try analyze_control_signal_usage(processor, microcode, &.{ .seq_op, .special }, w);
-    try analyze_control_signal_usage(processor, microcode, &.{ .allow_int, .special }, w);
-    try analyze_control_signal_usage(processor, microcode, &.{ .allow_int, .seq_op }, w);
-    try analyze_control_signal_usage(processor, microcode, &.{ .ll_src, .lh_src }, w);
+    try analyze_control_signal_usage(processor, &.{ .c_ij, .c_ik }, w);
+    try analyze_control_signal_usage(processor, &.{ .c_ij, .c_ik, .c_iw }, w);
+    try analyze_control_signal_usage(processor, &.{ .jl_src, .jh_src }, w);
+    try analyze_control_signal_usage(processor, &.{ .sr1_ri, .sr2_ri }, w);
+    try analyze_control_signal_usage(processor, &.{ .sr1_wi, .sr2_wi }, w);
+    try analyze_control_signal_usage(processor, &.{ .sr1_wsrc, .sr2_wsrc }, w);
+    try analyze_control_signal_usage(processor, &.{ .sr1_wi, .sr1_wsrc }, w);
+    try analyze_control_signal_usage(processor, &.{ .sr2_wi, .sr2_wsrc }, w);
+    try analyze_control_signal_usage(processor, &.{ .addr_space, .bus_width, .bus_dir }, w);
+    try analyze_control_signal_usage(processor, &.{ .ij_op, .ik_op, .iw_op }, w);
+    try analyze_control_signal_usage(processor, &.{ .bus_dir, .ij_op, .ik_op, .iw_op }, w);
+    try analyze_control_signal_usage(processor, &.{ .seq_op, .special }, w);
+    try analyze_control_signal_usage(processor, &.{ .allow_int, .special }, w);
+    try analyze_control_signal_usage(processor, &.{ .allow_int, .seq_op }, w);
+    try analyze_control_signal_usage(processor, &.{ .ll_src, .lh_src }, w);
 
     try w.writeAll(
         \\</body>
@@ -48,54 +50,80 @@ fn generate_control_signal_analysis(processor: *Processor, microcode: []const ?C
         );
 }
 
-pub fn analyze_control_signal_usage(processor: *Processor, microcode: []const ?Control_Signals, comptime signals: []const Control_Signal, writer: anytype) !void {
+pub fn analyze_control_signal_usage(processor: *Processor, comptime signals: []const Control_Signal, writer: anytype) !void {
     processor.temp.reset();
     var temp = std.ArrayList(u8).init(processor.temp.allocator());
     var data = std.StringHashMap(u16).init(processor.temp.allocator());
 
-    for (microcode, 0..) |maybe_cycle, ua| {
-        if (maybe_cycle) |cycle| {
-            temp.clearRetainingCapacity();
-            const signals_used_in_cycle = cycle.used_signals[ua];
-            inline for (signals) |signal| {
-                if (signals_used_in_cycle.contains(signal)) {
-                    const v = @field(cycle, @tagName(signal));
-                    var w = temp.writer();
-                    switch (@typeInfo(@TypeOf(v))) {
-                        .Enum  => try w.print("{s: <20} ", .{ @tagName(v) }),
-                        .Bool  => try w.print("{: <20} ", .{ v }),
-                        .Union => try w.print("{X: <20} ", .{ v.raw() }),
-                        .Int   => try w.print("0x{X: <18} ", .{ v }),
-                        else   => try w.print("{s: <20} ", .{ "?????" }),
-                    }
-                } else {
-                    try temp.appendSlice("---                  ");
+    for (processor.microcode.cycles.items, 0..) |cycle, ua| {
+        _ = ua;
+    
+        temp.clearRetainingCapacity();
+        inline for (signals) |signal| {
+            if (cycle.assigned_signals.contains(signal)) {
+                const v = @field(cycle.signals, @tagName(signal));
+                var w = temp.writer();
+                switch (@typeInfo(@TypeOf(v))) {
+                    .Enum  => {
+                        if (std.enums.tagName(@TypeOf(v), v)) |tag| {
+                            try w.print("{s}|", .{ tag });
+                        } else {
+                            try w.print("{}|", .{ @intFromEnum(v) });
+                        }
+                    },
+                    .Bool  => try w.print("{}|", .{ v }),
+                    .Union => try w.print("{X}|", .{ v.raw() }),
+                    .Int   => try w.print("0x{X}|", .{ v }),
+                    else   => try temp.appendSlice("???|"),
                 }
-            }
-
-            var result = try data.getOrPut(temp.items);
-            if (result.found_existing) {
-                result.value_ptr.* += 1;
             } else {
-                result.key_ptr.* = try temp_arena.allocator().dupe(u8, temp.items);
-                result.value_ptr.* = 1;
+                try temp.appendSlice("---|");
             }
+        }
+
+        temp.items.len -= 1;
+
+        var result = try data.getOrPut(temp.items);
+        if (result.found_existing) {
+            result.value_ptr.* += 1;
+        } else {
+            result.key_ptr.* = try processor.temp.allocator().dupe(u8, temp.items);
+            result.value_ptr.* = 1;
         }
     }
 
-    try writer.writeAll("-------- ");
+    try writer.writeAll(
+        \\
+        \\<table class="control_signal_freq">
+        \\  <tr>
+        );
     inline for (signals) |signal| {
-        try writer.print(" {s: <20}", .{ @tagName(signal) });
+        try writer.print("<th class=\"signal\">{s}</th>", .{ @tagName(signal) });
     }
-    try writer.writeAll("\n");
+    try writer.writeAll(
+        \\<th>Frequency</th></tr>
+        );
+
     var iter = data.iterator();
     while (iter.next()) |entry| {
-        try writer.print("{: >8}: {s}\n", .{ entry.value_ptr.*, entry.key_ptr.* });
+        try writer.writeAll(
+            \\
+            \\  <tr>
+            );
+
+        var column_iter = std.mem.splitScalar(u8, entry.key_ptr.*, '|');
+        while (column_iter.next()) |item| {
+            try writer.print("<td class=\"signal\">{s}</td>", .{ item });
+        }
+
+        try writer.print("<td>{}</td></tr>", .{ entry.value_ptr.* });
     }
-    try writer.writeAll("\n");
+    try writer.writeAll(
+        \\
+        \\</table>
+        \\
+    );
 }
-
-
 
 fn generate_encoding_table() !void {
     var f = try std.fs.cwd().createFile("doc/isa/encoding_table.html", .{});

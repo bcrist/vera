@@ -1,11 +1,10 @@
 roms/
+doc/isa/**
+
+*.ssx
 
 **/zig-cache/
 **/zig-out/
-
 **/.vscode/
-
 _archive/
 .obsidian/
-
-*.ssx

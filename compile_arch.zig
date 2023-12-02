@@ -133,7 +133,7 @@ pub fn main() !void {
         try af.finish();
     }
 
-    try documentation.generate(gpa.allocator(), &processor);
+    try documentation.generate(gpa.allocator(), &processor, uc);
 }
 
 const log = std.log.scoped(.compile_arch);
