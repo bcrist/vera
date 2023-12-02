@@ -64,10 +64,6 @@ pub fn main() !void {
     log.info("Normal Decode Space Usage: {} ({d:.1}%)", .{ normal_decode_usage, @as(f32, @floatFromInt(normal_decode_usage)) / 655.36 });
     log.info("Alt Decode Space Usage: {} ({d:.1}%)", .{ alt_decode_usage, @as(f32, @floatFromInt(alt_decode_usage)) / 655.36 });
 
-    // var stdout = std.io.getStdOut().writer();
-    // _ = stdout;
-    // try arch.writeOpcodeTableSmall(stdout);
-
     // try arch.analyzeCustom(&allocators.temp_arena, stdout);
     
     // inline for (comptime std.enums.values(ControlSignals.SignalName)) |signal| {
@@ -155,10 +151,12 @@ pub fn main() !void {
         try af.finish();
     }
 
+    try documentation.generate(gpa.allocator(), &processor);
 }
 
 const log = std.log.scoped(.compile_arch);
 
+const documentation = @import("compile_arch/documentation.zig");
 const hw = arch.hw;
 const isa = arch.isa;
 const arch = @import("lib_arch");

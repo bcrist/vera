@@ -1,8 +1,6 @@
 pub const hw = @import("arch/hardware.zig");
 pub const isa = @import("arch/isa.zig");
 
-pub const Opcode = u16;
-
 pub const Context_State = extern struct {
     registers: [hw.register_count]u16,
     rp: u32,

@@ -1,0 +1,21 @@
+.encoding_table td {
+    width: 3em;
+    height: 3em;
+    background: #ddd;
+}
+
+.encoding_table td a {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.encoding_table td.lo8 {
+    background: rgb(255, 231, 153);
+}
+.encoding_table td.lo12 {
+    background: rgb(153, 255, 241);
+}
+.encoding_table td.lo16 {
+    background: rgb(153, 197, 255);
+}
