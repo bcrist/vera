@@ -446,7 +446,7 @@ test "init_int_literal" {
     try std.testing.expectEqual(@as(i64, 9), constant.bit_count);
     try std.testing.expectEqualSlices(u8, "\x55\x00", constant.as_string());
 
-    constant = try init_int_literal(std.testing.allocator, &temp, "0n_0000_0000_0000_0000_0000_3210_3210_3210_3210_3210_3210_3210_3210");
+    constant = try init_int_literal(std.testing.allocator, &temp, "0q_0000_0000_0000_0000_0000_3210_3210_3210_3210_3210_3210_3210_3210");
     try std.testing.expectEqual(@as(i64, 104), constant.bit_count);
     try std.testing.expectEqualSlices(u8, "\xE4\xE4\xE4\xE4\xE4\xE4\xE4\xE4\x00\x00\x00\x00\x00", constant.as_string());
 }

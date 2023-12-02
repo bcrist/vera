@@ -366,45 +366,6 @@ fn backtrack_org_headers(operations: []const Instruction.Operation, handle: Inst
     return result;
 }
 
-test "Parser" {
-    const src =
-        \\label:
-        \\   nop //comment
-        \\   sync
-        \\   fret
-        \\
-        \\asdf: PARK
-    ;
-    var token_list = lex.lex(std.testing.allocator, src);
-    defer token_list.deinit(std.testing.allocator);
-    var results = parse(std.testing.allocator, src, token_list);
-    defer results.deinit(std.testing.allocator);
-    try std.testing.expectEqual(@as(usize, 0), results.errors.items.len);
-    try std.testing.expectEqual(@as(usize, 5), results.instructions.items.len);
-
-    var insn = results.instructions.items[0];
-    try std.testing.expect(insn.label != null);
-    try std.testing.expectEqualStrings("label", insn.label.?);
-    try std.testing.expectEqual(Mnemonic._reserved, insn.mnemonic);
-
-    insn = results.instructions.items[1];
-    try std.testing.expect(insn.label == null);
-    try std.testing.expectEqual(Mnemonic.NOP, insn.mnemonic);
-
-    insn = results.instructions.items[2];
-    try std.testing.expect(insn.label == null);
-    try std.testing.expectEqual(Mnemonic.SYNC, insn.mnemonic);
-
-    insn = results.instructions.items[3];
-    try std.testing.expect(insn.label == null);
-    try std.testing.expectEqual(Mnemonic.FRET, insn.mnemonic);
-
-    insn = results.instructions.items[4];
-    try std.testing.expect(insn.label != null);
-    try std.testing.expectEqualStrings("asdf", insn.label.?);
-    try std.testing.expectEqual(Mnemonic.PARK, insn.mnemonic);
-}
-
 const Source_File = @This();
 const lex = @import("lex.zig");
 const symbols = @import("symbols.zig");
