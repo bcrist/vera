@@ -29,7 +29,7 @@ pub const Mnemonic = enum {
     bb, bbn,
     bp, bpn,
     // Basic data movement:
-    c, dup, ld, ldi, ild, st, sti, ist,
+    c, swap, ld, ldi, ild, st, sti, ist,
     // MMU:
     sat, rat,
     // Stack:
@@ -138,7 +138,7 @@ pub fn branch_kind(mnemonic: Mnemonic, suffix: Mnemonic_Suffix) Branch_Kind {
         .shr, .shl, .shrc, .shlc,
         .mul, .mulh,
         .cb, .cz, .clb, .clz, .ctb, .ctz,
-        .c, .dup, .ld, .ldi, .ild, .st, .sti, .ist,
+        .c, .swap, .ld, .ldi, .ild, .st, .sti, .ist,
         .sat, .rat,
         .frame, .unframe, .pop, .push,
         .sync, .ald, .ast, .astz, .aadd, .ainc, .adecnz, .ax, .axe,

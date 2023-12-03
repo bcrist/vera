@@ -1,4 +1,31 @@
 pub const instructions = .{
+    struct { pub const spec = "c stat -> r(dest)";
+        pub const encoding = .{
+            opcodes.Lo12.copy_stat_to_reg16,
+            Encoder.shifted(12, Reg(.dest)),
+        };
+        pub const iw = Reg(.dest);
+
+        pub fn entry(c: *Cycle) void {
+            c.stat_to_ll();
+            c.ll_to_reg();
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = "c r(src) -> stat";
+        pub const encoding = .{
+            opcodes.Lo12.copy_reg16_to_stat_zncv,
+            Encoder.shifted(12, Reg(.src)),
+        };
+        pub const ij = Reg(.src);
+
+        pub fn entry(c: *Cycle) void {
+            c.reg_to_jl();
+            c.jl_to_ll();
+            c.ll_to_stat_zncv();
+            c.load_and_exec_next_insn();
+        }
+    },
     struct { pub const spec = // c x(src) -> <sr>
         \\c x(src) -> sp
         \\c x(src) -> rp
@@ -302,9 +329,12 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = "c (imm) -> r(dest)";
+    struct { pub const spec = // c (imm_u4) -> <reg>
+        \\c (imm) -> r(dest)
+        \\c (imm) -> x(dest)
+        ;
         pub const encoding = .{
-            opcodes.Lo8.copy_u4_reg16,
+            opcode,
             Encoder.shifted(8, Int(.imm, u4)),
             Encoder.shifted(12, Reg(.dest)),
         };
@@ -312,226 +342,330 @@ pub const instructions = .{
         pub const ik: u4 = 0;
         pub const iw = Reg(.dest);
 
-        pub fn entry(c: *Cycle) void {
-            c.ik_ij_zx_to_ll();
-            c.ll_to_reg();
+        fn opcode(params: []const Parameter.Signature) opcodes.Lo8 {
+            return switch (params[2].base) {
+                .reg16 => .copy_u4_reg16,
+                .reg32 => .copy_u4_reg32,
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle, params: []const Parameter.Signature) void {
+            c.zero_to_j();
+            c.ik_ij_zx_to_k();
+            c.j_plus_k_to_l(.zx, .fresh, .no_flags);
+            switch (params[2].base) {
+                .reg16 => c.ll_to_reg(),
+                .reg32 => c.l_to_reg32(),
+                else => unreachable,
+            }
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = "c (imm) -> r(dest)";
-        const Imm = Range(.imm, -16, -1);
+    struct { pub const spec = // c (imm_n4) -> <reg>
+        \\c (imm) -> r(dest)
+        \\c (imm) -> x(dest)
+        ;
         pub const encoding = .{
-            opcodes.Lo8.copy_n4_reg16,
+            opcode,
             Encoder.shifted(8, Imm),
             Encoder.shifted(12, Reg(.dest)),
         };
+        const Imm = Range(.imm, -16, -1);
         pub const iw = Reg(.dest);
 
-        pub fn entry(c: *Cycle, imm: Imm) void {
+        fn opcode(params: []const Parameter.Signature) opcodes.Lo8 {
+            return switch (params[2].base) {
+                .reg16 => .copy_n4_reg16,
+                .reg32 => .copy_n4_reg32,
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle, imm: Imm, params: []const Parameter.Signature) void {
+            c.zero_to_j();
             c.literal_to_k(@intCast(imm.value));
+            c.j_plus_k_to_l(.sx, .fresh, .no_flags);
+            switch (params[2].base) {
+                .reg16 => c.ll_to_reg(),
+                .reg32 => c.l_to_reg32(),
+                else => unreachable,
+            }
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // c (imm_bit) -> r(dest)
+        \\c (imm) -> r(dest)
+        ;
+        pub const encoding = .{
+            opcodes.Lo8.copy_imm_bit_reg16,
+            Encoder.shifted(8, Reg(.dest)),
+            Encoder.shifted(12, Imm),
+        };
+        pub const constraints = .{
+            .{ .imm, .greater_or_equal, 16 },
+        };
+        const Imm = Options(.imm, .{ 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768 });
+        pub const ik = Imm;
+        pub const iw = Reg(.dest);
+
+        pub fn entry(c: *Cycle) void {
+            c.ik_bit_to_k();
             c.k_to_ll();
             c.ll_to_reg();
             c.load_and_exec_next_insn();
         }
     },
+    struct { pub const spec = // c (imm8u) -> <reg>
+        \\c (imm) -> r(dest)
+        \\c (imm) -> x(dest)
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(12, Reg(.dest)),
+            Encoder.shifted(16, Int(.imm, u8)),
+        };
+        pub const iw = Reg(.dest);
+
+        fn opcode(params: []const Parameter.Signature) opcodes.Lo12 {
+            return switch (params[2].base) {
+                .reg16 => .copy_imm8u_reg16,
+                .reg32 => .copy_imm8u_reg32,
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle, params: []const Parameter.Signature) void {
+            c.ip_read_to_d(2, .byte);
+            c.d_to_l(.zx);
+            switch (params[2].base) {
+                .reg16 => c.ll_to_reg(),
+                .reg32 => c.l_to_reg32(),
+                else => unreachable,
+            }
+            c.next(load_and_exec_next_insn);
+        }
+
+        pub fn load_and_exec_next_insn(c: *Cycle) void {
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // c (imm16u) -> <reg>
+        \\c (imm) -> r(dest)
+        \\c (imm) -> x(dest)
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(12, Reg(.dest)),
+            Encoder.shifted(16, Int(.imm, u16)),
+        };
+        pub const iw = Reg(.dest);
+
+        fn opcode(params: []const Parameter.Signature) opcodes.Lo12 {
+            return switch (params[2].base) {
+                .reg16 => .copy_imm16_reg16,
+                .reg32 => .copy_imm16u_reg32,
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle, params: []const Parameter.Signature) void {
+            c.ip_read_to_d(2, .word);
+            c.d_to_l(.zx);
+            switch (params[2].base) {
+                .reg16 => c.ll_to_reg(),
+                .reg32 => c.l_to_reg32(),
+                else => unreachable,
+            }
+            c.next(load_and_exec_next_insn);
+        }
+
+        pub fn load_and_exec_next_insn(c: *Cycle) void {
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // c (imm16s) -> r(dest)
+        \\c (imm) -> r(dest)
+        ;
+        pub const encoding = .{
+            opcodes.Lo12.copy_imm16_reg16,
+            Encoder.shifted(12, Reg(.dest)),
+            Encoder.shifted(16, Int(.imm, i16)),
+        };
+        pub const iw = Reg(.dest);
+
+        pub fn entry(c: *Cycle) void {
+            c.ip_read_to_d(2, .word);
+            c.d_to_l(.zx);
+            c.ll_to_reg();
+            c.next(load_and_exec_next_insn);
+        }
+
+        pub fn load_and_exec_next_insn(c: *Cycle) void {
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // c (imm16n) -> x(dest)
+        \\c (imm) -> x(dest)
+        ;
+        pub const encoding = .{
+            opcodes.Lo12.copy_imm16n_reg32,
+            Encoder.shifted(12, Reg(.dest)),
+            Encoder.shifted(16, Range(.imm, -0x10000, -1)),
+        };
+        pub const iw = Reg(.dest);
+
+        pub fn entry(c: *Cycle) void {
+            c.ip_read_to_d(2, .word);
+            c.d_to_l(._1x);
+            c.l_to_reg32();
+            c.next(load_and_exec_next_insn);
+        }
+
+        pub fn load_and_exec_next_insn(c: *Cycle) void {
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = "c (imm) -> x(dest)";
+        pub const encoding = .{
+            opcodes.Lo12.copy_imm32_reg32,
+            Encoder.shifted(12, Reg(.dest)),
+            Encoder.shifted(16, Int(.imm, u32)),
+        };
+        pub const iw = Reg(.dest);
+
+        pub fn entry(c: *Cycle) void {
+            c.ip_read_to_d(4, .word);
+            c.d_to_l(.zx);
+            c.l_to_sr(.temp_1);
+            c.next(load_imm_low);
+        }
+
+        pub fn load_imm_low(c: *Cycle) void {
+            c.ip_read_to_d(2, .word);
+            c.d_to_ll();
+            c.srl_to_lh(.temp_1);
+            c.l_to_reg32();
+            c.next(load_and_exec_next_insn);
+        }
+
+        pub fn load_and_exec_next_insn(c: *Cycle) void {
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = "c (imm) -> x(dest)";
+        pub const encoding = .{
+            opcodes.Lo12.copy_imm32_reg32,
+            Encoder.shifted(12, Reg(.dest)),
+            Encoder.shifted(16, Int(.imm, i32)),
+        };
+        pub const iw = Reg(.dest);
+
+        pub fn entry(c: *Cycle) void {
+            c.ip_read_to_d(4, .word);
+            c.d_to_l(.zx);
+            c.l_to_sr(.temp_1);
+            c.next(load_imm_low);
+        }
+
+        pub fn load_imm_low(c: *Cycle) void {
+            c.ip_read_to_d(2, .word);
+            c.d_to_ll();
+            c.srl_to_lh(.temp_1);
+            c.l_to_reg32();
+            c.next(load_and_exec_next_insn);
+        }
+
+        pub fn load_and_exec_next_insn(c: *Cycle) void {
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = "c r(a) -> r(b) -> r(c)";
+        pub const encoding = .{
+            opcodes.Lo12.copy_reg16_reg16_reg16,
+            Encoder.shifted(12, Reg(.a)),
+            Encoder.shifted(16, Reg(.b)),
+            Encoder.shifted(20, @as(u4, 0)),
+            Encoder.shifted(24, Reg(.c)),
+            Encoder.shifted(28, @as(u4, 0)),
+        };
+        pub const ij = Reg(.a);
+
+        pub fn entry(c: *Cycle) void {
+            c.ip_read_to_dr(2, .byte);
+            c.decode_dr_to_ij_ik_iw(.alt);
+            c.reg_to_jl();
+            c.jl_to_ll();
+            c.zero_to_lh();
+            c.l_to_sr(.temp_1);
+            c.next(rb_to_rc);
+        }
+
+        pub fn rb_to_rc(c: *Cycle) void {
+            c.ip_read_to_dr(1, .byte);
+            c.decode_dr_to_ij_ik_iw(.alt);
+            c.reg_to_jl();
+            c.jl_to_ll();
+            c.ll_to_reg();
+            c.next(ra_to_rb);
+        }
+
+        pub fn ra_to_rb(c: *Cycle) void {
+            c.srl_to_ll(.temp_1);
+            c.ll_to_reg();
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = "c x(a) -> x(b) -> x(c)";
+        pub const encoding = .{
+            opcodes.Lo12.copy_reg32_reg32_reg32,
+            Encoder.shifted(12, Reg(.a)),
+            Encoder.shifted(16, Reg(.b)),
+            Encoder.shifted(20, @as(u4, 0)),
+            Encoder.shifted(24, Reg(.c)),
+            Encoder.shifted(28, @as(u4, 0)),
+        };
+        pub const ij = Reg(.a);
+
+        pub fn entry(c: *Cycle) void {
+            c.ip_read_to_dr(2, .byte);
+            c.decode_dr_to_ij_ik_iw(.alt);
+            c.reg32_to_l();
+            c.l_to_sr(.temp_1);
+            c.next(xb_to_xc);
+        }
+
+        pub fn xb_to_xc(c: *Cycle) void {
+            c.ip_read_to_dr(1, .byte);
+            c.decode_dr_to_ij_ik_iw(.alt);
+            c.reg32_to_l();
+            c.l_to_reg32();
+            c.next(xa_to_xb);
+        }
+
+        pub fn xa_to_xb(c: *Cycle) void {
+            c.sr_to_l(.temp_1);
+            c.l_to_reg32();
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = "swap r(a), r(b)";
+        pub const transform = "c r(a) -> r(b) -> r(c)";
+        pub const conversions = .{
+            .{ .a, .a },
+            .{ .b, .b },
+            .{ .a, .c },
+        };
+    },
+    struct { pub const spec = "swap x(a), x(b)";
+        pub const transform = "c x(a) -> x(b) -> x(c)";
+        pub const conversions = .{
+            .{ .a, .a },
+            .{ .b, .b },
+            .{ .a, .c },
+        };
+    },
 };
-
-
-// pub fn _5E00_5EFF() void {
-//     encoding(.C, .{ .immb4u, .to, .Xa });
-//     desc("Copy immediate to 32b register");
-
-//     literal_to_L(getParameterConstant(SignedOffsetForLiteral, 0));
-//     L_to_op_reg32(.OA);
-//     load_and_exec_next_insn(2);
-// }
-// pub fn _5F00_5FFF() void {
-//     encoding(.C, .{ .immb4n, .to, .Xa });
-//     desc("Copy immediate to 32b register");
-
-//     literal_to_L(getParameterConstant(SignedOffsetForLiteral, 0));
-//     L_to_op_reg32(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _5840_58FF() void {
-//     switch (OB()) {
-//         0x4 => encoding(.C, .{ .imm_16, .to, .Ra }),
-//         0x5 => encoding(.C, .{ .imm_32, .to, .Ra }),
-//         0x6 => encoding(.C, .{ .imm_64, .to, .Ra }),
-//         0x7 => encoding(.C, .{ .imm_128, .to, .Ra }),
-//         0x8 => encoding(.C, .{ .imm_256, .to, .Ra }),
-//         0x9 => encoding(.C, .{ .imm_512, .to, .Ra }),
-//         0xA => encoding(.C, .{ .imm_1024, .to, .Ra }),
-//         0xB => encoding(.C, .{ .imm_2048, .to, .Ra }),
-//         0xC => encoding(.C, .{ .imm_4096, .to, .Ra }),
-//         0xD => encoding(.C, .{ .imm_8192, .to, .Ra }),
-//         0xE => encoding(.C, .{ .imm_16384, .to, .Ra }),
-//         0xF => encoding(.C, .{ .imm_32768, .to, .Ra }),
-//         else => unreachable,
-//     }
-//     desc("Copy immediate to 16b register");
-
-//     literal_to_L(getParameterConstant(i17, 0));
-//     LL_to_op_reg(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _FB00_FB0F() void {
-//     encoding(.C, .{ .imm8u, .to, .Ra });
-//     desc("Copy immediate to 16b register");
-
-//     IP_read_to_D(2, .byte);
-//     D8_to_LL(.zx);
-//     LL_to_op_reg(.OA);
-//     next_cycle();
-
-//     load_and_exec_next_insn(3);
-// }
-
-// pub fn _FB10_FB1F() void {
-//     encoding(.C, .{ .imm8u, .to, .Xa });
-//     desc("Copy immediate to 32b register");
-
-//     IP_read_to_D(2, .byte);
-//     D_to_L(.zx);
-//     L_to_op_reg32(.OA);
-//     next_cycle();
-
-//     load_and_exec_next_insn(3);
-// }
-
-// pub fn _FB20_FB2F() void {
-//     encoding(.C, .{ .imm16u, .to, .RaU });
-//     desc("Copy immediate to 16b register");
-
-//     IP_read_to_D(2, .word);
-//     D_to_LL();
-//     LL_to_op_reg(.OA);
-//     next_cycle();
-
-//     load_and_exec_next_insn(4);
-// }
-// // pub fn _alias_FB20_FB2F_imm15u() void {
-// //     encoding(.C, .{ .imm15u, .to, .Ra });
-// //     desc("Copy immediate to 16b register");
-// // }
-// pub fn _alias_FB20_FB2F_imm16s() void {
-//     encoding(.C, .{ .imm16s, .to, .RaS });
-//     desc("Copy immediate to 16b register");
-// }
-
-// pub fn _FB30_FB3F() void {
-//     encoding(.C, .{ .imm16u, .to, .Xa });
-//     desc("Copy immediate to 32b register");
-
-//     IP_read_to_D(2, .word);
-//     D_to_L(.zx);
-//     L_to_op_reg32(.OA);
-//     next_cycle();
-
-//     load_and_exec_next_insn(4);
-// }
-
-// pub fn _FB40_FB4F() void {
-//     encoding(.C, .{ .imm16n, .to, .Xa });
-//     desc("Copy immediate to 32b register");
-
-//     IP_read_to_D(2, .word);
-//     D_to_L(._1x);
-//     L_to_op_reg32(.OA);
-//     next_cycle();
-
-//     load_and_exec_next_insn(4);
-// }
-
-// pub fn _FB50_FB5F() void {
-//     encoding(.C, .{ .imm32u, .to, .XaU });
-//     desc("Copy immediate to 32b register");
-
-//     IP_read_to_D(2, .word);
-//     D_to_L(.zx);
-//     L_to_SR(.temp_1);
-//     next_cycle();
-
-//     IP_read_to_D(4, .word);
-//     D_to_LH();
-//     SRL_to_LL(.temp_1);
-//     L_to_op_reg32(.OA);
-//     next_cycle();
-
-//     load_and_exec_next_insn(6);
-// }
-// pub fn _alias_FB50_FB5F_signed() void {
-//     encoding(.C, .{ .imm32s, .to, .XaS });
-//     desc("Copy immediate to 32b register");
-// }
-
-// pub fn _FB60_FB6F() void {
-//     encoding(.C, .{ .Ra, .to, .Ra1, .to, .Rb1 });
-//     desc("16b three register copy or swap");
-
-//     IP_read_to_D(2, .byte);
-//     D_to_OB_OA();
-//     op_reg_to_L(.OA, .zx);
-//     L_to_SR(.temp_1);
-//     next_cycle();
-
-//     op_reg_to_LL(.OA);
-//     LL_to_op_reg(.OB);
-//     next_cycle();
-
-//     SRL_to_LL(.temp_1);
-//     LL_to_op_reg(.OA);
-//     load_and_exec_next_insn(3);
-// }
-
-// pub fn _FB70_FB7F() void {
-//     encoding(.C, .{ .Xa, .to, .Xa1, .to, .Xb1 });
-//     desc("32b three register copy or swap");
-
-//     IP_read_to_D(2, .byte);
-//     D_to_OB_OA();
-//     op_reg32_to_L(.OA);
-//     L_to_SR(.temp_1);
-//     next_cycle();
-
-//     op_reg32_to_L(.OA);
-//     L_to_op_reg32(.OB);
-//     next_cycle();
-
-//     SR_to_L(.temp_1);
-//     L_to_op_reg32(.OA);
-//     load_and_exec_next_insn(3);
-// }
-
-// pub fn _5900_59FF() void {
-//     encoding(.DUP, .{ .Ra, .to, .Xb });
-//     desc("Concatenate 16b register with itself, storing result in 32b register");
-
-//     op_reg_to_JL(.OA);
-//     JL_to_LL_and_LH();
-//     L_to_op_reg32(.OB);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _FBD0_FBDF() void {
-//     encoding(.C, .{ .STAT, .to, .Ra });
-//     desc("Copy status register to 16b register");
-
-//     STAT_to_L();
-//     LL_to_op_reg(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _FBE0_FBEF() void {
-//     encoding(.C, .{ .Ra, .to, .STAT });
-//     desc("Copy 16b register to status register (flags only)");
-
-//     op_reg_to_LL(.OA);
-//     LL_to_ZNVC();
-//     load_and_exec_next_insn(2);
-// }
 
 const Cycle = @import("Cycle.zig");
 const Encoder = isa.Instruction_Encoding.Encoder;
@@ -540,6 +674,7 @@ const Control_Signals = arch.hw.Control_Signals;
 const Parameter = isa.Parameter;
 const Int = placeholders.Int;
 const Range = placeholders.Range;
+const Options = placeholders.Options;
 const Reg = placeholders.Reg;
 const placeholders = @import("placeholders.zig");
 const opcodes = @import("opcodes.zig");

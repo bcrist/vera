@@ -118,16 +118,17 @@ pub fn main() !void {
 
 fn saveConfig(alloc: std.mem.Allocator, gui: *Gui) void {
     var config = Config.init(alloc, gui) catch |err| {
-        std.log.warn("Failed to collect config data: {}", .{ err });
+        log.warn("Failed to collect config data: {}", .{ err });
         return;
     };
     defer config.deinit();
 
     config.save(alloc) catch |err| {
-        std.log.warn("Failed to save config data: {}", .{ err });
+        log.warn("Failed to save config data: {}", .{ err });
     };
 }
 
+const log = std.log.scoped(.microsim);
 
 const Gui = @import("microsim/gui/Gui.zig");
 const Config = @import("microsim/Config.zig");

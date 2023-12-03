@@ -53,34 +53,8 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
 
             var parser = Spec_Parser.init(alloc, Struct.spec);
             while (parser.next()) |parsed| {
-                const src_signature = self.finalize_instruction_signature(parsed.signature);
-                const src_constraints = self.arena.dupe(Constraint, raw_src_constraints) catch @panic("OOM");
-                for (src_constraints) |*constraint| {
-                    fixup_placeholder_value(&constraint.left, parsed.encoders);
-                    fixup_placeholder_value(&constraint.right, parsed.encoders);
-                }
-                const transforms = self.arena.dupe(Transform, raw_transforms) catch @panic("OOM");
-                for (transforms) |*transform| {
-                    fixup_placeholder_info(&transform.src, parsed.encoders);
-                    fixup_placeholder_info(&transform.dest, dest.encoders);
-                }
-                for (parsed.encoders) |encoder| {
-                    const placeholder = encoder.value.placeholder.name;
-                    for (raw_transforms) |transform| {
-                        if (std.mem.eql(u8, transform.dest.name, placeholder)) {
-                            break;
-                        }
-                    } else {
-                        std.debug.panic("Source placeholder '{s}' does not have an associated conversion", .{ placeholder });
-                    }
-                }
-                self.transform_list.append(.{
-                    .src_signature = src_signature,
-                    .src_constraints = src_constraints,
-                    .dest_signature = dest_signature,
-                    .dest_constant_values = dest_constant_values,
-                    .transforms = transforms,
-                }) catch @panic("OOM");
+                const transform = self.finalize_transform(parsed, raw_src_constraints, dest_signature, dest_constant_values, dest.encoders, raw_transforms);
+                self.transform_list.append(transform) catch @panic("OOM");
             }
 
             std.debug.assert(transformed_parser.next() == null);
@@ -451,7 +425,7 @@ pub const Initial_Word_Encoding_Iterator = struct {
             }
 
             const encoder_bits: hw.D.Raw = @truncate(mask);
-            std.log.info("Encoder #{}'s bit mask: {x}", .{ i, encoder_bits });
+            log.debug("Encoder #{}'s bit mask: {x}", .{ i, encoder_bits });
             undefined_bits &= ~encoder_bits;
 
             if (encoder.bit_offset < @bitSizeOf(hw.D)) {
@@ -582,7 +556,7 @@ pub const Initial_Word_Undefined_Bits_Iterator = struct {
             }
             const base = self.base_address.raw();
             if ((base | permutation) != (base ^ permutation)) {
-                std.log.err("base: {x}  permutation: {x}  undefined_bits: {x}", .{ base, permutation, self.undefined_bits.raw() });
+                log.err("base: {x}  permutation: {x}  undefined_bits: {x}", .{ base, permutation, self.undefined_bits.raw() });
                 std.debug.assert((base | permutation) == (base ^ permutation)); // base and undefined should deal with distinct bits
             }
             return hw.decode.Address.init(base | permutation);
@@ -795,6 +769,62 @@ pub const Slot_Info = struct {
     }
 };
 
+fn finalize_transform(
+    self: *Processor,
+    parsed: Instruction_Encoding,
+    src_constraints: []const Constraint,
+    dest_signature: Instruction_Signature,
+    dest_constant_values: []const Constant_Value,
+    dest_encoders: []const Encoder,
+    raw_transforms: []const Transform
+) Instruction_Transform {
+    const src_signature = self.finalize_instruction_signature(parsed.signature);
+
+    const constraints = self.arena.dupe(Constraint, src_constraints) catch @panic("OOM");
+    for (constraints) |*constraint| {
+        fixup_placeholder_value(&constraint.left, parsed.encoders);
+        fixup_placeholder_value(&constraint.right, parsed.encoders);
+    }
+    const transforms = self.arena.dupe(Transform, raw_transforms) catch @panic("OOM");
+    for (transforms) |*transform| {
+        fixup_placeholder_info(&transform.src, parsed.encoders);
+        fixup_placeholder_info(&transform.dest, dest_encoders);
+    }
+    for (parsed.encoders) |encoder| {
+        const placeholder = encoder.value.placeholder.name;
+        for (raw_transforms) |transform| {
+            if (std.mem.eql(u8, transform.dest.name, placeholder)) {
+                break;
+            }
+        } else {
+            std.debug.panic("Source placeholder '{s}' does not have an associated conversion", .{ placeholder });
+        }
+    }
+
+    return .{
+        .src_signature = src_signature,
+        .src_constraints = constraints,
+        .dest_signature = dest_signature,
+        .dest_constant_values = dest_constant_values,
+        .transforms = transforms,
+    };
+}
+
+/// Note this only works with .equal constraints where the left is a placeholder and the right is a constant,
+/// such as those that are generated by Spec_Parser for hardcoded numbers that can't be encoded in the instruction signature.
+fn convert_constraints_to_constant_values(self: *Processor, parsed: Instruction_Encoding) []const Constant_Value {
+    const constant_values = self.arena.alloc(Constant_Value, parsed.constraints.len) catch @panic("OOM");
+    for (parsed.constraints, constant_values) |constraint, *value| {
+        std.debug.assert(constraint.kind == .equal);
+        value.* = .{
+            .placeholder = constraint.left.placeholder,
+            .constant = constraint.right.constant,
+        };
+        fixup_placeholder_info(&value.placeholder, parsed.encoders);
+    }
+    return constant_values;
+}
+
 fn finalize_encoding(self: *Processor, parsed: Instruction_Encoding, constraints: []const Constraint, encoders: []const Encoder) Instruction_Encoding {
     const final_encoders = self.arena.dupe(Encoder, encoders) catch @panic("OOM");
     for (final_encoders) |*encoder| {
@@ -889,21 +919,6 @@ fn is_placeholder(needle: []const u8, value: Value) bool {
         .constant => false,
         .placeholder => |info| std.mem.eql(u8, info.name, needle),
     };
-}
-
-/// Note this only works with .equal constraints where the left is a placeholder and the right is a constant,
-/// such as those that are generated by Spec_Parser for hardcoded numbers that can't be encoded in the instruction signature.
-fn convert_constraints_to_constant_values(self: *Processor, parsed: Instruction_Encoding) []const Constant_Value {
-    const constant_values = self.arena.alloc(Constant_Value, parsed.constraints.len) catch @panic("OOM");
-    for (parsed.constraints, constant_values) |constraint, *value| {
-        std.debug.assert(constraint.kind == .equal);
-        value.* = .{
-            .placeholder = constraint.left.placeholder,
-            .constant = constraint.right.constant,
-        };
-        fixup_placeholder_info(&value.placeholder, parsed.encoders);
-    }
-    return constant_values;
 }
 
 const log = std.log.scoped(.compile_arch);

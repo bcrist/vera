@@ -9,7 +9,7 @@ pub const instructions = .{
             opcode,
             Encoder.shifted(12, Reg(.addr)),
             Encoder.shifted(16, Reg(.entry)),
-            Encoder.shifted(20, @as(u12, 0)),
+            Encoder.shifted(20, @as(u4, 0)),
         };
         pub const ij = Reg(.addr);
 
@@ -28,7 +28,7 @@ pub const instructions = .{
 
             c.reg32_to_l();
             c.l_to_sr(.temp_1);
-            c.ip_read_to_dr(2, .word);
+            c.ip_read_to_dr(2, .byte);
             c.decode_dr_to_ij(.alt);
             c.next(update_translation);
         }
@@ -61,7 +61,7 @@ pub const instructions = .{
             opcode,
             Encoder.shifted(12, Reg(.addr)),
             Encoder.shifted(16, Reg(.mask)),
-            Encoder.shifted(20, @as(u12, 0)),
+            Encoder.shifted(20, @as(u4, 0)),
         };
         pub const ij = Reg(.addr);
 
@@ -80,7 +80,7 @@ pub const instructions = .{
 
             c.reg32_to_l();
             c.l_to_sr(.temp_1);
-            c.ip_read_to_dr(2, .word);
+            c.ip_read_to_dr(2, .byte);
             c.decode_dr_to_ij(.alt);
             c.next(invalidate_translation);
         }

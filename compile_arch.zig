@@ -12,6 +12,13 @@ pub const Decode_ROM_Builder = @import("compile_arch/Decode_ROM_Builder.zig");
 pub const opcodes = @import("compile_arch/opcodes.zig");
 pub const placeholders = @import("compile_arch/placeholders.zig");
 
+pub const std_options = struct {
+    pub const log_scope_levels: []const std.log.ScopeLevel = &.{
+        .{ .scope = .compile_arch, .level = .info },
+        .{ .scope = .microcode_builder, .level = .info },
+    };
+};
+
 pub fn main() !void {
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .{};
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);

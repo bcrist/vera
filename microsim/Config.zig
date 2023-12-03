@@ -50,7 +50,7 @@ pub fn load(alloc: std.mem.Allocator, temp: std.mem.Allocator) !Config {
 
     return parse(alloc, temp, &reader) catch |err| switch (err) {
         error.SExpressionSyntaxError => {
-            std.log.err("Failed to parse microsim-config.sx!", .{});
+            log.err("Failed to parse microsim-config.sx!", .{});
             const context = try reader.token_context();
             try context.print_for_file(&file, std.io.getStdErr().writer(), 160);
             return err;
@@ -181,6 +181,8 @@ pub fn save(self: Config, temp: std.mem.Allocator) !void {
 
     try writer.done(); // expr_root
 }
+
+const log = std.log.scoped(.microsim);
 
 const Config = @This();
 const Gui = @import("gui/Gui.zig");
