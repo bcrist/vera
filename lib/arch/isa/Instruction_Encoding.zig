@@ -88,15 +88,15 @@ pub const Domain = union (enum) {
         multiple: u8,
     },
     range: struct {
-        min: i64,
-        max: i64,
+        first: i64,
+        last: i64,
     },
     enumerated: []const i64,
 
     pub fn max_encoded(self: Domain) u64 {
         return switch (self) {
             .int => |info| (@as(u64, 1) << info.bits) - 1,
-            .range => |range| @intCast(range.max - range.min),
+            .range => |range| @intCast(if (range.first < range.last) range.last - range.first else range.first - range.last),
             .enumerated => |values| values.len - 1,
         };
     }
@@ -122,7 +122,11 @@ pub const Domain = union (enum) {
                 return unsigned & mask;
             },
             .range => |range| {
-                return if (value >= range.min and value <= range.max) @bitCast(value - range.min) else null;
+                if (range.first < range.last) {
+                    return if (value >= range.first and value <= range.last) @bitCast(value - range.first) else null;
+                } else {
+                    return if (value >= range.last and value <= range.first) @bitCast(range.first - value) else null;
+                }
             },
             .enumerated => |values| {
                 for (0.., values) |i, v| {
@@ -154,10 +158,17 @@ pub const Domain = union (enum) {
                 }
             },
             .range => |range| {
-                const diff: u64 = @intCast(range.max - range.min);
-                if (raw > diff) return null;
-                const int: i64 = @intCast(raw);
-                return range.min + int;
+                if (range.first < range.last) {
+                    const diff: u64 = @intCast(range.last - range.first);
+                    if (raw > diff) return null;
+                    const int: i64 = @intCast(raw);
+                    return range.first + int;
+                } else {
+                    const diff: u64 = @intCast(range.first - range.last);
+                    if (raw > diff) return null;
+                    const int: i64 = @intCast(raw);
+                    return range.first - int;
+                }
             },
             .enumerated => |values| {
                 return if (raw < values.len) values[raw] else null;

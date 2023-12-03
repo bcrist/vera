@@ -32,8 +32,8 @@ pub fn write_encoding(comptime W: type, writer: *sx.Writer(W), compact: bool, en
             },
             .range => |range| {
                 try writer.expression("range");
-                try writer.int(range.min, 10);
-                try writer.int(range.max, 10);
+                try writer.int(range.first, 10);
+                try writer.int(range.last, 10);
                 _ = try writer.close();
             },
             .enumerated => |values| {

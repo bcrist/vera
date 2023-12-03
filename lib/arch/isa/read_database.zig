@@ -360,7 +360,7 @@ pub fn Parser(comptime Reader: type) type {
             while (try self.reader.expression("encode")) {
                 var enc: Encoder = .{
                     .value = .{ .constant = 0 },
-                    .domain = .{ .range = .{ .min = 0, .max = 0 }},
+                    .domain = .{ .range = .{ .first = 0, .last = 0 }},
                     .arithmetic_offset = 0,
                     .bit_offset = 0,
                 };
@@ -576,12 +576,12 @@ pub fn Parser(comptime Reader: type) type {
         }
 
         fn parse_range_domain(self: *Self) !Domain {
-            var min = try self.reader.require_any_int(i64, 0);
-            var max = try self.reader.require_any_int(i64, 0);
+            var first = try self.reader.require_any_int(i64, 0);
+            var last = try self.reader.require_any_int(i64, 0);
             try self.reader.require_close();
             return .{ .range = .{
-                .min = min,
-                .max = max,
+                .first = first,
+                .last = last,
             }};
         }
 

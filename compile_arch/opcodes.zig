@@ -44,6 +44,9 @@ pub const Lo8 = enum (u8) {
     subtract_sp_u8,
     add_sp_u8,
 
+    branch_imm_63_318 = 0xF0,
+    branch_imm_n64_n319 = 0xF1,
+
     pub fn value(self: Lo8) u8 {
         return @intFromEnum(self);
     }

@@ -15,14 +15,14 @@ pub fn Reg(comptime name_or_enum_literal: anytype) type {
     return Int(name_or_enum_literal, Register_Index);
 }
 
-pub fn Range(comptime name_or_enum_literal: anytype, comptime min: i64, comptime max: i64) type {
+pub fn Range(comptime name_or_enum_literal: anytype, comptime first: i64, comptime last: i64) type {
     return struct {
         value: i64,
 
         pub const placeholder = parse_name(name_or_enum_literal);
         pub const domain: Domain = .{ .range = .{
-            .min = min,
-            .max = max,
+            .first = first,
+            .last = last,
         }};
     };
 }

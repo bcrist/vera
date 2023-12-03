@@ -61,6 +61,52 @@ pub const instructions = .{
             c.branch(.ip, @intCast(imm.value));
         }
     },
+    struct { pub const spec = "b .i ip + (imm)";
+        pub const encoding = .{
+            opcodes.Lo8.branch_imm_63_318,
+            Encoder.shifted(8, Imm),
+        };
+        pub const constraints = .{
+            .{ .imm, .greater_or_equal, 64 },
+        };
+        const Imm = Range(.imm, 63, 63 + 255);
+        pub const ij_ik = Imm;
+
+        pub fn entry(c: *Cycle) void {
+            c.sr_to_j(.ip);
+            c.ij_ik_zx_to_k();
+            c.j_plus_k_to_l(.zx, .fresh, .no_flags);
+            c.l_to_sr(.next_ip);
+            c.next(branch);
+        }
+
+        pub fn branch(c: *Cycle) void {
+            c.branch(.ip, 63);
+        }
+    },
+    struct { pub const spec = "b .i ip + (imm)";
+        pub const encoding = .{
+            opcodes.Lo8.branch_imm_n64_n319,
+            Encoder.shifted(8, Imm),
+        };
+        pub const constraints = .{
+            .{ .imm, .less_or_equal, -65 },
+        };
+        const Imm = Range(.imm, -64, -64 - 255);
+        pub const ij_ik = Imm;
+
+        pub fn entry(c: *Cycle) void {
+            c.sr_to_j(.ip);
+            c.ij_ik_zx_to_k();
+            c.j_minus_k_to_l(.zx, .fresh, .no_flags);
+            c.l_to_sr(.next_ip);
+            c.next(branch);
+        }
+
+        pub fn branch(c: *Cycle) void {
+            c.branch(.ip, -64);
+        }
+    },
 };
 
 
