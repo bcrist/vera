@@ -43,15 +43,22 @@ pub fn write_encoding(comptime W: type, writer: *sx.Writer(W), compact: bool, en
             },
         }
 
-        if (enc.arithmetic_offset > 0) {
-            try writer.expression("base");
-            try writer.int(enc.arithmetic_offset, 10);
+
+        if (enc.bit_count > 0) {
+            try writer.expression("width");
+            try writer.int(enc.bit_count, 10);
             _ = try writer.close();
         }
 
         if (enc.bit_offset > 0) {
             try writer.expression("shift");
             try writer.int(enc.bit_offset, 10);
+            _ = try writer.close();
+        }
+
+        if (enc.arithmetic_offset > 0) {
+            try writer.expression("base");
+            try writer.int(enc.arithmetic_offset, 10);
             _ = try writer.close();
         }
 

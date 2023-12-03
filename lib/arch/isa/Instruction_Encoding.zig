@@ -101,6 +101,13 @@ pub const Domain = union (enum) {
         };
     }
 
+    pub fn min_bits(self: Domain) Encoded_Instruction.Bit_Length_Type {
+        return switch (self) {
+            .int => |info| info.bits,
+            else => std.math.log2_int_ceil(u64, self.max_encoded()),
+        };
+    }
+
     /// Returns null if the provided value is outside the represented domain
     pub fn encode(self: Domain, value: i64) ?u64 {
         switch (self) {

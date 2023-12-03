@@ -308,11 +308,12 @@ pub const instructions = .{
             Encoder.shifted(8, Int(.imm, u4)),
             Encoder.shifted(12, Reg(.dest)),
         };
-        pub const ik = Int(.imm, u4);
+        pub const ij = Int(.imm, u4);
+        pub const ik: u4 = 0;
         pub const iw = Reg(.dest);
 
         pub fn entry(c: *Cycle) void {
-            c.ik_zx_to_ll();
+            c.ik_ij_zx_to_ll();
             c.ll_to_reg();
             c.load_and_exec_next_insn();
         }

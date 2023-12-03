@@ -2,17 +2,16 @@ value: Value,
 domain: Domain,
 arithmetic_offset: u64,
 bit_offset: Encoded_Instruction.Bit_Length_Type,
+bit_count: Encoded_Instruction.Bit_Length_Type,
 
 pub fn required_bits(self: Encoder) Encoded_Instruction.Bit_Length_Type {
-    const n = std.math.log2_int_ceil(u64, self.domain.max_encoded() + self.arithmetic_offset);
-    return self.bit_offset + n;
+    return self.bit_offset + self.bit_count;
 }
 
 pub fn bit_mask(self: Encoder) Encoded_Instruction.Data {
     const W = std.meta.Int(.unsigned, @bitSizeOf(Encoded_Instruction.Data) + 1);
-    const high_ones = (@as(W, 1) << self.required_bits()) - 1;
-    const low_zeroes = (@as(W, 1) << self.bit_offset) - 1;
-    return @intCast(high_ones ^ low_zeroes);
+    const high_ones = (@as(W, 1) << self.bit_count) - 1;
+    return @intCast(high_ones << self.bit_offset);
 }
 
 pub fn encode(self: Encoder, insn: isa.Instruction, out: *Encoded_Instruction.Data) bool {
@@ -21,14 +20,16 @@ pub fn encode(self: Encoder, insn: isa.Instruction, out: *Encoded_Instruction.Da
 
 pub fn encode_value(self: Encoder, value: i64, out: *Encoded_Instruction.Data) bool {
     const raw = self.domain.encode(value) orelse return false;
-    const n: Encoded_Instruction.Data = raw + self.arithmetic_offset;
-    out.* |= @shlExact(n, self.bit_offset);
+    var n: Encoded_Instruction.Data = raw + self.arithmetic_offset;
+    n = @shlExact(n, self.bit_offset);
+    n &= self.bit_mask();
+    out.* |= n;
     return true;
 }
 
 pub fn decode(self: Encoder, data: Encoded_Instruction.Data, out: []isa.Parameter) bool {
     const shifted_data = data >> self.bit_offset;
-    const bits = self.required_bits() - self.bit_offset;
+    const bits = self.bit_count;
     const mask = (@as(u64, 1) << @intCast(bits)) - 1;
     if (shifted_data < self.arithmetic_offset) return false;
     const raw: u64 = @intCast((shifted_data - self.arithmetic_offset) & mask);
@@ -46,11 +47,11 @@ pub fn shifted(bit_offset: Encoded_Instruction.Bit_Length_Type, what: anytype) E
     return shifted_offset(bit_offset, 0, what);
 }
 
-pub fn offset(arith_offset: u64, what: anytype) Encoder {
+pub fn offset(arith_offset: anytype, what: anytype) Encoder {
     return shifted_offset(0, arith_offset, what);
 }
 
-pub fn shifted_offset(bit_offset: Encoded_Instruction.Bit_Length_Type, arith_offset: u64, what: anytype) Encoder {
+pub fn shifted_offset(bit_offset: Encoded_Instruction.Bit_Length_Type, arith_offset: anytype, what: anytype) Encoder {
     var value: Value = undefined;
     var domain: Domain = undefined;
     const T = @TypeOf(what);
@@ -114,6 +115,7 @@ pub fn shifted_offset(bit_offset: Encoded_Instruction.Bit_Length_Type, arith_off
         .domain = domain,
         .arithmetic_offset = arith_offset,
         .bit_offset = bit_offset,
+        .bit_count = @max(@bitSizeOf(@TypeOf(arith_offset)), domain.min_bits()),
     };
 }
 

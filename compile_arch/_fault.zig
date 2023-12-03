@@ -23,10 +23,10 @@ pub const instructions = .{
             c.reload_asn();
             c.sr_to_l(.fault_rsn_stat);
             c.ll_to_stat_zncvka();
-            c.next(restore_ij_ik_iw);
+            c.next(restore_iw_ik_ij);
         }
 
-        pub fn restore_ij_ik_iw(c: *Cycle) void {
+        pub fn restore_iw_ik_ij(c: *Cycle) void {
             c.sr_to_l(.int_rsn_fault_iw_ik_ij);
             c.ll_to_dr();
             c.decode_dr_to_ij_ik_iw(.alt);
@@ -374,10 +374,10 @@ fn Fault_Handler(comptime handler: hw.microcode.Slot) type {
             c.srh_to_lh(.fault_rsn_stat);
             c.stat_to_ll();
             c.l_to_sr(.fault_rsn_stat);
-            c.next(store_ij_ik_iw);
+            c.next(store_iw_ik_ij);
         }
 
-        pub fn store_ij_ik_iw(c: *Cycle) void {
+        pub fn store_iw_ik_ij(c: *Cycle) void {
             c.assume_ij_valid();
             c.assume_ik_valid();
             c.assume_iw_valid();

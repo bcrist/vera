@@ -36,7 +36,6 @@ pub fn simulate(
     const ij = in.ij.raw();
     const ik = in.ik.raw();
     const iw = in.iw.raw();
-    _ = iw;
 
     const sr1 = rs.sr1[in.cs.sr1_ri.raw()];
     const sr2 = rs.sr2[in.cs.sr2_ri.raw()];
@@ -68,8 +67,8 @@ pub fn simulate(
         .sr2l => sr2.lo.raw(),
         .kr => rs.reg[ik].raw(),
         .ik_bit => @as(u16, 1) << ik,
-        .ik_zx => ik,
-        .ij_ik_zx => bits.concat(.{ ik, ij }),
+        .iw_ik_ij_zx => bits.concat(.{ ij, ik, iw }),
+        .ik_ij_zx => bits.concat(.{ ij, ik }),
     });
 
     const addr_base: u32 =

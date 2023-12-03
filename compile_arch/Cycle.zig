@@ -52,14 +52,10 @@ pub fn finish(cycle: *Cycle) void {
 
     switch (cycle.signals.ll_src) {
         .zero, .translation_info_l, .stat, .pipeline => {},
-        .iw_ik_ij_zx => {
-            cycle.validate_ij();
-            cycle.validate_ik();
-            cycle.validate_iw();
-        },
         .compute_l => cycle.validate_compute_mode(null),
         .d        => cycle.validate_bus_read(null),
         .d8_sx    => cycle.validate_bus_read(.byte),
+        _ => cycle.warn("Unrecognized LL source", .{}),
     }
 
     switch (cycle.signals.lh_src) {
@@ -83,8 +79,13 @@ pub fn finish(cycle: *Cycle) void {
 
     switch (cycle.signals.k_src) {
         .zero, .literal_sx, .sr1l, .sr2l => {},
-        .kr, .ik_bit, .ik_zx => cycle.validate_ik(),
-        .ij_ik_zx => {
+        .kr, .ik_bit => cycle.validate_ik(),
+        .iw_ik_ij_zx => {
+            cycle.validate_ij();
+            cycle.validate_ik();
+            cycle.validate_iw();
+        },
+        .ik_ij_zx => {
             cycle.validate_ij();
             cycle.validate_ik();
         },
@@ -222,9 +223,6 @@ fn validate_compute_mode(cycle: *Cycle, expected: ?Control_Signals.Compute_Unit)
                 if (mode.k_ext != .none) {
                     cycle.validate_jh();
                 }
-            } else {
-                //const mode = cycle.signals.mode.logic;
-                cycle.validate_jh();
             }
             cycle.validate_jl();
             cycle.validate_k();
@@ -275,7 +273,7 @@ fn validate_k(cycle: *Cycle) void {
     if (!cycle.is_set(.k_src)) {
         cycle.warn("Expected k_src to be set", .{});
     } else switch (cycle.signals.k_src) {
-        .zero, .kr, .ik_bit, .ik_zx, .ij_ik_zx => {},
+        .zero, .kr, .ik_bit, .iw_ik_ij_zx, .ik_ij_zx => {},
         .literal_sx => cycle.ensure_set(.literal),
         .sr1l => cycle.ensure_set(.sr1_ri),
         .sr2l => cycle.ensure_set(.sr2_ri),
@@ -405,19 +403,19 @@ pub fn j_minus_k(c: *Cycle, k_ext: Zero_Sign_Or_One_Extension, freshness: Freshn
     }
 }
 
-pub fn jlm_logic_km(c: *Cycle, op: Logic_Op) void {
+pub fn jl_logic_k(c: *Cycle, op: Logic_Op) void {
     c.set_control_signal(.unit, .alu);
     c.set_control_signal(.mode, .{ .logic = switch (op) {
-        .xor => Control_Signals.Logic_Mode.jlm_xor_km,
-        .xnor => Control_Signals.Logic_Mode.jlm_xnor_km,
-        ._or => Control_Signals.Logic_Mode.jlm_or_km,
-        ._and => Control_Signals.Logic_Mode.jlm_and_km,
-        .not_or => Control_Signals.Logic_Mode.not_jlm_or_km,
-        .not_and => Control_Signals.Logic_Mode.not_jlm_and_km,
-        .or_not => Control_Signals.Logic_Mode.jlm_or_not_km,
-        .and_not => Control_Signals.Logic_Mode.jlm_and_not_km,
-        .nand => Control_Signals.Logic_Mode.jlm_nand_km,
-        .nor => Control_Signals.Logic_Mode.jlm_nor_km,
+        .xor => Control_Signals.Logic_Mode.jl_xor_k,
+        .xnor => Control_Signals.Logic_Mode.jl_xnor_k,
+        ._or => Control_Signals.Logic_Mode.jl_or_k,
+        ._and => Control_Signals.Logic_Mode.jl_and_k,
+        .not_or => Control_Signals.Logic_Mode.not_jl_or_k,
+        .not_and => Control_Signals.Logic_Mode.not_jl_and_k,
+        .or_not => Control_Signals.Logic_Mode.jl_or_not_k,
+        .and_not => Control_Signals.Logic_Mode.jl_and_not_k,
+        .nand => Control_Signals.Logic_Mode.jl_nand_k,
+        .nor => Control_Signals.Logic_Mode.jl_nor_k,
     }});
 }
 
@@ -557,12 +555,12 @@ pub fn zero_to_k(c: *Cycle) void {
     c.set_control_signal(.k_src, .zero);
 }
 
-pub fn ij_ik_zx_to_k(c: *Cycle) void {
-    c.set_control_signal(.k_src, .ij_ik_zx);
+pub fn ik_ij_zx_to_k(c: *Cycle) void {
+    c.set_control_signal(.k_src, .ik_ij_zx);
 }
 
-pub fn ik_zx_to_k(c: *Cycle) void {
-    c.set_control_signal(.k_src, .ik_zx);
+pub fn iw_ik_ij_zx_to_k(c: *Cycle) void {
+    c.set_control_signal(.k_src, .iw_ik_ij_zx);
 }
 
 pub fn ik_bit_to_k(c: *Cycle) void {
@@ -617,10 +615,6 @@ pub fn pipeline_id_to_ll(c: *Cycle) void {
     c.set_control_signal(.ll_src, .pipeline);
 }
 
-pub fn iw_ik_ij_zx_to_ll(c: *Cycle) void {
-    c.set_control_signal(.ll_src, .iw_ik_ij_zx);
-}
-
 pub fn zero_to_l(c: *Cycle) void {
     c.set_control_signal(.ll_src, .zero);
     c.set_control_signal(.lh_src, .zero);
@@ -630,7 +624,6 @@ pub fn last_translation_info_to_l(c: *Cycle) void {
     c.set_control_signal(.ll_src, .translation_info_l);
     c.set_control_signal(.lh_src, .translation_info_h);
 }
-
 
 pub fn reg32_to_l(c: *Cycle) void {
     c.reg32_to_j();
@@ -707,13 +700,13 @@ pub fn k_to_lh(c: *Cycle) void {
     c.compute_to_lh();
 }
 
-pub fn ij_ik_zx_to_ll(c: *Cycle) void {
-    c.ij_ik_zx_to_k();
+pub fn ik_ij_zx_to_ll(c: *Cycle) void {
+    c.ik_ij_zx_to_k();
     c.k_to_ll();
 }
 
-pub fn ik_zx_to_ll(c: *Cycle) void {
-    c.ik_zx_to_k();
+pub fn iw_ik_ij_zx_to_ll(c: *Cycle) void {
+    c.iw_ik_ij_zx_to_k();
     c.k_to_ll();
 }
 
@@ -741,8 +734,8 @@ pub fn j_minus_k_to_l(c: *Cycle, k_ext: Zero_Sign_Or_One_Extension, freshness: F
     c.set_control_signal(.lh_src, .compute_h);
 }
 
-pub fn jlm_logic_km_to_ll(c: *Cycle, op: Logic_Op, freshness: Freshness, flags: Flags_Mode) void {
-    c.jlm_logic_km(op);
+pub fn jl_logic_k_to_ll(c: *Cycle, op: Logic_Op, freshness: Freshness, flags: Flags_Mode) void {
+    c.jl_logic_k(op);
     c.compute_to_ll(freshness, flags);
 }
 
@@ -816,9 +809,9 @@ pub fn literal_to_ll(c: *Cycle, literal: K_Literal) void {
     if (literal == 0) {
         c.zero_to_ll();
     } else {
-        c.zero_to_j();
+        c.zero_to_jl();
         c.literal_to_k(literal);
-        c.jlm_logic_km_to_ll(.xor, .fresh, .no_flags);
+        c.jl_logic_k_to_ll(.xor, .fresh, .no_flags);
     }
 }
 
@@ -878,10 +871,8 @@ pub fn d_to_l(c: *Cycle, ext: Zero_Sign_Or_One_Extension) void {
                 return;
             }
             c.set_control_signal(.ll_src, .d);
-            c.zero_to_j();
-            c.zero_to_k();
-            c.jlm_logic_km(.xnor);
-            c.compute_to_lh();
+            c.neg_one_to_jh();
+            c.jh_to_lh();
         },
     }
 }
@@ -1030,9 +1021,9 @@ pub fn next_ik_bit(c: *Cycle, constant: hw.K.Raw) void {
     c.next_ik(@intCast(@ctz(constant)));
 }
 
-pub fn next_ij_ik_zx(c: *Cycle, constant: std.meta.Int(.unsigned, @bitSizeOf(hw.IJ) + @bitSizeOf(hw.IK))) void {
-    c.next_ij(@intCast(constant >> @bitSizeOf(hw.IK)));
-    c.next_ik(@truncate(constant));
+pub fn next_ik_ij_zx(c: *Cycle, constant: std.meta.Int(.unsigned, @bitSizeOf(hw.IJ) + @bitSizeOf(hw.IK))) void {
+    c.next_ik(@intCast(constant >> @bitSizeOf(hw.IK)));
+    c.next_ij(@truncate(constant));
 }
 
 pub fn next_ij_xor1(c: *Cycle) void {
@@ -1336,6 +1327,11 @@ pub fn load_and_exec_next_insn(c: *Cycle) void {
     }
 }
 
+pub fn load_and_exec_next_insn_no_atomic_end(c: *Cycle) void {
+    c.set_control_signal(.special, .none); // don't clear atomic state
+    c.load_and_exec_next_insn();
+}
+
 pub fn branch(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_Offset) void {
     c.address(base, offset);
     c.set_control_signal(.at_op, .translate);
@@ -1355,9 +1351,8 @@ pub fn decode_and_exec_dr(c: *Cycle, id_mode: Control_Signals.ID_Mode) void {
     c.set_control_signal(.seq_op, .next_instruction);
     if (c.is_set(.special)) {
         switch (c.signals.special) {
-            .none => c.set_control_signal(.special, .atomic_end),
-            .atomic_end, .atomic_next, .atomic_this => {},
-            .load_rsn_from_ll, .toggle_rsn, .trigger_fault, .block_transfer => {
+            .none, .atomic_end, .atomic_next, .atomic_this, .block_transfer => {},
+            .load_rsn_from_ll, .toggle_rsn, .trigger_fault => {
                 c.warn("Can't decode the next instruction in the same cycle as {}", .{ c.signals.special });
             },
         }
@@ -1439,10 +1434,6 @@ pub fn atomic_next_cycle_until_end(c: *Cycle) void {
     c.set_control_signal(.special, .atomic_next);
 }
 
-// pub fn load_and_exec_next_insn_no_atomic_end(ip_offset: Address_Offset) void {
-//     set_control_signal(.special, .none); // don't clear atomic state
-//     load_and_exec_next_insn(ip_offset);
-// }
 
 // pub fn exec_next_insn_no_atomic_end() void {
 //     if (c.special != .block_transfer) {

@@ -1,7 +1,7 @@
-pub fn generate(gpa: std.mem.Allocator, processor: *Processor, microcode: []const ?Control_Signals) !void {
+pub fn generate(gpa: std.mem.Allocator, processor: *Processor, microcode: []const ?Control_Signals, decode_rom: []const hw.decode.Result) !void {
     _ = gpa;
 
-    try generate_encoding_table();
+    try generate_encoding_table(processor, decode_rom);
     try generate_control_signal_analysis(processor, microcode);
 }
 
@@ -125,9 +125,77 @@ pub fn analyze_control_signal_usage(processor: *Processor, comptime signals: []c
     );
 }
 
-fn generate_encoding_table() !void {
+fn mnemonic_color(mnemonic: isa.Mnemonic) u24 {
+    var hasher = std.hash.Wyhash.init(0);
+    std.hash.autoHash(&hasher, mnemonic);
+    const hash = hasher.final();
+    const hue: u8 = @truncate(hash >> 8);
+    const hue_f32: f32 = @floatFromInt(hue);
+    const lightness: u8 = @truncate(hash >> 16);
+    const lightness_f32: f32 = @floatFromInt(lightness);
+    return hsl_to_rgb(hue_f32 / 256, 0.5, 0.66 + 0.2 * lightness_f32 / 256);
+}
+
+fn hsl_to_rgb(h: f32, s: f32, l: f32) u24 {
+    if (s == 0) {
+        const v: u8 = @intFromFloat(@min(255, l * 256));
+        return bits.concat(.{ v, v, v });
+    } else {
+        const q = if (l < 0.5) l * (1 + s) else l + s - l * s;
+        const p = 2 * l - q;
+        const r = hue_to_rgb(p, q, h + 1.0/3.0);
+        const g = hue_to_rgb(p, q, h);
+        const b = hue_to_rgb(p, q, h - 1.0/3.0);
+        return bits.concat(.{ r, g, b });
+    }
+}
+
+fn hue_to_rgb(p: f32, q: f32, t: f32) u8 {
+    var w = t;
+    if (w < 0) w += 1;
+    if (w > 1) w -= 1;
+    if (w < 1.0/6.0) {
+        w = p + (q - p) * 6 * w;
+    } else if (w < 1.0/2.0) {
+        w = q;
+    } else if (w < 2.0/3.0) {
+        w = p + (q - p) * (2.0/3.0 - w) * 6;
+    }
+    return @intFromFloat(@min(255, w * 256));
+}
+
+fn generate_encoding_table(processor: *Processor, decode_rom: []const hw.decode.Result) !void {
     var f = try std.fs.cwd().createFile("doc/isa/encoding_table.html", .{});
     defer f.close();
+
+    const Cell_Info = struct {
+        has_slots: bool = false,
+        multiple_encodings: bool = false,
+        instruction_encoding: ?Instruction_Encoding = null,
+    };
+
+    var cells: [256]Cell_Info = .{ .{} } ** 256;
+
+    for (0.., processor.decode_rom.entries[0..0x10000], decode_rom[0..0x10000]) |addr, entry, result| {
+        if (result.slot != .invalid_instruction) {
+            const first_byte: u8 = @truncate(addr);
+            const cell = &cells[first_byte];
+            cell.has_slots = true;
+
+            if (!cell.multiple_encodings) {
+                if (entry.instruction_encoding) |ie| {
+                    if (cell.instruction_encoding) |existing| {
+                        if (!ie.eql(existing)) {
+                            cell.multiple_encodings = true;
+                            cell.instruction_encoding = null;
+                        }
+                    } else {
+                        cell.instruction_encoding = ie;
+                    }
+                }
+            }
+        }
+    }
 
     var w = f.writer();
     try w.print(
@@ -150,6 +218,7 @@ fn generate_encoding_table() !void {
     }
 
     var temp_buf: [1024]u8 = undefined;
+    _ = temp_buf;
 
     for (0..0x10) |row_usize| {
         const row: u4 = @intCast(row_usize);
@@ -162,39 +231,33 @@ fn generate_encoding_table() !void {
             const col: u4 = @intCast(col_usize);
 
             const byte = bits.concat(.{ col, row });
+            const cell = cells[byte];
 
-            var title: []const u8 = "";
-            var class: []const u8 = "";
-
-            for (std.enums.values(opcodes.Lo8)) |opcode| {
-                if (opcode.value() == byte) {
-                    title = try std.fmt.bufPrint(&temp_buf, "0x{X:0>2}: {s}", .{ byte, @tagName(opcode) });
-                    class = "lo8";
-                    break;
+            const color: u24 = c: {
+                if (cell.instruction_encoding) |ie| {
+                    break :c mnemonic_color(ie.signature.mnemonic);
+                } else if (cell.has_slots) {
+                    break :c 0x777777;
+                } else {
+                    break :c 0xffffff;
                 }
-            } else for (std.enums.values(opcodes.Lo12)) |opcode| {
-                const truncated: u8 = @truncate(opcode.value());
-                if (truncated == byte) {
-                    title = try std.fmt.bufPrint(&temp_buf, "0x{X:0>2}", .{ byte });
-                    class = "lo12";
-                    break;
-                }
-            } else for (std.enums.values(opcodes.Lo16)) |opcode| {
-                const truncated: u8 = @truncate(opcode.value());
-                if (truncated == byte) {
-                    title = try std.fmt.bufPrint(&temp_buf, "0x{X:0>2}", .{ byte });
-                    class = "lo16";
-                    break;
-                }
-            }
+            };
 
             try w.print(
-                \\<td class="{s}" title="{s}">
-                , .{ class, title });
+                \\<td style="background:#{x:0>6}"
+                , .{ color });
 
-            if (class.len > 0) {
+            if (cell.instruction_encoding) |ie| {
+                try w.writeAll(" title=\"");
+                try isa.print.print_encoding(ie, w);
+                try w.writeAll("\"");
+            }
+
+            try w.writeAll(">");
+
+            if (cell.has_slots) {
                 try w.print("<a href=\"encoding_table_{x:0>2}.html\"></a>", .{ byte });
-                try generate_encoding_table_inner(byte);
+                try generate_encoding_table_inner(processor, decode_rom, byte);
             }
 
             try w.writeAll("</td>");
@@ -209,7 +272,24 @@ fn generate_encoding_table() !void {
         );
 }
 
-fn generate_encoding_table_inner(prefix_byte: u8) !void {
+fn generate_encoding_table_inner(processor: *Processor, decode_rom: []const hw.decode.Result, prefix_byte: u8) !void {
+    const Cell_Info = struct {
+        slot: hw.microcode.Slot = .invalid_instruction,
+        instruction_encoding: ?Instruction_Encoding = null,
+    };
+
+    var cells: [256]Cell_Info = .{ .{} } ** 256;
+
+    for (0..256) |byte| {
+        const addr = bits.concat(.{ prefix_byte, @as(u8, @intCast(byte)) });
+        const entry = processor.decode_rom.entries[addr];
+        const result = decode_rom[addr];
+        cells[byte] = .{
+            .slot = result.slot,
+            .instruction_encoding = entry.instruction_encoding,
+        };
+    }
+
     var temp_buf: [1024]u8 = undefined;
 
     const filename = try std.fmt.bufPrint(&temp_buf, "doc/isa/encoding_table_{x:0>2}.html", .{ prefix_byte });
@@ -237,7 +317,6 @@ fn generate_encoding_table_inner(prefix_byte: u8) !void {
             , .{ col });
     }
 
-
     for (0..0x10) |row_usize| {
         const row: u4 = @intCast(row_usize);
         try w.print(
@@ -248,42 +327,32 @@ fn generate_encoding_table_inner(prefix_byte: u8) !void {
         for (0..0x10) |col_usize| {
             const col: u4 = @intCast(col_usize);
 
-            const second_byte = bits.concat(.{ col, row });
+            const byte = bits.concat(.{ col, row });
+            const cell = cells[byte];
 
-            var title: []const u8 = "";
-            var class: []const u8 = "";
-
-            for (std.enums.values(opcodes.Lo8)) |opcode| {
-                if (opcode.value() == prefix_byte) {
-                    title = try std.fmt.bufPrint(&temp_buf, "0x{X:0>2}{X:0>2}: {s}", .{ second_byte, prefix_byte, @tagName(opcode) });
-                    class = "lo8";
-                    break;
+            const color: u24 = c: {
+                if (cell.instruction_encoding) |ie| {
+                    break :c mnemonic_color(ie.signature.mnemonic);
+                } else {
+                    break :c 0xffffff;
                 }
-            } else for (std.enums.values(opcodes.Lo12)) |opcode| {
-                const truncated: u8 = @truncate(opcode.value());
-                if (truncated == prefix_byte) {
-                    const remaining: u4 = @intCast(opcode.value() >> 8);
-                    if (remaining == @as(u4, @truncate(second_byte))) {
-                        title = try std.fmt.bufPrint(&temp_buf, "0x{X:0>2}{X:0>2}: {s}", .{ second_byte, prefix_byte, @tagName(opcode) });
-                        class = "lo12";
-                        break;
-                    }
-                }
-            } else for (std.enums.values(opcodes.Lo16)) |opcode| {
-                const truncated: u8 = @truncate(opcode.value());
-                if (truncated == prefix_byte) {
-                    const remaining: u8 = @intCast(opcode.value() >> 8);
-                    if (remaining == second_byte) {
-                        title = try std.fmt.bufPrint(&temp_buf, "0x{X:0>2}{X:0>2}: {s}", .{ second_byte, prefix_byte, @tagName(opcode) });
-                        class = "lo16";
-                        break;
-                    }
-                }
-            }
+            };
 
             try w.print(
-                \\<td class="{s}" title="{s}">
-                , .{ class, title });
+                \\<td style="background:#{x:0>6}" title="Slot {}
+                , .{ color, cell.slot.raw() });
+
+            if (cell.instruction_encoding) |ie| {
+                try w.writeAll(": ");
+                try isa.print.print_encoding(ie, w);
+            }
+
+            try w.writeAll("\">");
+
+            // if (cell.slot != .invalid_instruction) {
+            //     try w.print("<a href=\"encoding_table_{x:0>2}.html\"></a>", .{ byte });
+            //     try generate_encoding_table_inner(processor, decode_rom, byte);
+            // }
 
             try w.writeAll("</td>");
         }
@@ -301,6 +370,8 @@ const style = @embedFile("style.css");
 
 const Processor = @import("Processor.zig");
 const opcodes = @import("opcodes.zig");
+const Instruction_Encoding = isa.Instruction_Encoding;
+const isa = arch.isa;
 const Control_Signals = hw.Control_Signals;
 const Control_Signal = hw.Control_Signal;
 const hw = arch.hw;

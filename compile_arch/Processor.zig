@@ -106,7 +106,7 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
             const ij_fn = if (@hasDecl(Struct, "ij")) comptime resolve_encoders(Struct.ij) else no_encoders;
             const ik_fn = if (@hasDecl(Struct, "ik")) comptime resolve_encoders(Struct.ik) else no_encoders;
             const iw_fn = if (@hasDecl(Struct, "iw")) comptime resolve_encoders(Struct.iw) else no_encoders;
-            const ij_ik_fn = if (@hasDecl(Struct, "ij_ik")) comptime resolve_encoders(Struct.ij_ik) else no_encoders;
+            const ik_ij_fn = if (@hasDecl(Struct, "ik_ij")) comptime resolve_encoders(Struct.ik_ij) else no_encoders;
 
             const constraints = if (@hasDecl(Struct, "constraints")) comptime resolve_constraints(Struct.constraints) else &.{};
 
@@ -119,21 +119,23 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
                     const ij_encoders = ij_fn(alloc, parsed.signature);
                     const ik_encoders = ik_fn(alloc, parsed.signature);
                     const iw_encoders = iw_fn(alloc, parsed.signature);
-                    const ij_ik_encoders = ij_ik_fn(alloc, parsed.signature);
+                    const ik_ij_encoders = ik_ij_fn(alloc, parsed.signature);
 
-                    self.process_instruction(&Struct.entry, parsed.signature, constraints,
-                        encoders, ij_ik_encoders, ij_encoders, ik_encoders, iw_encoders, id_mode, &lookup);
+                    const final_encoding = self.finalize_encoding(parsed, constraints, encoders);
 
-                    self.encoding_list.append(self.finalize_encoding(parsed, constraints, encoders)) catch @panic("OOM");
+                    self.process_instruction(&Struct.entry, final_encoding, constraints,
+                        encoders, ik_ij_encoders, ij_encoders, ik_encoders, iw_encoders, id_mode, &lookup);
+
+                    self.encoding_list.append(final_encoding) catch @panic("OOM");
                 }
             } else {
                 const encoders = encoders_fn(alloc, null);
                 const ij_encoders = ij_fn(alloc, null);
                 const ik_encoders = ik_fn(alloc, null);
                 const iw_encoders = iw_fn(alloc, null);
-                const ij_ik_encoders = ij_ik_fn(alloc, null);
+                const ik_ij_encoders = ik_ij_fn(alloc, null);
                 self.process_instruction(&Struct.entry, null, constraints,
-                    encoders, ij_ik_encoders, ij_encoders, ik_encoders, iw_encoders, id_mode, &lookup);
+                    encoders, ik_ij_encoders, ij_encoders, ik_encoders, iw_encoders, id_mode, &lookup);
             }
         } else if (@hasDecl(Struct, "slot")) {
             const result = Microcode_Processor.process(.{
@@ -160,10 +162,10 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
 fn process_instruction(
     self: *Processor,
     entry_fn: *const anyopaque,
-    signature: ?isa.Instruction_Signature,
+    instruction_encoding: ?isa.Instruction_Encoding,
     constraints: []const Constraint,
     encoders: []const Encoder,
-    ij_ik_encoders: []const Encoder,
+    ik_ij_encoders: []const Encoder,
     ij_encoders: []const Encoder,
     ik_encoders: []const Encoder,
     iw_encoders: []const Encoder,
@@ -174,12 +176,12 @@ fn process_instruction(
     if (ij_encoders.len > 0) cycle_flags.insert(.ij_valid);
     if (ik_encoders.len > 0) cycle_flags.insert(.ik_valid);
     if (iw_encoders.len > 0) cycle_flags.insert(.iw_valid);
-    if (ij_ik_encoders.len > 0) {
+    if (ik_ij_encoders.len > 0) {
         cycle_flags.insert(.ij_valid);
         cycle_flags.insert(.ik_valid);
     }
 
-    var encoding_len = if (signature == null) null else encoding_length(encoders);
+    var encoding_len = if (instruction_encoding == null) null else encoding_length(encoders);
 
     var maybe_slot_handle: ?Slot_Data.Handle = null;
     var iter = Initial_Word_Encoding_Iterator.init(self.temp.allocator(), constraints, encoders, id_mode);
@@ -192,7 +194,7 @@ fn process_instruction(
                     .allocator = self.temp.allocator(),
                     .cycle_flags = cycle_flags,
                     .initial_word_encoding = &iter,
-                    .signature = signature,
+                    .signature = if (instruction_encoding) |ie| ie.signature else null,
                     .encoding_len = encoding_len,
                 },
                 .slot = .{ .forced_bits = 0 },
@@ -210,18 +212,22 @@ fn process_instruction(
         var ik: hw.IK = undefined;
         var iw = hw.IW.init(@intCast(iter.encode(iw_encoders, "IW")));
 
-        if (ij_ik_encoders.len > 0) {
-            const combined = iter.encode(ij_ik_encoders, "IJ/IK");
-            ik = hw.IK.init(@truncate(combined));
-            ij = hw.IJ.init(@intCast(combined >> 4));
-            if (ik_encoders.len > 0) @panic("Didn't expect both IK and IJ/IK encoders");
-            if (ij_encoders.len > 0) @panic("Didn't expect both IJ and IJ/IK encoders");
+        if (ik_ij_encoders.len > 0) {
+            const combined = iter.encode(ik_ij_encoders, "IK/IJ");
+            ij = hw.IJ.init(@truncate(combined));
+            ik = hw.IK.init(@intCast(combined >> 4));
+            if (ik_encoders.len > 0) @panic("Didn't expect both IK and IK/IJ encoders");
+            if (ij_encoders.len > 0) @panic("Didn't expect both IJ and IK/IJ encoders");
         } else {
             ij = hw.IJ.init(@intCast(iter.encode(ij_encoders, "IJ")));
             ik = hw.IK.init(@intCast(iter.encode(ik_encoders, "IK")));
         }
 
-        const entry: Decode_ROM_Builder.Entry = .{ .slot_handle = slot_handle, .ij = ij, .ik = ik, .iw = iw };
+        const entry: Decode_ROM_Builder.Entry = .{
+            .instruction_encoding = instruction_encoding,
+            .slot_handle = slot_handle,
+            .ij = ij, .ik = ik, .iw = iw,
+        };
 
         var undefined_bits_iter: Initial_Word_Undefined_Bits_Iterator = .{
             .base_address = base_addr,
@@ -445,6 +451,7 @@ pub const Initial_Word_Encoding_Iterator = struct {
             }
 
             const encoder_bits: hw.D.Raw = @truncate(mask);
+            std.log.info("Encoder #{}'s bit mask: {x}", .{ i, encoder_bits });
             undefined_bits &= ~encoder_bits;
 
             if (encoder.bit_offset < @bitSizeOf(hw.D)) {
@@ -562,7 +569,6 @@ pub const Initial_Word_Undefined_Bits_Iterator = struct {
             const undefined_bits = self.undefined_bits.raw();
             var bit = @as(hw.D.Raw, 1);
             for (0..@bitSizeOf(hw.D)) |_| {
-                bit <<= 1;
                 if (0 != (undefined_bits & bit)) {
                     next_permutation ^= bit;
                     if (0 == (permutation & bit)) {
@@ -570,11 +576,15 @@ pub const Initial_Word_Undefined_Bits_Iterator = struct {
                         break;
                     }
                 }
+                bit <<= 1;
             } else {
                 self.next_permutation = null;
             }
             const base = self.base_address.raw();
-            std.debug.assert((base | permutation) == (base ^ permutation)); // base and undefined should deal with distinct bits
+            if ((base | permutation) != (base ^ permutation)) {
+                std.log.err("base: {x}  permutation: {x}  undefined_bits: {x}", .{ base, permutation, self.undefined_bits.raw() });
+                std.debug.assert((base | permutation) == (base ^ permutation)); // base and undefined should deal with distinct bits
+            }
             return hw.decode.Address.init(base | permutation);
         }
         return null;

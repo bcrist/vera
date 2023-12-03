@@ -172,6 +172,7 @@ fn add_placeholder(self: *Spec_Parser, index: Parameter.Index, placeholder: []co
         .domain = .{ .enumerated = &.{} },
         .arithmetic_offset = 0,
         .bit_offset = 0,
+        .bit_count = 0,
     }) catch @panic("OOM");
 }
 fn add_placeholder_constant(self: *Spec_Parser, index: Parameter.Index, placeholder: []const u8) void {

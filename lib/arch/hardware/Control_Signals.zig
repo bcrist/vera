@@ -171,8 +171,8 @@ pub const K_Source = enum (u3) {
     sr2l = 3,
     kr = 4,
     ik_bit = 5,
-    ik_zx = 6,
-    ij_ik_zx = 7,
+    ik_ij_zx = 6,
+    iw_ik_ij_zx = 7,
 };
 
 pub const Compute_Unit = enum (u2) {
@@ -231,24 +231,20 @@ pub const Logic_Mode = packed struct (u6) {
         @"or" = 1,
         @"and" = 2,
     },
-    invert_jlm: bool,
-    invert_km: bool,
+    invert_jl: bool,
+    invert_k: bool,
     _reserved: u2 = 3,
 
-    // n.b. both operands are masked by jh:
-    // jlm = jl and not jh
-    // km = k and not jh
-
-    pub const jlm_xor_km     = Logic_Mode { .invert_jlm = false, .invert_km = false, .op = .xor    };
-    pub const jlm_xnor_km    = Logic_Mode { .invert_jlm = false, .invert_km = true,  .op = .xor    };
-    pub const jlm_or_km      = Logic_Mode { .invert_jlm = false, .invert_km = false, .op = .@"or"  };
-    pub const jlm_and_km     = Logic_Mode { .invert_jlm = false, .invert_km = false, .op = .@"and" };
-    pub const not_jlm_or_km  = Logic_Mode { .invert_jlm = true,  .invert_km = false, .op = .@"or"  };
-    pub const not_jlm_and_km = Logic_Mode { .invert_jlm = true,  .invert_km = false, .op = .@"and" };
-    pub const jlm_or_not_km  = Logic_Mode { .invert_jlm = false, .invert_km = true,  .op = .@"or"  };
-    pub const jlm_and_not_km = Logic_Mode { .invert_jlm = false, .invert_km = true,  .op = .@"and" };
-    pub const jlm_nand_km    = Logic_Mode { .invert_jlm = true,  .invert_km = true,  .op = .@"or"  };
-    pub const jlm_nor_km     = Logic_Mode { .invert_jlm = true,  .invert_km = true,  .op = .@"and" };
+    pub const jl_xor_k     = Logic_Mode { .invert_jl = false, .invert_k = false, .op = .xor    };
+    pub const jl_xnor_k    = Logic_Mode { .invert_jl = false, .invert_k = true,  .op = .xor    };
+    pub const jl_or_k      = Logic_Mode { .invert_jl = false, .invert_k = false, .op = .@"or"  };
+    pub const jl_and_k     = Logic_Mode { .invert_jl = false, .invert_k = false, .op = .@"and" };
+    pub const not_jl_or_k  = Logic_Mode { .invert_jl = true,  .invert_k = false, .op = .@"or"  };
+    pub const not_jl_and_k = Logic_Mode { .invert_jl = true,  .invert_k = false, .op = .@"and" };
+    pub const jl_or_not_k  = Logic_Mode { .invert_jl = false, .invert_k = true,  .op = .@"or"  };
+    pub const jl_and_not_k = Logic_Mode { .invert_jl = false, .invert_k = true,  .op = .@"and" };
+    pub const jl_nand_k    = Logic_Mode { .invert_jl = true,  .invert_k = true,  .op = .@"or"  };
+    pub const jl_nor_k     = Logic_Mode { .invert_jl = true,  .invert_k = true,  .op = .@"and" };
 };
 
 pub const Shift_Mode = packed struct (u6) {
@@ -308,8 +304,9 @@ pub const LL_Source = enum (u3) {
     d8_sx = 3,
     translation_info_l = 4,
     stat = 5,
-    iw_ik_ij_zx = 6,
+    // 6 unused
     pipeline = 7,
+    _,
 };
 
 pub const LH_Source = enum (u3) {

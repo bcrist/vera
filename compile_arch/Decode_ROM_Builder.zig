@@ -2,6 +2,7 @@ allocator: std.mem.Allocator,
 entries: []Entry,
 
 pub const Entry = struct {
+    instruction_encoding: ?Instruction_Encoding = null,
     slot_handle: ?Slot_Data.Handle = null,
     ij: hw.IJ = hw.IJ.init(0),
     ik: hw.IK = hw.IK.init(0),
@@ -67,6 +68,7 @@ const log = std.log.scoped(.compile_arch);
 const Decode_ROM_Builder = @This();
 const Slot_Data = Microcode_Builder.Slot_Data;
 const Microcode_Builder = @import("Microcode_Builder.zig");
+const Instruction_Encoding = arch.isa.Instruction_Encoding;
 const hw = arch.hw;
 const arch = @import("lib_arch");
 const std = @import("std");

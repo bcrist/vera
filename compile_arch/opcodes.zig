@@ -46,9 +46,46 @@ pub const Lo8 = enum (u8) {
 
     branch_imm_63_318 = 0xF0,
     branch_imm_n64_n319 = 0xF1,
+    branch_imm = Hi8.branch_4.to_lo8(),
+    branch_z_nz_imm = Hi8.branch_z_3.to_lo8(),
+    branch_conditional_imm_n6_12 = 0xF4,
 
     pub fn value(self: Lo8) u8 {
         return @intFromEnum(self);
+    }
+};
+
+pub const Hi8 = enum (u16) {
+    branch_4 = 0xF2_04,
+    // ...
+    branch_63 = 0xF2_3F,
+
+    branch_n64 = 0xF2_40,
+    // ...
+    branch_n1 = 0xF2_7F,
+
+    branch_z_3 = 0xF3_03,
+    // ...
+    branch_z_63 = 0xF3_3F,
+
+    branch_z_n64 = 0xF3_40,
+    // ...
+    branch_z_n1 = 0xF3_7F,
+
+    branch_nz_3 = 0xF3_83,
+    // ...
+    branch_nz_63 = 0xF3_BF,
+
+    branch_nz_n64 = 0xF3_C0,
+    // ...
+    branch_nz_n1 = 0xF3_FF,
+
+    pub fn value(self: Hi8) u8 {
+        return @truncate(@intFromEnum(self));
+    }
+
+    pub fn to_lo8(self: Hi8) u8 {
+        return @intCast(@intFromEnum(self) >> 8);
     }
 };
 
@@ -84,6 +121,8 @@ pub const Lo12 = enum (u12) {
     copy_uxp_to_reg32,
     copy_kxp_to_reg32,
     copy_asn_to_reg32,
+    branch_reg16u,
+    branch_reg16s,
 
     pop_reg8u = 0xFC_0,
     pop_reg8s,
@@ -92,6 +131,11 @@ pub const Lo12 = enum (u12) {
     push_reg8,
     push_reg16,
     push_reg32,
+    branch_abs_reg32,
+    branch_conditional_imm_13_268,
+    branch_conditional_imm_n262_n7,
+    branch_conditional_s16,
+    branch_double_conditional,
 
     pub fn value(self: Lo12) u12 {
         const raw = @intFromEnum(self);
@@ -112,132 +156,18 @@ pub const Lo16 = enum (u16) {
     add_sp_u16,
     nop2 = 0xFF_22,
     nop3 = 0xFF_33,
-    park = 0xFF_FF,
 
-    branch_4 = 0xFF_40,
-    branch_5,
-    branch_6,
-    branch_7,
-    branch_8,
-    branch_9,
-    branch_10,
-    branch_11,
-    branch_12,
-    branch_13,
-    branch_14,
-    branch_15,
-    branch_16,
-    branch_17,
-    branch_18,
-    branch_19,
-    branch_20,
-    branch_21,
-    branch_22,
-    branch_23,
-    branch_24,
-    branch_25,
-    branch_26,
-    branch_27,
-    branch_28,
-    branch_29,
-    branch_30,
-    branch_31,
-    branch_32,
-    branch_33,
-    branch_34,
-    branch_35,
-    branch_36,
-    branch_37,
-    branch_38,
-    branch_39,
-    branch_40,
-    branch_41,
-    branch_42,
-    branch_43,
-    branch_44,
-    branch_45,
-    branch_46,
-    branch_47,
-    branch_48,
-    branch_49,
-    branch_50,
-    branch_51,
-    branch_52,
-    branch_53,
-    branch_54,
-    branch_55,
-    branch_56,
-    branch_57,
-    branch_58,
-    branch_59,
-    branch_60,
-    branch_61,
-    branch_62,
-    branch_63,
-    branch_n64,
-    branch_n63,
-    branch_n62,
-    branch_n61,
-    branch_n60,
-    branch_n59,
-    branch_n58,
-    branch_n57,
-    branch_n56,
-    branch_n55,
-    branch_n54,
-    branch_n53,
-    branch_n52,
-    branch_n51,
-    branch_n50,
-    branch_n49,
-    branch_n48,
-    branch_n47,
-    branch_n46,
-    branch_n45,
-    branch_n44,
-    branch_n43,
-    branch_n42,
-    branch_n41,
-    branch_n40,
-    branch_n39,
-    branch_n38,
-    branch_n37,
-    branch_n36,
-    branch_n35,
-    branch_n34,
-    branch_n33,
-    branch_n32,
-    branch_n31,
-    branch_n30,
-    branch_n29,
-    branch_n28,
-    branch_n27,
-    branch_n26,
-    branch_n25,
-    branch_n24,
-    branch_n23,
-    branch_n22,
-    branch_n21,
-    branch_n20,
-    branch_n19,
-    branch_n18,
-    branch_n17,
-    branch_n16,
-    branch_n15,
-    branch_n14,
-    branch_n13,
-    branch_n12,
-    branch_n11,
-    branch_n10,
-    branch_n9,
-    branch_n8,
-    branch_n7,
-    branch_n6,
-    branch_n5,
-    branch_n4,
-    branch_n3,
-    branch_n2,
-    branch_n1,
+    branch_imm16u,
+    branch_imm16n,
+    branch_abs_imm32,
+    branch_to_start_of_current_page,
+    branch_to_start_of_next_page,
+    branch_to_start_of_current_block,
+    branch_to_start_of_next_block,
+    enable_translation_and_branch,
+    disable_translation_and_branch,
+
+    park = 0xFF_FF,
 
     pub fn value(self: Lo16) u16 {
         const raw = @intFromEnum(self);

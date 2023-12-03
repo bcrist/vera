@@ -17,14 +17,14 @@ pub const instructions = .{
             c.rsn_to_sr1h(.int_rsn_fault_iw_ik_ij);
             c.pipeline_id_to_ll();
             c.ll_to_rsn();
-            c.next_ij_ik_zx(@truncate(vector_register.raw() >> 16));
+            c.next_ik_ij_zx(@truncate(vector_register.raw() >> 16));
             c.next(compute_vector_address);
         }
 
         pub fn compute_vector_address(c: *Cycle) void {
             c.reload_asn();
             c.srl_to_jl(.one);
-            c.ij_ik_zx_to_k();
+            c.ik_ij_zx_to_k();
             c.jl_times_k__swap_result_halves(.zx, .zx);
             c.compute_to_l(.fresh, .no_flags);
             c.l_to_sr(.temp_1);

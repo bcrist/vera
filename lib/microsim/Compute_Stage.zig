@@ -124,16 +124,16 @@ fn simulate_alu(in: Compute_Stage, out: *Transact_Stage) void {
     } else {
         const mode = in.cs.mode.logic;
 
-        var jlm = in.j.lo.raw() & in.j.hi.raw();
-        var km = in.k.raw() & in.j.hi.raw();
+        var jl = in.j.lo.raw();
+        var k = in.k.raw();
 
-        if (mode.invert_jlm) jlm = ~jlm;
-        if (mode.invert_km) km = ~km;
+        if (mode.invert_jl) jl = ~jl;
+        if (mode.invert_k) k = ~k;
 
         const result = switch (mode.op) {
-            .xor => jlm ^ km,
-            .@"or" => jlm | km,
-            .@"and" => jlm & km,
+            .xor => jl ^ k,
+            .@"or" => jl | k,
+            .@"and" => jl & k,
         };
 
         out.alu_data.lo = hw.LL.init(result);

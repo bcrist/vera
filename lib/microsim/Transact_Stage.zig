@@ -157,8 +157,8 @@ fn compute_l(in: Transact_Stage, d: hw.D, at_info: at.Info, power: hw.Power_Mode
                 .pipeline = in.pipeline,
                 .exec = in.exec_mode,
             }).raw(),
-            .iw_ik_ij_zx => bits.concat(.{ in.ij.raw(), in.ik.raw(), in.iw.raw() }),
             .pipeline => in.pipeline.raw(),
+            _ => 0xBADC,
         }),
         .hi = hw.LH.init(switch (in.cs.lh_src) {
             .zero => 0,

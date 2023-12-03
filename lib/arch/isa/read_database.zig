@@ -363,11 +363,15 @@ pub fn Parser(comptime Reader: type) type {
                     .domain = .{ .range = .{ .first = 0, .last = 0 }},
                     .arithmetic_offset = 0,
                     .bit_offset = 0,
+                    .bit_count = 0,
                 };
 
                 while (try self.reader.any_expression()) |expr| {
                     if (std.mem.eql(u8, expr, "src")) {
                         enc.value = try self.parse_value_source();
+                        try self.reader.require_close();
+                    } else if (std.mem.eql(u8, expr, "width")) {
+                        enc.bit_count = try self.reader.require_any_int(Encoded_Instruction.Bit_Length_Type, 0);
                         try self.reader.require_close();
                     } else if (std.mem.eql(u8, expr, "shift")) {
                         enc.bit_offset = try self.reader.require_any_int(Encoded_Instruction.Bit_Length_Type, 0);

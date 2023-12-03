@@ -36,7 +36,7 @@ pub const instructions = .{
             opcode,
             Encoder.shifted(8, Int(.imm, u8)),
         };
-        pub const ij_ik = Int(.imm, u8);
+        pub const ik_ij = Int(.imm, u8);
 
         fn opcode(mnemonic: isa.Mnemonic) opcodes.Lo8 {
             return switch (mnemonic) {
@@ -48,7 +48,7 @@ pub const instructions = .{
 
         pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
             c.sr_to_j(.sp);
-            c.ij_ik_zx_to_k();
+            c.ik_ij_zx_to_k();
             switch (mnemonic) {
                 .frame => c.j_minus_k_to_l(.zx, .fresh, .no_flags),
                 .unframe => c.j_plus_k_to_l(.zx, .fresh, .no_flags),
