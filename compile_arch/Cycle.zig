@@ -58,7 +58,7 @@ pub fn finish(cycle: *Cycle) void {
             cycle.validate_iw();
         },
         .compute_l => cycle.validate_compute_mode(null),
-        .d        => cycle.validate_bus_read(.word),
+        .d        => cycle.validate_bus_read(null),
         .d8_sx    => cycle.validate_bus_read(.byte),
     }
 

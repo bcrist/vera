@@ -41,21 +41,19 @@ pub const Lo8 = enum (u8) {
     andnot_reg16_reg16,
     copy_u4_reg16,
     copy_n4_reg16,
-
+    subtract_sp_u8,
+    add_sp_u8,
 };
 
 pub const Lo12 = enum (u12) {
-
     compare_reg16_i16 = 0x0_FE,
     compare_reg16_i16_with_carry = 0x1_FE,
     compare_reg32_u16 = 0x2_FE,
     compare_reg32_n16 = 0x3_FE,
-
     copy_ip_relative_u16_reg32 = 0x4_FE,
     copy_sp_relative_u16_reg32 = 0x5_FE,
     copy_ip_relative_n16_reg32 = 0x6_FE,
     copy_sp_relative_n16_reg32 = 0x7_FE,
-
     update_address_translation__data_write = 0x8_FE,
     update_address_translation__data_read = 0x9_FE,
     update_address_translation__stack = 0xA_FE,
@@ -71,16 +69,22 @@ pub const Lo12 = enum (u12) {
     copy_reg32_to_uxp = 0x3_FD,
     copy_reg32_to_kxp = 0x4_FD,
     copy_reg32_to_asn = 0x5_FD,
-
     register_call = 0x6_FD,
     switch_to_registerset = 0x7_FD,
-
     copy_sp_to_reg32 = 0x8_FD,
     copy_rp_to_reg32 = 0x9_FD,
     copy_bp_to_reg32 = 0xA_FD,
     copy_uxp_to_reg32 = 0xB_FD,
     copy_kxp_to_reg32 = 0xC_FD,
     copy_asn_to_reg32 = 0xD_FD,
+
+    pop_reg8u = 0x0_FC,
+    pop_reg8s = 0x1_FC,
+    pop_reg16 = 0x2_FC,
+    pop_reg32 = 0x3_FC,
+    push_reg8 = 0x4_FC,
+    push_reg16 = 0x5_FC,
+    push_reg32 = 0x6_FC,
 };
 
 pub const Lo16 = enum (u16) {
@@ -88,4 +92,8 @@ pub const Lo16 = enum (u16) {
     return_from_interrupt = 0x01_FF,
     return_from_fault = 0x02_FF,
     exit_handler = 0x03_FF,
+    subtract_sp_r0u = 0x04_FF,
+    add_sp_r0u = 0x05_FF,
+    subtract_sp_u16 = 0x06_FF,
+    add_sp_u16 = 0x07_FF,
 };

@@ -106,6 +106,7 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
             const ij_fn = if (@hasDecl(Struct, "ij")) comptime resolve_encoders(Struct.ij) else no_encoders;
             const ik_fn = if (@hasDecl(Struct, "ik")) comptime resolve_encoders(Struct.ik) else no_encoders;
             const iw_fn = if (@hasDecl(Struct, "iw")) comptime resolve_encoders(Struct.iw) else no_encoders;
+            const ij_ik_fn = if (@hasDecl(Struct, "ij_ik")) comptime resolve_encoders(Struct.ij_ik) else no_encoders;
 
             const constraints = if (@hasDecl(Struct, "constraints")) comptime resolve_constraints(Struct.constraints) else &.{};
 
@@ -118,9 +119,10 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
                     const ij_encoders = ij_fn(alloc, parsed.signature);
                     const ik_encoders = ik_fn(alloc, parsed.signature);
                     const iw_encoders = iw_fn(alloc, parsed.signature);
+                    const ij_ik_encoders = ij_ik_fn(alloc, parsed.signature);
 
                     self.process_instruction(&Struct.entry, parsed.signature, constraints,
-                        encoders, ij_encoders, ik_encoders, iw_encoders, id_mode, &lookup);
+                        encoders, ij_ik_encoders, ij_encoders, ik_encoders, iw_encoders, id_mode, &lookup);
 
                     self.encoding_list.append(self.finalize_encoding(parsed, constraints, encoders)) catch @panic("OOM");
                 }
@@ -129,8 +131,9 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
                 const ij_encoders = ij_fn(alloc, null);
                 const ik_encoders = ik_fn(alloc, null);
                 const iw_encoders = iw_fn(alloc, null);
+                const ij_ik_encoders = ij_ik_fn(alloc, null);
                 self.process_instruction(&Struct.entry, null, constraints,
-                    encoders, ij_encoders, ik_encoders, iw_encoders, id_mode, &lookup);
+                    encoders, ij_ik_encoders, ij_encoders, ik_encoders, iw_encoders, id_mode, &lookup);
             }
         } else if (@hasDecl(Struct, "slot")) {
             const result = Microcode_Processor.process(.{
@@ -160,6 +163,7 @@ fn process_instruction(
     signature: ?isa.Instruction_Signature,
     constraints: []const Constraint,
     encoders: []const Encoder,
+    ij_ik_encoders: []const Encoder,
     ij_encoders: []const Encoder,
     ik_encoders: []const Encoder,
     iw_encoders: []const Encoder,
@@ -170,6 +174,10 @@ fn process_instruction(
     if (ij_encoders.len > 0) cycle_flags.insert(.ij_valid);
     if (ik_encoders.len > 0) cycle_flags.insert(.ik_valid);
     if (iw_encoders.len > 0) cycle_flags.insert(.iw_valid);
+    if (ij_ik_encoders.len > 0) {
+        cycle_flags.insert(.ij_valid);
+        cycle_flags.insert(.ik_valid);
+    }
 
     var encoding_len = if (signature == null) null else encoding_length(encoders);
 
@@ -198,12 +206,22 @@ fn process_instruction(
             break :handle result.slot_handle;
         };
 
-        const entry: Decode_ROM_Builder.Entry = .{
-            .slot_handle = slot_handle,
-            .ij = hw.IJ.init(@intCast(iter.encode(ij_encoders, "IJ"))),
-            .ik = hw.IK.init(@intCast(iter.encode(ik_encoders, "IK"))),
-            .iw = hw.IW.init(@intCast(iter.encode(iw_encoders, "IW"))),
-        };
+        var ij: hw.IJ = undefined;
+        var ik: hw.IK = undefined;
+        var iw = hw.IW.init(@intCast(iter.encode(iw_encoders, "IW")));
+
+        if (ij_ik_encoders.len > 0) {
+            const combined = iter.encode(ij_ik_encoders, "IJ/IK");
+            ik = hw.IK.init(@truncate(combined));
+            ij = hw.IJ.init(@intCast(combined >> 4));
+            if (ik_encoders.len > 0) @panic("Didn't expect both IK and IJ/IK encoders");
+            if (ij_encoders.len > 0) @panic("Didn't expect both IJ and IJ/IK encoders");
+        } else {
+            ij = hw.IJ.init(@intCast(iter.encode(ij_encoders, "IJ")));
+            ik = hw.IK.init(@intCast(iter.encode(ik_encoders, "IK")));
+        }
+
+        const entry: Decode_ROM_Builder.Entry = .{ .slot_handle = slot_handle, .ij = ij, .ik = ik, .iw = iw };
 
         var undefined_bits_iter: Initial_Word_Undefined_Bits_Iterator = .{
             .base_address = base_addr,

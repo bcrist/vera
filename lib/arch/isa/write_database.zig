@@ -202,7 +202,9 @@ fn write_value_source(v: Value, w: anytype) !void {
                 .param_offset_register => "param-offset-reg",
             });
             try w.int(info.index.raw(), 10);
-            try w.string(info.name);
+            if (info.name.len > 0) {
+                try w.string(info.name);
+            }
             _ = try w.close();
         },
     }

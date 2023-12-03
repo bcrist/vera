@@ -1,208 +1,224 @@
 pub const instructions = .{
-    struct { pub const spec =
-        \\c x(src) -> sp
-        \\c x(src) -> sp
-        \\c x(src) -> sp
+    struct { pub const spec = // [un]frame r0 .unsigned
+        \\unframe r0 .unsigned
+        \\frame r0 .unsigned
         ;
-        // pub const encoding = .{
-        //     opcode,
-        //     Encoder.shifted(12, Reg(.src)),
-        // };
+        pub const encoding = .{
+            opcode,
+        };
+        pub const ik: u4 = 0;
 
-        // fn opcode(params: []const Parameter.Signature) opcodes.Lo12 {
-        //     return switch (params[1].base.sr) {
-        //         .sp => .copy_reg32_to_sp,
-        //     };
-        // }
+        fn opcode(mnemonic: isa.Mnemonic) opcodes.Lo16 {
+            return switch (mnemonic) {
+                .frame => .subtract_sp_r0u,
+                .unframe => .add_sp_r0u,
+                else => unreachable,
+            };
+        }
 
-        // pub fn entry(c: *Cycle, params: []const Parameter.Signature) void {
-        //     c.reg32_to_l();
-        //     c.l_to_sr(switch (params[1].base.sr) {
-        //         .sp => .sp,
-        //     });
-        //     c.load_and_exec_next_insn();
-        // }
+        pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
+            c.sr_to_j(.sp);
+            c.reg_to_k();
+            switch (mnemonic) {
+                .frame => c.j_minus_k_to_l(.zx, .fresh, .no_flags),
+                .unframe => c.j_plus_k_to_l(.zx, .fresh, .no_flags),
+                else => unreachable,
+            }
+            c.l_to_sr(.sp);
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // [un]frame (imm)
+        \\unframe (imm)
+        \\frame (imm)
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(8, Int(.imm, u8)),
+        };
+        pub const ij_ik = Int(.imm, u8);
+
+        fn opcode(mnemonic: isa.Mnemonic) opcodes.Lo8 {
+            return switch (mnemonic) {
+                .frame => .subtract_sp_u8,
+                .unframe => .add_sp_u8,
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
+            c.sr_to_j(.sp);
+            c.ij_ik_zx_to_k();
+            switch (mnemonic) {
+                .frame => c.j_minus_k_to_l(.zx, .fresh, .no_flags),
+                .unframe => c.j_plus_k_to_l(.zx, .fresh, .no_flags),
+                else => unreachable,
+            }
+            c.l_to_sr(.sp);
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // [un]frame (imm)
+        \\unframe (imm)
+        \\frame (imm)
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(16, Int(.imm, u16)),
+        };
+
+        fn opcode(mnemonic: isa.Mnemonic) opcodes.Lo16 {
+            return switch (mnemonic) {
+                .frame => .subtract_sp_u16,
+                .unframe => .add_sp_u16,
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle) void {
+            c.ip_read_to_d(2, .word);
+            c.d_to_l(.zx);
+            c.l_to_sr(.temp_2);
+            c.next(modify_sp);
+        }
+
+        pub fn modify_sp(c: *Cycle, mnemonic: isa.Mnemonic) void {
+            c.sr_to_j(.sp);
+            c.srl_to_k(.temp_2);
+            switch (mnemonic) {
+                .frame => c.j_minus_k_to_l(.zx, .fresh, .no_flags),
+                .unframe => c.j_plus_k_to_l(.zx, .fresh, .no_flags),
+                else => unreachable,
+            }
+            c.l_to_sr(.sp);
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // pop <reg>
+        \\pop b(reg) .signed
+        \\pop b(reg) .unsigned
+        \\pop r(reg)
+        \\pop x(reg)
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(12, Reg(.reg)),
+        };
+        pub const iw = Reg(.reg);
+
+        fn opcode(params: []const Parameter.Signature) opcodes.Lo12 {
+            return switch (params[0].base) {
+                .reg8 => |signedness| switch (signedness.?) {
+                    .unsigned => .pop_reg8u,
+                    .signed => .pop_reg8s,
+                },
+                .reg16 => .pop_reg16,
+                .reg32 => .pop_reg32,
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle, params: []const Parameter.Signature) void {
+            c.read_to_d(.sp, 0, switch (params[0].base) {
+                .reg8 => .byte,
+                .reg16, .reg32 => .word,
+                else => unreachable,
+            }, .stack);
+            c.d_to_l(switch (params[0].base) {
+                .reg8 => |signedness| switch (signedness.?) {
+                    .unsigned => .zx,
+                    .signed => .sx,
+                },
+                .reg16, .reg32 => .zx,
+                else => unreachable,
+            });
+            c.ll_to_reg();
+            if (params[0].base == .reg32) c.next_iw_xor1();
+            c.next(if (params[0].base == .reg32) pop_high else modify_sp);
+        }
+
+        pub fn pop_high(c: *Cycle) void {
+            c.read_to_d(.sp, 2, .word, .stack);
+            c.d_to_ll();
+            c.ll_to_reg();
+            c.next(modify_sp);
+        }
+
+        pub fn modify_sp(c: *Cycle, params: []const Parameter.Signature) void {
+            c.sr_to_j(.sp);
+            c.literal_to_k(switch (params[0].base) {
+                .reg8 => 1,
+                .reg16 => 2,
+                .reg32 => 4,
+                else => unreachable,
+            });
+            c.j_plus_k_to_l(.zx, .fresh, .no_flags);
+            c.l_to_sr(.sp);
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // push <reg>
+        \\push b(reg)
+        \\push r(reg)
+        \\push x(reg)
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(12, Reg(.reg)),
+        };
+        pub const ij = Reg(.reg);
+
+        fn opcode(params: []const Parameter.Signature) opcodes.Lo12 {
+            return switch (params[0].base) {
+                .reg8 => .push_reg8,
+                .reg16 => .push_reg16,
+                .reg32 => .push_reg32,
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle, params: []const Parameter.Signature) void {
+            c.reg_to_jl();
+            c.jl_to_ll();
+            c.write_from_ll(.sp, switch (params[0].base) {
+                .reg8 => -1,
+                .reg16 => -2,
+                .reg32 => -4,
+                else => unreachable,
+            }, switch (params[0].base) {
+                .reg8 => .byte,
+                .reg16, .reg32 => .word,
+                else => unreachable,
+            }, .stack);
+            if (params[0].base == .reg32) c.next_ij_xor1();
+            c.next(if (params[0].base == .reg32) push_high else modify_sp);
+        }
+
+        pub fn push_high(c: *Cycle) void {
+            c.reg_to_jl();
+            c.jl_to_ll();
+            c.write_from_ll(.sp, -2, .word, .stack);
+            c.next(modify_sp);
+        }
+
+        pub fn modify_sp(c: *Cycle, params: []const Parameter.Signature) void {
+            c.sr_to_j(.sp);
+            c.literal_to_k(switch (params[0].base) {
+                .reg8 => 1,
+                .reg16 => 2,
+                .reg32 => 4,
+                else => unreachable,
+            });
+            c.j_minus_k_to_l(.zx, .fresh, .no_flags);
+            c.l_to_sr(.sp);
+            c.load_and_exec_next_insn();
+        }
     },
 };
 
-
-pub fn _0008() void {
-    encoding(.UNFRAME, .{ .R0U });
-    desc("Add 16b register to stack pointer");
-
-    SR_plus_reg_to_L(.sp, 0, .zx, .fresh, .no_flags);
-    L_to_SR(.sp);
-    load_and_exec_next_insn(2);
-}
-
-pub fn _0009() void {
-    encoding(.FRAME, .{ .R0U });
-    desc("Subtract 16b register from stack pointer");
-
-    SR_minus_reg_to_L(.sp, 0, .zx, .fresh, .no_flags);
-    L_to_SR(.sp);
-    load_and_exec_next_insn(2);
-}
-
-pub fn _5A00_5AFF() void {
-    encoding(.UNFRAME, .{ .immba8u });
-    desc("Add immediate to stack pointer");
-
-    SR_to_J(.sp);
-    OB_OA_to_K();
-    add_to_L(.zx, .fresh, .no_flags);
-    L_to_SR(.sp);
-    load_and_exec_next_insn(2);
-}
-
-pub fn _5B00_5BFF() void {
-    encoding(.FRAME, .{ .immba8u });
-    desc("Subtract immediate from stack pointer");
-
-    SR_to_J(.sp);
-    OB_OA_to_K();
-    sub_to_L(.zx, .fresh, .no_flags);
-    L_to_SR(.sp);
-    load_and_exec_next_insn(2);
-}
-
-pub fn _0004() void {
-    encoding(.UNFRAME, .{ .imm16u });
-    desc("Add immediate to stack pointer");
-
-    IP_read_to_D(2, .word);
-    D_to_L(.zx);
-    L_to_SR(.temp_2);
-    next_cycle();
-
-    SR_to_J(.sp);
-    SRL_to_K(.temp_2);
-    add_to_L(.zx, .fresh, .no_flags);
-    L_to_SR(.sp);
-    load_and_exec_next_insn(4);
-}
-
-pub fn _0005() void {
-    encoding(.FRAME, .{ .imm16u });
-    desc("Subtract immediate from stack pointer");
-
-    IP_read_to_D(2, .word);
-    D_to_L(.zx);
-    L_to_SR(.temp_2);
-    next_cycle();
-
-    SR_to_J(.sp);
-    SRL_to_K(.temp_2);
-    sub_to_L(.zx, .fresh, .no_flags);
-    L_to_SR(.sp);
-    load_and_exec_next_insn(4);
-}
-
-pub fn _E480_E49F() void {
-    var ext: cb.ZeroOrSignExtension = undefined;
-    switch (OB()) {
-        0x8 => {
-            encoding(.POP, .{ .BaU });
-            desc("Pop unsigned byte from stack to 16b register");
-            ext = .zx;
-        },
-        0x9 => {
-            encoding(.POP, .{ .BaS });
-            desc("Pop signed byte from stack to 16b register");
-            ext = .sx;
-        },
-        else => unreachable,
-    }
-
-    read_to_D(.sp, 0, .byte, .stack);
-    D8_to_LL(ext);
-    LL_to_op_reg(.OA);
-    next_cycle();
-
-    SR_plus_literal_to_L(.sp, 1, .fresh, .no_flags);
-    L_to_SR(.sp);
-    load_and_exec_next_insn(2);
-}
-
-pub fn _E4A0_E4AF() void {
-    encoding(.POP, .{ .Ra });
-    desc("Pop word from stack to 16b register");
-
-    read_to_D(.sp, 0, .word, .stack);
-    D_to_LL();
-    LL_to_op_reg(.OA);
-    next_cycle();
-
-    SR_plus_literal_to_L(.sp, 2, .fresh, .no_flags);
-    L_to_SR(.sp);
-    load_and_exec_next_insn(2);
-}
-
-pub fn _E4B0_E4BF() void {
-    encoding(.POP, .{ .Xa });
-    desc("Pop double word from stack to 32b register");
-
-    read_to_D(.sp, 0, .word, .stack);
-    D_to_L(.zx);
-    L_to_SR(.temp_2);
-    next_cycle();
-
-    read_to_D(.sp, 2, .word, .stack);
-    D_to_LH();
-    SRL_to_LL(.temp_2);
-    L_to_op_reg32(.OA);
-    next_cycle();
-
-    SR_plus_literal_to_L(.sp, 4, .fresh, .no_flags);
-    L_to_SR(.sp);
-    load_and_exec_next_insn(2);
-}
-
-pub fn _E4C0_E4CF() void {
-    encoding(.PUSH, .{ .Ba });
-    desc("Push byte to stack from 16b register");
-
-    op_reg_to_LL(.OA);
-    write_from_LL(.sp, -1, .byte, .stack);
-    next_cycle();
-
-    SR_minus_literal_to_L(.sp, 1, .fresh, .no_flags);
-    L_to_SR(.sp);
-    load_and_exec_next_insn(2);
-}
-
-pub fn _E4D0_E4DF() void {
-    encoding(.PUSH, .{ .Ra });
-    desc("Push word to stack from 16b register");
-
-    op_reg_to_LL(.OA);
-    write_from_LL(.sp, -2, .word, .stack);
-    next_cycle();
-
-    SR_minus_literal_to_L(.sp, 2, .fresh, .no_flags);
-    L_to_SR(.sp);
-    load_and_exec_next_insn(2);
-}
-
-pub fn _E4E0_E4EF() void {
-    encoding(.PUSH, .{ .Xa });
-    desc("Push double word to stack from 32b register");
-
-    op_reg_to_LL(.OA);
-    write_from_LL(.sp, -4, .word, .stack);
-    next_cycle();
-
-    op_reg_to_LL(.OAxor1);
-    write_from_LL(.sp, -2, .word, .stack);
-    next_cycle();
-
-    SR_minus_literal_to_L(.sp, 4, .fresh, .no_flags);
-    L_to_SR(.sp);
-    load_and_exec_next_insn(2);
-}
-
 const Cycle = @import("Cycle.zig");
 const Encoder = isa.Instruction_Encoding.Encoder;
+const Instruction_Signature = isa.Instruction_Signature;
 const Parameter = isa.Parameter;
 const Int = placeholders.Int;
 const Range = placeholders.Range;

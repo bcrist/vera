@@ -518,7 +518,7 @@ pub fn Parser(comptime Reader: type) type {
         fn parse_placeholder_info(self: *Self) !Placeholder_Info {
             if (try self.reader.expression("param-constant")) {
                 const index = Parameter.Index.init(try self.reader.require_any_int(Parameter.Index.Raw, 0));
-                const name = try self.data.strings.intern(try self.reader.require_any_string(), self.data);
+                const name = try self.data.strings.intern((try self.reader.any_string()) orelse "", self.data);
                 try self.reader.require_close();
                 return .{
                     .kind = .param_constant,
@@ -529,7 +529,7 @@ pub fn Parser(comptime Reader: type) type {
 
             if (try self.reader.expression("param-base-reg")) {
                 const index = Parameter.Index.init(try self.reader.require_any_int(Parameter.Index.Raw, 0));
-                const name = try self.data.strings.intern(try self.reader.require_any_string(), self.data);
+                const name = try self.data.strings.intern((try self.reader.any_string()) orelse "", self.data);
                 try self.reader.require_close();
                 return .{
                     .kind = .param_base_register,
@@ -540,7 +540,7 @@ pub fn Parser(comptime Reader: type) type {
 
             if (try self.reader.expression("param-offset-reg")) {
                 const index = Parameter.Index.init(try self.reader.require_any_int(Parameter.Index.Raw, 0));
-                const name = try self.data.strings.intern(try self.reader.require_any_string(), self.data);
+                const name = try self.data.strings.intern((try self.reader.any_string()) orelse "", self.data);
                 try self.reader.require_close();
                 return .{
                     .kind = .param_offset_register,
