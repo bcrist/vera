@@ -20,8 +20,8 @@
             .hash = "12201a8c1ceb731f541d0eb4f37174129413643f6abf1e5cf18681e6c6555f5390de",
         },
         .@"Zig-SX" = .{
-            .url = "https://github.com/bcrist/Zig-SX/archive/fcb6ab57091591e6cfd0cb003cf6823a8a728c77.tar.gz",
-            .hash = "1220244d1ed2c5ea095982207d36d7b7999b84ebc4d65b2ce672bf8c8da172719fcc",
+            .url = "https://github.com/bcrist/Zig-SX/archive/7de3dc7d92d37aaf6ddbe14081577cdab1800220.tar.gz",
+            .hash = "12204fe87932f6fe030901423ee1fc780ecf34c13c1c5275bab0b5930cb83d31ae8b",
         },
         .@"Zig-S-Records" = .{
             .url = "https://github.com/bcrist/Zig-S-Records/archive/e26c669a0ac15d2b8a9ab994a09d857d42dd11a6.tar.gz",
