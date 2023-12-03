@@ -8,10 +8,6 @@ sync_to_end_of_line: bool,
 token_kinds: []Token_Kind,
 token_offsets: []u32,
 
-directive_map: std.StringHashMapUnmanaged(Instruction.Operation_Type),
-
-const max_directive_length = 8;
-
 pub fn init(
     temp: std.mem.Allocator,
     gpa: std.mem.Allocator,
@@ -19,25 +15,6 @@ pub fn init(
     out: *Source_File,
     errors: *std.ArrayListUnmanaged(Error),
 ) Parser {
-    var directive_map = std.StringHashMapUnmanaged(Instruction.Operation_Type) {};
-
-    const directives = comptime std.enums.values(Instruction.Operation_Type);
-    directive_map.ensureUnusedCapacity(temp, directives.len) catch @panic("OOM");
-    errdefer directive_map.deinit(temp);
-
-    inline for (directives) |directive| {
-        switch (directive) {
-            .none, .insn, .bound_insn => {},
-            inline else => |comptime_directive| {
-                const lower = comptime blk: {
-                    var buf = [_]u8{0} ** max_directive_length;
-                    break :blk std.ascii.lowerString(&buf, @tagName(comptime_directive));
-                };
-                directive_map.putAssumeCapacityNoClobber(lower, directive);
-            },
-        }
-    }
-
     return .{
         .temp = temp,
         .gpa = gpa,
@@ -48,7 +25,6 @@ pub fn init(
         .sync_to_end_of_line = false,
         .token_kinds = out.tokens.items(.kind),
         .token_offsets = out.tokens.items(.offset),
-        .directive_map = directive_map,
     };
 }
 
@@ -748,12 +724,8 @@ fn parse_directive(self: *Parser) ?Instruction.Operation_Type {
 
     if (self.try_token(.id)) {
         const directive_str = self.token_location(self.next_token - 1);
-        if (directive_str.len <= max_directive_length) {
-            var buf = [_]u8 {0} ** max_directive_length;
-            const lower = std.ascii.lowerString(&buf, directive_str);
-            if (self.directive_map.get(lower)) |directive| {
-                return directive;
-            }
+        if (directive_map.get(directive_str)) |directive| {
+            return directive;
         }
         self.record_error_rel("Unrecognized directive", -1);
     } else {
@@ -796,6 +768,10 @@ pub fn record_error_rel(self: *Parser, desc: []const u8, token_offset: i8) void 
 pub fn token_location(self: *Parser, handle: Token.Handle) []const u8 {
     return self.out.tokens.get(handle).location(self.out.source);
 }
+
+const directive_map = parse_helpers.Case_Insensitive_Enum_Map(Instruction.Operation_Type, .{
+    .excluded_values = &.{ "none", "insn", "bound_insn" },
+}, .{});
 
 const Parser = @This();
 const Source_File = @import("Source_File.zig");

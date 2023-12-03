@@ -23,7 +23,7 @@ pub fn main() !void {
     processor.process(@import("compile_arch/_interrupt.zig").instructions);
     processor.process(@import("compile_arch/_alu.zig").instructions);
     processor.process(@import("compile_arch/_copy.zig").instructions);
-    // processor.process(@import("compile_arch/_branch.zig").instructions);
+    processor.process(@import("compile_arch/_branch.zig").instructions);
     processor.process(@import("compile_arch/_call.zig").instructions);
     // processor.process(@import("compile_arch/_load_store.zig").instructions);
     processor.process(@import("compile_arch/_stack.zig").instructions);

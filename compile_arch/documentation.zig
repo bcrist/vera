@@ -167,20 +167,20 @@ fn generate_encoding_table() !void {
             var class: []const u8 = "";
 
             for (std.enums.values(opcodes.Lo8)) |opcode| {
-                if (@intFromEnum(opcode) == byte) {
+                if (opcode.value() == byte) {
                     title = try std.fmt.bufPrint(&temp_buf, "0x{X:0>2}: {s}", .{ byte, @tagName(opcode) });
                     class = "lo8";
                     break;
                 }
             } else for (std.enums.values(opcodes.Lo12)) |opcode| {
-                const truncated: u8 = @truncate(@intFromEnum(opcode));
+                const truncated: u8 = @truncate(opcode.value());
                 if (truncated == byte) {
                     title = try std.fmt.bufPrint(&temp_buf, "0x{X:0>2}", .{ byte });
                     class = "lo12";
                     break;
                 }
             } else for (std.enums.values(opcodes.Lo16)) |opcode| {
-                const truncated: u8 = @truncate(@intFromEnum(opcode));
+                const truncated: u8 = @truncate(opcode.value());
                 if (truncated == byte) {
                     title = try std.fmt.bufPrint(&temp_buf, "0x{X:0>2}", .{ byte });
                     class = "lo16";
@@ -254,15 +254,15 @@ fn generate_encoding_table_inner(prefix_byte: u8) !void {
             var class: []const u8 = "";
 
             for (std.enums.values(opcodes.Lo8)) |opcode| {
-                if (@intFromEnum(opcode) == prefix_byte) {
+                if (opcode.value() == prefix_byte) {
                     title = try std.fmt.bufPrint(&temp_buf, "0x{X:0>2}{X:0>2}: {s}", .{ second_byte, prefix_byte, @tagName(opcode) });
                     class = "lo8";
                     break;
                 }
             } else for (std.enums.values(opcodes.Lo12)) |opcode| {
-                const truncated: u8 = @truncate(@intFromEnum(opcode));
+                const truncated: u8 = @truncate(opcode.value());
                 if (truncated == prefix_byte) {
-                    const remaining: u4 = @intCast(@intFromEnum(opcode) >> 8);
+                    const remaining: u4 = @intCast(opcode.value() >> 8);
                     if (remaining == @as(u4, @truncate(second_byte))) {
                         title = try std.fmt.bufPrint(&temp_buf, "0x{X:0>2}{X:0>2}: {s}", .{ second_byte, prefix_byte, @tagName(opcode) });
                         class = "lo12";
@@ -270,9 +270,9 @@ fn generate_encoding_table_inner(prefix_byte: u8) !void {
                     }
                 }
             } else for (std.enums.values(opcodes.Lo16)) |opcode| {
-                const truncated: u8 = @truncate(@intFromEnum(opcode));
+                const truncated: u8 = @truncate(opcode.value());
                 if (truncated == prefix_byte) {
-                    const remaining: u8 = @intCast(@intFromEnum(opcode) >> 8);
+                    const remaining: u8 = @intCast(opcode.value() >> 8);
                     if (remaining == second_byte) {
                         title = try std.fmt.bufPrint(&temp_buf, "0x{X:0>2}{X:0>2}: {s}", .{ second_byte, prefix_byte, @tagName(opcode) });
                         class = "lo16";
