@@ -188,21 +188,21 @@ pub fn finish(cycle: *Cycle) void {
         .from_ij => cycle.flags.setPresent(.ij_valid, old_flags.contains(.ij_valid)),
         .from_ik => cycle.flags.setPresent(.ij_valid, old_flags.contains(.ik_valid)),
         .from_iw => cycle.flags.setPresent(.ij_valid, old_flags.contains(.iw_valid)),
-        .xor1, .xor2 => {},
+        .xor1, .increment => {},
     }
     switch (cycle.signals.ik_op) {
         .zero, .from_continuation, .from_decode => cycle.flags.insert(.ik_valid),
         .from_ij => cycle.flags.setPresent(.ik_valid, old_flags.contains(.ij_valid)),
         .from_ik => cycle.flags.setPresent(.ik_valid, old_flags.contains(.ik_valid)),
         .from_iw => cycle.flags.setPresent(.ik_valid, old_flags.contains(.iw_valid)),
-        .xor1, .xor2 => {},
+        .xor1, .increment => {},
     }
     switch (cycle.signals.iw_op) {
         .zero, .from_continuation, .from_decode => cycle.flags.insert(.iw_valid),
         .from_ij => cycle.flags.setPresent(.iw_valid, old_flags.contains(.ij_valid)),
         .from_ik => cycle.flags.setPresent(.iw_valid, old_flags.contains(.ik_valid)),
         .from_iw => cycle.flags.setPresent(.iw_valid, old_flags.contains(.iw_valid)),
-        .xor1, .xor2 => {},
+        .xor1, .increment => {},
     }
 }
 
@@ -1295,25 +1295,21 @@ pub fn next_ik_ij_zx(c: *Cycle, constant: std.meta.Int(.unsigned, @bitSizeOf(hw.
 pub fn next_ij_xor1(c: *Cycle) void {
     c.set_control_signal(.ij_op, .xor1);
 }
-
 pub fn next_ik_xor1(c: *Cycle) void {
     c.set_control_signal(.ik_op, .xor1);
 }
-
 pub fn next_iw_xor1(c: *Cycle) void {
     c.set_control_signal(.iw_op, .xor1);
 }
 
-pub fn next_ij_xor2(c: *Cycle) void {
-    c.set_control_signal(.ij_op, .xor2);
+pub fn next_ij_increment(c: *Cycle) void {
+    c.set_control_signal(.ij_op, .increment);
 }
-
-pub fn next_ik_xor2(c: *Cycle) void {
-    c.set_control_signal(.ik_op, .xor2);
+pub fn next_ik_increment(c: *Cycle) void {
+    c.set_control_signal(.ik_op, .increment);
 }
-
-pub fn next_iw_xor2(c: *Cycle) void {
-    c.set_control_signal(.iw_op, .xor2);
+pub fn next_iw_increment(c: *Cycle) void {
+    c.set_control_signal(.iw_op, .increment);
 }
 
 pub fn next_ij_from_ik(c: *Cycle) void {

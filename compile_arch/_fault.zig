@@ -80,6 +80,7 @@ pub const instructions = .{
         pub fn switch_rsn(c: *Cycle) void {
             c.rsn_to_sr1h(.fault_rsn_stat);
             c.reg_to_k(); // r(registerset)
+            c.k_to_ll();
             c.ll_to_rsn();
             c.sr2_to_sr2(.temp_2, .rs_reserved);
             c.next(load_r0);
@@ -109,7 +110,7 @@ pub const instructions = .{
                     c.d_to_l(.zx);
                     c.ll_to_reg();
                     if (n < 15) {
-                        c.next_iw(n + 1);
+                        c.next_iw_increment();
                         c.next(@field(LDRS, std.fmt.comptimePrint("load_r{}", .{ n + 1 })));
                     } else {
                         c.next_ik_bit(hw.register_count * @sizeOf(hw.R));
@@ -244,7 +245,7 @@ pub const instructions = .{
                     c.k_to_ll();
                     c.write_from_ll(.rs_reserved, @as(Cycle.Address_Offset_Literal, n) * 2, .word, .data);
                     if (n < 15) {
-                        c.next_ik(n + 1);
+                        c.next_ik_increment();
                         c.next(@field(STRS, std.fmt.comptimePrint("store_r{}", .{ n + 1 })));
                     } else {
                         c.next_ik_bit(hw.register_count * @sizeOf(hw.R));

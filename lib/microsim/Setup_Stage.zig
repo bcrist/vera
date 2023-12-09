@@ -80,7 +80,7 @@ pub fn simulate(
         .zero => 0,
         .two => 2,
         .literal_sx => bits.sx(u32, in.cs.literal.raw()),
-        ._reserved => 0,
+        .ik_ij_sx => bits.sx(u32, bits.concat(.{ in.ij.raw(), in.ik.raw() })),
     };
 
     out.virtual_addr = hw.addr.Virtual.init(addr_base +% addr_offset);

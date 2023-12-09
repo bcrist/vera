@@ -296,7 +296,7 @@ pub fn doWindow(self: Pipeline_State) void {
         .from_ik => "K",
         .from_iw => "W",
         .xor1 => "^",
-        .xor2 => "%",
+        .increment => "+",
         .from_continuation => "C",
         .from_decode => "D",
     });
@@ -313,7 +313,7 @@ pub fn doWindow(self: Pipeline_State) void {
         .from_ik => " ",
         .from_iw => "W",
         .xor1 => "^",
-        .xor2 => "%",
+        .increment => "+",
         .from_continuation => "C",
         .from_decode => "D",
     });
@@ -330,7 +330,7 @@ pub fn doWindow(self: Pipeline_State) void {
         .from_ik => "K",
         .from_iw => " ",
         .xor1 => "^",
-        .xor2 => "%",
+        .increment => "+",
         .from_continuation => "C",
         .from_decode => "D",
     });

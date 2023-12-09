@@ -1,7 +1,5 @@
-[arch] Control_Signals.Operand_Index_Op.xor2 -> increment
 [arch] Control_Signals.Status_Op - use `unit` and `reg_write` to determine where C/V flags come from? then just need u3 for op
 [arch] Control_Signals.Bus_Direction - add none, remove read_to_dr; add separate DR_Op (hold, low_from_d, high_from_d, from_d)
-[arch] Control_Signals.Address_Offset_Source.literal_minus_64 -> ik_ij (for conditional branches)
 [arch] Remove single-byte instructions
 [arch] Add push/pop/ld/st instructions that use a bitset (like arm)
 [arch] Consider making some instructions only allow even registers

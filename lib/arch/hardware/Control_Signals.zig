@@ -53,7 +53,7 @@ pub const Operand_Index_Op = enum (u3) {
     from_ik = 2,
     from_iw = 3,
     xor1 = 4,
-    xor2 = 5,
+    increment = 5,
     from_continuation = 6,
     from_decode = 7,
 };
@@ -147,7 +147,7 @@ pub const Address_Offset_Source = enum (u2) {
     zero = 0,
     literal_sx = 1,
     two = 2,
-    _reserved = 3,
+    ik_ij_sx = 3,
 };
 
 pub const JL_Source = enum (u2) {

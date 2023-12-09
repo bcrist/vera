@@ -40,7 +40,7 @@ pub fn simulate(
         .from_ik => hw.IJ.init(in.ik.raw()),
         .from_iw => hw.IJ.init(in.iw.raw()),
         .xor1 => hw.IJ.init(in.ij.raw() ^ 1),
-        .xor2 => hw.IJ.init(in.ij.raw() ^ 2),
+        .increment => hw.IJ.init(in.ij.raw() + 1),
         .from_continuation => in.cs.c_ij,
         .from_decode => id_result.ij,
     };
@@ -50,7 +50,7 @@ pub fn simulate(
         .from_ik => hw.IK.init(in.ik.raw()),
         .from_iw => hw.IK.init(in.iw.raw()),
         .xor1 => hw.IK.init(in.ik.raw() ^ 1),
-        .xor2 => hw.IK.init(in.ik.raw() ^ 2),
+        .increment => hw.IK.init(in.ik.raw() + 1),
         .from_continuation => in.cs.c_ik,
         .from_decode => id_result.ik,
     };
@@ -60,7 +60,7 @@ pub fn simulate(
         .from_ik => hw.IW.init(in.ik.raw()),
         .from_iw => hw.IW.init(in.iw.raw()),
         .xor1 => hw.IW.init(in.iw.raw() ^ 1),
-        .xor2 => hw.IW.init(in.iw.raw() ^ 2),
+        .increment => hw.IW.init(in.iw.raw() + 1),
         .from_continuation => in.cs.c_iw,
         .from_decode => id_result.iw,
     };
