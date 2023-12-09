@@ -204,15 +204,11 @@ fn simulate_register_file(in: Transact_Stage, out: *Decode_Stage, l: hw.L, regis
     switch (in.cs.reg_write) {
         .no_write => {},
         .write_16 => {
-            rs.reg[iw] = hw.R.init(if (iw == 0) 0 else l.lo.raw());
+            rs.reg[iw] = hw.R.init(l.lo.raw());
         },
         .write_32 => {
-            var ll = l.lo.raw();
-            var lh = l.hi.raw();
-            if (iw == 0) ll = 0;
-            if (iw == 1) lh = 0;
-            rs.reg[iw] = hw.R.init(ll);
-            rs.reg[iw^1] = hw.R.init(lh);
+            rs.reg[iw] = hw.R.init(l.lo.raw());
+            rs.reg[iw^1] = hw.R.init(l.hi.raw());
         },
         _ => {},
     }

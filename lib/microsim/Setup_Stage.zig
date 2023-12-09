@@ -79,8 +79,8 @@ pub fn simulate(
     const addr_offset: u32 = switch (in.cs.offset_src) {
         .zero => 0,
         .two => 2,
-        .literal => in.cs.literal.raw(),
-        .literal_minus_64 => bits._1x(u32, in.cs.literal.raw()),
+        .literal_sx => bits.sx(u32, in.cs.literal.raw()),
+        ._reserved => 0,
     };
 
     out.virtual_addr = hw.addr.Virtual.init(addr_base +% addr_offset);

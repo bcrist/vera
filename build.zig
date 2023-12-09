@@ -28,7 +28,7 @@ pub fn build(b: *std.Build) void {
         .zbox = b.dependency("zbox", .{}).module("zbox"),
     };
 
-    const lib_arch = makeModule("lib_arch", .{
+    const lib_arch = makeModule(.{
         .source_file = .{ .path = "lib/arch.zig" },
         .dependencies = &.{
             .{ .name = "bits", .module = ext.bits },
@@ -46,7 +46,7 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    const lib_assembler = makeModule("assembler", .{
+    const lib_assembler = makeModule(.{
         .source_file = .{ .path = "lib/assembler.zig" },
         .dependencies = &.{
             .{ .name = "lib_arch", .module = lib_arch },
@@ -64,7 +64,7 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    const lib_microsim = makeModule("lib_microsim", .{
+    const lib_microsim = makeModule(.{
         .source_file = .{ .path = "lib/microsim.zig" },
         .dependencies = &.{
             .{ .name = "bits", .module = ext.bits },
@@ -127,10 +127,8 @@ pub fn build(b: *std.Build) void {
     microsim.want_lto = false;
 }
 
-fn makeModule(comptime name: []const u8, options: std.build.CreateModuleOptions) *std.build.Module {
-    const mod = builder.createModule(options);
-    mod.dependencies.put(name, mod) catch @panic("OOM");
-    return mod;
+fn makeModule(options: std.build.CreateModuleOptions) *std.build.Module {
+    return builder.createModule(options);
 }
 
 fn makeExe(comptime name: []const u8, options: std.build.CreateModuleOptions) *std.build.CompileStep {

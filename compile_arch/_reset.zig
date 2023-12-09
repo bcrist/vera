@@ -70,7 +70,6 @@ pub const instructions = .{
 
         pub fn block_transfer_signature_plus_one(c: *Cycle) void {
             c.reg_to_jl(); // R1
-            c.zero_to_jh(); // TODO this shouldn't be necessary to specify in this case
             c.literal_to_k(1);
             c.jl_plus_k_to_ll(.fresh, .flags);
             c.next(check_block_transfer_signature);

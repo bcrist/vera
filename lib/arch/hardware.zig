@@ -608,6 +608,6 @@ pub const addr = struct {
     };
 };
 
-const arch = @import("lib_arch");
+const arch = @import("../arch.zig");
 const bits = @import("bits");
 const std = @import("std");

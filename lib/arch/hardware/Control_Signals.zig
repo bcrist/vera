@@ -31,14 +31,15 @@ seq_op: Sequencer_Op,
 special: Special_Op,
 allow_int: bool,
 
-pub const Literal = enum (u6) {
+pub const Literal = enum (i8) {
     _,
-    pub fn init(raw_value: u6) Literal {
+    pub fn init(raw_value: i8) Literal {
         return @enumFromInt(raw_value);
     }
-    pub fn raw(self: Literal) u6 {
+    pub fn raw(self: Literal) i8 {
         return @intFromEnum(self);
     }
+    pub const Raw = std.meta.Tag(Literal);
 };
 
 pub const ID_Mode = enum (u1) {
@@ -46,11 +47,15 @@ pub const ID_Mode = enum (u1) {
     alt = 1,
 };
 
-pub const Operand_Index_Op = enum (u2) {
-    hold = 0,
-    xor1 = 1,
-    from_continuation = 2,
-    from_decode = 3,
+pub const Operand_Index_Op = enum (u3) {
+    zero = 0,
+    from_ij = 1,
+    from_ik = 2,
+    from_iw = 3,
+    xor1 = 4,
+    xor2 = 5,
+    from_continuation = 6,
+    from_decode = 7,
 };
 
 pub const Register_Write_Mode = enum (u2) {
@@ -140,9 +145,9 @@ pub const Any_SR_Index = enum (u4) {
 
 pub const Address_Offset_Source = enum (u2) {
     zero = 0,
-    literal = 1,
+    literal_sx = 1,
     two = 2,
-    literal_minus_64 = 3,
+    _reserved = 3,
 };
 
 pub const JL_Source = enum (u2) {
@@ -426,5 +431,5 @@ pub fn hash(self: Control_Signals, hasher: anytype) void {
 }
 
 const Control_Signals = @This();
-const hw = @import("lib_arch").hw;
+const hw = @import("../hardware.zig");
 const std = @import("std");

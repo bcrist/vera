@@ -30,7 +30,7 @@ pub const Slot_Data = struct {
 };
 pub const Slot_Location = union (enum) {
     exact: hw.microcode.Slot,
-    forced_bits: hw.microcode.Slot.Raw, // TODO don't include this in hashing; just update it to add more bits if necessary
+    forced_bits: hw.microcode.Slot.Raw,
 
     pub fn forced_slot_bits(self: Slot_Location) hw.microcode.Slot.Raw {
         return switch (self) {
@@ -94,7 +94,7 @@ pub fn intern_slot_data(self: *Microcode_Builder, data: Slot_Data) Slot_Data.Han
 
 pub fn complete_loop(self: *Microcode_Builder, handle: Cycle_Handle, next: Slot_Data.Handle) void {
     const cycle = &self.cycles.items[@intFromEnum(handle)];
-    std.debug.assert(cycle.recursion_ptr != null);
+    std.debug.assert(cycle.next_func != null);
     std.debug.assert(cycle.next_slot == next or cycle.next_slot == null);
     cycle.next_slot = next;
 
@@ -224,6 +224,9 @@ fn update_cycle_continuation(self: *Microcode_Builder, cycle: *Cycle, handle: Sl
     cycle.signals.c_ij = continuation_slot.ij();
     cycle.signals.c_ik = continuation_slot.ik();
     cycle.signals.c_iw = continuation_slot.iw();
+    cycle.assigned_signals.insert(.c_ij);
+    cycle.assigned_signals.insert(.c_ik);
+    cycle.assigned_signals.insert(.c_iw);
 }
 
 fn slot_assignment_sort_ctx(self: *const Microcode_Builder) Slot_Assignment_Sort_Context {
@@ -278,9 +281,11 @@ const Slot_Data_Hash_Context = struct {
 fn hash_cycle(cycle: Cycle) u64 {
     var hasher = std.hash.Wyhash.init(0);
     cycle.signals.hash(&hasher);
-    if (cycle.recursion_ptr) |recursion_ptr| {
+    if (cycle.next_func) |next_func| {
         std.hash.autoHash(&hasher, true);
-        std.hash.autoHash(&hasher, recursion_ptr);
+        std.hash.autoHash(&hasher, next_func);
+        std.hash.autoHash(&hasher, cycle.instruction_signature);
+        std.hash.autoHash(&hasher, cycle.initial_encoding_word);
     } else {
         std.hash.autoHash(&hasher, false);
         std.hash.autoHash(&hasher, cycle.next_slot);
@@ -312,10 +317,12 @@ const Cycle_Hash_Context = struct {
     pub fn eql(ctx: Cycle_Hash_Context, cycle: Cycle, handle: Cycle_Handle) bool {
         const handle_cycle = ctx.data[@intFromEnum(handle)];
         if (!cycle.signals.eql(handle_cycle.signals)) return false;
-        if (cycle.recursion_ptr != null or handle_cycle.recursion_ptr != null) {
-            return std.meta.eql(cycle.recursion_ptr, handle_cycle.recursion_ptr);
-        } else {
+        if (cycle.next_func == null and handle_cycle.next_func == null) {
             return std.meta.eql(cycle.next_slot, handle_cycle.next_slot);
+        } else {
+            return cycle.next_func == handle_cycle.next_func
+                and cycle.initial_encoding_word == handle_cycle.initial_encoding_word
+                and std.meta.eql(cycle.instruction_signature, handle_cycle.instruction_signature);
         }
     }
 };

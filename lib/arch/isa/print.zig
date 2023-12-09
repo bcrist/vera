@@ -30,7 +30,6 @@ pub fn print_encoding(encoding: Instruction_Encoding, writer: anytype) !void {
         try writer.writeByte(' ');
         try print_parameter_signature(param, .{}, writer);
     }
-    // TODO print placeholders with valid ranges and constraints specified
 }
 
 pub fn print_instruction(insn: Instruction, insn_address: ?u32, writer: anytype) !void {
@@ -138,14 +137,13 @@ pub fn print_parameter_kind(kind: Parameter.Kind, register_index: ?Register_Inde
     }
 }
 
-const Instruction_Encoding = @import("Instruction_Encoding.zig");
-const Instruction = @import("Instruction.zig");
-const Parameter = @import("Parameter.zig");
+const Instruction_Encoding = isa.Instruction_Encoding;
+const Instruction = isa.Instruction;
+const Parameter = isa.Parameter;
 const Mnemonic = isa.Mnemonic;
 const Mnemonic_Suffix = isa.Mnemonic_Suffix;
-const isa = arch.isa;
+const isa = @import("../isa.zig");
 const Register_Index = hw.Register_Index;
-const hw = arch.hw;
-const arch = @import("lib_arch");
+const hw = @import("../hardware.zig");
 const Signedness = std.builtin.Signedness;
 const std = @import("std");

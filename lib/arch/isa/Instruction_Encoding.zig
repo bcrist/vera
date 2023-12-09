@@ -39,11 +39,11 @@ pub const Placeholder_Info = struct {
         switch (self.kind) {
             .param_constant => out[self.index.raw()].constant = value,
             .param_base_register => {
-                if (value < 0 or value >= arch.hw.register_count) return false;
+                if (value < 0 or value >= hw.register_count) return false;
                 out[self.index.raw()].base_register_index = @intCast(value);
             },
             .param_offset_register => {
-                if (value < 0 or value >= arch.hw.register_count) return false;
+                if (value < 0 or value >= hw.register_count) return false;
                 out[self.index.raw()].offset_register_index = @intCast(value);
             },
         }
@@ -71,7 +71,7 @@ pub const Constraint = struct {
 
     pub fn matches(self: Constraint, params: []const Parameter) bool {
         const left = self.left.evaluate(params);
-        const right = self.left.evaluate(params);
+        const right = self.right.evaluate(params);
         return switch (self.kind) {
             .equal => left == right,
             .not_equal => left != right,
@@ -151,15 +151,18 @@ pub const Domain = union (enum) {
                 if ((raw & mask) != raw) return null;
                 switch (info.signedness) {
                     .unsigned => {
-                        return @intCast(raw);
+                        const compressed: i64 = @intCast(raw);
+                        return compressed * info.multiple;
                     },
                     .signed => {
                         const sign: u1 = @truncate(raw >> (info.bits - 1));
                         if (sign == 1) {
                             const sign_extended = (~@as(u64, 0) << info.bits) | raw;
-                            return @bitCast(sign_extended);
+                            const compressed: i64 = @bitCast(sign_extended);
+                            return compressed * info.multiple;
                         } else {
-                            return @intCast(raw);
+                            const compressed: i64 = @intCast(raw);
+                            return compressed * info.multiple;
                         }
                     },
                 }
@@ -241,8 +244,29 @@ pub fn encode(self: Instruction_Encoding, insn: Instruction) Encoded_Instruction
     return out;
 }
 
+// .equal constraints can be assumed to match if the .left side is not populated by any encoders.
+// To check this, we first decode the encoded parameters, then assign all the left sides of .equal
+// constraints to their right side values.  In the case that both sides of an .equal constraint
+// reference numbers that were decoded directly, this would normally mean we'd get some
+// false-positive matches, since we've overwritten the decoded data on the left with the decoded
+// data on the right.  To avoid that we re-decode the values from encoders again afterward.
+// Finally we can check all the constraints.
+//
+// @Speed: It might be better to just keep track of which parameter values have been decoded,
+// and then only assign constraints that deal with unencoded parameter values.
 pub fn matches_data(self: Instruction_Encoding, data: Encoded_Instruction.Data) bool {
     var temp: [Parameter.Index.count]Parameter = undefined;
+
+    for (self.encoders) |enc| {
+        if (!enc.decode(data, &temp)) return false;
+    }
+
+    for (self.constraints) |constraint| {
+        if (constraint.kind == .equal) {
+            const ok = constraint.left.assign(constraint.right.evaluate(&temp), &temp);
+            std.debug.assert(ok);
+        }
+    }
 
     for (self.encoders) |enc| {
         if (!enc.decode(data, &temp)) return false;
@@ -265,8 +289,15 @@ pub fn decode_params(self: Instruction_Encoding, data: Encoded_Instruction.Data,
     }
 
     for (self.encoders) |enc| {
-        const success = enc.decode(data, params);
-        std.debug.assert(success);
+        const ok = enc.decode(data, params);
+        std.debug.assert(ok);
+    }
+
+    for (self.constraints) |constraint| {
+        if (constraint.kind == .equal) {
+            const ok = constraint.left.assign(constraint.right.evaluate(params), params);
+            std.debug.assert(ok);
+        }
     }
 }
 
@@ -275,12 +306,12 @@ pub fn eql(self: Instruction_Encoding, other: Instruction_Encoding) bool {
 }
 
 const Instruction_Encoding = @This();
-const Instruction = @import("Instruction.zig");
-const Parameter = @import("Parameter.zig");
+const Instruction = isa.Instruction;
+const Parameter = isa.Parameter;
 const Mnemonic = isa.Mnemonic;
 const Encoded_Instruction = isa.Encoded_Instruction;
-const isa = arch.isa;
-const arch = @import("lib_arch");
+const isa = @import("../isa.zig");
+const hw = @import("../hardware.zig");
 const deep_hash_map = @import("deep_hash_map");
 const Signedness = std.builtin.Signedness;
 const std = @import("std");

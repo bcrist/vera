@@ -129,11 +129,13 @@ fn mnemonic_color(mnemonic: isa.Mnemonic) u24 {
     var hasher = std.hash.Wyhash.init(0);
     std.hash.autoHash(&hasher, mnemonic);
     const hash = hasher.final();
-    const hue: u8 = @truncate(hash >> 8);
+    const hue: u8 = @truncate(hash >> 7);
     const hue_f32: f32 = @floatFromInt(hue);
     const lightness: u8 = @truncate(hash >> 16);
     const lightness_f32: f32 = @floatFromInt(lightness);
-    return hsl_to_rgb(hue_f32 / 256, 0.5, 0.66 + 0.2 * lightness_f32 / 256);
+    const sat: u8 = @truncate(hash >> 24);
+    const sat_f32: f32 = @floatFromInt(sat);
+    return hsl_to_rgb(hue_f32 / 256, 0.4 + 0.5 * sat_f32 / 256, 0.5 + 0.3 * lightness_f32 / 256);
 }
 
 fn hsl_to_rgb(h: f32, s: f32, l: f32) u24 {
@@ -255,11 +257,18 @@ fn generate_encoding_table(processor: *Processor, decode_rom: []const hw.decode.
 
             try w.writeAll(">");
 
+            var end: []const u8 = "";
             if (cell.has_slots) {
-                try w.print("<a href=\"encoding_table_{x:0>2}.html\"></a>", .{ byte });
+                try w.print("<a href=\"encoding_table_{x:0>2}.html\">", .{ byte });
+                end = "</a>";
                 try generate_encoding_table_inner(processor, decode_rom, byte);
             }
 
+            if (cell.instruction_encoding) |ie| {
+                try w.writeAll(@tagName(ie.signature.mnemonic));
+            }
+
+            try w.writeAll(end);
             try w.writeAll("</td>");
         }
     }
@@ -349,10 +358,9 @@ fn generate_encoding_table_inner(processor: *Processor, decode_rom: []const hw.d
 
             try w.writeAll("\">");
 
-            // if (cell.slot != .invalid_instruction) {
-            //     try w.print("<a href=\"encoding_table_{x:0>2}.html\"></a>", .{ byte });
-            //     try generate_encoding_table_inner(processor, decode_rom, byte);
-            // }
+            if (cell.instruction_encoding) |ie| {
+                try w.writeAll(@tagName(ie.signature.mnemonic));
+            }
 
             try w.writeAll("</td>");
         }

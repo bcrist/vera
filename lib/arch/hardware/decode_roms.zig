@@ -80,8 +80,7 @@ pub fn write_srec_roms(result_allocator: std.mem.Allocator, temp_allocator: std.
 }
 
 const Control_Signals = hw.Control_Signals;
-const hw = arch.hw;
-const arch = @import("lib_arch");
+const hw = @import("../hardware.zig");
 const rom_compress = @import("rom_compress");
 const rom_decompress = @import("rom_decompress");
 const srec = @import("srec");

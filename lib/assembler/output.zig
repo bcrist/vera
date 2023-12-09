@@ -285,7 +285,7 @@ pub fn write_sim_sx_page(a: *const Assembler, page: hw.addr.Page, sx_writer: any
         try sx_writer.expression("page");
         if (section.kind == .boot) {
             try sx_writer.string("flash");
-            try sx_writer.print_value("{X:0>3}", .{ page.raw() + 1008 }); // TODO magic number
+            try sx_writer.print_value("{X:0>3}", .{ page.raw() + 1008 });
         } else {
             try sx_writer.string("ram");
             try sx_writer.print_value("{X:0>5}", .{ page.raw() });

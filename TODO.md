@@ -1,4 +1,30 @@
-[assembler] single-byte instructions will still be loaded using a word width; need to adjust page alignment error detection to account for this
+[arch] Control_Signals.Operand_Index_Op.xor2 -> increment
+[arch] Control_Signals.Status_Op - use `unit` and `reg_write` to determine where C/V flags come from? then just need u3 for op
+[arch] Control_Signals.Bus_Direction - add none, remove read_to_dr; add separate DR_Op (hold, low_from_d, high_from_d, from_d)
+[arch] Control_Signals.Address_Offset_Source.literal_minus_64 -> ik_ij (for conditional branches)
+[arch] Remove single-byte instructions
+[arch] Add push/pop/ld/st instructions that use a bitset (like arm)
+[arch] Consider making some instructions only allow even registers
+[arch] Finish block diagram
+[arch] Finish Encoding_Database.similar_encodings
+[arch] Add Domain.bitset - encoded as (1 << value).  Encoders using it can overlap other bitsets, but not other types of domains
+[arch] print_encoding - print placeholders with valid ranges and constraints specified
+[arch/microsim] Fault if a block load/store instruction is executed on an invalid context
+
+[compile_arch] Error if there are undefined bits in the initial word of an instruction encoding
+[compile_arch] bp-relative loads/stores
+[compile_arch] rp-relative loads/stores
+[compile_arch] Microcode_Builder.Slot_Location.forced_bits - don't include in hashing; just update it to add more bits if necessary
+[compile_arch] Refactor opcodes.zig - just a bunch of Encoder constants instead of enums?
+[compile_arch] Compute min/max cycles per instruction, add to encoding sx
+[compile_arch] Decompile/dump to HTML
+[compile_arch] Validate that the same instruction encoding doesn't map to multiple opcodes/aliases
+[compile_arch] Revamp instruction_builder.print_cycle_path()
+[compile_arch] HTML instruction documentation with "disassembly" of control signals
+[compile_arch] cycle_builder.branch(): check that either base is .zero, or RSN is not being loaded this cycle
+[compile_arch] ensure exec_next_insn() is only used in microcode of instructions where isa.branch_kind returns nonbranching or conditional
+
+[assembler] Fix EDB loading
 [assembler] CLI
 [assembler] Consider allowing things that expect constant expressions to also accept absolute addresses (.db/.dw/.dd, length casts, etc.)
 [assembler] Don't allow branches across .push/.pop boundaries
@@ -11,19 +37,17 @@
 [assembler] Improve error context printing
 [assembler] improve vscode plugin
 [assembler] improve auto-placement of chunks
+[assembler] better handling of degenerate/recursive cases where the layout never reaches an equilibrium
+[assembler] add an acceleration structure inside Section for finding partially filled chunks with >= N bytes free
+[assembler] Listing.write_instruction_line - analyze insn.encoding.encoders to figure out which chunks to pass to write_grouped_data_and_source
+[assembler] Explain magic constant in output.write_sim_sx_page for boot flash
 
 [test] Use assembler for test_instruction_behavior
 [test] Use assembler and disassembler for test_instruction_encoding
 
-[compile_arch] Compute min/max cycles per instruction, add to encoding sx
-[compile_arch] Add more aliases
-[compile_arch] Decompile/dump to HTML
-[compile_arch] Validate that the same instruction encoding doesn't map to multiple opcodes/aliases
-[compile_arch] Revamp instruction_builder.print_cycle_path()
-[compile_arch] HTML instruction documentation with "disassembly" of control signals
-[compile_arch] HTML instruction opcode table
-[compile_arch] cycle_builder.branch(): check that either base is .zero, or RSN is not being loaded this cycle
-
+[microsim] implement sleep flag based on when all contexts are executing PARK
+[microsim] fix Memory device
+[microsim] Fix FrameTracker device
 [microsim] Memory view - raw (may open multiple for different locations)
 [microsim] disassembly view of memory around IP
 [microsim] Load/save state from/to file
@@ -35,6 +59,7 @@
 [microsim] Improve SST39VF802C emulation accuracy in memory.zig (timing, status polling, IDs, write protection, etc.)
 
 [design] Consider Shifter overflow flag - if any shifted out bits differ from the last bit that wasn't shifted out
+[design] Consider multiplier overflow flag - for unsigned 16b result, if any high 1 bits were truncated.  For signed 16b result, if any high bits != sign bit
 [design] Consider removing wait states
 [design] count zeroes with mask instruction?
 [design] Implement interrupt controller

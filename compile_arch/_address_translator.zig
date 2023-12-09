@@ -29,7 +29,7 @@ pub const instructions = .{
             c.reg32_to_l();
             c.l_to_sr(.temp_1);
             c.ip_read_to_dr(2, .byte);
-            c.decode_dr_to_ij(.alt);
+            c.next_ij_from_decode(.alt);
             c.next(update_translation);
         }
 
@@ -81,7 +81,7 @@ pub const instructions = .{
             c.reg32_to_l();
             c.l_to_sr(.temp_1);
             c.ip_read_to_dr(2, .byte);
-            c.decode_dr_to_ij(.alt);
+            c.next_ij_from_decode(.alt);
             c.next(invalidate_translation);
         }
 

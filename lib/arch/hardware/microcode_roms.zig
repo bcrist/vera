@@ -7,7 +7,7 @@
 //     @embedFile("../../../roms/microcode_5"),
 // };
 
-pub const num_roms = 11;
+pub const num_roms = 12;
 
 pub const Compressed_Rom_Data = [num_roms][]const u8;
 
@@ -15,19 +15,17 @@ const Rom_Entry = rom_compress.Entry(hw.microcode.Address.Raw, u8);
 
 const Rom0 = packed struct (u8) {
     c_ij: hw.IJ,
-    ij_op: Control_Signals.Operand_Index_Op,
-    seq_op: Control_Signals.Sequencer_Op,
+    c_ik: hw.IK,
 };
 const Rom1 = packed struct (u8) {
-    c_ik: hw.IK,
+    ij_op: Control_Signals.Operand_Index_Op,
     ik_op: Control_Signals.Operand_Index_Op,
-    iw_op: Control_Signals.Operand_Index_Op,
+    seq_op: Control_Signals.Sequencer_Op,
 };
 const Rom2 = packed struct (u8) {
+    iw_op: Control_Signals.Operand_Index_Op,
     c_iw: hw.IW,
     id_mode: Control_Signals.ID_Mode,
-    allow_int: bool,
-    bus_dir: Control_Signals.Bus_Direction,
 };
 const Rom3 = packed struct (u8) {
     sr1_ri: Control_Signals.SR1_Index,
@@ -35,34 +33,39 @@ const Rom3 = packed struct (u8) {
     unit: Control_Signals.Compute_Unit,
 };
 const Rom4 = packed struct (u8) {
-    literal: Control_Signals.Literal,
+    allow_int: bool,
+    bus_dir: Control_Signals.Bus_Direction,
     jl_src: Control_Signals.JL_Source,
+    _reserved: u3 = 0,
 };
 const Rom5 = packed struct (u8) {
+    literal: Control_Signals.Literal,
+};
+const Rom6 = packed struct (u8) {
     jh_src: Control_Signals.JH_Source,
     k_src: Control_Signals.K_Source,
     offset_src: Control_Signals.Address_Offset_Source,
 };
-const Rom6 = packed struct (u8) {
+const Rom7 = packed struct (u8) {
     base_ri: Control_Signals.Any_SR_Index,
     special: Control_Signals.Special_Op,
     bus_width: Control_Signals.Bus_Width,
 };
-const Rom7 = packed struct (u8) {
+const Rom8 = packed struct (u8) {
     mode: Control_Signals.Compute_Mode,
     at_op: Control_Signals.Address_Translator_Op,
 };
-const Rom8 = packed struct (u8) {
+const Rom9 = packed struct (u8) {
     addr_space: Control_Signals.Address_Space,
     ll_src: Control_Signals.LL_Source,
     lh_src: Control_Signals.LH_Source,
 };
-const Rom9 = packed struct (u8) {
+const Rom10 = packed struct (u8) {
     reg_write: Control_Signals.Register_Write_Mode,
     sr1_wi: Control_Signals.SR1_Index,
     sr2_wi: Control_Signals.SR2_Index,
 };
-const Rom10 = packed struct (u8) {
+const Rom11 = packed struct (u8) {
     sr1_wsrc: Control_Signals.SR1_Write_Source,
     sr2_wsrc: Control_Signals.SR2_Write_Source,
     stat_op: Control_Signals.Status_Op,
@@ -70,12 +73,14 @@ const Rom10 = packed struct (u8) {
 
 fn apply_to_cs(comptime Rom_Data: type, data: Rom_Data, cs: *Control_Signals) void {
     inline for (@typeInfo(Rom_Data).Struct.fields) |field_info| {
+        if (field_info.name[0] == '_') continue;
         @field(cs.*, field_info.name) = @field(data, field_info.name);
     }
 }
 fn from_cs(comptime Rom_Data: type, cs: Control_Signals) Rom_Data {
     var data: Rom_Data = undefined;
     inline for (@typeInfo(Rom_Data).Struct.fields) |field_info| {
+        if (field_info.name[0] == '_') continue;
         @field(data, field_info.name) = @field(cs, field_info.name);
     }
     return data;
@@ -184,7 +189,7 @@ pub fn write_srec_roms(result_allocator: std.mem.Allocator, temp_allocator: std.
 }
 
 const Control_Signals = hw.Control_Signals;
-const hw = arch.hw;
+const hw = @import("../hardware.zig");
 const arch = @import("lib_arch");
 const rom_compress = @import("rom_compress");
 const rom_decompress = @import("rom_decompress");

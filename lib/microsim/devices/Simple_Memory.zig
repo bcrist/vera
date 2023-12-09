@@ -52,7 +52,7 @@ pub fn write(self: *Simple_Memory, addr: hw.addr.Physical, width: hw.Control_Sig
 }
 
 const Simple_Memory = @This();
-const Device = @import("lib_microsim").Device;
+const Device = @import("../Device.zig");
 const hw = arch.hw;
 const arch = @import("lib_arch");
 const bits = @import("bits");

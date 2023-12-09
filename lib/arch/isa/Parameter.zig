@@ -34,8 +34,8 @@ pub const Index = enum (u4) {
 
 const Parameter = @This();
 const Special_Register = isa.Special_Register;
-const isa = arch.isa;
-const Register_Index = arch.hw.Register_Index;
-const arch = @import("lib_arch");
+const isa = @import("../isa.zig");
+const Register_Index = hw.Register_Index;
+const hw = @import("../hardware.zig");
 const Signedness = std.builtin.Signedness;
 const std = @import("std");

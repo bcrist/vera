@@ -24,9 +24,10 @@ test "Instruction encoding" {
             continue;
         } orelse break;
 
-        //const stderr = std.io.getStdErr().writer();
+        // const stderr = std.io.getStdErr().writer();
+        // try stderr.print("{any} ", .{ decoder.last_instruction });
         // try isa.print.print_instruction(insn, null, stderr);
-        //try stderr.writeByte('\n');
+        // try stderr.writeByte('\n');
 
         var iter = edb.matching_encodings(insn);
         while (iter.next()) |encoding| {

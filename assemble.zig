@@ -1,5 +1,3 @@
-// TODO fix std.mem.set in console
-
 // --ssx filename.ext --ssx-no-list
 // --srec filename.ext --split <num>:<width> --offset <address offset> --range min-max --merge --pretty
 // --ihex filename.ext
@@ -18,7 +16,7 @@ pub fn main() !void {
         .temp = gpa.allocator(),
     };
 
-    const edb = try arch.isa.read_database.parse_encoding_db(&pd, ""); // TODO
+    const edb = try arch.isa.read_database.parse_encoding_db(&pd, "");
 
     var a = Assembler.init(gpa.allocator(), arena.allocator(), edb);
 

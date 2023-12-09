@@ -105,7 +105,7 @@ pub const instructions = .{
         fn load_gpr(comptime n: hw.Register_Index) fn(c: *Cycle)void {
             return struct {
                 pub fn func(c: *Cycle) void {
-                    c.read_to_d(.rs_reserved, @as(Cycle.Address_Offset, n) * 2, .word, .data);
+                    c.read_to_d(.rs_reserved, @as(Cycle.Address_Offset_Literal, n) * 2, .word, .data);
                     c.d_to_l(.zx);
                     c.ll_to_reg();
                     if (n < 15) {
@@ -242,7 +242,7 @@ pub const instructions = .{
                 pub fn func(c: *Cycle) void {
                     c.reg_to_k();
                     c.k_to_ll();
-                    c.write_from_ll(.rs_reserved, @as(Cycle.Address_Offset, n) * 2, .word, .data);
+                    c.write_from_ll(.rs_reserved, @as(Cycle.Address_Offset_Literal, n) * 2, .word, .data);
                     if (n < 15) {
                         c.next_ik(n + 1);
                         c.next(@field(STRS, std.fmt.comptimePrint("store_r{}", .{ n + 1 })));

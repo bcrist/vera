@@ -35,20 +35,32 @@ pub fn simulate(
     const id_result = decode_rom[in.dr.raw()];
 
     out.ij = if (in.inhibit_writes) in.ij else switch (in.cs.ij_op) {
-        .hold => in.ij,
+        .zero => hw.IJ.init(0),
+        .from_ij => hw.IJ.init(in.ij.raw()),
+        .from_ik => hw.IJ.init(in.ik.raw()),
+        .from_iw => hw.IJ.init(in.iw.raw()),
         .xor1 => hw.IJ.init(in.ij.raw() ^ 1),
+        .xor2 => hw.IJ.init(in.ij.raw() ^ 2),
         .from_continuation => in.cs.c_ij,
         .from_decode => id_result.ij,
     };
     out.ik = if (in.inhibit_writes) in.ik else switch (in.cs.ik_op) {
-        .hold => in.ik,
+        .zero => hw.IK.init(0),
+        .from_ij => hw.IK.init(in.ij.raw()),
+        .from_ik => hw.IK.init(in.ik.raw()),
+        .from_iw => hw.IK.init(in.iw.raw()),
         .xor1 => hw.IK.init(in.ik.raw() ^ 1),
+        .xor2 => hw.IK.init(in.ik.raw() ^ 2),
         .from_continuation => in.cs.c_ik,
         .from_decode => id_result.ik,
     };
     out.iw = if (in.inhibit_writes) in.iw else switch (in.cs.iw_op) {
-        .hold => in.iw,
+        .zero => hw.IW.init(0),
+        .from_ij => hw.IW.init(in.ij.raw()),
+        .from_ik => hw.IW.init(in.ik.raw()),
+        .from_iw => hw.IW.init(in.iw.raw()),
         .xor1 => hw.IW.init(in.iw.raw() ^ 1),
+        .xor2 => hw.IW.init(in.iw.raw() ^ 2),
         .from_continuation => in.cs.c_iw,
         .from_decode => id_result.iw,
     };

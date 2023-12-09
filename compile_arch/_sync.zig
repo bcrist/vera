@@ -1,537 +1,647 @@
-const ib = @import("instruction_builder.zig");
-const cb = @import("cycle_builder.zig");
-
-const addr = ib.addr;
-const encoding = ib.encoding;
-const encodingWithSuffix = ib.encodingWithSuffix;
-const desc = ib.desc;
-const next_cycle = ib.next_cycle;
-const next_cycle_conditional = ib.next_cycle_conditional;
-const zero = ib.zero;
-
-const op_reg32_to_L = cb.op_reg32_to_L;
-const op_reg_to_JL = cb.op_reg_to_JL;
-const reg_to_JL = cb.reg_to_JL;
-const L_to_SR = cb.L_to_SR;
-const IP_read_to_D = cb.IP_read_to_D;
-const read_to_D = cb.read_to_D;
-const write_from_LL = cb.write_from_LL;
-const add_to_LL = cb.add_to_LL;
-const sub_to_LL = cb.sub_to_LL;
-const D_to_L = cb.D_to_L;
-const D_to_LL = cb.D_to_LL;
-const D_to_OB_OA = cb.D_to_OB_OA;
-const LL_to_op_reg = cb.LL_to_op_reg;
-const LL_to_reg = cb.LL_to_reg;
-const L_to_op_reg32 = cb.L_to_op_reg32;
-const reg_to_J = cb.reg_to_J;
-const reg_to_K = cb.reg_to_K;
-const op_reg_to_J = cb.op_reg_to_J;
-const op_reg_to_K = cb.op_reg_to_K;
-const op_reg_to_L = cb.op_reg_to_L;
-const op_reg_to_LL = cb.op_reg_to_LL;
-const op_reg_plus_literal_to_LL = cb.op_reg_plus_literal_to_LL;
-const op_reg_minus_literal_to_LL = cb.op_reg_minus_literal_to_LL;
-const op_reg32_plus_literal_to_L = cb.op_reg32_plus_literal_to_L;
-const op_reg32_minus_literal_to_L = cb.op_reg32_minus_literal_to_L;
-const load_and_exec_next_insn = cb.load_and_exec_next_insn;
-const load_next_insn = cb.load_next_insn;
-const exec_next_insn = cb.exec_next_insn;
-const assume_next_insn_loaded = cb.assume_next_insn_loaded;
-const atomic_this_cycle = cb.atomic_this_cycle;
-const atomic_next_cycle_until_end = cb.atomic_next_cycle_until_end;
-const ZN_from_LL = cb.ZN_from_LL;
-
-pub fn _0002() void {
-    encoding(.SYNC, .{});
-    desc("Forces the next instruction to be atomic");
-    atomic_next_cycle_until_end();
-    load_and_exec_next_insn(2);
-}
-
-pub fn _3000_30FF() void {
-    encoding(.ALD, .{ addr(.data, .Xa), .to, .Rb });
-    desc("Atomic load 16b register using pointer to data memory");
-
-    op_reg32_to_L(.OA);
-    L_to_SR(.temp_1);
-    load_next_insn(2);
-    next_cycle();
-
-    atomic_this_cycle();
-    read_to_D(.temp_1, 0, .word, .data);
-    D_to_LL();
-    LL_to_op_reg(.OB);
-    exec_next_insn();
-}
-
-pub fn _3100_31FF() void {
-    encoding(.ALD, .{ addr(.data, .Xa), .to, .Xb });
-    desc("Atomic load 32b register using pointer to data memory");
-
-    op_reg32_to_L(.OA);
-    L_to_SR(.temp_1);
-    load_next_insn(2);
-    next_cycle();
-
-    atomic_this_cycle();
-    read_to_D(.temp_1, 0, .word, .data);
-    D_to_LL();
-    LL_to_op_reg(.OB);
-    next_cycle();
-
-    atomic_this_cycle();
-    read_to_D(.temp_1, 2, .word, .data);
-    D_to_LL();
-    LL_to_op_reg(.OBxor1);
-    exec_next_insn();
-}
-
-pub fn _3200_32FF() void {
-    encoding(.AST, .{ .Rb, .to, addr(.data, .Xa) });
-    desc("Atomic store 16b register using pointer to data memory");
-
-    op_reg32_to_L(.OA);
-    L_to_SR(.temp_1);
-    load_next_insn(2);
-    next_cycle();
-
-    atomic_this_cycle();
-    op_reg_to_LL(.OB);
-    write_from_LL(.temp_1, 0, .word, .data);
-    exec_next_insn();
-}
-
-pub fn _3300_33FF() void {
-    encoding(.AST, .{ .Xb, .to, addr(.data, .Xa) });
-    desc("Atomic store 32b register using pointer to data memory");
-
-    op_reg32_to_L(.OA);
-    L_to_SR(.temp_1);
-    load_next_insn(2);
-    next_cycle();
-
-    atomic_this_cycle();
-    op_reg_to_LL(.OB);
-    write_from_LL(.temp_1, 0, .word, .data);
-    next_cycle();
-
-    atomic_this_cycle();
-    op_reg_to_LL(.OBxor1);
-    write_from_LL(.temp_1, 2, .word, .data);
-    exec_next_insn();
-}
-
-pub fn _3400_34FF() void {
-    encoding(.ASTZ, .{ .Rb, .to, addr(.data, .Xa) });
-    desc("Atomic store 16b register using pointer to data memory, if previous stored value is 0");
-
-    op_reg32_to_L(.OA);
-    L_to_SR(.temp_1);
-    load_next_insn(2);
-    next_cycle();
-
-    atomic_this_cycle();
-    read_to_D(.temp_1, 0, .word, .data);
-    D_to_LL();
-    ZN_from_LL(.fresh);
-    next_cycle_conditional(astz16_continuation);
-}
-fn astz16_continuation() void {
-    assume_next_insn_loaded(2);
-    if (zero()) {
-        atomic_this_cycle();
-        op_reg_to_LL(.OB);
-        write_from_LL(.temp_1, 0, .word, .data);
-        exec_next_insn();
-    } else {
-        exec_next_insn();
-    }
-}
-
-pub fn _3500_35FF() void {
-    encoding(.ASTZ, .{ .Xb, .to, addr(.data, .Xa) });
-    desc("Atomic store 32b register using pointer to data memory, if previous stored value is 0");
-
-    op_reg32_to_L(.OA);
-    L_to_SR(.temp_1);
-    load_next_insn(2);
-    next_cycle();
-
-    atomic_this_cycle();
-    read_to_D(.temp_1, 0, .word, .data);
-    D_to_LL();
-    ZN_from_LL(.fresh);
-    next_cycle();
-
-    atomic_this_cycle();
-    read_to_D(.temp_1, 2, .word, .data);
-    D_to_LL();
-    ZN_from_LL(.cont);
-    next_cycle_conditional(astz32_continuation);
-}
-fn astz32_continuation() void {
-    assume_next_insn_loaded(2);
-    if (zero()) {
-        atomic_this_cycle();
-        op_reg_to_LL(.OB);
-        write_from_LL(.temp_1, 0, .word, .data);
-        next_cycle();
-
-        atomic_this_cycle();
-        op_reg_to_LL(.OBxor1);
-        write_from_LL(.temp_1, 2, .word, .data);
-        exec_next_insn();
-    } else {
-        exec_next_insn();
-    }
-}
-
-pub fn _3600_36FF() void {
-    encoding(.AADD, .{ addr(.data, .Xa), .to, .R0, .Rb, .to, addr(.data, .Xa) });
-    desc("16b Atomic add using pointer to data memory");
-
-    op_reg32_to_L(.OA);
-    L_to_SR(.temp_1);
-    load_next_insn(2);
-    next_cycle();
-
-    atomic_this_cycle();
-    read_to_D(.temp_1, 0, .word, .data);
-    D_to_LL();
-    LL_to_reg(0);
-    next_cycle();
-
-    atomic_this_cycle();
-    op_reg_to_K(.OB);
-    reg_to_JL(0);
-    add_to_LL(.fresh, .flags);
-    LL_to_reg(0);
-    write_from_LL(.temp_1, 0, .word, .data);
-    exec_next_insn();
-}
-
-pub fn _3700_37FF() void {
-    encoding(.AADD, .{ addr(.data, .Xa), .to, .X0, .Xb, .to, addr(.data, .Xa) });
-    desc("32b Atomic add using pointer to data memory");
-
-    op_reg32_to_L(.OA);
-    L_to_SR(.temp_1);
-    load_next_insn(2);
-    next_cycle();
-
-    atomic_this_cycle();
-    read_to_D(.temp_1, 0, .word, .data);
-    D_to_LL();
-    LL_to_reg(0);
-    next_cycle();
-
-    atomic_this_cycle();
-    read_to_D(.temp_1, 2, .word, .data);
-    D_to_LL();
-    LL_to_reg(1);
-    next_cycle();
-
-    atomic_this_cycle();
-    op_reg_to_K(.OB);
-    reg_to_JL(0);
-    add_to_LL(.fresh, .flags);
-    LL_to_reg(0);
-    write_from_LL(.temp_1, 0, .word, .data);
-    next_cycle();
-
-    atomic_this_cycle();
-    op_reg_to_K(.OBxor1);
-    reg_to_JL(0);
-    add_to_LL(.cont, .flags);
-    LL_to_reg(1);
-    write_from_LL(.temp_1, 2, .word, .data);
-    exec_next_insn();
-}
-
-// Atomic increment & decrement
-// Useful for implementing semaphores, mutexes, and latches
-
-pub fn _3800_380F() void {
-    encoding(.AINC, .{ addr(.data, .Xa), .to, .Ra });
-    desc("16b Atomic increment using pointer to data memory, overwriting pointer with new value");
-
-    op_reg32_to_L(.OA);
-    L_to_SR(.temp_1);
-    load_next_insn(2);
-    next_cycle();
-
-    atomic_this_cycle();
-    read_to_D(.temp_1, 0, .word, .data);
-    D_to_LL();
-    LL_to_op_reg(.OA);
-    next_cycle();
-
-    atomic_this_cycle();
-    op_reg_plus_literal_to_LL(.OA, 1, .fresh, .flags);
-    LL_to_op_reg(.OA);
-    write_from_LL(.temp_1, 0, .word, .data);
-    exec_next_insn();
-}
-
-pub fn _3900_39FF() void {
-    encoding(.AINC, .{ addr(.data, .Xa), .to, .Xa });
-    desc("32b Atomic increment using pointer to data memory, overwriting pointer with new value");
-
-    op_reg32_to_L(.OA);
-    L_to_SR(.temp_1);
-    load_next_insn(2);
-    next_cycle();
-
-    atomic_this_cycle();
-    read_to_D(.temp_1, 0, .word, .data);
-    D_to_LL();
-    LL_to_op_reg(.OA);
-    next_cycle();
-
-    atomic_this_cycle();
-    read_to_D(.temp_1, 2, .word, .data);
-    D_to_LL();
-    LL_to_op_reg(.OAxor1);
-    next_cycle();
-
-    atomic_this_cycle();
-    op_reg32_plus_literal_to_L(.OA, 1, .fresh, .flags);
-    L_to_op_reg32(.OA);
-    write_from_LL(.temp_1, 0, .word, .data);
-    next_cycle();
-
-    atomic_this_cycle();
-    op_reg_to_LL(.OAxor1);
-    write_from_LL(.temp_1, 2, .word, .data);
-    exec_next_insn();
-}
-
-pub fn _3A00_3A0F() void {
-    encoding(.ADECNZ, .{ addr(.data, .Xa), .to, .Ra });
-    desc("16b Atomic decrement using pointer to data memory, if stored value is not zero.  Overwrites address with final value.");
-
-    op_reg32_to_L(.OA);
-    L_to_SR(.temp_1);
-    load_next_insn(2);
-    next_cycle();
-
-    atomic_this_cycle();
-    read_to_D(.temp_1, 0, .word, .data);
-    D_to_LL();
-    LL_to_op_reg(.OA);
-    ZN_from_LL(.fresh);
-    next_cycle_conditional(adecnz16_continuation);
-}
-fn adecnz16_continuation() void {
-    assume_next_insn_loaded(2);
-    if (zero()) {
-        exec_next_insn();
-    } else {
-        atomic_this_cycle();
-        op_reg_minus_literal_to_LL(.OA, 1, .fresh, .no_flags);
-        LL_to_op_reg(.OA);
-        write_from_LL(.temp_1, 0, .word, .data);
-        exec_next_insn();
-    }
-}
-
-pub fn _3B00_3B0F() void {
-    encoding(.ADECNZ, .{ addr(.data, .Xa), .to, .Xa });
-    desc("32b Atomic decrement using pointer to data memory, if stored value is not zero.  Overwrites address with final value.");
-
-    op_reg32_to_L(.OA);
-    L_to_SR(.temp_1);
-    load_next_insn(2);
-    next_cycle();
-
-    atomic_this_cycle();
-    read_to_D(.temp_1, 0, .word, .data);
-    D_to_LL();
-    LL_to_op_reg(.OA);
-    ZN_from_LL(.fresh);
-    next_cycle();
-
-    atomic_this_cycle();
-    read_to_D(.temp_1, 2, .word, .data);
-    D_to_LL();
-    LL_to_op_reg(.OAxor1);
-    ZN_from_LL(.cont);
-    next_cycle_conditional(adecnz32_continuation);
-}
-fn adecnz32_continuation() void {
-    assume_next_insn_loaded(2);
-    if (zero()) {
-        exec_next_insn();
-    } else {
-        atomic_this_cycle();
-        op_reg32_minus_literal_to_L(.OA, 1, .fresh, .no_flags);
-        L_to_op_reg32(.OA);
-        write_from_LL(.temp_1, 0, .word, .data);
-        next_cycle();
-
-        atomic_this_cycle();
-        op_reg_to_LL(.OAxor1);
-        write_from_LL(.temp_1, 2, .word, .data);
-        exec_next_insn();
-    }
-}
-
-pub fn _3C00_3C0F() void {
-    encoding(.AX, .{ addr(.data, .Xa), .to, .Rb1, .Ra1, .to, addr(.data, .Xa) });
-    desc("16b Atomic exchange using pointer to data memory");
-
-    op_reg32_to_L(.OA);
-    L_to_SR(.temp_1);
-    IP_read_to_D(2, .byte);
-    D_to_OB_OA();
-    next_cycle();
-
-    load_next_insn(3);
-    next_cycle();
-
-    atomic_this_cycle();
-    read_to_D(.temp_1, 0, .word, .data);
-    D_to_LL();
-    LL_to_op_reg(.OB);
-    next_cycle();
-
-    atomic_this_cycle();
-    op_reg_to_LL(.OA);
-    write_from_LL(.temp_1, 0, .word, .data);
-    exec_next_insn();
-}
-
-pub fn _3C10_3C1F() void {
-    encoding(.AX, .{ addr(.data, .Xa), .to, .Xb1, .Xa1, .to, addr(.data, .Xa) });
-    desc("32b Atomic exchange using pointer to data memory");
-
-    op_reg32_to_L(.OA);
-    L_to_SR(.temp_1);
-    IP_read_to_D(2, .byte);
-    D_to_OB_OA();
-    next_cycle();
-
-    load_next_insn(3);
-    next_cycle();
-
-    atomic_this_cycle();
-    read_to_D(.temp_1, 0, .word, .data);
-    D_to_LL();
-    LL_to_op_reg(.OB);
-    next_cycle();
-
-    atomic_this_cycle();
-    read_to_D(.temp_1, 2, .word, .data);
-    D_to_LL();
-    LL_to_op_reg(.OBxor1);
-    next_cycle();
-
-    atomic_this_cycle();
-    op_reg_to_LL(.OA);
-    write_from_LL(.temp_1, 0, .word, .data);
-    next_cycle();
-
-    atomic_this_cycle();
-    op_reg_to_LL(.OAxor1);
-    write_from_LL(.temp_1, 2, .word, .data);
-    exec_next_insn();
-}
-
-pub fn _3C20_3C2F() void {
-    encoding(.AXE, .{ addr(.data, .Xa), .to, .R0, .Rb1, .Ra1, .to, addr(.data, .Xa) });
-    desc("16b Atomic exchange using pointer to data memory, if stored value equals probe value");
-
-    op_reg32_to_L(.OA);
-    L_to_SR(.temp_1);
-    IP_read_to_D(2, .byte);
-    D_to_OB_OA();
-    next_cycle();
-
-    load_next_insn(3);
-    next_cycle();
-
-    atomic_this_cycle();
-    read_to_D(.temp_1, 0, .word, .data);
-    D_to_LL();
-    LL_to_reg(0);
-    next_cycle();
-
-    atomic_this_cycle();
-    reg_to_JL(0);
-    op_reg_to_K(.OB);
-    sub_to_LL(.fresh, .flags);
-    next_cycle_conditional(axe16_continuation);
-}
-fn axe16_continuation() void {
-    assume_next_insn_loaded(3);
-    if (zero()) {
-        atomic_this_cycle();
-        op_reg_to_LL(.OA);
-        write_from_LL(.temp_1, 0, .word, .data);
-        exec_next_insn();
-    } else {
-        exec_next_insn();
-    }
-}
-
-pub fn _3C30_3C3F() void {
-    encoding(.AXE, .{ addr(.data, .Xa), .to, .X0, .Xb1, .Xa1, .to, addr(.data, .Xa) });
-    desc("32b Atomic exchange using pointer to data memory, if stored value equals probe value");
-
-    op_reg32_to_L(.OA);
-    L_to_SR(.temp_1);
-    IP_read_to_D(2, .byte);
-    D_to_OB_OA();
-    next_cycle();
-
-    // TODO why am I doing this now?  Seems like a cycle could be saved in some cases by moving it to the end
-    load_next_insn(3);
-    next_cycle();
-
-    atomic_this_cycle();
-    read_to_D(.temp_1, 0, .word, .data);
-    D_to_LL();
-    LL_to_reg(0);
-    next_cycle();
-
-    atomic_this_cycle();
-    reg_to_JL(0);
-    op_reg_to_K(.OB);
-    sub_to_LL(.fresh, .flags);
-    next_cycle_conditional(axe32_continuation_1);
-}
-fn axe32_continuation_1() void {
-    assume_next_insn_loaded(3);
-    if (zero()) {
-        atomic_this_cycle();
-        read_to_D(.temp_1, 2, .word, .data);
-        D_to_LL();
-        LL_to_reg(1);
-        next_cycle();
-
-        atomic_this_cycle();
-        reg_to_JL(1);
-        op_reg_to_K(.OBxor1);
-        sub_to_LL(.cont, .flags);
-        next_cycle_conditional(axe32_continuation_2);
-    } else {
-        exec_next_insn();
-    }
-}
-fn axe32_continuation_2() void {
-    assume_next_insn_loaded(3);
-    if (zero()) {
-        atomic_this_cycle();
-        op_reg_to_LL(.OA);
-        write_from_LL(.temp_1, 0, .word, .data);
-        next_cycle();
-
-        atomic_this_cycle();
-        op_reg_to_LL(.OAxor1);
-        write_from_LL(.temp_1, 2, .word, .data);
-        exec_next_insn();
-    } else {
-        exec_next_insn();
-    }
-}
+pub const instructions = .{
+    struct { pub const spec = "sync";
+        pub const encoding = .{
+            opcodes.Lo16.sync,
+        };
+
+        pub fn entry(c: *Cycle) void {
+            c.atomic_next_cycle_until_end();
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // ald .d x(src) -> <reg>
+        \\ald .d x(src) -> r(dest)
+        \\ald .d x(src) -> x(dest)
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(8, Reg(.src)),
+            Encoder.shifted(12, Reg(.dest)),
+        };
+        pub const ij = Reg(.src);
+        pub const iw = Reg(.dest);
+
+        fn opcode(params: []const Parameter.Signature) opcodes.Lo8 {
+            return switch (params[2].base) {
+                .reg16 => .atomic_load_reg16,
+                .reg32 => .atomic_load_reg32,
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle) void {
+            c.reg32_to_l();
+            c.l_to_sr(.temp_1);
+            c.load_next_insn();
+            c.next(atomic_load);
+        }
+
+        pub fn atomic_load(c: *Cycle, params: []const Parameter.Signature) void {
+            c.atomic_this_cycle();
+            c.read_to_d(.temp_1, 0, .word, .data);
+            c.d_to_ll();
+            c.ll_to_reg();
+            if (params[2].base == .reg32) {
+                c.next_iw_xor1();
+                c.next(atomic_load_high);
+            } else {
+                c.exec_next_insn();
+            }
+        }
+
+        pub fn atomic_load_high(c: *Cycle) void {
+            c.atomic_this_cycle();
+            c.read_to_d(.temp_1, 2, .word, .data);
+            c.d_to_ll();
+            c.ll_to_reg();
+            c.exec_next_insn();
+        }
+    },
+    struct { pub const spec = // ast <reg> -> .d x(dest)
+        \\ast r(src) -> .d x(dest)
+        \\ast x(src) -> .d x(dest)
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(8, Reg(.dest)),
+            Encoder.shifted(12, Reg(.src)),
+        };
+        pub const ij = Reg(.dest);
+        pub const ik = Reg(.src);
+
+        fn opcode(params: []const Parameter.Signature) opcodes.Lo8 {
+            return switch (params[0].base) {
+                .reg16 => .atomic_store_reg16,
+                .reg32 => .atomic_store_reg32,
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle) void {
+            c.reg32_to_l();
+            c.l_to_sr(.temp_1);
+            c.load_next_insn();
+            c.next(atomic_store);
+        }
+
+        pub fn atomic_store(c: *Cycle, params: []const Parameter.Signature) void {
+            c.atomic_this_cycle();
+            c.reg_to_k();
+            c.k_to_ll();
+            c.write_from_ll(.temp_1, 0, .word, .data);
+            if (params[0].base == .reg32) {
+                c.next_ik_xor1();
+                c.next(atomic_store_high);
+            } else {
+                c.exec_next_insn();
+            }
+        }
+
+        pub fn atomic_store_high(c: *Cycle) void {
+            c.atomic_this_cycle();
+            c.reg_to_k();
+            c.k_to_ll();
+            c.write_from_ll(.temp_1, 2, .word, .data);
+            c.exec_next_insn();
+        }
+    },
+    struct { pub const spec = // astz <reg> -> .d x(dest)
+        \\astz r(src) -> .d x(dest)
+        \\astz x(src) -> .d x(dest)
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(8, Reg(.dest)),
+            Encoder.shifted(12, Reg(.src)),
+        };
+        pub const ij = Reg(.dest);
+        pub const ik = Reg(.src);
+
+        fn opcode(params: []const Parameter.Signature) opcodes.Lo8 {
+            return switch (params[0].base) {
+                .reg16 => .atomic_store_if_zero_reg16,
+                .reg32 => .atomic_store_if_zero_reg32,
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle) void {
+            c.reg32_to_l();
+            c.l_to_sr(.temp_1);
+            c.load_next_insn();
+            c.next(atomic_check);
+        }
+
+        pub fn atomic_check(c: *Cycle, params: []const Parameter.Signature) void {
+            c.atomic_this_cycle();
+            c.read_to_d(.temp_1, 0, .word, .data);
+            c.d_to_ll();
+            c.zn_flags_from_ll(.fresh);
+            if (params[0].base == .reg32) {
+                c.next_ik_xor1();
+                c.next(atomic_check_high);
+            } else {
+                c.next(atomic_store);
+            }
+        }
+
+        pub fn atomic_check_high(c: *Cycle, flags: Flags) void {
+            if (flags.zero()) {
+                c.atomic_this_cycle();
+                c.read_to_d(.temp_1, 2, .word, .data);
+                c.d_to_ll();
+                c.zn_flags_from_ll(.cont);
+                c.next_ik_xor1();
+                c.next(atomic_store);
+            } else {
+                c.exec_next_insn();
+            }
+        }
+
+        pub fn atomic_store(c: *Cycle, flags: Flags, params: []const Parameter.Signature) void {
+            if (flags.zero()) {
+                c.atomic_this_cycle();
+                c.reg_to_k();
+                c.k_to_ll();
+                c.write_from_ll(.temp_1, 0, .word, .data);
+                if (params[0].base == .reg32) {
+                    c.next_ik_xor1();
+                    c.next(atomic_store_high);
+                } else {
+                    c.exec_next_insn();
+                }
+            } else {
+                c.exec_next_insn();
+            }
+        }
+
+        pub fn atomic_store_high(c: *Cycle) void {
+            c.atomic_this_cycle();
+            c.reg_to_k();
+            c.k_to_ll();
+            c.write_from_ll(.temp_1, 2, .word, .data);
+            c.exec_next_insn();
+        }
+    },
+    struct { pub const spec = // aadd .d x(mem), <reg> -> <reg0>
+        \\aadd .d x(mem), r(offset) -> r0
+        \\aadd .d x(mem), x(offset) -> x0
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(8, Reg(.mem)),
+            Encoder.shifted(12, Reg(.offset)),
+        };
+        pub const ij = Reg(.mem);
+        pub const ik = Reg(.offset);
+        pub const iw: u4 = 0;
+
+        fn opcode(params: []const Parameter.Signature) opcodes.Lo8 {
+            return switch (params[1].base) {
+                .reg16 => .atomic_add_reg16,
+                .reg32 => .atomic_add_reg32,
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle) void {
+            c.reg32_to_l();
+            c.l_to_sr(.temp_1);
+            c.load_next_insn();
+            c.next_ij_from_iw();
+            c.next(atomic_load);
+        }
+
+        pub fn atomic_load(c: *Cycle, params: []const Parameter.Signature) void {
+            c.atomic_this_cycle();
+            c.read_to_d(.temp_1, 0, .word, .data);
+            c.d_to_ll();
+            c.ll_to_reg();
+            if (params[1].base == .reg32) {
+                c.next_iw_xor1();
+                c.next(atomic_load_high);
+            } else {
+                c.next(atomic_store);
+            }
+        }
+
+        pub fn atomic_load_high(c: *Cycle) void {
+            c.atomic_this_cycle();
+            c.read_to_d(.temp_1, 2, .word, .data);
+            c.d_to_ll();
+            c.ll_to_reg();
+            c.next_iw_xor1();
+            c.next(atomic_store);
+        }
+
+        pub fn atomic_store(c: *Cycle, params: []const Parameter.Signature) void {
+            c.atomic_this_cycle();
+            c.reg_to_jl();
+            c.reg_to_k();
+            c.jl_plus_k_to_ll(.fresh, .flags);
+            c.ll_to_reg();
+            c.write_from_ll(.temp_1, 0, .word, .data);
+            if (params[1].base == .reg32) {
+                c.next_ij_xor1();
+                c.next_ik_xor1();
+                c.next_iw_xor1();
+                c.next(atomic_store_high);
+            } else {
+                c.exec_next_insn();
+            }
+        }
+
+        pub fn atomic_store_high(c: *Cycle) void {
+            c.atomic_this_cycle();
+            c.reg_to_jl();
+            c.reg_to_k();
+            c.jl_plus_k_to_ll(.cont, .flags);
+            c.ll_to_reg();
+            c.write_from_ll(.temp_1, 2, .word, .data);
+            c.exec_next_insn();
+        }
+    },
+    struct { pub const spec = // ainc .d x(mem) -> <reg0>
+        \\ainc .d x(mem) -> r0
+        \\ainc .d x(mem) -> x0
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(12, Reg(.mem)),
+        };
+        pub const ij = Reg(.mem);
+        pub const iw: u4 = 0;
+
+        fn opcode(params: []const Parameter.Signature) opcodes.Lo12 {
+            return switch (params[2].base) {
+                .reg16 => .atomic_increment_reg16,
+                .reg32 => .atomic_increment_reg32,
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle) void {
+            c.reg32_to_l();
+            c.l_to_sr(.temp_1);
+            c.load_next_insn();
+            c.next_ij_from_iw();
+            c.next(atomic_load);
+        }
+
+        pub fn atomic_load(c: *Cycle, params: []const Parameter.Signature) void {
+            c.atomic_this_cycle();
+            c.read_to_d(.temp_1, 0, .word, .data);
+            c.d_to_ll();
+            c.ll_to_reg();
+            if (params[2].base == .reg32) {
+                c.next_iw_xor1();
+                c.next(atomic_load_high);
+            } else {
+                c.next(atomic_store);
+            }
+        }
+
+        pub fn atomic_load_high(c: *Cycle) void {
+            c.atomic_this_cycle();
+            c.read_to_d(.temp_1, 2, .word, .data);
+            c.d_to_ll();
+            c.ll_to_reg();
+            c.next_iw_xor1();
+            c.next(atomic_store);
+        }
+
+        pub fn atomic_store(c: *Cycle, params: []const Parameter.Signature) void {
+            c.atomic_this_cycle();
+            c.reg_to_jl();
+            c.literal_to_k(1);
+            c.jl_plus_k_to_ll(.fresh, .flags);
+            c.ll_to_reg();
+            c.write_from_ll(.temp_1, 0, .word, .data);
+            if (params[2].base == .reg32) {
+                c.next_ij_xor1();
+                c.next_iw_xor1();
+                c.next(atomic_store_high);
+            } else {
+                c.exec_next_insn();
+            }
+        }
+
+        pub fn atomic_store_high(c: *Cycle) void {
+            c.atomic_this_cycle();
+            c.reg_to_jl();
+            c.zero_to_k();
+            c.jl_plus_k_to_ll(.cont, .flags);
+            c.ll_to_reg();
+            c.write_from_ll(.temp_1, 2, .word, .data);
+            c.exec_next_insn();
+        }
+    },
+    struct { pub const spec = // adecnz .d x(mem) -> <reg0>
+        \\adecnz .d x(mem) -> r0
+        \\adecnz .d x(mem) -> x0
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(12, Reg(.mem)),
+        };
+        pub const ij = Reg(.mem);
+        pub const iw: u4 = 0;
+
+        fn opcode(params: []const Parameter.Signature) opcodes.Lo12 {
+            return switch (params[2].base) {
+                .reg16 => .atomic_decrement_if_not_zero_reg16,
+                .reg32 => .atomic_decrement_if_not_zero_reg32,
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle) void {
+            c.reg32_to_l();
+            c.l_to_sr(.temp_1);
+            c.load_next_insn();
+            c.next_ij_from_iw();
+            c.next(atomic_load);
+        }
+
+        pub fn atomic_load(c: *Cycle, params: []const Parameter.Signature) void {
+            c.atomic_this_cycle();
+            c.read_to_d(.temp_1, 0, .word, .data);
+            c.d_to_ll();
+            c.ll_to_reg();
+            c.zn_flags_from_ll(.fresh);
+            if (params[2].base == .reg32) {
+                c.next_iw_xor1();
+                c.next(atomic_load_high);
+            } else {
+                c.next(atomic_store);
+            }
+        }
+
+        pub fn atomic_load_high(c: *Cycle, flags: Flags) void {
+            if (flags.zero()) {
+                c.exec_next_insn();
+            } else {
+                c.atomic_this_cycle();
+                c.read_to_d(.temp_1, 2, .word, .data);
+                c.d_to_ll();
+                c.ll_to_reg();
+                c.zn_flags_from_l(.cont);
+                c.next_iw_xor1();
+                c.next(atomic_store);
+            }
+        }
+
+        pub fn atomic_store(c: *Cycle, flags: Flags, params: []const Parameter.Signature) void {
+            if (flags.zero()) {
+                c.exec_next_insn();
+            } else {
+                c.atomic_this_cycle();
+                c.reg_to_jl();
+                c.literal_to_k(1);
+                c.jl_plus_k_to_ll(.fresh, .flags);
+                c.ll_to_reg();
+                c.write_from_ll(.temp_1, 0, .word, .data);
+                if (params[2].base == .reg32) {
+                    c.next_ij_xor1();
+                    c.next_iw_xor1();
+                    c.next(atomic_store_high);
+                } else {
+                    c.exec_next_insn();
+                }
+            }
+        }
+
+        pub fn atomic_store_high(c: *Cycle) void {
+            c.atomic_this_cycle();
+            c.reg_to_jl();
+            c.zero_to_k();
+            c.jl_plus_k_to_ll(.cont, .flags);
+            c.ll_to_reg();
+            c.write_from_ll(.temp_1, 2, .word, .data);
+            c.exec_next_insn();
+        }
+    },
+    struct { pub const spec = "ax r(reg), .d x(mem)";
+        pub const transform = "ax r(src) -> .d x(mem) -> r(dest)";
+        pub const conversions = .{
+            .{ .reg, .src },
+            .{ .reg, .dest },
+            .{ .mem, .mem },
+        };
+    },
+    struct { pub const spec = "ax x(reg), .d x(mem)";
+        pub const transform = "ax x(src) -> .d x(mem) -> x(dest)";
+        pub const conversions = .{
+            .{ .reg, .src },
+            .{ .reg, .dest },
+            .{ .mem, .mem },
+        };
+    },
+    struct { pub const spec = "ax .d x(mem), r(reg)";
+        pub const transform = "ax r(src) -> .d x(mem) -> r(dest)";
+        pub const conversions = .{
+            .{ .reg, .src },
+            .{ .reg, .dest },
+            .{ .mem, .mem },
+        };
+    },
+    struct { pub const spec = "ax .d x(mem), x(reg)";
+        pub const transform = "ax x(src) -> .d x(mem) -> x(dest)";
+        pub const conversions = .{
+            .{ .reg, .src },
+            .{ .reg, .dest },
+            .{ .mem, .mem },
+        };
+    },
+    struct { pub const spec = // ax <src> -> .d x(mem) -> <dest>
+        \\ax r(src) -> .d x(mem) -> r(dest)
+        \\ax x(src) -> .d x(mem) -> x(dest)
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(12, Reg(.mem)),
+            Encoder.shifted(16, Reg(.src)),
+            Encoder.shifted(20, Reg(.dest)),
+        };
+        pub const ij = Reg(.mem);
+
+        fn opcode(params: []const Parameter.Signature) opcodes.Lo12 {
+            return switch (params[0].base) {
+                .reg16 => .atomic_exchange_reg16,
+                .reg32 => .atomic_exchange_reg32,
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle) void {
+            c.reg32_to_l();
+            c.l_to_sr(.temp_1);
+            c.ip_read_to_dr(2, .byte);
+            c.next_ij_from_decode(.alt);
+            c.next_ik_from_decode(.alt);
+            c.next(load_next_insn);
+        }
+
+        pub fn load_next_insn(c: *Cycle) void {
+            c.load_next_insn();
+            c.next_iw_from_ik();
+            c.next(atomic_load);
+        }
+
+        pub fn atomic_load(c: *Cycle, params: []const Parameter.Signature) void {
+            c.atomic_this_cycle();
+            c.read_to_d(.temp_1, 0, .word, .data);
+            c.d_to_ll();
+            c.ll_to_reg();
+            if (params[2].base == .reg32) {
+                c.next_iw_xor1();
+                c.next(atomic_load_high);
+            } else {
+                c.next(atomic_store);
+            }
+        }
+
+        pub fn atomic_load_high(c: *Cycle) void {
+            c.atomic_this_cycle();
+            c.read_to_d(.temp_1, 2, .word, .data);
+            c.d_to_ll();
+            c.ll_to_reg();
+            c.next_iw_xor1();
+            c.next(atomic_store);
+        }
+
+        pub fn atomic_store(c: *Cycle, params: []const Parameter.Signature) void {
+            c.atomic_this_cycle();
+            c.reg_to_jl();
+            c.jl_to_ll();
+            c.write_from_ll(.temp_1, 0, .word, .data);
+            if (params[2].base == .reg32) {
+                c.next_ij_xor1();
+                c.next(atomic_store_high);
+            } else {
+                c.exec_next_insn();
+            }
+        }
+
+        pub fn atomic_store_high(c: *Cycle) void {
+            c.atomic_this_cycle();
+            c.reg_to_jl();
+            c.jl_to_ll();
+            c.write_from_ll(.temp_1, 2, .word, .data);
+            c.exec_next_insn();
+        }
+    },
+
+
+    struct { pub const spec = // axe <src> -> .d x(mem) -> <dest>
+        \\axe r(src) -> .d x(mem) -> r(expected)
+        \\axe x(src) -> .d x(mem) -> x(expected)
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(12, Reg(.mem)),
+            Encoder.shifted(16, Reg(.src)),
+            Encoder.shifted(20, Reg(.expected)),
+        };
+        pub const ij = Reg(.mem);
+
+        fn opcode(params: []const Parameter.Signature) opcodes.Lo12 {
+            return switch (params[0].base) {
+                .reg16 => .atomic_exchange_if_equal_reg16,
+                .reg32 => .atomic_exchange_if_equal_reg32,
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle) void {
+            c.reg32_to_l();
+            c.l_to_sr(.temp_1);
+            c.ip_read_to_dr(2, .byte);
+            c.next_ij_from_decode(.alt);
+            c.next_ik_from_decode(.alt);
+            c.next(atomic_load);
+        }
+
+        pub fn atomic_load(c: *Cycle) void {
+            c.atomic_this_cycle();
+            c.read_to_d(.temp_1, 0, .word, .data);
+            c.d_to_l(.zx);
+            c.l_to_sr(.temp_2);
+            c.next(compare);
+        }
+
+        pub fn compare(c: *Cycle, params: []const Parameter.Signature) void {
+            c.atomic_this_cycle();
+            c.srl_to_jl(.temp_2);
+            c.reg_to_k();
+            c.jl_minus_k(.fresh, .flags);
+            if (params[2].base == .reg32) {
+                c.next(atomic_load_high);
+            } else {
+                c.next(atomic_store);
+            }
+        }
+
+        pub fn atomic_load_high(c: *Cycle, flags: Flags) void {
+            if (flags.zero()) {
+                c.atomic_this_cycle();
+                c.read_to_d(.temp_1, 2, .word, .data);
+                c.d_to_l(.zx);
+                c.l_to_sr(.temp_2);
+                c.next_ik_xor1();
+                c.next(compare_high);
+            } else {
+                c.load_and_exec_next_insn();
+            }
+        }
+
+        pub fn compare_high(c: *Cycle) void {
+            c.atomic_this_cycle();
+            c.srl_to_jl(.temp_2);
+            c.reg_to_k();
+            c.jl_minus_k(.fresh, .flags);
+            c.next(atomic_store);
+        }
+
+        pub fn atomic_store(c: *Cycle, flags: Flags, params: []const Parameter.Signature) void {
+            if (flags.zero()) {
+                c.atomic_this_cycle();
+                c.reg_to_jl();
+                c.jl_to_ll();
+                c.write_from_ll(.temp_1, 0, .word, .data);
+                if (params[2].base == .reg32) {
+                    c.next_ij_xor1();
+                    c.next(atomic_store_high);
+                } else {
+                    c.next(load_and_exec_next_insn);
+                }
+            } else {
+                c.load_and_exec_next_insn();
+            }
+        }
+
+        pub fn atomic_store_high(c: *Cycle) void {
+            c.atomic_this_cycle();
+            c.reg_to_jl();
+            c.jl_to_ll();
+            c.write_from_ll(.temp_1, 2, .word, .data);
+            c.next(load_and_exec_next_insn);
+        }
+
+        pub const load_and_exec_next_insn = Cycle.load_and_exec_next_insn;
+    },
+};
+
+const Cycle = @import("Cycle.zig");
+const Encoder = isa.Instruction_Encoding.Encoder;
+const Int = placeholders.Int;
+const Range = placeholders.Range;
+const Reg = placeholders.Reg;
+const placeholders = @import("placeholders.zig");
+const opcodes = @import("opcodes.zig");
+const Parameter = isa.Parameter;
+const Flags = hw.microcode.Flags;
+const hw = arch.hw;
+const isa = arch.isa;
+const arch = @import("lib_arch");
+const std = @import("std");

@@ -658,25 +658,24 @@ fn Array_Intern_Pool(comptime T: type) type {
     };
 }
 
-const Encoding_Database = @import("Encoding_Database.zig");
-const Decoding_Database = @import("Decoding_Database.zig");
+const Encoding_Database = isa.Encoding_Database;
+const Decoding_Database = isa.Decoding_Database;
 const Transform = Instruction_Transform.Transform;
 const Constant_Value = Instruction_Transform.Constant_Value;
-const Instruction_Transform = @import("Instruction_Transform.zig");
+const Instruction_Transform = isa.Instruction_Transform;
 const Placeholder_Info = Instruction_Encoding.Placeholder_Info;
 const Domain = Instruction_Encoding.Domain;
 const Constraint = Instruction_Encoding.Constraint;
 const Encoder = Instruction_Encoding.Encoder;
 const Value = Instruction_Encoding.Value;
-const Instruction_Encoding = @import("Instruction_Encoding.zig");
-const Instruction = @import("Instruction.zig");
-const Parameter = @import("Parameter.zig");
+const Instruction_Encoding = isa.Instruction_Encoding;
+const Instruction = isa.Instruction;
+const Parameter = isa.Parameter;
 const Mnemonic = isa.Mnemonic;
 const Mnemonic_Suffix = isa.Mnemonic_Suffix;
 const Encoded_Instruction = isa.Encoded_Instruction;
 const Instruction_Signature = isa.Instruction_Signature;
-const isa = arch.isa;
-const arch = @import("lib_arch");
+const isa = @import("../isa.zig");
 const sx = @import("sx");
 const deep_hash_map = @import("deep_hash_map");
 const Signedness = std.builtin.Signedness;

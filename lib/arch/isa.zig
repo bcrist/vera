@@ -37,7 +37,7 @@ pub const Mnemonic = enum {
     // Atomics:
     sync, ald, ast, astz, aadd, ainc, adecnz, ax, axe,
     // Memcopy & streaming:
-    mcr, mcrb, mcf, mcfb, si, sib, so, sob,
+    mcr, mcrb, mcf, mcfb, si, sib, so, sob, bld, bst,
     // Faults, interrupts, and context switching:
     fret, iret, ifex, ldrs, strs, srs, park,
     // Misc:
@@ -128,7 +128,6 @@ pub const Branch_Kind = enum {
     call,
 };
 pub fn branch_kind(mnemonic: Mnemonic, suffix: Mnemonic_Suffix) Branch_Kind {
-    // TODO ensure exec_next_insn() is only used in microcode of instructions where this returns nonbranching or conditional
     return switch (mnemonic) {
         ._reserved => unreachable,
 
@@ -142,7 +141,7 @@ pub fn branch_kind(mnemonic: Mnemonic, suffix: Mnemonic_Suffix) Branch_Kind {
         .sat, .rat,
         .frame, .unframe, .pop, .push,
         .sync, .ald, .ast, .astz, .aadd, .ainc, .adecnz, .ax, .axe,
-        .mcr, .mcrb, .mcf, .mcfb, .si, .sib, .so, .sob,
+        .mcr, .mcrb, .mcf, .mcfb, .si, .sib, .so, .sob, .bld, .bst,
         .ifex, .ldrs, .strs, .srs,
         .nop,
         => .nonbranching,

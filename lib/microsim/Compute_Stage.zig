@@ -229,10 +229,11 @@ fn simulate_count(in: Compute_Stage, out: *Transact_Stage) void {
     const mode = in.cs.mode.count;
 
     var jl = in.j.lo.raw();
+    var k = in.k.raw();
 
     if (mode.invert_jl) jl = ~jl;
 
-    const jlm = jl & in.j.hi.raw();
+    const jlm = jl & k;
 
     var mask: u16 = undefined;
     if (!mode.leftmost_only and !mode.rightmost_only) {
@@ -291,7 +292,6 @@ fn simulate_address_translator(in: Compute_Stage, out: *Transact_Stage, translat
 
     const translate = in.cs.at_op == .translate;
 
-    // TODO audit this to make sure it catches all instruction loads
     const insn_load = translate and in.cs.sr2_wsrc == .virtual_addr and (in.cs.sr2_wi == .ip or in.cs.sr2_wi == .next_ip);
 
     const enabled = in.stat_a and in.cs.addr_space != .raw;

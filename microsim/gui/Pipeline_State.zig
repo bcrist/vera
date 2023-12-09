@@ -1,5 +1,3 @@
-// TODO show literal directly?
-
 pipeline: hw.Pipeline,
 stage: enum {
     reset,
@@ -293,8 +291,12 @@ pub fn doWindow(self: Pipeline_State) void {
     zgui.textUnformattedColored(colors.label, "IJ");
     zgui.sameLine(.{});
     zgui.textUnformattedColored(w_color, switch (self.cs.ij_op) {
-        .hold => " ",
+        .zero => "0",
+        .from_ij => " ",
+        .from_ik => "K",
+        .from_iw => "W",
         .xor1 => "^",
+        .xor2 => "%",
         .from_continuation => "C",
         .from_decode => "D",
     });
@@ -306,8 +308,12 @@ pub fn doWindow(self: Pipeline_State) void {
     zgui.textUnformattedColored(colors.label, "IK");
     zgui.sameLine(.{});
     zgui.textUnformattedColored(w_color, switch (self.cs.ik_op) {
-        .hold => " ",
+        .zero => "0",
+        .from_ij => "J",
+        .from_ik => " ",
+        .from_iw => "W",
         .xor1 => "^",
+        .xor2 => "%",
         .from_continuation => "C",
         .from_decode => "D",
     });
@@ -319,8 +325,12 @@ pub fn doWindow(self: Pipeline_State) void {
     zgui.textUnformattedColored(colors.label, "IW");
     zgui.sameLine(.{});
     zgui.textUnformattedColored(w_color, switch (self.cs.iw_op) {
-        .hold => " ",
+        .zero => "0",
+        .from_ij => "J",
+        .from_ik => "K",
+        .from_iw => " ",
         .xor1 => "^",
+        .xor2 => "%",
         .from_continuation => "C",
         .from_decode => "D",
     });

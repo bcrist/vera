@@ -81,9 +81,6 @@ fn resolve_auto_org_address(a: *Assembler, chunk: Source_File.Chunk) u32 {
 
     if (chunk_size < Page_Data.page_size) {
         // See if there's an existing semi-full chunk that we can reuse
-        // TODO it might make sense to add an acceleration structure for this inside Section
-        //      e.g. list of non-full pages for that section, sorted by size of largest free span (or maybe last used?).
-        //      But need to ensure that the upkeep cost doesn't exceed the gains here.
         for (0.., page_sections) |page_data_handle, section_handle| {
             if (section_handle != chunk_section_handle) {
                 continue;

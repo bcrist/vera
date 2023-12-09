@@ -1,4 +1,52 @@
 pub const instructions = .{
+    struct { pub const spec = "sub r(src), (imm) -> r(dest)";
+        pub const transform = "add r(src), (imm) -> r(dest)";
+        pub const conversions = .{
+            .{ .src, .src },
+            .{ .dest, .dest },
+            .{ .imm, .imm, .negate },
+        };
+    },
+    struct { pub const spec = "subc r(src), (imm) -> r(dest)";
+        pub const transform = "addc r(src), (imm) -> r(dest)";
+        pub const conversions = .{
+            .{ .src, .src },
+            .{ .dest, .dest },
+            .{ .imm, .imm, .negate, .{ .offset = -1 } },
+        };
+    },
+    struct { pub const spec = "add (imm), r(src) -> r(dest)";
+        pub const transform = "add r(src), (imm) -> r(dest)";
+        pub const conversions = .{
+            .{ .imm, .imm },
+            .{ .src, .src },
+            .{ .dest, .dest },
+        };
+    },
+    struct { pub const spec = "addc (imm), r(src) -> r(dest)";
+        pub const transform = "addc r(src), (imm) -> r(dest)";
+        pub const conversions = .{
+            .{ .imm, .imm },
+            .{ .src, .src },
+            .{ .dest, .dest },
+        };
+    },
+    struct { pub const spec = "add (imm), x(src) -> x(dest)";
+        pub const transform = "add x(src), (imm) -> x(dest)";
+        pub const conversions = .{
+            .{ .imm, .imm },
+            .{ .src, .src },
+            .{ .dest, .dest },
+        };
+    },
+    struct { pub const spec = "add r(a), x(b) -> x(dest)";
+        pub const transform = "add x(b), r(a) -> x(dest)";
+        pub const conversions = .{
+            .{ .a, .a },
+            .{ .b, .b },
+            .{ .dest, .dest },
+        };
+    },
     struct { pub const spec = // add x(src), (imm8s) -> x(dest)
         \\add x(src), (imm) -> x(dest)
         ;
@@ -636,528 +684,840 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = "sub r(src), (imm) -> r(dest)";
-        pub const transform = "add r(src), (imm) -> r(dest)";
+    struct { pub const spec = // inc[c] r(reg) -> r(reg)
+        \\inc r(reg)
+        \\inc r(reg) -> r(reg)
+        \\add r(reg), 1
+        \\add r(reg), 1 -> r(reg)
+        \\sub r(reg), -1
+        \\sub r(reg), -1 -> r(reg)
+        \\incc r(reg)
+        \\incc r(reg) -> r(reg)
+        \\addc r(reg), 0
+        \\addc r(reg), 0 -> r(reg)
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(12, Reg(.reg)),
+        };
+        pub const ij = Reg(.reg);
+        pub const iw = Reg(.reg);
+
+        fn opcode(mnemonic: isa.Mnemonic) opcodes.Lo12 {
+            return switch (mnemonic) {
+                .inc, .add, .sub => .increment_reg16,
+                .incc, .addc => .increment_reg16_if_carry,
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
+            c.reg_to_jl();
+            switch (mnemonic) {
+                .inc, .add, .sub => {
+                    c.srl_to_k(.one);
+                    c.jl_plus_k_to_ll(.fresh, .flags);
+                },
+                .incc, .addc => {
+                    c.zero_to_k();
+                    c.jl_plus_k_to_ll(.cont, .flags);
+                },
+                else => unreachable,
+            }
+            c.ll_to_reg();
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // dec[c] r(reg) -> r(reg)
+        \\dec r(reg)
+        \\dec r(reg) -> r(reg)
+        \\add r(reg), -1
+        \\add r(reg), -1 -> r(reg)
+        \\sub r(reg), 1
+        \\sub r(reg), 1 -> r(reg)
+        \\decc r(reg)
+        \\decc r(reg) -> r(reg)
+        \\subc r(reg), 0
+        \\subc r(reg), 0 -> r(reg)
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(12, Reg(.reg)),
+        };
+        pub const ij = Reg(.reg);
+        pub const iw = Reg(.reg);
+
+        fn opcode(mnemonic: isa.Mnemonic) opcodes.Lo12 {
+            return switch (mnemonic) {
+                .dec, .add, .sub => .decrement_reg16,
+                .decc, .subc => .decrement_reg16_if_not_carry,
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
+            c.reg_to_jl();
+            switch (mnemonic) {
+                .dec, .add, .sub => {
+                    c.srl_to_k(.one);
+                    c.jl_minus_k_to_ll(.fresh, .flags);
+                },
+                .decc, .subc => {
+                    c.zero_to_k();
+                    c.jl_minus_k_to_ll(.cont, .flags);
+                },
+                else => unreachable,
+            }
+            c.ll_to_reg();
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // inc[c] x(reg) -> x(reg)
+        \\inc x(reg)
+        \\inc x(reg) -> x(reg)
+        \\add x(reg), 1
+        \\add x(reg), 1 -> x(reg)
+        \\sub x(reg), -1
+        \\sub x(reg), -1 -> x(reg)
+        \\incc x(reg)
+        \\incc x(reg) -> x(reg)
+        \\addc x(reg), 0
+        \\addc x(reg), 0 -> x(reg)
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(12, Reg(.reg)),
+        };
+        pub const ij = Reg(.reg);
+        pub const iw = Reg(.reg);
+
+        fn opcode(mnemonic: isa.Mnemonic) opcodes.Lo12 {
+            return switch (mnemonic) {
+                .inc, .add, .sub => .increment_reg32,
+                .incc, .addc => .increment_reg32_if_carry,
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
+            c.reg32_to_j();
+            switch (mnemonic) {
+                .inc, .add, .sub => {
+                    c.srl_to_k(.one);
+                    c.j_plus_k_to_l(.zx, .fresh, .flags);
+                },
+                .incc, .addc => {
+                    c.zero_to_k();
+                    c.j_plus_k_to_l(.zx, .cont, .flags);
+                },
+                else => unreachable,
+            }
+            c.l_to_reg32();
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // dec[c] x(reg) -> x(reg)
+        \\dec x(reg)
+        \\dec x(reg) -> x(reg)
+        \\add x(reg), -1
+        \\add x(reg), -1 -> x(reg)
+        \\sub x(reg), 1
+        \\sub x(reg), 1 -> x(reg)
+        \\decc x(reg)
+        \\decc x(reg) -> x(reg)
+        \\subc x(reg), 0
+        \\subc x(reg), 0 -> x(reg)
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(12, Reg(.reg)),
+        };
+        pub const ij = Reg(.reg);
+        pub const iw = Reg(.reg);
+
+        fn opcode(mnemonic: isa.Mnemonic) opcodes.Lo12 {
+            return switch (mnemonic) {
+                .dec, .add, .sub => .decrement_reg32,
+                .decc, .subc => .decrement_reg32_if_not_carry,
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
+            c.reg32_to_j();
+            switch (mnemonic) {
+                .dec, .add, .sub => {
+                    c.srl_to_k(.one);
+                    c.j_minus_k_to_l(.zx, .fresh, .flags);
+                },
+                .decc, .subc => {
+                    c.zero_to_k();
+                    c.j_minus_k_to_l(.zx, .cont, .flags);
+                },
+                else => unreachable,
+            }
+            c.l_to_reg32();
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // neg[c] r(reg) -> r(reg)
+        \\neg r(reg)
+        \\neg r(reg) -> r(reg)
+        \\sub 0, r(reg) -> r(reg)
+        \\negc r(reg)
+        \\negc r(reg) -> r(reg)
+        \\subc 0, r(reg) -> r(reg)
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(12, Reg(.reg)),
+        };
+        pub const ik = Reg(.reg);
+        pub const iw = Reg(.reg);
+
+        fn opcode(mnemonic: isa.Mnemonic) opcodes.Lo12 {
+            return switch (mnemonic) {
+                .neg, .sub => .negate_reg16,
+                .negc, .subc => .negate_reg16_with_carry,
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
+            c.zero_to_jl();
+            c.reg_to_k();
+            switch (mnemonic) {
+                .neg, .sub => {
+                    c.jl_minus_k_to_ll(.fresh, .flags);
+                },
+                .negc, .subc => {
+                    c.jl_minus_k_to_ll(.cont, .flags);
+                },
+                else => unreachable,
+            }
+            c.ll_to_reg();
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // not r(reg) -> r(reg)
+        \\not r(reg)
+        \\not r(reg) -> r(reg)
+        ;
+        pub const encoding = .{
+            opcodes.Lo12.complement_reg16,
+            Encoder.shifted(12, Reg(.reg)),
+        };
+        pub const ik = Reg(.reg);
+        pub const iw = Reg(.reg);
+
+        pub fn entry(c: *Cycle) void {
+            c.zero_to_jl();
+            c.reg_to_k();
+            c.jl_logic_k_to_ll(.xnor, .fresh, .flags);
+            c.ll_to_reg();
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // test[z] r(a), r(b)
+        \\test r(a), r(b)
+        \\testz r(a), r(b)
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(8, Reg(.a)),
+            Encoder.shifted(12, Reg(.b)),
+        };
+        pub const ij = Reg(.a);
+        pub const ik = Reg(.b);
+
+        fn opcode(mnemonic: isa.Mnemonic) opcodes.Lo8 {
+            return switch (mnemonic) {
+                .@"test" => .test_reg16,
+                .testz => .test_reg16_no_set_z,
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
+            c.reg_to_jl();
+            c.reg_to_k();
+            c.jl_logic_k_to_ll(._and, switch (mnemonic) {
+                .@"test" => .fresh,
+                .testz => .cont,
+                else => unreachable,
+            }, .flags);
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // testb[z] r(a), (imm4u)
+        \\testb r(reg), (imm)
+        \\testbz r(reg), (imm)
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(8, Reg(.reg)),
+            Encoder.shifted(12, Imm),
+        };
+        const Imm = Int(.imm, u4);
+        pub const ij = Reg(.reg);
+        pub const ik = Imm;
+
+        fn opcode(mnemonic: isa.Mnemonic) opcodes.Lo8 {
+            return switch (mnemonic) {
+                .testb => .test_bit_reg16,
+                .testbz => .test_bit_reg16_no_set_z,
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
+            c.reg_to_jl();
+            c.ik_bit_to_k();
+            c.jl_logic_k_to_ll(._and, switch (mnemonic) {
+                .testb => .fresh,
+                .testbz => .cont,
+                else => unreachable,
+            }, .flags);
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // <clr/set/tgl>b r(reg), (imm4u) -> r(reg)
+        \\clrb r(reg), (imm)
+        \\clrb r(reg), (imm) -> r(reg)
+        \\setb r(reg), (imm)
+        \\setb r(reg), (imm) -> r(reg)
+        \\tglb r(reg), (imm)
+        \\tglb r(reg), (imm) -> r(reg)
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(8, Reg(.reg)),
+            Encoder.shifted(12, Imm),
+        };
+        const Imm = Int(.imm, u4);
+        pub const ij = Reg(.reg);
+        pub const ik = Imm;
+        pub const iw = Reg(.reg);
+
+        fn opcode(mnemonic: isa.Mnemonic) opcodes.Lo8 {
+            return switch (mnemonic) {
+                .clrb => .clear_bit_reg16_u4,
+                .setb => .set_bit_reg16_u4,
+                .tglb => .toggle_bit_reg16_u4,
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
+            c.reg_to_jl();
+            c.ik_bit_to_k();
+            c.jl_logic_k_to_ll(switch (mnemonic) {
+                .clrb => .and_not,
+                .setb => ._or,
+                .tglb => .xor,
+                else => unreachable,
+            }, .fresh, .flags);
+            c.ll_to_reg();
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // <shr/shl> <reg>, b(bits) -> <reg>
+        \\shr x(reg) .unsigned, b(bits)
+        \\shr x(reg) .unsigned, b(bits) -> x(reg)
+        \\shl x(reg), r(bits)
+        \\shl x(reg), r(bits) -> x(reg)
+        \\shr r(reg) .unsigned, b(bits)
+        \\shr r(reg) .unsigned, b(bits) -> r(reg)
+        \\shr r(reg) .signed, b(bits)
+        \\shr r(reg) .signed, b(bits) -> r(reg)
+        \\shl r(reg), b(bits)
+        \\shl r(reg), b(bits) -> r(reg)
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(8, Reg(.reg)),
+            Encoder.shifted(12, Reg(.bits)),
+        };
+        pub const ij = Reg(.reg);
+        pub const ik = Reg(.bits);
+        pub const iw = Reg(.reg);
+
+        fn opcode(mnemonic: isa.Mnemonic, params: []const Parameter.Signature) opcodes.Lo8 {
+            return switch (mnemonic) {
+                .shr => switch (params[0].base) {
+                    .reg16 => |signedness| switch (signedness.?) {
+                        .unsigned => .shift_right_reg16u_reg4,
+                        .signed => .shift_right_reg16s_reg4,
+                    },
+                    .reg32 => .shift_right_reg32_reg5,
+                    else => unreachable,
+                },
+                .shl => switch (params[0].base) {
+                    .reg16 => .shift_left_reg16_reg4,
+                    .reg32 => .shift_left_reg32_reg5,
+                    else => unreachable,
+                },
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic, params: []const Parameter.Signature) void {
+            const dir: Cycle.Shift_Direction = switch (mnemonic) {
+                .shr => .right,
+                .shl => .left,
+                else => unreachable,
+            };
+
+            c.reg_to_k();
+            if (params[0].base == .reg32) {
+                c.reg32_to_j();
+                c.j_shift_k5_to_l(dir, .fresh, .flags);
+                c.l_to_reg32();
+            } else {
+                c.reg_to_j(if (params[0].base.reg16) |signedness| switch (signedness) {
+                    .unsigned => .zx,
+                    .signed => .sx,
+                } else .zx);
+                c.jl_shift_k4_to_ll(dir, .fresh, .flags);
+                c.ll_to_reg();
+            }
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // <shr/shl> <reg>, (imm) -> <reg>
+        \\shr r(reg) .unsigned, (imm)
+        \\shr r(reg) .unsigned, (imm) -> r(reg)
+        \\shr r(reg) .signed, (imm)
+        \\shr r(reg) .signed, (imm) -> r(reg)
+        \\shl r(reg), (imm)
+        \\shl r(reg), (imm) -> r(reg)
+        \\shr x(reg) .unsigned, (imm)
+        \\shr x(reg) .unsigned, (imm) -> x(reg)
+        \\shl x(reg), (imm)
+        \\shl x(reg), (imm) -> x(reg)
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(8, Reg(.reg)),
+            Encoder.shifted(12, Imm),
+        };
+        const Imm = Int(.imm, u4);
+        pub const ij = Reg(.reg);
+        pub const iw = Reg(.reg);
+
+        fn opcode(mnemonic: isa.Mnemonic, params: []const Parameter.Signature) opcodes.Lo8 {
+            return switch (mnemonic) {
+                .shr => switch (params[0].base) {
+                    .reg16 => |signedness| switch (signedness.?) {
+                        .unsigned => .shift_right_reg16u_u4,
+                        .signed => .shift_right_reg16s_u4,
+                    },
+                    .reg32 => .shift_right_reg32_u4,
+                    else => unreachable,
+                },
+                .shl => switch (params[0].base) {
+                    .reg16 => .shift_left_reg16_u4,
+                    .reg32 => .shift_left_reg32_u4,
+                    else => unreachable,
+                },
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic, params: []const Parameter.Signature, imm: Imm) void {
+            const dir: Cycle.Shift_Direction = switch (mnemonic) {
+                .shr => .right,
+                .shl => .left,
+                else => unreachable,
+            };
+
+            c.literal_to_k(@intCast(imm.value));
+            if (params[0].base == .reg32) {
+                c.reg32_to_j();
+                c.j_shift_k5_to_l(dir, .fresh, .flags);
+                c.l_to_reg32();
+            } else {
+                c.reg_to_j(if (params[0].base.reg16) |signedness| switch (signedness) {
+                    .unsigned => .zx,
+                    .signed => .sx,
+                } else .zx);
+                c.jl_shift_k4_to_ll(dir, .fresh, .flags);
+                c.ll_to_reg();
+            }
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // <shr/shl> <reg>, (imm) -> <reg>
+        \\shr x(reg) .unsigned, (imm)
+        \\shr x(reg) .unsigned, (imm) -> x(reg)
+        \\shl x(reg), (imm)
+        \\shl x(reg), (imm) -> x(reg)
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(8, Reg(.reg)),
+            Encoder.shifted(12, Imm),
+        };
+        const Imm = Range(.imm, 16, 31);
+        pub const ij = Reg(.reg);
+        pub const iw = Reg(.reg);
+
+        fn opcode(mnemonic: isa.Mnemonic) opcodes.Lo8 {
+            return switch (mnemonic) {
+                .shr => .shift_right_reg32_u4_16_31,
+                .shl => .shift_left_reg32_u4_16_31,
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic, imm: Imm) void {
+            const dir: Cycle.Shift_Direction = switch (mnemonic) {
+                .shr => .right,
+                .shl => .left,
+                else => unreachable,
+            };
+
+            c.literal_to_k(@intCast(imm.value));
+            c.reg32_to_j();
+            c.j_shift_k5_to_l(dir, .fresh, .flags);
+            c.l_to_reg32();
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // <shrc/shlc> <reg> -> <reg>
+        \\shrc r(reg)
+        \\shrc r(reg) -> r(reg)
+        \\shlc r(reg)
+        \\shlc r(reg) -> r(reg)
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(12, Reg(.reg)),
+        };
+        pub const ij = Reg(.reg);
+        pub const iw = Reg(.reg);
+
+        fn opcode(mnemonic: isa.Mnemonic) opcodes.Lo12 {
+            return switch (mnemonic) {
+                .shrc => .shift_right_reg16_c,
+                .shlc => .shift_left_reg16_c,
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic, flags: Flags) void {
+            const dir: Cycle.Shift_Direction = switch (mnemonic) {
+                .shrc => .right,
+                .shlc => .left,
+                else => unreachable,
+            };
+
+            c.reg_to_jl();
+            if (flags.carry()) c.neg_one_to_jh() else c.zero_to_jh();
+            c.srl_to_k(.one);
+            c.jl_shift_k4_to_ll(dir, .fresh, .flags);
+            c.ll_to_reg();
+            c.load_and_exec_next_insn();
+        }
+    },
+
+    struct { pub const spec = // <count> r(reg) -> r(reg)
+        \\cb r(reg)
+        \\cb r(reg) -> r(reg)
+        \\cz r(reg)
+        \\cz r(reg) -> r(reg)
+        \\clb r(reg)
+        \\clb r(reg) -> r(reg)
+        \\clz r(reg)
+        \\clz r(reg) -> r(reg)
+        \\ctb r(reg)
+        \\ctb r(reg) -> r(reg)
+        \\ctz r(reg)
+        \\ctz r(reg) -> r(reg)
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(12, Reg(.reg)),
+        };
+        pub const ij = Reg(.reg);
+        pub const iw = Reg(.reg);
+
+        fn opcode(mnemonic: isa.Mnemonic) opcodes.Lo12 {
+            return switch (mnemonic) {
+                .cb => .count_bits,
+                .cz => .count_zeroes,
+                .clb => .count_bits_leading,
+                .clz => .count_zeroes_leading,
+                .ctb => .count_bits_trailing,
+                .ctz => .count_zeroes_trailing,
+                else => unreachable,
+            };
+        }
+
+        pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
+            c.reg_to_jl();
+            c.literal_to_k(-1);
+            c.count_jl_and_k_to_ll(switch (mnemonic) {
+                .cb, .clb, .ctb => .ones,
+                .cz, .clz, .ctz => .zeroes,
+                else => unreachable,
+            }, switch (mnemonic) {
+                .cb, .cz => .all,
+                .ctb, .ctz => .trailing,
+                .clb, .clz => .leading,
+                else => unreachable,
+            }, .fresh, .flags);
+            c.ll_to_reg();
+            c.load_and_exec_next_insn();
+        }
+    },
+
+    struct { pub const spec = "mul (imm), r(src) -> r(dest)";
+        pub const transform = "mul r(src), (imm) -> r(dest)";
         pub const conversions = .{
+            .{ .imm, .imm },
             .{ .src, .src },
             .{ .dest, .dest },
-            .{ .imm, .imm, .negate },
         };
     },
-    struct { pub const spec = "subc r(src), (imm) -> r(dest)";
-        pub const transform = "addc r(src), (imm) -> r(dest)";
-        pub const conversions = .{
-            .{ .src, .src },
-            .{ .dest, .dest },
-            .{ .imm, .imm, .negate, .{ .offset = -1 } },
+    struct { pub const spec = "mul r(src), (imm) -> r(dest)";
+        pub const encoding = .{
+            opcodes.Lo8.multiply_low_reg16_i16,
+            Encoder.shifted(8, Reg(.src)),
+            Encoder.shifted(12, Reg(.dest)),
+            Encoder.shifted(16, Int(.imm, u16)),
         };
+        pub const ij = Reg(.src);
+        pub const iw = Reg(.dest);
+
+        pub fn entry(c: *Cycle) void {
+            c.ip_read_to_d(2, .word);
+            c.d_to_l(.zx);
+            c.l_to_sr(.temp_1);
+            c.next(multiply);
+        }
+
+        pub fn multiply(c: *Cycle) void {
+            c.reg_to_jl();
+            c.srl_to_k(.temp_1);
+            c.jl_times_k_to_ll(.zx, .zx, .fresh, .flags);
+            c.ll_to_reg();
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = "mul r(src), (imm) -> r(dest)";
+        pub const encoding = .{
+            opcodes.Lo8.multiply_low_reg16_i16,
+            Encoder.shifted(8, Reg(.src)),
+            Encoder.shifted(12, Reg(.dest)),
+            Encoder.shifted(16, Int(.imm, i16)),
+        };
+        pub const ij = Reg(.src);
+        pub const iw = Reg(.dest);
+
+        pub fn entry(c: *Cycle) void {
+            c.ip_read_to_d(2, .word);
+            c.d_to_l(.zx);
+            c.l_to_sr(.temp_1);
+            c.next(multiply);
+        }
+
+        pub fn multiply(c: *Cycle) void {
+            c.reg_to_jl();
+            c.srl_to_k(.temp_1);
+            c.jl_times_k_to_ll(.zx, .zx, .fresh, .flags);
+            c.ll_to_reg();
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // mul r(src), (imm) -> x(dest)
+        \\mul r(src) .unsigned, (imm) -> x(dest) .unsigned
+        \\mul r(src) .signed, (imm) -> x(dest) .signed
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(8, Reg(.src)),
+            Encoder.shifted(12, Reg(.dest)),
+            Encoder.shifted(16, Int(.imm, u16)),
+        };
+        pub const ij = Reg(.src);
+        pub const iw = Reg(.dest);
+
+        fn opcode(params: []const Parameter.Signature) opcodes.Lo8 {
+            return switch (params[0].base.reg16.?) {
+                .unsigned => .multiply_full_reg16u_u16,
+                .signed => .multiply_full_reg16s_u16,
+            };
+        }
+
+        pub fn entry(c: *Cycle) void {
+            c.ip_read_to_d(2, .word);
+            c.d_to_l(.zx);
+            c.l_to_sr(.temp_1);
+            c.next(multiply);
+        }
+
+        pub fn multiply(c: *Cycle, params: []const Parameter.Signature) void {
+            c.reg_to_jl();
+            c.srl_to_k(.temp_1);
+            c.jl_times_k_to_l(switch (params[0].base.reg16.?) {
+                .unsigned => .zx,
+                .signed => .sx,
+            }, .zx, .fresh, .flags);
+            c.l_to_reg32();
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // mul r(src), (imm) -> x(dest)
+        \\mul r(src) .unsigned, (imm) -> x(dest) .signed
+        \\mul r(src) .signed, (imm) -> x(dest) .signed
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(8, Reg(.src)),
+            Encoder.shifted(12, Reg(.dest)),
+            Encoder.shifted(16, Int(.imm, i16)),
+        };
+        pub const ij = Reg(.src);
+        pub const iw = Reg(.dest);
+
+        fn opcode(params: []const Parameter.Signature) opcodes.Lo8 {
+            return switch (params[0].base.reg16.?) {
+                .unsigned => .multiply_full_reg16u_s16,
+                .signed => .multiply_full_reg16s_s16,
+            };
+        }
+
+        pub fn entry(c: *Cycle) void {
+            c.ip_read_to_d(2, .word);
+            c.d_to_l(.zx);
+            c.l_to_sr(.temp_1);
+            c.next(multiply);
+        }
+
+        pub fn multiply(c: *Cycle, params: []const Parameter.Signature) void {
+            c.reg_to_jl();
+            c.srl_to_k(.temp_1);
+            c.jl_times_k_to_l(switch (params[0].base.reg16.?) {
+                .unsigned => .zx,
+                .signed => .sx,
+            }, .sx, .fresh, .flags);
+            c.l_to_reg32();
+            c.load_and_exec_next_insn();
+        }
+    },
+
+    struct { pub const spec = "mul r(a), r(b) -> r(a)";
+        pub const encoding = .{
+            opcodes.Lo8.multiply_low_reg16_reg16,
+            Encoder.shifted(8, Reg(.a)),
+            Encoder.shifted(12, Reg(.b)),
+        };
+        pub const ij = Reg(.a);
+        pub const ik = Reg(.b);
+        pub const iw = Reg(.a);
+
+        pub fn entry(c: *Cycle) void {
+            c.reg_to_jl();
+            c.reg_to_k();
+            c.jl_times_k_to_ll(.zx, .sx, .fresh, .flags);
+            c.ll_to_reg();
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // mulh r(a), r(b) -> r(a)
+        \\mulh r(a) .unsigned, r(b) .unsigned -> r(a) .unsigned
+        \\mulh r(a) .unsigned, r(b) .signed -> r(a) .signed
+        \\mulh r(a) .signed, r(b) .unsigned -> r(a) .signed
+        \\mulh r(a) .signed, r(b) .signed -> r(a) .signed
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(8, Reg(.a)),
+            Encoder.shifted(12, Reg(.b)),
+        };
+        pub const ij = Reg(.a);
+        pub const ik = Reg(.b);
+        pub const iw = Reg(.a);
+
+        fn opcode(params: []const Parameter.Signature) opcodes.Lo8 {
+            return switch (params[0].base.reg16.?) {
+                .unsigned => switch (params[1].base.reg16.?) {
+                    .unsigned => .multiply_high_reg16u_reg16u,
+                    .signed => .multiply_high_reg16u_reg16s,
+                },
+                .signed => switch (params[1].base.reg16.?) {
+                    .unsigned => .multiply_high_reg16s_reg16u,
+                    .signed => .multiply_high_reg16s_reg16s,
+                },
+            };
+        }
+
+        pub fn entry(c: *Cycle, params: []const Parameter.Signature) void {
+            c.reg_to_jl();
+            c.reg_to_k();
+            c.jl_times_k__shr_16_to_ll(switch (params[0].base.reg16.?) {
+                .unsigned => .zx,
+                .signed => .sx,
+            }, switch (params[1].base.reg16.?) {
+                .unsigned => .zx,
+                .signed => .sx,
+            }, .fresh, .flags);
+            c.ll_to_reg();
+            c.load_and_exec_next_insn();
+        }
+    },
+
+    struct { pub const spec = // mul r(a), r(b) -> x0
+        \\mul r(a) .unsigned, r(b) .unsigned -> x0 .unsigned
+        \\mul r(a) .unsigned, r(b) .signed -> x0 .signed
+        \\mul r(b) .signed, r(a) .unsigned -> x0 .signed
+        \\mul r(a) .signed, r(b) .signed -> x0 .signed
+        ;
+        pub const encoding = .{
+            opcode,
+            Encoder.shifted(8, Reg(.a)),
+            Encoder.shifted(12, Reg(.b)),
+        };
+        pub const ij = Reg(.a);
+        pub const ik = Reg(.b);
+        pub const iw = Reg(.a);
+
+        fn opcode(params: []const Parameter.Signature) opcodes.Lo8 {
+            return switch (params[0].base.reg16.?) {
+                .unsigned => switch (params[1].base.reg16.?) {
+                    .unsigned => .multiply_full_reg16u_reg16u_x0,
+                    .signed => .multiply_full_reg16u_reg16s_x0,
+                },
+                .signed => switch (params[1].base.reg16.?) {
+                    .unsigned => .multiply_full_reg16u_reg16s_x0,
+                    .signed => .multiply_full_reg16s_reg16s_x0,
+                },
+            };
+        }
+
+        pub fn entry(c: *Cycle, params: []const Parameter.Signature) void {
+            c.reg_to_jl();
+            c.reg_to_k();
+            if (params[0].base.reg16.? != params[1].base.reg16.?) {
+                c.jl_times_k__shr_16_to_ll(.zx, .sx, .fresh, .flags);
+            } else switch (params[3].base.reg32.?) {
+                .unsigned => c.jl_times_k__shr_16_to_ll(.zx, .zx, .fresh, .flags),
+                .signed => c.jl_times_k__shr_16_to_ll(.sx, .sx, .fresh, .flags),
+            }
+            c.ll_to_reg();
+            c.load_and_exec_next_insn();
+        }
     },
 };
 
-
-
-// pub fn _9300_931F() void {
-//     var freshness: cb.Freshness = undefined;
-//     switch (OB()) {
-//         0x0 => {
-//             encoding(.INC, .{ .Ra, .to, .Ra });
-//             desc("Increment 16b register");
-//             freshness = .fresh;
-//         },
-//         0x1 => {
-//             encoding(.INCC, .{ .Ra, .to, .Ra });
-//             desc("Increment 16b register, with carry");
-//             freshness = .cont;
-//         },
-//         else => unreachable,
-//     }
-
-//     op_reg_plus_literal_to_LL(.OA, 1, freshness, .flags);
-//     LL_to_op_reg(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _9320_933F() void {
-//     var freshness: cb.Freshness = undefined;
-//     switch (OB()) {
-//         0x2 => {
-//             encoding(.INC, .{ .Xa, .to, .Xa });
-//             desc("Increment 32b register");
-//             freshness = .fresh;
-//         },
-//         0x3 => {
-//             encoding(.INCC, .{ .Xa, .to, .Xa });
-//             desc("Increment 32b register, with carry");
-//             freshness = .cont;
-//         },
-//         else => unreachable,
-//     }
-
-//     op_reg32_plus_literal_to_L(.OA, 1, freshness, .flags);
-//     L_to_op_reg32(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _9340_935F() void {
-//     var freshness: cb.Freshness = undefined;
-//     switch (OB()) {
-//         0x4 => {
-//             encoding(.DEC, .{ .Ra, .to, .Ra });
-//             desc("Decrement 16b register");
-//             freshness = .fresh;
-//         },
-//         0x5 => {
-//             encoding(.DECB, .{ .Ra, .to, .Ra });
-//             desc("Decrement 16b register, with borrow");
-//             freshness = .cont;
-//         },
-//         else => unreachable,
-//     }
-
-//     op_reg_minus_literal_to_LL(.OA, 1, freshness, .flags);
-//     LL_to_op_reg(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _9360_937F() void {
-//     var freshness: cb.Freshness = undefined;
-//     switch (OB()) {
-//         0x6 => {
-//             encoding(.DEC, .{ .Xa, .to, .Xa });
-//             desc("Decrement 32b register");
-//             freshness = .fresh;
-//         },
-//         0x7 => {
-//             encoding(.DECB, .{ .Xa, .to, .Xa });
-//             desc("Decrement 32b register, with borrow");
-//             freshness = .cont;
-//         },
-//         else => unreachable,
-//     }
-
-//     op_reg32_minus_literal_to_L(.OA, 1, freshness, .flags);
-//     L_to_op_reg32(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _9400_94FF() void {
-//     encoding(.NEG, .{ .Rb, .to, .Ra });
-//     desc("Negate 16b register");
-
-//     zero_minus_op_reg_to_LL(.OB, .fresh, .flags);
-//     L_to_op_reg32(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _9500_95FF() void {
-//     encoding(.NEGB, .{ .Rb, .to, .Ra });
-//     desc("Negate 16b register, with borrow");
-
-//     zero_minus_op_reg_to_LL(.OB, .cont, .flags);
-//     L_to_op_reg32(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _93A0_93AF() void {
-//     encoding(.NOT, .{ .Ra, .to, .Ra });
-//     desc("Bitwise complement of 16b register");
-
-//     op_reg_logic_literal_to_LL(.OA, .jl_xor_k, -1, .fresh, .flags);
-//     LL_to_op_reg(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-
-
-// pub fn _C100_C5FF() void {
-//     var op: ControlSignals.LogicMode = undefined;
-//     var mn: Mnemonic = undefined;
-//     var d: []const u8 = undefined;
-//     switch (opcode_high()) {
-//         0xC1 => { mn = .XOR;  op = .jl_xor_k;  d = "Bitwise XOR of 16b register and immediate"; },
-//         0xC2 => { mn = .OR;   op = .jl_or_k;   d = "Bitwise OR of 16b register and immediate"; },
-//         0xC3 => { mn = .NOR;  op = .jl_nor_k;  d = "Bitwise NOR of 16b register and immediate"; },
-//         0xC4 => { mn = .AND;  op = .jl_and_k;  d = "Bitwise AND of 16b register and immediate"; },
-//         0xC5 => { mn = .NAND; op = .jl_nand_k; d = "Bitwise NAND of 16b register and immediate"; },
-//         else => unreachable,
-//     }
-
-//     encoding(mn, .{ .RaU, .imm16u, .to, .RbU });
-//     desc(d);
-
-//     IP_read_to_D(2, .word);
-//     D_to_L(.zx);
-//     L_to_SR(.temp_1);
-//     next_cycle();
-
-//     op_reg_logic_SRL_to_LL(.OA, op, .temp_1, .fresh, .flags);
-//     LL_to_op_reg(.OB);
-//     load_and_exec_next_insn(4);
-// }
-// pub fn _alias_C100_C5FF_signed() void {
-//     var mn: Mnemonic = undefined;
-//     var d: []const u8 = undefined;
-//     switch (opcode_high()) {
-//         0xC1 => { mn = .XOR;  d = "Bitwise XOR of 16b register and immediate"; },
-//         0xC2 => { mn = .OR;   d = "Bitwise OR of 16b register and immediate"; },
-//         0xC3 => { mn = .NOR;  d = "Bitwise NOR of 16b register and immediate"; },
-//         0xC4 => { mn = .AND;  d = "Bitwise AND of 16b register and immediate"; },
-//         0xC5 => { mn = .NAND; d = "Bitwise NAND of 16b register and immediate"; },
-//         else => unreachable,
-//     }
-
-//     encoding(mn, .{ .RaS, .imm16s, .to, .RbS });
-//     desc(d);
-// }
-
-// pub fn _C600_C7FF() void {
-//     var freshness: cb.Freshness = undefined;
-//     switch (opcode_high()) {
-//         0xC6 => {
-//             encoding(.TEST, .{ .Ra, .Rb });
-//             desc("Set Z and N flags based on bitwise AND of two 16b registers");
-//             freshness = .fresh;
-//         },
-//         0xC7 => {
-//             encoding(.TESTZ, .{ .Ra, .Rb });
-//             desc("Set Z and N flags based on bitwise AND of two 16b registers (don't set Z if already clear)");
-//             freshness = .cont;
-//         },
-//         else => unreachable,
-//     }
-
-//     op_reg_logic_op_reg_to_LL(.OA, .jl_and_k, .OB, freshness, .flags);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _9100_91FF() void {
-//     encoding(.TESTB, .{ .Ra, .immb4u });
-//     desc("Set Z and N flags according to single bit from 16b register");
-
-//     op_reg_logic_literal_to_LL(.OA, .jl_and_k, @as(u16, 1) << OB(), .fresh, .flags);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _9200_92FF() void {
-//     encoding(.TESTBZ, .{ .Ra, .immb4u });
-//     desc("Set Z and N flags according to single bit from 16b register, without setting the Z flag if it is already clear");
-
-//     op_reg_logic_literal_to_LL(.OA, .jl_and_k, @as(u16, 1) << OB(), .cont, .flags);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _A000_A0FF() void {
-//     encoding(.CLRB, .{ .Ra, .immb4u, .to, .Ra });
-//     desc("Clear single bit in 16b register");
-
-//     op_reg_logic_literal_to_LL(.OA, .njl_nor_k, @as(u16, 1) << OB(), .fresh, .flags);
-//     LL_to_op_reg(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _A100_A1FF() void {
-//     encoding(.SETB, .{ .Ra, .immb4u, .to, .Ra });
-//     desc("Set single bit in 16b register");
-
-//     op_reg_logic_literal_to_LL(.OA, .jl_or_k, @as(u16, 1) << OB(), .fresh, .flags);
-//     LL_to_op_reg(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _A200_A2FF() void {
-//     encoding(.TGLB, .{ .Ra, .immb4u, .to, .Ra });
-//     desc("Toggle single bit in 16b register");
-
-//     op_reg_logic_literal_to_LL(.OA, .jl_xor_k, @as(u16, 1) << OB(), .fresh, .flags);
-//     LL_to_op_reg(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _D000_D1FF() void {
-//     var dir: cb.ShiftDirection = undefined;
-//     switch (opcode_high()) {
-//         0xD0 => {
-//             encoding(.SHR, .{ .XaU, .Rb, .to, .XaU });
-//             desc("Right shift 32b register 0-31 bits, zero extending");
-//             dir = .right;
-//         },
-//         0xD1 => {
-//             encoding(.SHL, .{ .Xa, .Rb, .to, .Xa });
-//             desc("Left shift 32b register 0-31 bits");
-//             dir = .left;
-//         },
-//         else => unreachable,
-//     }
-
-//     op_reg32_shift_op_reg_to_L(.OA, dir, .OB, .flags);
-//     L_to_op_reg32(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _D200_D4FF() void {
-//     var dir: cb.ShiftDirection = undefined;
-//     var ext: cb.ZeroSignOrOneExtension = undefined;
-//     switch (opcode_high()) {
-//         0xD2 => {
-//             encoding(.SHR, .{ .RaU, .Rb, .to, .RaU });
-//             desc("Shift right 16b register 0-15 bits, unsigned");
-//             dir = .right;
-//             ext = .zx;
-//         },
-//         0xD3 => {
-//             encoding(.SHR, .{ .RaS, .Rb, .to, .RaS });
-//             desc("Shift right 16b register 0-15 bits, signed");
-//             dir = .right;
-//             ext = .sx;
-//         },
-//         0xD4 => {
-//             encoding(.SHL, .{ .Ra, .Rb, .to, .Ra });
-//             desc("Shift left 16b register 0-15 bits");
-//             dir = .left;
-//             ext = .zx;
-//         },
-//         else => unreachable,
-//     }
-
-//     op_reg_shift_op_reg_to_LL(.OA, ext, dir, .OB, .flags);
-//     LL_to_op_reg(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _D500_D7FF() void {
-//     var dir: cb.ShiftDirection = undefined;
-//     var ext: cb.ZeroSignOrOneExtension = undefined;
-//     switch (opcode_high()) {
-//         0xD5 => {
-//             encoding(.SHR, .{ .RaU, .immb4u, .to, .RaU });
-//             desc("Shift right 16b register 0-15 bits, unsigned");
-//             dir = .right;
-//             ext = .zx;
-//         },
-//         0xD6 => {
-//             encoding(.SHR, .{ .RaS, .immb4u, .to, .RaS });
-//             desc("Shift right 16b register 0-15 bits, signed");
-//             dir = .right;
-//             ext = .sx;
-//         },
-//         0xD7 => {
-//             encoding(.SHL, .{ .Ra, .immb4u, .to, .Ra });
-//             desc("Shift left 16b register 0-15 bits");
-//             dir = .left;
-//             ext = .zx;
-//         },
-//         else => unreachable,
-//     }
-
-//     const amount = getParameterConstant(u4, 1);
-//     op_reg_shift_literal_to_LL(.OA, ext, dir, amount, .flags);
-//     LL_to_op_reg(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _E000_E3FF() void {
-//     var dir: cb.ShiftDirection = undefined;
-//     switch (opcode_high()) {
-//         0xE0 => {
-//             encoding(.SHR, .{ .XaU, .immb4u, .to, .XaU });
-//             desc("Right shift 32b register 0-31 bits, zero extending");
-//             dir = .right;
-//         },
-//         0xE1 => {
-//             encoding(.SHR, .{ .XaU, .immb4_16_31, .to, .XaU });
-//             desc("Right shift 32b register 0-31 bits, zero extending");
-//             dir = .right;
-//         },
-//         0xE2 => {
-//             encoding(.SHL, .{ .Xa, .immb4u, .to, .Xa });
-//             desc("Left shift 32b register 0-31 bits");
-//             dir = .left;
-//         },
-//         0xE3 => {
-//             encoding(.SHL, .{ .Xa, .immb4_16_31, .to, .Xa });
-//             desc("Left shift 32b register 0-31 bits");
-//             dir = .left;
-//         },
-//         else => unreachable,
-//     }
-
-//     const amount = getParameterConstant(u5, 1);
-//     op_reg32_shift_literal_to_L(.OA, dir, amount, .flags);
-//     L_to_op_reg32(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _0900_090F() void {
-//     encoding(.SHRC, .{ .Ra, .to, .Ra });
-//     desc("Shift right 16b register 1 bit, shift Carry into MSB");
-
-//     op_reg_shift_literal_to_LL(.OA, (if (carry_borrow()) ._1x else .zx), .right, 1, .flags);
-//     LL_to_op_reg(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _0910_091F() void {
-//     encoding(.SHLC, .{ .Ra, .to, .Ra });
-//     desc("Shift left 16b register 1 bit, shift Carry into LSB");
-
-//     op_reg_shift_literal_to_LL(.OA, (if (carry_borrow()) ._1x else .zx), .left, 1, .flags);
-//     LL_to_op_reg(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _F000_F0FF() void {
-//     encoding(.MUL, .{ .RaU, .imm16u, .to, .RbU });
-//     desc("Multiply 16b register by immediate, truncate result to 16b and store in another register");
-
-//     IP_read_to_D(2, .word);
-//     D_to_L(.zx);
-//     L_to_SR(.temp_1);
-//     next_cycle();
-
-//     op_reg_mult_SRL_to_LL(.OA, .zx, .temp_1, .zx, .normal, .flags);
-//     LL_to_op_reg(.OB);
-//     load_and_exec_next_insn(4);
-// }
-// pub fn _alias_F000_F0FF_signed() void {
-//     encoding(.MUL, .{ .RaS, .imm16s, .to, .RbS });
-//     desc("Multiply 16b register by immediate, truncate result to 16b and store in another register");
-// }
-
-// pub fn _F100_F1FF() void {
-//     encoding(.MUL, .{ .Ra, .Rb, .to, .Ra });
-//     desc("Multiply 16b registers, truncate result to 16b");
-
-//     op_reg_mult_op_reg_to_LL(.OA, .zx, .OB, .zx, .normal, .flags);
-//     LL_to_op_reg(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _F200_F2FF() void {
-//     encoding(.MULH, .{ .RaU, .RbU, .to, .RaU });
-//     desc("Multiply 16b unsigned registers, store high 16b of result");
-
-//     op_reg_mult_op_reg_to_LL(.OA, .zx, .OB, .zx, .swap, .flags);
-//     LL_to_op_reg(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _F300_F3FF() void {
-//     encoding(.MULH, .{ .RaU, .RbS, .to, .RaS });
-//     desc("Multiply 16b unsigned registers, store high 16b of result");
-
-//     op_reg_mult_op_reg_to_LL(.OA, .sx, .OB, .zx, .swap, .flags);
-//     LL_to_op_reg(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _F400_F4FF() void {
-//     encoding(.MULH, .{ .RaS, .RbU, .to, .RaS });
-//     desc("Multiply 16b unsigned registers, store high 16b of result");
-
-//     op_reg_mult_op_reg_to_LL(.OA, .sx, .OB, .zx, .swap, .flags);
-//     LL_to_op_reg(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _F500_F5FF() void {
-//     encoding(.MULH, .{ .RaS, .RbS, .to, .RaS });
-//     desc("Multiply 16b unsigned registers, store high 16b of result");
-
-//     op_reg_mult_op_reg_to_LL(.OA, .sx, .OB, .sx, .swap, .flags);
-//     LL_to_op_reg(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _F600_F8FF() void {
-//     var ext_l: cb.ZeroOrSignExtension = undefined;
-//     var ext_r: cb.ZeroOrSignExtension = undefined;
-//     switch (opcode_high()) {
-//         0xF6 => {
-//             encoding(.MUL, .{ .RaU, .RbU, .to, .X0U });
-//             desc("Multiply 16b unsigned registers, store 32b result");
-//             ext_l = .zx;
-//             ext_r = .zx;
-//         },
-//         0xF7 => {
-//             encoding(.MUL, .{ .RaS, .RbS, .to, .X0S });
-//             desc("Multiply 16b signed registers, store 32b result");
-//             ext_l = .sx;
-//             ext_r = .sx;
-//         },
-//         0xF8 => {
-//             encoding(.MUL, .{ .RaU, .RbS, .to, .X0S });
-//             desc("Multiply 16b unsigned and signed registers, store 32b result");
-//             ext_l = .zx;
-//             ext_r = .sx;
-//         },
-//         else => unreachable,
-//     }
-
-//     op_reg_mult_op_reg_to_L(.OA, ext_l, .OB, ext_r, .flags);
-//     L_to_reg32(0);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _E400_E40F() void {
-//     encoding(.CB, .{ .Ra, .to, .Ra });
-//     desc("Count set bits in 16b register");
-
-//     bitcount_op_reg_to_LL(.OA, .all, 1, .flags);
-//     LL_to_op_reg(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _E410_E41F() void {
-//     encoding(.CZ, .{ .Ra, .to, .Ra });
-//     desc("Count zero bits in 16b register");
-
-//     bitcount_op_reg_to_LL(.OA, .all, 0, .flags);
-//     LL_to_op_reg(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _E420_E42F() void {
-//     encoding(.CLB, .{ .Ra, .to, .Ra });
-//     desc("Count leading (most significant) set bits in 16b register");
-
-//     bitcount_op_reg_to_LL(.OA, .leading, 1, .flags);
-//     LL_to_op_reg(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _E430_E43F() void {
-//     encoding(.CLZ, .{ .Ra, .to, .Ra });
-//     desc("Count leading (most significant) zero bits in 16b register");
-
-//     bitcount_op_reg_to_LL(.OA, .leading, 0, .flags);
-//     LL_to_op_reg(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _E440_E44F() void {
-//     encoding(.CTB, .{ .Ra, .to, .Ra });
-//     desc("Count trailing (least significant) set bits in 16b register");
-
-//     bitcount_op_reg_to_LL(.OA, .trailing, 1, .flags);
-//     LL_to_op_reg(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-// pub fn _E450_E45F() void {
-//     encoding(.CTZ, .{ .Ra, .to, .Ra });
-//     desc("Count trailing (least significant) zero bits in 16b register");
-
-//     bitcount_op_reg_to_LL(.OA, .trailing, 0, .flags);
-//     LL_to_op_reg(.OA);
-//     load_and_exec_next_insn(2);
-// }
-
-
 const Cycle = @import("Cycle.zig");
 const Encoder = isa.Instruction_Encoding.Encoder;
+const Parameter = isa.Parameter;
 const Int = placeholders.Int;
 const Range = placeholders.Range;
 const Reg = placeholders.Reg;
+const Flags = arch.hw.microcode.Flags;
 const placeholders = @import("placeholders.zig");
 const opcodes = @import("opcodes.zig");
 const isa = arch.isa;

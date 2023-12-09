@@ -408,6 +408,7 @@ fn encoding_length(encoders: []const Encoder) Encoded_Instruction.Length_Type {
 pub const Initial_Word_Encoding_Iterator = struct {
     first: bool = true,
     undefined_bits: hw.D,
+    last_encoded: hw.D,
     constraints: []const Constraint,
     value_iters: []Encoder.Value_Iterator,
     id_mode: hw.Control_Signals.ID_Mode,
@@ -436,6 +437,7 @@ pub const Initial_Word_Encoding_Iterator = struct {
         return .{
             .first = true,
             .undefined_bits = hw.D.init(undefined_bits),
+            .last_encoded = hw.D.init(0),
             .constraints = constraints,
             .value_iters = out[0..n],
             .id_mode = id_mode,
@@ -460,9 +462,10 @@ pub const Initial_Word_Encoding_Iterator = struct {
                 std.debug.assert(value_iter.encoder.encode_value(value_iter.last_value, &encoded));
             }
             self.first = false;
-            // log.debug("Encoding: {X}", .{ encoded });
+            const encoded_d = hw.D.init(@truncate(encoded));
+            self.last_encoded = encoded_d;
             return .{
-                .d = hw.D.init(@truncate(encoded)),
+                .d = encoded_d,
                 .mode = self.id_mode,
             };
         }
@@ -477,9 +480,10 @@ pub const Initial_Word_Encoding_Iterator = struct {
                 for (self.value_iters) |iter| {
                     std.debug.assert(iter.encoder.encode_value(iter.last_value, &encoded));
                 }
-                //log.debug("Encoding: {X}", .{ encoded });
+                const encoded_d = hw.D.init(@truncate(encoded));
+                self.last_encoded = encoded_d;
                 return .{
-                    .d = hw.D.init(@truncate(encoded)),
+                    .d = encoded_d,
                     .mode = self.id_mode,
                 };
             }
@@ -576,8 +580,8 @@ fn resolve_cycles(self: *Processor, slot_handle: Slot_Data.Handle, lookup: *cons
         }
 
         const cycle = &self.microcode.cycles.items[@intFromEnum(cycle_handle)];
-        if (cycle.recursion_ptr) |ptr| {
-            const next = lookup.get(ptr).?;
+        if (cycle.next_func) |next_func| {
+            const next = lookup.get(next_func).?;
             self.microcode.complete_loop(cycle_handle, next.slot);
         } else if (cycle.next_slot) |next| {
             self.resolve_cycles(next, lookup);
@@ -606,26 +610,25 @@ pub const Microcode_Processor = struct {
         log.debug("Processed microcode function {s}", .{ cycles[0].func_name });
 
         var uses_placeholders = slot_info.uses_placeholders;
-        var cycle_recursion_ptrs: [hw.microcode.Address.count_per_slot]?*const anyopaque = undefined;
+        var cycle_recursion = [_]?*const anyopaque { null } ** hw.microcode.Address.count_per_slot;
         var slot_data: Slot_Data = undefined;
         slot_data.slot = self.slot;
         slot_data.acyclic = true;
         for (0.., cycles) |i, *cycle| {
-            // Except in the case of loops, we will wipe out cycle.recursion_ptr after recursively computing the next slot handle.
-            // But to avoid excessive fan-out of descendant cycles (for slots using flags) we keep track of the original
-            // recursion_ptr so that we can see if this cycle is a duplicate of one we just processed, without needing to
-            // recursively process recursion_ptr.
-            cycle_recursion_ptrs[i] = cycle.recursion_ptr;
-
-            if (cycle.recursion_ptr) |next_ptr| {
-                if (self.has_processed(next_ptr)) {
+            if (cycle.next_func) |next_func_ptr| {
+                if (self.has_processed(next_func_ptr)) {
                     slot_data.acyclic = false;
                 } else {
+                    // Except in the case of loops, we will wipe out cycle.next_func after recursively computing the next slot handle.
+                    // But to avoid excessive fan-out of descendant cycles (for slots using flags) we keep track of the original
+                    // next_func so that we can see if this cycle is a duplicate of one we just processed, without needing to
+                    // recursively process next_func.
+                    cycle_recursion[i] = next_func_ptr;
                     for (0..i) |j| {
-                        if (cycle_recursion_ptrs[j] == next_ptr and cycles[j].signals.eql(cycle.signals)) {
-                            // No need to recursively process recursion_ptr, it's a duplicate of another cycle already processed for this slot.
+                        if (cycle_recursion[j] == cycle_recursion[i]) {
+                            // No need to recursively process next_func, it's a duplicate of another cycle already processed for this slot.
                             cycle.next_slot = cycles[j].next_slot;
-                            cycle.recursion_ptr = null;
+                            cycle.next_func = null;
                             break;
                         }
                     } else {
@@ -634,14 +637,14 @@ pub const Microcode_Processor = struct {
                         const result = Microcode_Processor.process(.{
                             .processor = self.processor,
                             .prev = &self,
-                            .ptr = next_ptr,
+                            .ptr = next_func_ptr,
                             .ctx = ctx,
                             .slot = Slot_Location.for_continuation(cycle.signals),
                             .lookup = self.lookup,
                         });
                         if (result.uses_placeholders) uses_placeholders = true;
                         cycle.next_slot = result.slot_handle;
-                        cycle.recursion_ptr = null;
+                        cycle.next_func = null;
                         if (slot_data.acyclic and !self.processor.microcode.slot_data.items[result.slot_handle.raw()].acyclic) {
                             slot_data.acyclic = false;
                         }
@@ -712,7 +715,8 @@ pub const Slot_Info = struct {
             pub fn unconditional(ctx: Impl_Context) []Cycle {
                 const cycle = ctx.allocator.create(Cycle) catch @panic("OOM");
                 const encoding_len = if (ctx.encoding_len) |len| len else null;
-                cycle.* = Cycle.init(name, encoding_len, ctx.cycle_flags);
+                const initial_encoding_word: hw.D.Raw = if (ctx.initial_word_encoding) |iter| iter.last_encoded.raw() else 0;
+                cycle.* = Cycle.init(name, ctx.signature, initial_encoding_word, encoding_len, ctx.cycle_flags);
                 @call(.auto, func, build_args(cycle, hw.microcode.Flags.init(0), ctx));
                 cycle.finish();
                 return @as(*[1]Cycle, cycle);
@@ -721,8 +725,9 @@ pub const Slot_Info = struct {
             pub fn conditional(ctx: Impl_Context) []Cycle {
                 const cycles = ctx.allocator.alloc(Cycle, hw.microcode.Address.count_per_slot) catch @panic("OOM");
                 const encoding_len = if (ctx.encoding_len) |len| len else null;
+                const initial_encoding_word: hw.D.Raw = if (ctx.initial_word_encoding) |iter| iter.last_encoded.raw() else 0;
                 for (cycles, 0..) |*cycle, raw_flags| {
-                    cycle.* = Cycle.init(name, encoding_len, ctx.cycle_flags);
+                    cycle.* = Cycle.init(name, ctx.signature, initial_encoding_word, encoding_len, ctx.cycle_flags);
                     @call(.auto, func, build_args(cycle, hw.microcode.Flags.init(@intCast(raw_flags)), ctx));
                     cycle.finish();
                 }
@@ -793,7 +798,7 @@ fn finalize_transform(
     for (parsed.encoders) |encoder| {
         const placeholder = encoder.value.placeholder.name;
         for (raw_transforms) |transform| {
-            if (std.mem.eql(u8, transform.dest.name, placeholder)) {
+            if (std.mem.eql(u8, transform.src.name, placeholder)) {
                 break;
             }
         } else {

@@ -1,12 +1,25 @@
 pub fn Int(comptime name_or_enum_literal: anytype, comptime T: type) type {
     return struct {
-        value: T,
+        value: i64,
 
         pub const placeholder = parse_name(name_or_enum_literal);
         pub const domain: Domain = .{ .int = .{
             .signedness = @typeInfo(T).Int.signedness,
             .bits = @bitSizeOf(T),
             .multiple = 1,
+        }};
+    };
+}
+
+pub fn Int_Mult(comptime name_or_enum_literal: anytype, comptime T: type, comptime multiple: u8) type {
+    return struct {
+        value: i64,
+
+        pub const placeholder = parse_name(name_or_enum_literal);
+        pub const domain: Domain = .{ .int = .{
+            .signedness = @typeInfo(T).Int.signedness,
+            .bits = @bitSizeOf(T),
+            .multiple = multiple,
         }};
     };
 }
@@ -33,6 +46,15 @@ pub fn Options(comptime name_or_enum_literal: anytype, comptime options: anytype
 
         pub const placeholder = parse_name(name_or_enum_literal);
         pub const domain: Domain = .{ .enumerated = &options };
+    };
+}
+
+/// Can be used as a parameter in microcode functions, but not in Encoders.
+pub fn Any(comptime name_or_enum_literal: anytype) type {
+    return struct {
+        value: i64,
+
+        pub const placeholder = parse_name(name_or_enum_literal);
     };
 }
 

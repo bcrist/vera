@@ -70,10 +70,9 @@ pub fn try_transform(self: Instruction_Transform, insn: Instruction, dest_insn: 
 const Instruction_Transform = @This();
 const Constraint = Instruction_Encoding.Constraint;
 const Placeholder_Info = Instruction_Encoding.Placeholder_Info;
-const Instruction_Encoding = @import("Instruction_Encoding.zig");
-const Instruction = @import("Instruction.zig");
-const Parameter = @import("Parameter.zig");
+const Instruction_Encoding = isa.Instruction_Encoding;
+const Instruction = isa.Instruction;
+const Parameter = isa.Parameter;
 const Instruction_Signature = isa.Instruction_Signature;
-const isa = arch.isa;
-const arch = @import("lib_arch");
+const isa = @import("../isa.zig");
 const std = @import("std");

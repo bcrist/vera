@@ -3,8 +3,6 @@
 //  - Mappings between assembly syntax and machine code and vice-versa; used by the assembler and disassembler
 //  - HTML instruction set documentation
 
-// TODO compute flags affected by each instruction, include in encoding data/documentation
-
 pub const Cycle = @import("compile_arch/Cycle.zig");
 pub const Processor = @import("compile_arch/Processor.zig");
 pub const Microcode_Builder = @import("compile_arch/Microcode_Builder.zig");
@@ -29,13 +27,15 @@ pub fn main() !void {
     processor.process(@import("compile_arch/_fault.zig").instructions);
     processor.process(@import("compile_arch/_interrupt.zig").instructions);
     processor.process(@import("compile_arch/_alu.zig").instructions);
-    processor.process(@import("compile_arch/_copy.zig").instructions);
+    processor.process(@import("compile_arch/_copy.zig").instructions);  
     processor.process(@import("compile_arch/_branch.zig").instructions);
     processor.process(@import("compile_arch/_call.zig").instructions);
-    // processor.process(@import("compile_arch/_load_store.zig").instructions);
+    processor.process(@import("compile_arch/_load.zig").instructions);
+    processor.process(@import("compile_arch/_store.zig").instructions);
     processor.process(@import("compile_arch/_stack.zig").instructions);
     processor.process(@import("compile_arch/_address_translator.zig").instructions);
-    // processor.process(@import("compile_arch/_sync.zig").instructions);
+    processor.process(@import("compile_arch/_sync.zig").instructions);
+    processor.process(@import("compile_arch/_memcpy.zig").instructions);
 
     processor.process(@import("compile_arch/_alt.zig").instructions);
 

@@ -1,10 +1,16 @@
+// The following fields are only guaranteed to be accurate during microcode processing;
+// They aren't considered when deduplicating cycles, so after cycle deduplication they will only reflect one of the usages of the cycle.
 func_name: []const u8,
-signals: Control_Signals,
-assigned_signals: std.EnumSet(Control_Signal),
-recursion_ptr: ?*const anyopaque, // alternative to `next` for breaking microcode loop dependencies
-next_slot: ?Microcode_Builder.Slot_Data.Handle,
+instruction_signature: ?isa.Instruction_Signature,
+initial_encoding_word: hw.D.Raw,
 encoding_len: ?Encoded_Instruction.Length_Type,
 flags: std.EnumSet(Cycle_Flags),
+assigned_signals: std.EnumSet(Control_Signal),
+
+// These fields *are* considered when deduplicating:
+signals: Control_Signals,
+next_func: ?*const anyopaque,
+next_slot: ?Microcode_Builder.Slot_Data.Handle, // only considered when next_func is null
 
 pub const Cycle_Flags = enum {
     next_insn_loaded,
@@ -13,15 +19,38 @@ pub const Cycle_Flags = enum {
     iw_valid,
 };
 
-pub fn init(name: []const u8, encoding_len: ?Encoded_Instruction.Length_Type, flags: std.EnumSet(Cycle_Flags)) Cycle {
+pub fn init(
+    name: []const u8,
+    instruction_signature: ?isa.Instruction_Signature,
+    initial_encoding_word: hw.D.Raw,
+    encoding_len: ?Encoded_Instruction.Length_Type,
+    flags: std.EnumSet(Cycle_Flags)
+) Cycle {
     return .{
         .func_name = name,
-        .signals = std.mem.zeroInit(Control_Signals, .{ .mode = Control_Signals.Compute_Mode.init(0) }),
-        .assigned_signals = .{},
-        .recursion_ptr = null,
-        .next_slot = null,
+        .instruction_signature = instruction_signature,
+        .initial_encoding_word = initial_encoding_word,
         .encoding_len = encoding_len,
         .flags = flags,
+        .signals = std.mem.zeroInit(Control_Signals, .{
+            .unit = .count,
+            .mode = .{ .count = Control_Signals.Bit_Count_Mode.cb },
+            .special = .none,
+            .at_op = .none,
+            .ij_op = .from_ij,
+            .ik_op = .from_ik,
+            .iw_op = .from_iw,
+            .reg_write = .no_write,
+            .sr1_wsrc = .no_write,
+            .sr2_wsrc = .no_write,
+            .stat_op = .hold,
+            .bus_dir = .read,
+            .allow_int = false,
+            .seq_op = .next_uop,
+        }),
+        .assigned_signals = .{},
+        .next_func = null,
+        .next_slot = null,
     };
 }
 
@@ -129,11 +158,11 @@ pub fn finish(cycle: *Cycle) void {
     switch (cycle.signals.seq_op) {
         .next_instruction, .fault_return => {
             cycle.flags.remove(.next_insn_loaded);
-            if (cycle.recursion_ptr != null) {
+            if (cycle.next_func != null) {
                 cycle.warn("next() is not allowed when decoding/executing a new instruction", .{});
             }
         },
-        .next_uop, .next_uop_force_normal => if (cycle.recursion_ptr == null and cycle.signals.special != .trigger_fault) {
+        .next_uop, .next_uop_force_normal => if (cycle.next_func == null and cycle.signals.special != .trigger_fault) {
             cycle.warn("Expected a next()", .{});
         },
     }
@@ -152,31 +181,29 @@ pub fn finish(cycle: *Cycle) void {
         cycle.warn(".c_iw must be set when .iw_op is .from_continuation", .{});
     }
 
+    const old_flags = cycle.flags;
+
     switch (cycle.signals.ij_op) {
-        .from_continuation, .from_decode => cycle.flags.insert(.ij_valid),
-        .hold, .xor1 => {},
+        .zero, .from_continuation, .from_decode => cycle.flags.insert(.ij_valid),
+        .from_ij => cycle.flags.setPresent(.ij_valid, old_flags.contains(.ij_valid)),
+        .from_ik => cycle.flags.setPresent(.ij_valid, old_flags.contains(.ik_valid)),
+        .from_iw => cycle.flags.setPresent(.ij_valid, old_flags.contains(.iw_valid)),
+        .xor1, .xor2 => {},
     }
     switch (cycle.signals.ik_op) {
-        .from_continuation, .from_decode => cycle.flags.insert(.ik_valid),
-        .hold, .xor1 => {},
+        .zero, .from_continuation, .from_decode => cycle.flags.insert(.ik_valid),
+        .from_ij => cycle.flags.setPresent(.ik_valid, old_flags.contains(.ij_valid)),
+        .from_ik => cycle.flags.setPresent(.ik_valid, old_flags.contains(.ik_valid)),
+        .from_iw => cycle.flags.setPresent(.ik_valid, old_flags.contains(.iw_valid)),
+        .xor1, .xor2 => {},
     }
     switch (cycle.signals.iw_op) {
-        .from_continuation, .from_decode => cycle.flags.insert(.iw_valid),
-        .hold, .xor1 => {},
+        .zero, .from_continuation, .from_decode => cycle.flags.insert(.iw_valid),
+        .from_ij => cycle.flags.setPresent(.iw_valid, old_flags.contains(.ij_valid)),
+        .from_ik => cycle.flags.setPresent(.iw_valid, old_flags.contains(.ik_valid)),
+        .from_iw => cycle.flags.setPresent(.iw_valid, old_flags.contains(.iw_valid)),
+        .xor1, .xor2 => {},
     }
-
-    if (!cycle.is_set(.unit)) cycle.set_control_signal(.unit, .count);
-    if (!cycle.is_set(.special)) cycle.set_control_signal(.special, .none);
-    if (!cycle.is_set(.at_op)) cycle.set_control_signal(.at_op, .none);
-    if (!cycle.is_set(.ij_op)) cycle.set_control_signal(.ij_op, .hold);
-    if (!cycle.is_set(.ik_op)) cycle.set_control_signal(.ik_op, .hold);
-    if (!cycle.is_set(.iw_op)) cycle.set_control_signal(.iw_op, .hold);
-    if (!cycle.is_set(.sr1_wsrc)) cycle.set_control_signal(.sr1_wsrc, .no_write);
-    if (!cycle.is_set(.sr2_wsrc)) cycle.set_control_signal(.sr2_wsrc, .no_write);
-    if (!cycle.is_set(.stat_op)) cycle.set_control_signal(.stat_op, .hold);
-    if (!cycle.is_set(.bus_dir)) cycle.set_control_signal(.bus_dir, .read);
-    if (!cycle.is_set(.allow_int)) cycle.set_control_signal(.allow_int, false);
-    if (!cycle.is_set(.seq_op)) cycle.set_control_signal(.seq_op, .next_uop);
 }
 
 fn is_set(cycle: *Cycle, signal: Control_Signal) bool {
@@ -235,15 +262,9 @@ fn validate_compute_mode(cycle: *Cycle, expected: ?Control_Signals.Compute_Unit)
             cycle.validate_jl();
             cycle.validate_k();
         },
-        .mult => {
-            //const mode = cycle.signals.mode.mult;
+        .mult, .count => {
             cycle.validate_jl();
             cycle.validate_k();
-        },
-        .count => {
-            //const mode = cycle.signals.mode.count;
-            cycle.validate_jh();
-            cycle.validate_jl();
         },
     }
 }
@@ -472,7 +493,7 @@ pub fn jl_times_k__swap_result_halves(c: *Cycle, jl_ext: Zero_Or_Sign_Extension,
     c.set_control_signal(.mode, .{ .mult = mode });
 }
 
-pub fn count_jlm(c: *Cycle, count_what: Bit_Count_Polarity, dir: Bit_Count_Direction) void {
+pub fn count_jl_and_k(c: *Cycle, count_what: Bit_Count_Polarity, dir: Bit_Count_Direction) void {
     const mode: Control_Signals.Bit_Count_Mode = .{
         .invert_jl = switch (count_what) {
             .zeroes => true,
@@ -513,6 +534,14 @@ pub fn reg32_to_j(c: *Cycle) void {
 
 pub fn reg_to_jl(c: *Cycle) void {
     c.set_control_signal(.jl_src, .jrl);
+}
+pub fn reg_to_j(c: *Cycle, ext: Zero_Sign_Or_One_Extension) void {
+    c.set_control_signal(.jl_src, .jrl);
+    switch (ext) {
+        .zx => c.set_control_signal(.jh_src, .zero),
+        .sx => c.set_control_signal(.jh_src, .jrl_sx),
+        ._1x => c.set_control_signal(.jh_src, .neg_one),
+    }
 }
 
 pub fn srh_to_jh(c: *Cycle, which: Control_Signals.Any_SR_Index) void {
@@ -569,7 +598,7 @@ pub fn ik_bit_to_k(c: *Cycle) void {
 
 pub fn literal_to_k(c: *Cycle, literal: K_Literal) void {
     c.set_control_signal(.k_src, .literal_sx);
-    c.set_control_signal(.literal, Control_Signals.Literal.init(@bitCast(literal)));
+    c.set_control_signal(.literal, Control_Signals.Literal.init(literal));
 }
 
 pub fn reg_to_k(c: *Cycle) void {
@@ -689,6 +718,11 @@ pub fn jl_to_lh(c: *Cycle) void {
     c.set_control_signal(.lh_src, .compute_h);
 }
 
+pub fn k_to_l(c: *Cycle, ext: Zero_Sign_Or_One_Extension) void {
+    c.zero_to_j();
+    c.j_plus_k_to_l(ext, .fresh, .no_flags);
+}
+
 pub fn k_to_ll(c: *Cycle) void {
     c.zero_to_jl();
     c.jl_plus_k_to_ll(.fresh, .no_flags);
@@ -729,7 +763,7 @@ pub fn j_plus_k_to_l(c: *Cycle, k_ext: Zero_Sign_Or_One_Extension, freshness: Fr
     c.set_control_signal(.lh_src, .compute_h);
 }
 pub fn j_minus_k_to_l(c: *Cycle, k_ext: Zero_Sign_Or_One_Extension, freshness: Freshness, flags: Flags_Mode) void {
-    c.j_plus_k(k_ext, freshness, flags);
+    c.j_minus_k(k_ext, freshness, flags);
     c.set_control_signal(.ll_src, .compute_l);
     c.set_control_signal(.lh_src, .compute_h);
 }
@@ -762,6 +796,19 @@ pub fn jh_shift_k4_to_ll(c: *Cycle, dir: Shift_Direction, freshness: Freshness, 
     }
 }
 
+pub fn j_shift_k5_to_l(c: *Cycle, dir: Shift_Direction, freshness: Freshness, flags: Flags_Mode) void {
+    c.j_shift_k5(dir);
+    c.set_control_signal(.ll_src, .compute_l);
+    c.set_control_signal(.lh_src, .compute_h);
+    switch (flags) {
+        .no_flags => {},
+        .flags => switch (freshness) {
+            .fresh => c.set_control_signal(.stat_op, .zn_32__c_from_shift),
+            .cont => c.set_control_signal(.stat_op, .zn_32_no_set_z__c_from_shift),
+        },
+    }
+}
+
 pub fn jl_times_k_to_ll(c: *Cycle, jl_ext: Zero_Or_Sign_Extension, k_ext: Zero_Or_Sign_Extension, freshness: Freshness, flags: Flags_Mode) void {
     c.jl_times_k(jl_ext, k_ext);
     c.compute_to_ll(freshness, flags);
@@ -779,8 +826,8 @@ pub fn jl_times_k__swap_result_halves_to_l(c: *Cycle, jl_ext: Zero_Or_Sign_Exten
     c.compute_to_l(freshness, flags);
 }
 
-pub fn count_jlm_to_ll(c: *Cycle, count_what: Bit_Count_Polarity, dir: Bit_Count_Direction, freshness: Freshness, flags: Flags_Mode) void {
-    c.count_jlm(count_what, dir);
+pub fn count_jl_and_k_to_ll(c: *Cycle, count_what: Bit_Count_Polarity, dir: Bit_Count_Direction, freshness: Freshness, flags: Flags_Mode) void {
+    c.count_jl_and_k(count_what, dir);
     c.compute_to_l(freshness, flags);
 }
 
@@ -877,46 +924,6 @@ pub fn d_to_l(c: *Cycle, ext: Zero_Sign_Or_One_Extension) void {
     }
 }
 
-// pub fn D_to_LH() void {
-//     if (!is_set(.bus_byte)) {
-//         warn("bus_byte not set!", .{});
-//         return;
-//     }
-//     if (c.bus_byte == .byte) {
-//         warn("D_to_LH() not supported for byte loads!", .{});
-//         return;
-//     }
-//     set_control_signal(.lh_src, .d16);
-// }
-
-// pub fn D_to_LL() void {
-//     if (!is_set(.bus_byte)) {
-//         warn("bus_byte not set!", .{});
-//         return;
-//     }
-//     if (c.bus_byte == .byte) {
-//         warn("Use D8_to_LL() instead!", .{});
-//         return;
-//     }
-//     set_control_signal(.ll_src, .d16);
-// }
-
-// pub fn D8_to_LL(ext: ZeroOrSignExtension) void {
-//     if (!is_set(.bus_byte)) {
-//         warn("bus_byte not set!", .{});
-//         return;
-//     }
-//     if (c.bus_byte != .byte) {
-//         warn("Use D_to_LL() instead!", .{});
-//         return;
-//     }
-//     switch (ext) {
-//         .zx => set_control_signal(.ll_src, .d16),
-//         .sx => set_control_signal(.ll_src, .d8_sx),
-//     }
-// }
-
-
 /////////////////////
 // Register Writes //
 /////////////////////
@@ -1001,43 +1008,6 @@ pub fn reload_asn(c: *Cycle) void {
     c.sr2_to_sr2(.asn, .asn);
 }
 
-pub fn next_ij(c: *Cycle, ij: hw.IJ.Raw) void {
-    c.set_control_signal(.ij_op, .from_continuation);
-    c.set_control_signal(.c_ij, hw.IJ.init(ij));
-}
-
-pub fn next_ik(c: *Cycle, ik: hw.IK.Raw) void {
-    c.set_control_signal(.ik_op, .from_continuation);
-    c.set_control_signal(.c_ik, hw.IK.init(ik));
-}
-
-pub fn next_iw(c: *Cycle, iw: hw.IW.Raw) void {
-    c.set_control_signal(.iw_op, .from_continuation);
-    c.set_control_signal(.c_iw, hw.IW.init(iw));
-}
-
-pub fn next_ik_bit(c: *Cycle, constant: hw.K.Raw) void {
-    std.debug.assert(@popCount(constant) == 1);
-    c.next_ik(@intCast(@ctz(constant)));
-}
-
-pub fn next_ik_ij_zx(c: *Cycle, constant: std.meta.Int(.unsigned, @bitSizeOf(hw.IJ) + @bitSizeOf(hw.IK))) void {
-    c.next_ik(@intCast(constant >> @bitSizeOf(hw.IK)));
-    c.next_ij(@truncate(constant));
-}
-
-pub fn next_ij_xor1(c: *Cycle) void {
-    c.set_control_signal(.ij_op, .xor1);
-}
-
-pub fn next_ik_xor1(c: *Cycle) void {
-    c.set_control_signal(.ik_op, .xor1);
-}
-
-pub fn next_iw_xor1(c: *Cycle) void {
-    c.set_control_signal(.iw_op, .xor1);
-}
-
 /////////////////////
 // Addresses & Bus //
 /////////////////////
@@ -1079,7 +1049,7 @@ pub fn invalidate_address_translation_from_l(c: *Cycle, base: Control_Signals.An
     c.set_control_signal(.bus_width, .word);
 }
 
-pub fn address(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_Offset) void {
+pub fn address(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_Offset_Literal) void {
     c.set_control_signal(.base_ri, base);
 
     if (offset == 0) {
@@ -1087,19 +1057,13 @@ pub fn address(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_Of
     } else if (offset == 2) {
         c.set_control_signal(.offset_src, .two);
     } else {
-        var raw_offset: Control_Signals.Literal = undefined;
-        if (offset < 0) {
-            raw_offset = Control_Signals.Literal.init(@intCast(@as(i8, offset) + 64));
-            c.set_control_signal(.offset_src, .literal_minus_64);
-        } else {
-            raw_offset = Control_Signals.Literal.init(@intCast(offset));
-            c.set_control_signal(.offset_src, .literal);
-        }
+        const raw_offset = Control_Signals.Literal.init(offset);
+        c.set_control_signal(.offset_src, .literal_sx);
         c.set_control_signal(.literal, raw_offset);
     }
 }
 
-pub fn read_to_d(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_Offset, width: Control_Signals.Bus_Width, space: Control_Signals.Address_Space) void {
+pub fn read_to_d(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_Offset_Literal, width: Control_Signals.Bus_Width, space: Control_Signals.Address_Space) void {
     c.address(base, offset);
     c.set_control_signal(.at_op, .translate);
     c.set_control_signal(.addr_space, space);
@@ -1121,7 +1085,7 @@ pub fn read_to_d(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_
     }
 }
 
-pub fn read_to_dr(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_Offset, width: Control_Signals.Bus_Width, space: Control_Signals.Address_Space) void {
+pub fn read_to_dr(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_Offset_Literal, width: Control_Signals.Bus_Width, space: Control_Signals.Address_Space) void {
     c.address(base, offset);
     c.set_control_signal(.at_op, .translate);
     c.set_control_signal(.addr_space, space);
@@ -1143,15 +1107,15 @@ pub fn read_to_dr(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address
     }
 }
 
-pub fn ip_read_to_d(c: *Cycle, offset: Address_Offset, width: Control_Signals.Bus_Width) void {
+pub fn ip_read_to_d(c: *Cycle, offset: Address_Offset_Literal, width: Control_Signals.Bus_Width) void {
     c.read_to_d(.ip, offset, width, .insn);
 }
 
-pub fn ip_read_to_dr(c: *Cycle, offset: Address_Offset, width: Control_Signals.Bus_Width) void {
+pub fn ip_read_to_dr(c: *Cycle, offset: Address_Offset_Literal, width: Control_Signals.Bus_Width) void {
     c.read_to_dr(.ip, offset, width, .insn);
 }
 
-pub fn write_from_ll(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_Offset, width: Control_Signals.Bus_Width, space: Control_Signals.Address_Space) void {
+pub fn write_from_ll(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_Offset_Literal, width: Control_Signals.Bus_Width, space: Control_Signals.Address_Space) void {
     c.address(base, offset);
     c.set_control_signal(.at_op, .translate);
     c.set_control_signal(.addr_space, space);
@@ -1159,7 +1123,7 @@ pub fn write_from_ll(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Addr
     c.set_control_signal(.bus_dir, .write_from_ll);
 }
 
-pub fn write_from_dr(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_Offset, width: Control_Signals.Bus_Width, space: Control_Signals.Address_Space) void {
+pub fn write_from_dr(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_Offset_Literal, width: Control_Signals.Bus_Width, space: Control_Signals.Address_Space) void {
     c.address(base, offset);
     c.set_control_signal(.at_op, .translate);
     c.set_control_signal(.addr_space, space);
@@ -1167,7 +1131,7 @@ pub fn write_from_dr(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Addr
     c.set_control_signal(.bus_dir, .write_from_dr);
 }
 
-pub fn block_transfer_to_ram(c: *Cycle, base: Control_Signals.Any_SR_Index, preincrement: Address_Offset, space: Control_Signals.Address_Space) void {
+pub fn block_transfer_to_ram(c: *Cycle, base: Control_Signals.Any_SR_Index, preincrement: Address_Offset_Literal, space: Control_Signals.Address_Space) void {
     c.address(base, preincrement);
     c.set_control_signal(.at_op, .translate);
     c.set_control_signal(.addr_space, space);
@@ -1177,7 +1141,7 @@ pub fn block_transfer_to_ram(c: *Cycle, base: Control_Signals.Any_SR_Index, prei
     c.virtual_address_to_sr(base);
 }
 
-pub fn block_transfer_from_ram(c: *Cycle, base: Control_Signals.Any_SR_Index, preincrement: Address_Offset, space: Control_Signals.Address_Space) void {
+pub fn block_transfer_from_ram(c: *Cycle, base: Control_Signals.Any_SR_Index, preincrement: Address_Offset_Literal, space: Control_Signals.Address_Space) void {
     c.address(base, preincrement);
     c.set_control_signal(.at_op, .translate);
     c.set_control_signal(.addr_space, space);
@@ -1186,103 +1150,6 @@ pub fn block_transfer_from_ram(c: *Cycle, base: Control_Signals.Any_SR_Index, pr
     c.set_control_signal(.special, .block_transfer);
     c.virtual_address_to_sr(base);
 }
-
-// pub fn ik_reg_to_k(c: *Cycle) void {
-//     set_control_signal(.k_src, .kr);
-// }
-
-// pub fn ik_reg_to_ll(c: *Cycle) void {
-//     set_control_signal(.jl_src, .zero);
-//     set_control_signal(.k_src, .kr);
-//     set_control_signal(.compute_mode, .{ .logic = .jl_xor_k });
-//     set_control_signal(.ll_src, .logic);
-// }
-
-// pub fn ik_to_k(c: *Cycle) void {
-//     set_control_signal(.k_src, .ik_zx);
-// }
-
-// pub fn ik_to_ll(c: *Cycle) void {
-//     set_control_signal(.jl_src, .zero);
-//     set_control_signal(.k_src, .ob_oa_zx);
-//     set_control_signal(.compute_mode, .{ .logic = .jl_xor_k });
-//     set_control_signal(.ll_src, .logic);
-// }
-
-// pub fn ik_to_lh(c: *Cycle) void {
-//     set_control_signal(.jl_src, .zero);
-//     set_control_signal(.k_src, .ik_zx);
-//     set_control_signal(.compute_mode, .{ .logic = .jl_xor_k });
-//     set_control_signal(.lh_src, .logic);
-// }
-
-// pub fn JL_to_L_zx() void {
-//     zero_to_K();
-//     set_control_signal(.compute_mode, .{ .logic = .jl_xor_k });
-//     set_control_signal(.ll_src, .logic);
-//     set_control_signal(.lh_src, .zero);
-// }
-
-// pub fn JL_to_LL_and_LH() void {
-//     zero_to_K();
-//     set_control_signal(.compute_mode, .{ .logic = .jl_xor_k });
-//     set_control_signal(.ll_src, .logic);
-//     set_control_signal(.lh_src, .logic);
-// }
-
-// pub fn JL_to_LH() void {
-//     zero_to_JH();
-//     zero_to_K();
-//     set_control_signal(.compute_mode, .{ .shift = .jh_shr_k4 });
-//     set_control_signal(.lh_src, .shift_h);
-// }
-
-// pub fn K_to_L(ext: ZeroSignOrOneExtension) void {
-//     zero_to_J();
-//     set_control_signal(.compute_mode, .{ .arith = switch (ext) {
-//         .zx => .add_J_K_zx,
-//         .sx => .add_J_K_sx,
-//         ._1x => .add_J_K_1x,
-//     } });
-//     set_control_signal(.ll_src, .arith_l);
-//     set_control_signal(.lh_src, .arith_h);
-// }
-// pub fn K_to_LL() void {
-//     zero_to_JL();
-//     set_control_signal(.compute_mode, .{ .logic = .jl_xor_k });
-//     set_control_signal(.ll_src, .logic);
-// }
-
-// pub fn STAT_to_L() void {
-//     set_control_signal(.ll_src, .stat);
-//     set_control_signal(.lh_src, .zero);
-// }
-
-// pub fn LL_to_D() void {
-//     set_control_signal(.at_op, .none);
-//     set_control_signal(.bus_mode, .data);
-//     set_control_signal(.bus_byte, .word);
-//     set_control_signal(.bus_rw, .write);
-// }
-
-// pub fn ZN_from_LL(freshness: Freshness) void {
-//     switch (freshness) {
-//         .fresh => set_control_signal(.stat_op, .zn_from_ll),
-//         .cont => set_control_signal(.stat_op, .zn_from_ll_no_set_z),
-//     }
-// }
-// pub fn ZN_from_L(freshness: Freshness) void {
-//     switch (freshness) {
-//         .fresh => set_control_signal(.stat_op, .zn_from_l),
-//         .cont => set_control_signal(.stat_op, .zn_from_l_no_set_z),
-//     }
-// }
-
-// pub fn LL_to_ZNVC() void {
-//     set_control_signal(.stat_op, .load_znvc_from_ll);
-// }
-
-
 
 pub fn load_next_insn(c: *Cycle) void {
     if (c.encoding_len) |offset| {
@@ -1319,6 +1186,11 @@ pub fn exec_next_insn(c: *Cycle) void {
     c.decode_and_exec_dr(.normal);
 }
 
+pub fn exec_next_insn_no_atomic_end(c: *Cycle) void {
+    c.set_control_signal(.special, .none); // don't clear atomic state
+    c.exec_next_insn();
+}
+
 pub fn load_and_exec_next_insn(c: *Cycle) void {
     if (c.encoding_len) |offset| {
         c.branch(.ip, offset);
@@ -1332,7 +1204,7 @@ pub fn load_and_exec_next_insn_no_atomic_end(c: *Cycle) void {
     c.load_and_exec_next_insn();
 }
 
-pub fn branch(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_Offset) void {
+pub fn branch(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_Offset_Literal) void {
     c.address(base, offset);
     c.set_control_signal(.at_op, .translate);
     c.set_control_signal(.addr_space, .insn);
@@ -1362,25 +1234,107 @@ pub fn decode_and_exec_dr(c: *Cycle, id_mode: Control_Signals.ID_Mode) void {
 }
 
 pub fn decode_dr_to_ij_ik_iw(c: *Cycle, id_mode: Control_Signals.ID_Mode) void {
+    c.next_ij_from_decode(id_mode);
+    c.next_ik_from_decode(id_mode);
+    c.next_iw_from_decode(id_mode);
+}
+
+pub fn next_ij_from_decode(c: *Cycle, id_mode: Control_Signals.ID_Mode) void {
     c.set_control_signal(.id_mode, id_mode);
     c.set_control_signal(.ij_op, .from_decode);
+}
+
+pub fn next_ik_from_decode(c: *Cycle, id_mode: Control_Signals.ID_Mode) void {
+    c.set_control_signal(.id_mode, id_mode);
     c.set_control_signal(.ik_op, .from_decode);
+}
+
+pub fn next_iw_from_decode(c: *Cycle, id_mode: Control_Signals.ID_Mode) void {
+    c.set_control_signal(.id_mode, id_mode);
     c.set_control_signal(.iw_op, .from_decode);
 }
 
-pub fn decode_dr_to_ij(c: *Cycle, id_mode: Control_Signals.ID_Mode) void {
-    c.set_control_signal(.id_mode, id_mode);
-    c.set_control_signal(.ij_op, .from_decode);
+
+pub fn next_ij(c: *Cycle, ij: hw.IJ.Raw) void {
+    if (ij == 0) {
+        c.set_control_signal(.ij_op, .zero);
+    } else {
+        c.set_control_signal(.ij_op, .from_continuation);
+        c.set_control_signal(.c_ij, hw.IJ.init(ij));
+    }
 }
 
-pub fn decode_dr_to_ik(c: *Cycle, id_mode: Control_Signals.ID_Mode) void {
-    c.set_control_signal(.id_mode, id_mode);
-    c.set_control_signal(.ik_op, .from_decode);
+pub fn next_ik(c: *Cycle, ik: hw.IK.Raw) void {
+    if (ik == 0) {
+        c.set_control_signal(.ik_op, .zero);
+    } else {
+        c.set_control_signal(.ik_op, .from_continuation);
+        c.set_control_signal(.c_ik, hw.IK.init(ik));
+    }
 }
 
-pub fn decode_dr_to_iw(c: *Cycle, id_mode: Control_Signals.ID_Mode) void {
-    c.set_control_signal(.id_mode, id_mode);
-    c.set_control_signal(.iw_op, .from_decode);
+pub fn next_iw(c: *Cycle, iw: hw.IW.Raw) void {
+    if (iw == 0) {
+        c.set_control_signal(.iw_op, .zero);
+    } else {
+        c.set_control_signal(.iw_op, .from_continuation);
+        c.set_control_signal(.c_iw, hw.IW.init(iw));
+    }
+}
+
+pub fn next_ik_bit(c: *Cycle, constant: hw.K.Raw) void {
+    std.debug.assert(@popCount(constant) == 1);
+    c.next_ik(@intCast(@ctz(constant)));
+}
+
+pub fn next_ik_ij_zx(c: *Cycle, constant: std.meta.Int(.unsigned, @bitSizeOf(hw.IJ) + @bitSizeOf(hw.IK))) void {
+    c.next_ik(@intCast(constant >> @bitSizeOf(hw.IK)));
+    c.next_ij(@truncate(constant));
+}
+
+pub fn next_ij_xor1(c: *Cycle) void {
+    c.set_control_signal(.ij_op, .xor1);
+}
+
+pub fn next_ik_xor1(c: *Cycle) void {
+    c.set_control_signal(.ik_op, .xor1);
+}
+
+pub fn next_iw_xor1(c: *Cycle) void {
+    c.set_control_signal(.iw_op, .xor1);
+}
+
+pub fn next_ij_xor2(c: *Cycle) void {
+    c.set_control_signal(.ij_op, .xor2);
+}
+
+pub fn next_ik_xor2(c: *Cycle) void {
+    c.set_control_signal(.ik_op, .xor2);
+}
+
+pub fn next_iw_xor2(c: *Cycle) void {
+    c.set_control_signal(.iw_op, .xor2);
+}
+
+pub fn next_ij_from_ik(c: *Cycle) void {
+    c.set_control_signal(.ij_op, .from_ik);
+}
+pub fn next_ij_from_iw(c: *Cycle) void {
+    c.set_control_signal(.ij_op, .from_iw);
+}
+
+pub fn next_ik_from_ij(c: *Cycle) void {
+    c.set_control_signal(.ik_op, .from_ij);
+}
+pub fn next_ik_from_iw(c: *Cycle) void {
+    c.set_control_signal(.ik_op, .from_iw);
+}
+
+pub fn next_iw_from_ij(c: *Cycle) void {
+    c.set_control_signal(.iw_op, .from_ij);
+}
+pub fn next_iw_from_ik(c: *Cycle) void {
+    c.set_control_signal(.iw_op, .from_ik);
 }
 
 pub fn assume_ij_valid(c: *Cycle) void {
@@ -1394,8 +1348,8 @@ pub fn assume_iw_valid(c: *Cycle) void {
 }
 
 pub fn next(c: *Cycle, func: *const anyopaque) void {
-    std.debug.assert(c.recursion_ptr == null);
-    c.recursion_ptr = func;
+    std.debug.assert(c.next_func == null);
+    c.next_func = func;
 }
 
 pub fn force_normal_execution(c: *Cycle, func: *const anyopaque) void {
@@ -1434,17 +1388,6 @@ pub fn atomic_next_cycle_until_end(c: *Cycle) void {
     c.set_control_signal(.special, .atomic_next);
 }
 
-
-// pub fn exec_next_insn_no_atomic_end() void {
-//     if (c.special != .block_transfer) {
-//         set_control_signal(.special, .none); // don't clear atomic state
-//     }
-//     exec_next_insn();
-// }
-
-// pub fn prev_UA_to_LH() void {
-//     set_control_signal(.lh_src, .prev_ua);
-// }
 
 pub const Flags_Mode = enum {
     no_flags,
@@ -1501,8 +1444,8 @@ pub const Bit_Count_Direction = enum {
     trailing,
 };
 
-pub const Address_Offset = i7;
-pub const K_Literal = i6;
+pub const Address_Offset_Literal = Control_Signals.Literal.Raw;
+pub const K_Literal = Control_Signals.Literal.Raw;
 
 const log = std.log.scoped(.cycle);
 

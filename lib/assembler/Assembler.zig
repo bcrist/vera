@@ -150,7 +150,6 @@ pub fn assemble(self: *Assembler) void {
         var try_again = layout.do_fixed_org_layout(self, fixed_org_chunks.items);
         try_again = layout.do_auto_org_layout(self, auto_org_chunks.items) or try_again;
 
-        // TODO better handling of degenerate/recursive cases where the layout never reaches an equilibrium?
         if (!try_again) break;
     }
 

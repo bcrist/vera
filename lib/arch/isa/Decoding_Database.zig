@@ -65,7 +65,10 @@ pub const Decoder = struct {
         @memcpy(std.mem.asBytes(&data)[0..available_len], self.remaining.ptr);
 
         var iter = self.db.matching_encodings(data);
-        const encoding = iter.next() orelse return error.InvalidInstruction;
+        const encoding = while (iter.next()) |enc| {
+            if (enc.len() <= available_len) break enc;
+        } else return error.InvalidInstruction;
+
         const param_signatures = encoding.signature.params;
 
         var params = if (self.allocator) |alloc| try alloc.alloc(Parameter, param_signatures.len) else self.params_buffer[0..param_signatures.len];
@@ -96,10 +99,9 @@ pub const Decoder = struct {
 };
 
 const Decoding_Database = @This();
-const Instruction_Encoding = @import("Instruction_Encoding.zig");
-const Instruction = @import("Instruction.zig");
-const Parameter = @import("Parameter.zig");
+const Instruction_Encoding = isa.Instruction_Encoding;
+const Instruction = isa.Instruction;
+const Parameter = isa.Parameter;
 const Encoded_Instruction = isa.Encoded_Instruction;
-const isa = arch.isa;
-const arch = @import("lib_arch");
+const isa = @import("../isa.zig");
 const std = @import("std");

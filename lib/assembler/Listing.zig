@@ -309,7 +309,6 @@ fn write_instruction_line(
         d[offset] = ctx.read_byte(@intCast(address + offset), address_space);
     }
 
-    // TODO analyze insn.encoding.encoders to figure out which chunks to pass to write_grouped_data_and_source
     return write_grouped_data_and_source(address, line_cursor, &d, &.{ @intCast(length) }, line_number, source, writer);
 }
 

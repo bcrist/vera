@@ -111,7 +111,7 @@ pub fn similar_encodings(self: Encoding_Database, insn: Instruction, limit: usiz
     _ = insn;
     const all = self.all_encodings;
 
-    // TODO sort all based on similarity with insn
+    // sort all based on similarity with insn
 
     return .{
         .remaining = all[0..@min(limit, all.len)],
@@ -160,11 +160,11 @@ const Instruction_Context = struct {
 };
 
 const Encoding_Database = @This();
-const Instruction = @import("Instruction.zig");
-const Parameter = @import("Parameter.zig");
-const Instruction_Encoding = @import("Instruction_Encoding.zig");
-const Instruction_Transform = @import("Instruction_Transform.zig");
+const Instruction = isa.Instruction;
+const Parameter = isa.Parameter;
+const Instruction_Encoding = isa.Instruction_Encoding;
+const Instruction_Transform = isa.Instruction_Transform;
 const Instruction_Signature = isa.Instruction_Signature;
-const isa = @import("lib_arch").isa;
+const isa = @import("../isa.zig");
 const deep_hash_map = @import("deep_hash_map");
 const std = @import("std");
