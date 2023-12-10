@@ -462,6 +462,7 @@ pub const instructions = .{
             Encoder.shifted(12, Reg(.mem)),
             Encoder.shifted(16, Reg(.src)),
             Encoder.shifted(20, Reg(.dest)),
+            Encoder.shifted(24, @as(u8, 0)),
         };
         pub const ij = Reg(.mem);
 
@@ -476,7 +477,7 @@ pub const instructions = .{
         pub fn entry(c: *Cycle) void {
             c.reg32_to_l();
             c.l_to_sr(.temp_1);
-            c.ip_read_to_dr(2, .byte);
+            c.ip_read_to_dr(2, .full);
             c.next_ij_from_decode(.alt);
             c.next_ik_from_decode(.alt);
             c.next(load_next_insn);
@@ -542,6 +543,7 @@ pub const instructions = .{
             Encoder.shifted(12, Reg(.mem)),
             Encoder.shifted(16, Reg(.src)),
             Encoder.shifted(20, Reg(.expected)),
+            Encoder.shifted(24, @as(u8, 0)),
         };
         pub const ij = Reg(.mem);
 
@@ -556,7 +558,7 @@ pub const instructions = .{
         pub fn entry(c: *Cycle) void {
             c.reg32_to_l();
             c.l_to_sr(.temp_1);
-            c.ip_read_to_dr(2, .byte);
+            c.ip_read_to_dr(2, .full);
             c.next_ij_from_decode(.alt);
             c.next_ik_from_decode(.alt);
             c.next(atomic_load);

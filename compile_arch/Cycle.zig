@@ -79,6 +79,21 @@ pub fn finish(cycle: *Cycle) void {
         cycle.warn("DR value is written to D, but there is no bus transaction happening, and D is not being read to LL", .{});
     }
 
+    switch (cycle.signals.dr_op) {
+        .hold => {},
+        .from_d, .low_from_d_hold_high, .high_from_d_hold_low => switch (cycle.signals.bus_dir) {
+            .write_from_ll => {},
+            .none, .write_from_dr => cycle.warn("Expected bus_rw to be .read", .{}),
+            .read => {
+                cycle.validate_address();
+                if (cycle.signals.at_op != .translate) cycle.warn("Expected at_op to be .translate", .{});
+                if (cycle.signals.dr_op != .low_from_d_hold_high and cycle.signals.bus_width == .byte) {
+                    cycle.warn("Expected bus_width to be .word", .{});
+                }
+            },
+        },
+    }
+
     switch (cycle.signals.ll_src) {
         .zero, .translation_info_l, .stat, .pipeline => {},
         .compute_l => cycle.validate_compute_mode(),
@@ -293,15 +308,15 @@ fn validate_address(cycle: *Cycle) void {
 
 fn validate_bus_read(cycle: *Cycle, width: ?Control_Signals.Bus_Width) void {
     switch (cycle.signals.bus_dir) {
-        .read, .read_to_dr => {
+        .write_from_dr => {},
+        .none, .write_from_ll => cycle.warn("Expected bus_rw to be .read", .{}),
+        .read => {
             cycle.validate_address();
             if (cycle.signals.at_op != .translate) cycle.warn("Expected at_op to be .translate", .{});
             if (width) |w| {
                 if (w != cycle.signals.bus_width) cycle.warn("Expected bus_width to be {}", .{ w });
             }
         },
-        .write_from_dr => {},
-        .write_from_ll => cycle.warn("Expected bus_rw to be .read", .{}),
     }
 }
 
@@ -325,7 +340,7 @@ fn set_control_signal(c: *Cycle, comptime signal: Control_Signal, raw_value: any
         },
     }
     switch (signal) {
-        .bus_dir => if (value == .read_to_dr) {
+        .dr_op => if (value != .hold) {
             // if this was for a load_next_insn() then this will be overwritten after set_control_signal returns.
             c.flags.remove(.next_insn_loaded);
         },
@@ -906,9 +921,14 @@ pub fn zn_flags_from_ll(c: *Cycle) void {
     c.set_control_signal(.stat_op, .zn_from_ll);
 }
 
-pub fn ll_to_dr(c: *Cycle) void {
+pub fn ll_to_dr(c: *Cycle, what: Low_High_Or_Full) void {
     c.set_control_signal(.at_op, .none);
-    c.set_control_signal(.bus_dir, .read_to_dr);
+    c.set_control_signal(.bus_dir, .write_from_ll);
+    c.set_control_signal(.dr_op, @as(Control_Signals.Data_Register_Op, switch (what) {
+        .low => .low_from_d_hold_high,
+        .high => .high_from_d_hold_low,
+        .full => .from_d,
+    }));
 }
 
 pub fn ll_to_rsn(c: *Cycle) void {
@@ -990,7 +1010,7 @@ pub fn read_to_d(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_
     c.set_control_signal(.addr_space, space);
     c.set_control_signal(.bus_width, width);
     c.set_control_signal(.bus_dir, .read);
-    if (base == .ip and space == .insn) {
+    if (base == .ip and space == .insn and c.signals.sr2_wi != .ip and c.signals.sr2_wi != .next_ip) {
         if (c.encoding_len) |len| {
             var end_offset: i64 = offset;
             end_offset += switch (width) {
@@ -1006,34 +1026,24 @@ pub fn read_to_d(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_
     }
 }
 
-pub fn read_to_dr(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_Offset_Literal, width: Control_Signals.Bus_Width, space: Control_Signals.Address_Space) void {
-    c.address(base, offset);
-    c.set_control_signal(.at_op, .translate);
-    c.set_control_signal(.addr_space, space);
-    c.set_control_signal(.bus_width, width);
-    c.set_control_signal(.bus_dir, .read_to_dr);
-    if (base == .ip and space == .insn) {
-        if (c.encoding_len) |len| {
-            var end_offset: i64 = offset;
-            end_offset += switch (width) {
-                .byte => 1,
-                .word => 2,
-            };
-            if (end_offset > len) {
-                c.warn("IP-relative {s} read at offset {} is not contained within the expected encoding length of {} ", .{ @tagName(width), offset, len });
-            }
-        } else {
-            c.warn("Cycle performs an IP-relative read, but there is no instruction encoding corresponding to this microcode sequence", .{});
-        }
-    }
+pub fn read_to_dr(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_Offset_Literal, what: Low_High_Or_Full, space: Control_Signals.Address_Space) void {
+    c.read_to_d(base, offset, switch (what) {
+        .low => .byte,
+        .high, .full => .word,
+    }, space);
+    c.set_control_signal(.dr_op, @as(Control_Signals.Data_Register_Op, switch (what) {
+        .low => .low_from_d_hold_high,
+        .high => .high_from_d_hold_low,
+        .full => .from_d,
+    }));
 }
 
 pub fn ip_read_to_d(c: *Cycle, offset: Address_Offset_Literal, width: Control_Signals.Bus_Width) void {
     c.read_to_d(.ip, offset, width, .insn);
 }
 
-pub fn ip_read_to_dr(c: *Cycle, offset: Address_Offset_Literal, width: Control_Signals.Bus_Width) void {
-    c.read_to_dr(.ip, offset, width, .insn);
+pub fn ip_read_to_dr(c: *Cycle, offset: Address_Offset_Literal, what: Low_High_Or_Full) void {
+    c.read_to_dr(.ip, offset, what, .insn);
 }
 
 pub fn write_from_ll(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_Offset_Literal, width: Control_Signals.Bus_Width, space: Control_Signals.Address_Space) void {
@@ -1074,13 +1084,9 @@ pub fn block_transfer_from_ram(c: *Cycle, base: Control_Signals.Any_SR_Index, pr
 
 pub fn load_next_insn(c: *Cycle) void {
     if (c.encoding_len) |offset| {
-        c.address(.ip, offset);
-        c.set_control_signal(.at_op, .translate);
-        c.set_control_signal(.addr_space, .insn);
-        c.set_control_signal(.bus_width, .word);
-        c.set_control_signal(.bus_dir, .read_to_dr);
         c.set_control_signal(.sr2_wi, .next_ip);
         c.set_control_signal(.sr2_wsrc, .virtual_addr);
+        c.ip_read_to_dr(offset, .full);
         c.assume_next_insn_loaded();
     } else {
         c.warn("Cycle loads next instruction, but there is no instruction encoding corresponding to this microcode sequence", .{});
@@ -1126,15 +1132,11 @@ pub fn load_and_exec_next_insn_no_atomic_end(c: *Cycle) void {
 }
 
 pub fn branch(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_Offset_Literal) void {
-    c.address(base, offset);
-    c.set_control_signal(.at_op, .translate);
-    c.set_control_signal(.addr_space, .insn);
-    c.set_control_signal(.bus_width, .word);
-    c.set_control_signal(.bus_dir, .read_to_dr);
     if (base != .ip or offset != 0) {
         c.set_control_signal(.sr2_wi, .ip);
         c.set_control_signal(.sr2_wsrc, .virtual_addr);
     }
+    c.read_to_dr(base, offset, .full, .insn);
     c.decode_and_exec_dr(.normal);
 }
 
@@ -1325,6 +1327,12 @@ pub const Zero_Sign_Or_One_Extension = enum {
     zx,
     sx,
     _1x,
+};
+
+pub const Low_High_Or_Full = enum {
+    low,
+    high,
+    full,
 };
 
 pub const Logic_Op = enum {

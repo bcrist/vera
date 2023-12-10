@@ -1,14 +1,13 @@
-[arch] Control_Signals.Bus_Direction - add none, remove read_to_dr; add separate DR_Op (hold, low_from_d, high_from_d, from_d)
 [arch] Remove single-byte instructions
-[arch] Add push/pop/ld/st instructions that use a bitset (like arm)
+[compile_arch] Error if there are undefined bits in the initial word of an instruction encoding
 [arch] Consider making some instructions only allow even registers
+[compile_arch] Add push/pop/ld/st instructions that use a bitset (like arm)
+[arch] Add Domain.bitset - encoded as (1 << value).  Encoders using it can overlap other bitsets, but not other types of domains
 [arch] Finish block diagram
 [arch] Finish Encoding_Database.similar_encodings
-[arch] Add Domain.bitset - encoded as (1 << value).  Encoders using it can overlap other bitsets, but not other types of domains
 [arch] print_encoding - print placeholders with valid ranges and constraints specified
 [arch/microsim] Fault if a block load/store instruction is executed on an invalid context
 
-[compile_arch] Error if there are undefined bits in the initial word of an instruction encoding
 [compile_arch] bp-relative loads/stores
 [compile_arch] rp-relative loads/stores
 [compile_arch] Microcode_Builder.Slot_Location.forced_bits - don't include in hashing; just update it to add more bits if necessary

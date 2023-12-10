@@ -298,7 +298,7 @@ fn simulate_address_translator(in: Compute_Stage, out: *Transact_Stage, translat
     const group: at.Entry_Group = switch (in.cs.addr_space) {
         .raw, .data => switch (in.cs.bus_dir) {
             .write_from_ll, .write_from_dr => .data_write,
-            .read, .read_to_dr => .data_read,
+            .none, .read => .data_read,
         },
         .stack => .stack,
         .insn => .insn,

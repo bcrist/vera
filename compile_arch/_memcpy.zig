@@ -35,7 +35,7 @@ pub const instructions = .{
                 c.j_plus_k_to_l(.sx, .fresh, .flags);
                 c.next(initial_check_for_1_byte_remaining);
             } else {
-                c.read_to_dr(.bp, 0, .word, .data);
+                c.read_to_dr(.bp, 0, .full, .data);
                 c.reg32_to_j();
                 c.literal_to_k(-2);
                 c.j_plus_k_to_l(.sx, .fresh, .flags);
@@ -60,7 +60,7 @@ pub const instructions = .{
                 c.load_and_exec_next_insn();
             } else {
                 // length == 1 byte
-                c.read_to_dr(.bp, 0, .byte, .data);
+                c.read_to_dr(.bp, 0, .low, .data);
                 c.next(write_single_byte);
             }
         }
@@ -84,7 +84,7 @@ pub const instructions = .{
         }
 
         pub fn read(c: *Cycle, flags: Flags, mnemonic: isa.Mnemonic) void {
-            c.read_to_dr(.bp, if (mnemonic == .si) 0 else 2, if (flags.negative()) .byte else .word, .data);
+            c.read_to_dr(.bp, if (mnemonic == .si) 0 else 2, if (flags.negative()) .low else .full, .data);
             c.virtual_address_to_sr(.bp);
             c.reg32_to_j();
             c.literal_to_k(-2);
@@ -160,7 +160,7 @@ pub const instructions = .{
                 // length == 0
                 c.load_and_exec_next_insn();
             } else {
-                c.read_to_dr(.bp, 0, .byte, .data);
+                c.read_to_dr(.bp, 0, .low, .data);
                 if (flags.zero()) {
                     // length == 1 byte
                     c.next(write_single);
@@ -185,7 +185,7 @@ pub const instructions = .{
         }
 
         pub fn read(c: *Cycle, flags: Flags, mnemonic: isa.Mnemonic) void {
-            c.read_to_dr(.bp, if (mnemonic == .si) 0 else 1, .byte, .data);
+            c.read_to_dr(.bp, if (mnemonic == .si) 0 else 1, .low, .data);
             c.virtual_address_to_sr(.bp);
             c.reg32_to_j();
             c.srl_to_k(.one);
@@ -243,7 +243,7 @@ pub const instructions = .{
                 c.l_to_reg32();
                 c.next(initial_check_for_1_byte_remaining);
             } else {
-                c.read_to_dr(.bp, -2, .word, .data);
+                c.read_to_dr(.bp, -2, .full, .data);
                 c.virtual_address_to_sr(.bp);
                 c.reg32_to_j();
                 c.literal_to_k(-2);
@@ -269,7 +269,7 @@ pub const instructions = .{
                 c.load_and_exec_next_insn();
             } else {
                 // length == 1 byte
-                c.read_to_dr(.bp, -1, .byte, .data);
+                c.read_to_dr(.bp, -1, .low, .data);
                 c.virtual_address_to_sr(.bp);
                 c.next(write_final_byte);
             }
@@ -277,10 +277,10 @@ pub const instructions = .{
 
         pub fn read(c: *Cycle, flags: Flags) void {
             if (flags.negative()) {
-                c.read_to_dr(.bp, -1, .byte, .data);
+                c.read_to_dr(.bp, -1, .low, .data);
                 c.literal_to_k(-1);
             } else {
-                c.read_to_dr(.bp, -2, .word, .data);
+                c.read_to_dr(.bp, -2, .full, .data);
                 c.literal_to_k(-2);
             }
             c.virtual_address_to_sr(.bp);
@@ -351,7 +351,7 @@ pub const instructions = .{
                 // length == 0
                 c.load_and_exec_next_insn();
             } else {
-                c.read_to_dr(.bp, -1, .byte, .data);
+                c.read_to_dr(.bp, -1, .low, .data);
                 c.virtual_address_to_sr(.bp);
                 if (flags.zero()) {
                     // length == 1 byte

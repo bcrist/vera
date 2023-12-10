@@ -67,8 +67,8 @@ pub fn read(self: Transact_Stage) ?hw.addr.Physical {
     if (self.cs.at_op != .translate) return null;
     if (self.inhibit_writes) return null;
     return switch (self.cs.bus_dir) {
-        .read, .read_to_dr => self.physical_addr,
-        .write_from_dr, .write_from_ll => null,
+        .none, .write_from_dr, .write_from_ll => null,
+        .read => self.physical_addr,
     };
 }
 
@@ -86,24 +86,32 @@ pub fn simulate(
     out.last_translation = if (in.cs.at_op == .none) in.last_translation else in.at_info;
 
     var d = if (in.cs.bus_dir == .write_from_dr) in.dr else read_data;
+    if (in.cs.bus_width == .byte) d = hw.D.init(d.raw() & 0xFF);
+
     const l = in.compute_l(d, out.last_translation, power);
 
     var write_addr: ?hw.addr.Physical = null;
     out.dr = in.dr;
     switch (in.cs.bus_dir) {
-        .read => {},
-        .read_to_dr => {
-            if (in.cs.at_op != .translate) d = hw.D.init(l.lo.raw());
-            if (!in.inhibit_writes) out.dr = d;
-        },
+        .none, .read => {},
         .write_from_dr => {
-            d = in.dr;
-            if (!in.inhibit_writes) write_addr = in.physical_addr;
+            write_addr = in.physical_addr;
         },
         .write_from_ll => {
             d = hw.D.init(l.lo.raw());
-            if (!in.inhibit_writes) write_addr = in.physical_addr;
+            write_addr = in.physical_addr;
         },
+    }
+
+    out.dr = if (in.inhibit_writes) in.dr else switch (in.cs.dr_op) {
+        .hold => in.dr,
+        .low_from_d_hold_high => hw.D.init(in.dr.raw() & 0xFF00 | d.raw() & 0xFF),
+        .high_from_d_hold_low => hw.D.init(in.dr.raw() & 0xFF | d.raw() & 0xFF00),
+        .from_d => d,
+    };
+
+    if (in.inhibit_writes or in.cs.at_op != .translate) {
+        write_addr = null;
     }
 
     in.simulate_register_file(out, l, registers);

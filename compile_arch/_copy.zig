@@ -592,7 +592,7 @@ pub const instructions = .{
         pub const ij = Reg(.a);
 
         pub fn entry(c: *Cycle) void {
-            c.ip_read_to_dr(2, .byte);
+            c.ip_read_to_dr(2, .full);
             c.decode_dr_to_ij_ik_iw(.alt);
             c.reg_to_jl();
             c.jl_to_ll();
@@ -602,7 +602,7 @@ pub const instructions = .{
         }
 
         pub fn rb_to_rc(c: *Cycle) void {
-            c.ip_read_to_dr(1, .byte);
+            c.ip_read_to_dr(1, .full);
             c.decode_dr_to_ij_ik_iw(.alt);
             c.reg_to_jl();
             c.jl_to_ll();
@@ -628,7 +628,7 @@ pub const instructions = .{
         pub const ij = Reg(.a);
 
         pub fn entry(c: *Cycle) void {
-            c.ip_read_to_dr(2, .byte);
+            c.ip_read_to_dr(2, .full);
             c.decode_dr_to_ij_ik_iw(.alt);
             c.reg32_to_l();
             c.l_to_sr(.temp_1);
@@ -636,7 +636,7 @@ pub const instructions = .{
         }
 
         pub fn xb_to_xc(c: *Cycle) void {
-            c.ip_read_to_dr(1, .byte);
+            c.ip_read_to_dr(1, .full);
             c.decode_dr_to_ij_ik_iw(.alt);
             c.reg32_to_l();
             c.l_to_reg32();

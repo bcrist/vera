@@ -20,6 +20,7 @@ jh_src: JH_Source,
 k_src: K_Source,
 unit: Compute_Unit,
 mode: Compute_Mode,
+dr_op: Data_Register_Op,
 ll_src: LL_Source,
 lh_src: LH_Source,
 bus_dir: Bus_Direction,
@@ -326,9 +327,16 @@ pub const LH_Source = enum (u3) {
     _,
 };
 
+pub const Data_Register_Op = enum (u2) {
+    hold,
+    low_from_d_hold_high,
+    high_from_d_hold_low,
+    from_d,
+};
+
 pub const Bus_Direction = enum (u2) {
+    none,
     read,
-    read_to_dr,
     write_from_ll,
     write_from_dr,
 };

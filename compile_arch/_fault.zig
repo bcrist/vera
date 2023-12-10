@@ -28,14 +28,14 @@ pub const instructions = .{
 
         pub fn restore_iw_ik_ij(c: *Cycle) void {
             c.sr_to_l(.int_rsn_fault_iw_ik_ij);
-            c.ll_to_dr();
+            c.ll_to_dr(.full);
             c.decode_dr_to_ij_ik_iw(.alt);
             c.next(restore_dr_and_retry);
         }
 
         pub fn restore_dr_and_retry(c: *Cycle) void {
             c.sr_to_l(.fault_uc_slot_dr);
-            c.ll_to_dr();
+            c.ll_to_dr(.full);
             // If a page fault occurs during an instruction preceeded by SYNC,
             // we want to make sure it's still atomic when we retry.
             // It doesn't hurt to "upgrade" a non-atomic instruction, so we

@@ -275,15 +275,17 @@ pub fn doWindow(self: Pipeline_State) void {
     zgui.sameLine(.{ .offset_from_start_x = 15 * glyph_width });
     zgui.textUnformattedColored(colors.label, "DR");
     zgui.sameLine(.{});
-    zgui.textUnformattedColored(w_color, switch (self.cs.bus_dir) {
-        .read, .write_from_ll, .write_from_dr => " ",
-        .read_to_dr => "D",
+    zgui.textUnformattedColored(w_color, switch (self.cs.dr_op) {
+        .hold => " ",
+        .low_from_d_hold_high => "L",
+        .high_from_d_hold_low => "H",
+        .from_d => "D",
     });
     zgui.sameLine(.{});
     zgui.text("{X:0>4}", .{ self.dr.raw() });
     zgui.sameLine(.{});
     zgui.textUnformattedColored(colors.read, switch (self.cs.bus_dir) {
-        .read, .read_to_dr, .write_from_ll => " ",
+        .none, .read, .write_from_ll => " ",
         .write_from_dr => "D",
     });
 

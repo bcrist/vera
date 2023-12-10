@@ -35,8 +35,9 @@ const Rom3 = packed struct (u8) {
 const Rom4 = packed struct (u8) {
     allow_int: bool,
     bus_dir: Control_Signals.Bus_Direction,
+    dr_op: Control_Signals.Data_Register_Op,
     jl_src: Control_Signals.JL_Source,
-    _reserved: u3 = 0,
+    _reserved: u1 = 0,
 };
 const Rom5 = packed struct (u8) {
     literal: Control_Signals.Literal,
