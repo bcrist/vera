@@ -165,28 +165,44 @@ fn simulate_shift(in: Compute_Stage, out: *Transact_Stage) void {
     }
 
     var c: u1 = 0;
+    var overflow = false;
 
     if (mode.wide and k4) {
         c = @truncate(j >> 31);
+        if ((j & 0xFFFF_0000) != 0) {
+            overflow = true;
+        }
         j = j & 0x0000_FFFF;
     }
 
     if (k2) {
+        if (@as(u4, @truncate(j)) != 0) {
+            overflow = true;
+        }
         j >>= 3;
         c = @truncate(j);
         j >>= 1;
     }
     if (k1) {
+        if (@as(u2, @truncate(j)) != 0) {
+            overflow = true;
+        }
         j >>= 1;
         c = @truncate(j);
         j >>= 1;
     }
     if (k0) {
+        if (@as(u1, @truncate(j)) != 0) {
+            overflow = true;
+        }
         c = @truncate(j);
         j >>= 1;
     }
 
     if (k3) {
+        if (@as(u8, @truncate(j)) != 0) {
+            overflow = true;
+        }
         j >>= 7;
         c = @truncate(j);
         j >>= 1;
@@ -203,9 +219,19 @@ fn simulate_shift(in: Compute_Stage, out: *Transact_Stage) void {
 
     out.shift_data = hw.L.init(j);
     out.shift_c = c != 0;
+    out.shift_v = overflow;
+
+    if (mode.wide) {
+        out.shift_z = j == 0;
+        out.shift_n = (j >> (@bitSizeOf(hw.J) - 1)) != 0;
+    } else {
+        out.shift_z = out.shift_data.lo.raw() == 0;
+        out.shift_n = (out.shift_data.lo.raw() >> (@bitSizeOf(hw.JL) - 1)) != 0;
+    }
 }
 fn simulate_mult(in: Compute_Stage, out: *Transact_Stage) void {
     const mode = in.cs.mode.mult;
+    const signed_result = mode.jl == .signed or mode.k == .signed;
 
     const j = switch (mode.jl) {
         .unsigned => bits.zx(i64, in.j.lo.raw()),
@@ -219,6 +245,14 @@ fn simulate_mult(in: Compute_Stage, out: *Transact_Stage) void {
 
     const result: u64 = @bitCast(j * k);
     const result_l = hw.L.init(@truncate(result));
+
+    out.mult_z = result_l.raw() == 0;
+    out.mult_n = signed_result and 0 != (result_l.raw() >> (@bitSizeOf(hw.L.Raw) - 1));
+    out.mult_v = false;
+    if (mode.wide) {
+        const expected = if (signed_result) hw.L.init(bits.sx(hw.L.Raw, result_l.lo.raw())).hi else hw.LH.init(0);
+        out.mult_v = result_l.hi != expected;
+    }
 
     out.mult_data = if (mode.swap_halves) .{
         .lo = hw.LL.init(result_l.hi.raw()),
@@ -257,6 +291,7 @@ fn simulate_count(in: Compute_Stage, out: *Transact_Stage) void {
     const jlm2 = jlm & mask;
 
     out.count_data = hw.L.init(@popCount(jlm2));
+    out.count_z = jlm2 == 0;
 }
 
 fn simulate_address_translator(in: Compute_Stage, out: *Transact_Stage, translations: []const at.Entry_Pair) void {

@@ -136,7 +136,7 @@ pub const instructions = .{
             c.atomic_this_cycle();
             c.read_to_d(.temp_1, 0, .word, .data);
             c.d_to_ll();
-            c.zn_flags_from_ll(.fresh);
+            c.zn_flags_from_ll();
             if (params[0].base == .reg32) {
                 c.next_ik_xor1();
                 c.next(atomic_check_high);
@@ -150,7 +150,7 @@ pub const instructions = .{
                 c.atomic_this_cycle();
                 c.read_to_d(.temp_1, 2, .word, .data);
                 c.d_to_ll();
-                c.zn_flags_from_ll(.cont);
+                c.zn_flags_from_ll();
                 c.next_ik_xor1();
                 c.next(atomic_store);
             } else {
@@ -368,7 +368,7 @@ pub const instructions = .{
             c.read_to_d(.temp_1, 0, .word, .data);
             c.d_to_ll();
             c.ll_to_reg();
-            c.zn_flags_from_ll(.fresh);
+            c.zn_flags_from_ll();
             if (params[2].base == .reg32) {
                 c.next_iw_xor1();
                 c.next(atomic_load_high);
@@ -385,7 +385,7 @@ pub const instructions = .{
                 c.read_to_d(.temp_1, 2, .word, .data);
                 c.d_to_ll();
                 c.ll_to_reg();
-                c.zn_flags_from_l(.cont);
+                c.zn_flags_from_ll();
                 c.next_iw_xor1();
                 c.next(atomic_store);
             }

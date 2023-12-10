@@ -12,7 +12,7 @@ pub const instructions = .{
             c.ll_to_rsn();
             // We also store the RSN in .temp_1 so we can use it easily later:
             c.l_to_sr(.temp_1);
-            c.zn_flags_from_ll(.fresh);
+            c.zn_flags_from_ll();
             c.next_iw(0);
             c.next(init_zero_registers);
         }
@@ -84,7 +84,7 @@ pub const instructions = .{
             } else {
                 // block transfers not supported; assume memory is already initialized somehow
                 c.zero_to_l();
-                c.zn_flags_from_l(.fresh); // ensure Z flag is set so we skip the transfer loop
+                c.zn_flags_from_ll(); // ensure Z flag is set so we skip the transfer loop
                 c.next(block_transfer_loop);
             }
         }
@@ -115,8 +115,7 @@ pub const instructions = .{
             c.neg_one_to_jh();
             c.zero_to_jl();
             c.literal_to_k(3);
-            c.j_shift_k5(.right);
-            c.compute_to_ll(.fresh, .no_flags);
+            c.jl_shift_k4_to_ll(.right, .fresh, .no_flags);
             c.ll_to_reg(); // R1
             c.next(write_block_transfer_register);
         }
@@ -139,7 +138,7 @@ pub const instructions = .{
         pub fn setup_transfer_counter(c: *Cycle) void {
             c.ik_bit_to_ll(); // 0x2000
             c.ll_to_reg(); // R1
-            c.zn_flags_from_ll(.fresh);
+            c.zn_flags_from_ll();
             c.next(block_transfer_loop);
         }
 
@@ -176,7 +175,7 @@ pub const instructions = .{
             c.ik_bit_to_ll();
             c.ll_to_rsn();
             c.l_to_sr(.temp_1);
-            c.zn_flags_from_ll(.fresh);
+            c.zn_flags_from_ll();
             c.next(pipe_n_init_constant_registers);
         }
 

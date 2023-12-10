@@ -81,7 +81,7 @@ pub fn finish(cycle: *Cycle) void {
 
     switch (cycle.signals.ll_src) {
         .zero, .translation_info_l, .stat, .pipeline => {},
-        .compute_l => cycle.validate_compute_mode(null),
+        .compute_l => cycle.validate_compute_mode(),
         .d        => cycle.validate_bus_read(null),
         .d8_sx    => cycle.validate_bus_read(.byte),
         _ => cycle.warn("Unrecognized LL source", .{}),
@@ -89,7 +89,7 @@ pub fn finish(cycle: *Cycle) void {
 
     switch (cycle.signals.lh_src) {
         .zero, .translation_info_h, .jh, .prev_uc_slot => {},
-        .compute_h => cycle.validate_compute_mode(null),
+        .compute_h => cycle.validate_compute_mode(),
         .d_sx => if (cycle.signals.ll_src != .d) cycle.warn("Expected LL source to be d when LH source is d_sx", .{}),
         .d8_sx => if (cycle.signals.ll_src != .d8_sx) cycle.warn("Expected LL source to be d8_sx when LH source is d8_sx", .{}),
         _ => cycle.warn("Unrecognized LH source", .{}),
@@ -139,20 +139,8 @@ pub fn finish(cycle: *Cycle) void {
     }
 
     switch (cycle.signals.stat_op) {
-        .hold,
-        .load_zncv,
-        .load_zncvka,
-        .clear_a, .set_a,
-        .zn_16, .zn_16_no_set_z,
-        .zn_32, .zn_32_no_set_z,
-        => {},
-
-        .zn_16__c_from_shift, .zn_16_no_set_z__c_from_shift,
-        .zn_32__c_from_shift, .zn_32_no_set_z__c_from_shift => cycle.validate_compute_mode(.shift),
-
-        .zncv_from_arith, .zncv_from_arith_no_set_z => cycle.validate_compute_mode(.alu),
-
-        _ => {},
+        .hold, .load_zncv, .load_zncvka, .clear_a, .set_a, .zn_from_ll => {},
+        .compute, .compute_no_set_z => cycle.validate_compute_mode(),
     }
 
     switch (cycle.signals.seq_op) {
@@ -232,13 +220,7 @@ fn validate_iw(cycle: *Cycle) void {
     }
 }
 
-fn validate_compute_mode(cycle: *Cycle, expected: ?Control_Signals.Compute_Unit) void {
-    if (expected) |unit| {
-        if (unit != cycle.signals.unit) {
-            cycle.warn("Expected compute unit to be {s}, but found {s}", .{ @tagName(unit), @tagName(cycle.signals.unit) });
-        }
-    }
-
+fn validate_compute_mode(cycle: *Cycle) void {
     cycle.ensure_set(.unit);
     cycle.ensure_set(.mode);
 
@@ -357,31 +339,29 @@ fn set_control_signal(c: *Cycle, comptime signal: Control_Signal, raw_value: any
 // compute units //
 ///////////////////
 
+fn compute_flags(c: *Cycle, freshness: Freshness, flags: Flags_Mode) void {
+    switch (flags) {
+        .no_flags => {},
+        .flags => switch (freshness) {
+            .fresh => c.set_control_signal(.stat_op, .compute),
+            .cont => c.set_control_signal(.stat_op, .compute_no_set_z),
+        },
+    }
+}
+
 pub fn jl_plus_k(c: *Cycle, freshness: Freshness, flags: Flags_Mode) void {
     var mode = Control_Signals.Arithmetic_Mode.jl_plus_k;
     mode.carry = freshness == .cont;
     c.set_control_signal(.unit, .alu);
     c.set_control_signal(.mode, .{ .arith = mode });
-    switch (flags) {
-        .no_flags => {},
-        .flags => switch (freshness) {
-            .fresh => c.set_control_signal(.stat_op, .zncv_from_arith),
-            .cont => c.set_control_signal(.stat_op, .zncv_from_arith_no_set_z),
-        },
-    }
+    c.compute_flags(freshness, flags);
 }
 pub fn jl_minus_k(c: *Cycle, freshness: Freshness, flags: Flags_Mode) void {
     var mode = Control_Signals.Arithmetic_Mode.jl_minus_k;
     mode.carry = freshness == .cont;
     c.set_control_signal(.unit, .alu);
     c.set_control_signal(.mode, .{ .arith = mode });
-    switch (flags) {
-        .no_flags => {},
-        .flags => switch (freshness) {
-            .fresh => c.set_control_signal(.stat_op, .zncv_from_arith),
-            .cont => c.set_control_signal(.stat_op, .zncv_from_arith_no_set_z),
-        },
-    }
+    c.compute_flags(freshness, flags);
 }
 pub fn j_plus_k(c: *Cycle, k_ext: Zero_Sign_Or_One_Extension, freshness: Freshness, flags: Flags_Mode) void {
     const mode: Control_Signals.Arithmetic_Mode = .{
@@ -395,13 +375,7 @@ pub fn j_plus_k(c: *Cycle, k_ext: Zero_Sign_Or_One_Extension, freshness: Freshne
     };
     c.set_control_signal(.unit, .alu);
     c.set_control_signal(.mode, .{ .arith = mode });
-    switch (flags) {
-        .no_flags => {},
-        .flags => switch (freshness) {
-            .fresh => c.set_control_signal(.stat_op, .zncv_from_arith),
-            .cont => c.set_control_signal(.stat_op, .zncv_from_arith_no_set_z),
-        },
-    }
+    c.compute_flags(freshness, flags);
 }
 pub fn j_minus_k(c: *Cycle, k_ext: Zero_Sign_Or_One_Extension, freshness: Freshness, flags: Flags_Mode) void {
     const mode: Control_Signals.Arithmetic_Mode = .{
@@ -415,16 +389,10 @@ pub fn j_minus_k(c: *Cycle, k_ext: Zero_Sign_Or_One_Extension, freshness: Freshn
     };
     c.set_control_signal(.unit, .alu);
     c.set_control_signal(.mode, .{ .arith = mode });
-    switch (flags) {
-        .no_flags => {},
-        .flags => switch (freshness) {
-            .fresh => c.set_control_signal(.stat_op, .zncv_from_arith),
-            .cont => c.set_control_signal(.stat_op, .zncv_from_arith_no_set_z),
-        },
-    }
+    c.compute_flags(freshness, flags);
 }
 
-pub fn jl_logic_k(c: *Cycle, op: Logic_Op) void {
+pub fn jl_logic_k(c: *Cycle, op: Logic_Op, freshness: Freshness, flags: Flags_Mode) void {
     c.set_control_signal(.unit, .alu);
     c.set_control_signal(.mode, .{ .logic = switch (op) {
         .xor => Control_Signals.Logic_Mode.jl_xor_k,
@@ -438,31 +406,35 @@ pub fn jl_logic_k(c: *Cycle, op: Logic_Op) void {
         .nand => Control_Signals.Logic_Mode.jl_nand_k,
         .nor => Control_Signals.Logic_Mode.jl_nor_k,
     }});
+    c.compute_flags(freshness, flags);
 }
 
-pub fn jl_shift_k4(c: *Cycle, dir: Shift_Direction) void {
+pub fn jl_shift_k4(c: *Cycle, dir: Shift_Direction, freshness: Freshness, flags: Flags_Mode) void {
     c.set_control_signal(.unit, .shift);
     c.set_control_signal(.mode, .{ .shift = switch (dir) {
         .left => Control_Signals.Shift_Mode.jl_shl_k4,
         .right => Control_Signals.Shift_Mode.jl_shr_k4,
     }});
+    c.compute_flags(freshness, flags);
 }
-pub fn jh_shift_k4(c: *Cycle, dir: Shift_Direction) void {
+pub fn jh_shift_k4(c: *Cycle, dir: Shift_Direction, freshness: Freshness, flags: Flags_Mode) void {
     c.set_control_signal(.unit, .shift);
     c.set_control_signal(.mode, .{ .shift = switch (dir) {
         .left => Control_Signals.Shift_Mode.jh_shl_k4,
         .right => Control_Signals.Shift_Mode.jh_shr_k4,
     }});
+    c.compute_flags(freshness, flags);
 }
-pub fn j_shift_k5(c: *Cycle, dir: Shift_Direction) void {
+pub fn j_shift_k5(c: *Cycle, dir: Shift_Direction, freshness: Freshness, flags: Flags_Mode) void {
     c.set_control_signal(.unit, .shift);
     c.set_control_signal(.mode, .{ .shift = switch (dir) {
         .left => Control_Signals.Shift_Mode.j_shl_k5,
         .right => Control_Signals.Shift_Mode.j_shr_k5,
     }});
+    c.compute_flags(freshness, flags);
 }
 
-pub fn jl_times_k(c: *Cycle, jl_ext: Zero_Or_Sign_Extension, k_ext: Zero_Or_Sign_Extension) void {
+pub fn jl_times_k(c: *Cycle, jl_ext: Zero_Or_Sign_Extension, k_ext: Zero_Or_Sign_Extension, wide: bool, freshness: Freshness, flags: Flags_Mode) void {
     const mode: Control_Signals.Multiply_Mode = .{
         .jl = switch (jl_ext) {
             .sx => .signed,
@@ -473,11 +445,13 @@ pub fn jl_times_k(c: *Cycle, jl_ext: Zero_Or_Sign_Extension, k_ext: Zero_Or_Sign
             .zx => .unsigned,
         },
         .swap_halves = false,
+        .wide = wide,
     };
     c.set_control_signal(.unit, .mult);
     c.set_control_signal(.mode, .{ .mult = mode });
+    c.compute_flags(freshness, flags);
 }
-pub fn jl_times_k__swap_result_halves(c: *Cycle, jl_ext: Zero_Or_Sign_Extension, k_ext: Zero_Or_Sign_Extension) void {
+pub fn jl_times_k__swap_result_halves(c: *Cycle, jl_ext: Zero_Or_Sign_Extension, k_ext: Zero_Or_Sign_Extension, wide: bool, freshness: Freshness, flags: Flags_Mode) void {
     const mode: Control_Signals.Multiply_Mode = .{
         .jl = switch (jl_ext) {
             .sx => .signed,
@@ -488,12 +462,14 @@ pub fn jl_times_k__swap_result_halves(c: *Cycle, jl_ext: Zero_Or_Sign_Extension,
             .zx => .unsigned,
         },
         .swap_halves = true,
+        .wide = wide,
     };
     c.set_control_signal(.unit, .mult);
     c.set_control_signal(.mode, .{ .mult = mode });
+    c.compute_flags(freshness, flags);
 }
 
-pub fn count_jl_and_k(c: *Cycle, count_what: Bit_Count_Polarity, dir: Bit_Count_Direction) void {
+pub fn count_jl_and_k(c: *Cycle, count_what: Bit_Count_Polarity, dir: Bit_Count_Direction, freshness: Freshness, flags: Flags_Mode) void {
     const mode: Control_Signals.Bit_Count_Mode = .{
         .invert_jl = switch (count_what) {
             .zeroes => true,
@@ -504,6 +480,7 @@ pub fn count_jl_and_k(c: *Cycle, count_what: Bit_Count_Polarity, dir: Bit_Count_
     };
     c.set_control_signal(.unit, .count);
     c.set_control_signal(.mode, .{ .count = mode });
+    c.compute_flags(freshness, flags);
 }
 
 //////////////
@@ -686,7 +663,7 @@ pub fn sr_to_l(c: *Cycle, which: Control_Signals.Any_SR_Index) void {
 
 pub fn j_to_l(c: *Cycle) void {
     c.zero_to_k();
-    c.j_shift_k5(.right);
+    c.j_shift_k5(.right, .fresh, .no_flags);
     c.set_control_signal(.ll_src, .compute_l);
     c.set_control_signal(.lh_src, .compute_h);
 }
@@ -696,13 +673,13 @@ pub fn jh_to_ll(c: *Cycle) void {
         c.zero_to_jl();
     }
     c.zero_to_k();
-    c.jh_shift_k4(.right);
+    c.jh_shift_k4(.right, .fresh, .no_flags);
     c.set_control_signal(.ll_src, .compute_l);
 }
 
 pub fn jl_to_ll(c: *Cycle) void {
     c.zero_to_k();
-    c.jl_shift_k4(.right);
+    c.jl_shift_k4(.right, .fresh, .no_flags);
     c.set_control_signal(.ll_src, .compute_l);
 }
 
@@ -726,12 +703,6 @@ pub fn k_to_l(c: *Cycle, ext: Zero_Sign_Or_One_Extension) void {
 pub fn k_to_ll(c: *Cycle) void {
     c.zero_to_jl();
     c.jl_plus_k_to_ll(.fresh, .no_flags);
-}
-
-pub fn k_to_lh(c: *Cycle) void {
-    c.sr_to_j(.one);
-    c.jl_times_k__swap_result_halves_to_l(.zx, .zx);
-    c.compute_to_lh();
 }
 
 pub fn ik_ij_zx_to_ll(c: *Cycle) void {
@@ -769,87 +740,47 @@ pub fn j_minus_k_to_l(c: *Cycle, k_ext: Zero_Sign_Or_One_Extension, freshness: F
 }
 
 pub fn jl_logic_k_to_ll(c: *Cycle, op: Logic_Op, freshness: Freshness, flags: Flags_Mode) void {
-    c.jl_logic_k(op);
-    c.compute_to_ll(freshness, flags);
+    c.jl_logic_k(op, freshness, flags);
+    c.set_control_signal(.ll_src, .compute_l);
 }
 
 pub fn jl_shift_k4_to_ll(c: *Cycle, dir: Shift_Direction, freshness: Freshness, flags: Flags_Mode) void {
-    c.jl_shift_k4(dir);
+    c.jl_shift_k4(dir, freshness, flags);
     c.set_control_signal(.ll_src, .compute_l);
-    switch (flags) {
-        .no_flags => {},
-        .flags => switch (freshness) {
-            .fresh => c.set_control_signal(.stat_op, .zn_16__c_from_shift),
-            .cont => c.set_control_signal(.stat_op, .zn_16_no_set_z__c_from_shift),
-        },
-    }
 }
 pub fn jh_shift_k4_to_ll(c: *Cycle, dir: Shift_Direction, freshness: Freshness, flags: Flags_Mode) void {
-    c.jh_shift_k4(dir);
+    c.jh_shift_k4(dir, freshness, flags);
     c.set_control_signal(.ll_src, .compute_l);
-    switch (flags) {
-        .no_flags => {},
-        .flags => switch (freshness) {
-            .fresh => c.set_control_signal(.stat_op, .zn_16__c_from_shift),
-            .cont => c.set_control_signal(.stat_op, .zn_16_no_set_z__c_from_shift),
-        },
-    }
 }
 
 pub fn j_shift_k5_to_l(c: *Cycle, dir: Shift_Direction, freshness: Freshness, flags: Flags_Mode) void {
-    c.j_shift_k5(dir);
+    c.j_shift_k5(dir, freshness, flags);
     c.set_control_signal(.ll_src, .compute_l);
     c.set_control_signal(.lh_src, .compute_h);
-    switch (flags) {
-        .no_flags => {},
-        .flags => switch (freshness) {
-            .fresh => c.set_control_signal(.stat_op, .zn_32__c_from_shift),
-            .cont => c.set_control_signal(.stat_op, .zn_32_no_set_z__c_from_shift),
-        },
-    }
 }
 
 pub fn jl_times_k_to_ll(c: *Cycle, jl_ext: Zero_Or_Sign_Extension, k_ext: Zero_Or_Sign_Extension, freshness: Freshness, flags: Flags_Mode) void {
-    c.jl_times_k(jl_ext, k_ext);
-    c.compute_to_ll(freshness, flags);
+    c.jl_times_k(jl_ext, k_ext, false, freshness, flags);
+    c.set_control_signal(.ll_src, .compute_l);
 }
 pub fn jl_times_k_to_l(c: *Cycle, jl_ext: Zero_Or_Sign_Extension, k_ext: Zero_Or_Sign_Extension, freshness: Freshness, flags: Flags_Mode) void {
-    c.jl_times_k(jl_ext, k_ext);
-    c.compute_to_l(freshness, flags);
+    c.jl_times_k(jl_ext, k_ext, true, freshness, flags);
+    c.set_control_signal(.ll_src, .compute_l);
+    c.set_control_signal(.lh_src, .compute_h);
 }
 pub fn jl_times_k__shr_16_to_ll(c: *Cycle, jl_ext: Zero_Or_Sign_Extension, k_ext: Zero_Or_Sign_Extension, freshness: Freshness, flags: Flags_Mode) void {
-    c.jl_times_k__swap_result_halves(jl_ext, k_ext);
-    c.compute_to_ll(freshness, flags);
+    c.jl_times_k__swap_result_halves(jl_ext, k_ext, true, freshness, flags);
+    c.set_control_signal(.ll_src, .compute_l);
 }
 pub fn jl_times_k__swap_result_halves_to_l(c: *Cycle, jl_ext: Zero_Or_Sign_Extension, k_ext: Zero_Or_Sign_Extension, freshness: Freshness, flags: Flags_Mode) void {
-    c.jl_times_k__swap_result_halves(jl_ext, k_ext);
-    c.compute_to_l(freshness, flags);
+    c.jl_times_k__swap_result_halves(jl_ext, k_ext, true, freshness, flags);
+    c.set_control_signal(.ll_src, .compute_l);
+    c.set_control_signal(.lh_src, .compute_h);
 }
 
 pub fn count_jl_and_k_to_ll(c: *Cycle, count_what: Bit_Count_Polarity, dir: Bit_Count_Direction, freshness: Freshness, flags: Flags_Mode) void {
-    c.count_jl_and_k(count_what, dir);
-    c.compute_to_l(freshness, flags);
-}
-
-pub fn compute_to_l(c: *Cycle, freshness: Freshness, flags: Flags_Mode) void {
+    c.count_jl_and_k(count_what, dir, freshness, flags);
     c.set_control_signal(.ll_src, .compute_l);
-    c.set_control_signal(.lh_src, .compute_h);
-    switch (flags) {
-        .no_flags => {},
-        .flags => c.zn_flags_from_l(freshness),
-    }
-}
-
-pub fn compute_to_ll(c: *Cycle, freshness: Freshness, flags: Flags_Mode) void {
-    c.set_control_signal(.ll_src, .compute_l);
-    switch (flags) {
-        .no_flags => {},
-        .flags => c.zn_flags_from_ll(freshness),
-    }
-}
-
-pub fn compute_to_lh(c: *Cycle) void {
-    c.set_control_signal(.lh_src, .compute_h);
 }
 
 pub fn literal_to_ll(c: *Cycle, literal: K_Literal) void {
@@ -971,18 +902,8 @@ pub fn ll_to_stat_zncvka(c: *Cycle) void {
     c.set_control_signal(.stat_op, .load_zncvka);
 }
 
-pub fn zn_flags_from_l(c: *Cycle, freshness: Freshness) void {
-    switch (freshness) {
-        .fresh => c.set_control_signal(.stat_op, .zn_32),
-        .cont => c.set_control_signal(.stat_op, .zn_32_no_set_z),
-    }
-}
-
-pub fn zn_flags_from_ll(c: *Cycle, freshness: Freshness) void {
-    switch (freshness) {
-        .fresh => c.set_control_signal(.stat_op, .zn_16),
-        .cont => c.set_control_signal(.stat_op, .zn_16_no_set_z),
-    }
+pub fn zn_flags_from_ll(c: *Cycle) void {
+    c.set_control_signal(.stat_op, .zn_from_ll);
 }
 
 pub fn ll_to_dr(c: *Cycle) void {

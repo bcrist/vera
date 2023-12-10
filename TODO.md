@@ -1,4 +1,3 @@
-[arch] Control_Signals.Status_Op - use `unit` and `reg_write` to determine where C/V flags come from? then just need u3 for op
 [arch] Control_Signals.Bus_Direction - add none, remove read_to_dr; add separate DR_Op (hold, low_from_d, high_from_d, from_d)
 [arch] Remove single-byte instructions
 [arch] Add push/pop/ld/st instructions that use a bitset (like arm)
@@ -21,6 +20,7 @@
 [compile_arch] HTML instruction documentation with "disassembly" of control signals
 [compile_arch] cycle_builder.branch(): check that either base is .zero, or RSN is not being loaded this cycle
 [compile_arch] ensure exec_next_insn() is only used in microcode of instructions where isa.branch_kind returns nonbranching or conditional
+[compile_arch] count zeroes with mask instruction?
 
 [assembler] Fix EDB loading
 [assembler] CLI
@@ -56,11 +56,6 @@
 [microsim] Error console - Access to invalid memory, Faults
 [microsim] Improve SST39VF802C emulation accuracy in memory.zig (timing, status polling, IDs, write protection, etc.)
 
-[design] Consider Shifter overflow flag - if any shifted out bits differ from the last bit that wasn't shifted out
-[design] Consider multiplier overflow flag - for unsigned 16b result, if any high 1 bits were truncated.  For signed 16b result, if any high bits != sign bit
-[design] Consider removing wait states
-[design] count zeroes with mask instruction?
 [design] Implement interrupt controller
-[design] Consider separate AT enable flag for code/stack vs data?
 
 [sx] automatic (de)serialization of structs

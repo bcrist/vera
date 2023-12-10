@@ -271,7 +271,8 @@ pub const Multiply_Mode = packed struct (u6) {
     jl: Data_Type,
     k: Data_Type,
     swap_halves: bool,
-    _unused: u3 = 0,
+    wide: bool,
+    _unused: u2 = 0,
 
     pub const Data_Type = enum (u1) {
         unsigned = 0,
@@ -353,24 +354,15 @@ pub const Address_Translator_Op = enum (u2) {
     invalidate = 3,
 };
 
-pub const Status_Op = enum (u4) {
+pub const Status_Op = enum (u3) {
     hold = 0,
-    // 1 unused
+    zn_from_ll = 1,
     clear_a = 2,
     set_a = 3,
-    zncv_from_arith = 4,
-    zncv_from_arith_no_set_z = 5,
+    compute = 4,
+    compute_no_set_z = 5,
     load_zncv = 6,
     load_zncvka = 7,
-    zn_16 = 8, // compute ZN from LL only
-    zn_16_no_set_z = 9, // compute ZN from LL only
-    zn_16__c_from_shift = 10,
-    zn_16_no_set_z__c_from_shift = 11,
-    zn_32 = 12, // compute ZN from LL + LH
-    zn_32_no_set_z = 13, // compute ZN from LL + LH
-    zn_32__c_from_shift = 14,
-    zn_32_no_set_z__c_from_shift = 15,
-    _,
 };
 
 pub const Sequencer_Op = enum (u2) {

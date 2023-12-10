@@ -69,6 +69,7 @@ const Rom11 = packed struct (u8) {
     sr1_wsrc: Control_Signals.SR1_Write_Source,
     sr2_wsrc: Control_Signals.SR2_Write_Source,
     stat_op: Control_Signals.Status_Op,
+    _reserved: u1 = 0,
 };
 
 fn apply_to_cs(comptime Rom_Data: type, data: Rom_Data, cs: *Control_Signals) void {

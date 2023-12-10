@@ -29,9 +29,16 @@ alu_n: bool,
 alu_c: bool,
 alu_v: bool,
 shift_data: hw.L,
+shift_z: bool,
+shift_n: bool,
 shift_c: bool,
+shift_v: bool,
 mult_data: hw.L,
+mult_z: bool,
+mult_n: bool,
+mult_v: bool,
 count_data: hw.L,
+count_z: bool,
 virtual_addr: hw.addr.Virtual,
 physical_addr: hw.addr.Physical,
 at_info: at.Info,
@@ -294,55 +301,37 @@ fn simulate_status_register(in: Transact_Stage, out: *Decode_Stage, l: hw.L) voi
         .set_a => {
             out.stat_a = true;
         },
-        .zncv_from_arith => {
-            out.stat_z = in.alu_z;
-            out.stat_n = in.alu_n;
-            out.stat_v = in.alu_v;
-            out.stat_c = in.alu_c;
+        .compute, .compute_no_set_z => {
+            switch (in.cs.unit) {
+                .alu => {
+                    out.stat_z = in.alu_z;
+                    out.stat_n = in.alu_n;
+                    out.stat_v = in.alu_v;
+                    out.stat_c = in.alu_c;
+                },
+                .shift => {
+                    out.stat_z = in.shift_z;
+                    out.stat_n = in.shift_n;
+                    out.stat_v = in.shift_v;
+                    out.stat_c = in.shift_c;
+                },
+                .mult => {
+                    out.stat_z = in.mult_z;
+                    out.stat_n = in.mult_n;
+                    out.stat_v = in.mult_v;
+                },
+                .count => {
+                    out.stat_z = in.count_z;
+                },
+            }
+            if (in.cs.stat_op == .compute_no_set_z and !in.stat_z) {
+                out.stat_z = false;
+            }
         },
-        .zncv_from_arith_no_set_z => {
-            out.stat_z = in.alu_z and in.stat_z;
-            out.stat_n = in.alu_n;
-            out.stat_v = in.alu_v;
-            out.stat_c = in.alu_c;
-        },
-        .zn_16 => {
+        .zn_from_ll => {
             out.stat_z = l.lo.raw() == 0;
             out.stat_n = (l.lo.raw() >> 15) == 1;
         },
-        .zn_16_no_set_z => {
-            out.stat_z = l.lo.raw() == 0 and in.stat_z;
-            out.stat_n = (l.lo.raw() >> 15) == 1;
-        },
-        .zn_16__c_from_shift => {
-            out.stat_z = l.lo.raw() == 0;
-            out.stat_n = (l.lo.raw() >> 15) == 1;
-            out.stat_c = in.shift_c;
-        },
-        .zn_16_no_set_z__c_from_shift => {
-            out.stat_z = l.lo.raw() == 0 and in.stat_z;
-            out.stat_n = (l.lo.raw() >> 15) == 1;
-            out.stat_c = in.shift_c;
-        },
-        .zn_32 => {
-            out.stat_z = l.raw() == 0;
-            out.stat_n = (l.hi.raw() >> 15) == 1;
-        },
-        .zn_32_no_set_z => {
-            out.stat_z = l.raw() == 0 and in.stat_z;
-            out.stat_n = (l.hi.raw() >> 15) == 1;
-        },
-        .zn_32__c_from_shift => {
-            out.stat_z = l.raw() == 0;
-            out.stat_n = (l.hi.raw() >> 15) == 1;
-            out.stat_c = in.shift_c;
-        },
-        .zn_32_no_set_z__c_from_shift => {
-            out.stat_z = l.raw() == 0 and in.stat_z;
-            out.stat_n = (l.hi.raw() >> 15) == 1;
-            out.stat_c = in.shift_c;
-        },
-        _ => unreachable,
     }
 }
 

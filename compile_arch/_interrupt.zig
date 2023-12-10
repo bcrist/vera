@@ -25,8 +25,7 @@ pub const instructions = .{
             c.reload_asn();
             c.srl_to_jl(.one);
             c.ik_ij_zx_to_k();
-            c.jl_times_k__swap_result_halves(.zx, .zx);
-            c.compute_to_l(.fresh, .no_flags);
+            c.jl_times_k__swap_result_halves_to_l(.zx, .zx, .fresh, .no_flags);
             c.l_to_sr(.temp_1);
             c.next(read_vector);
         }
