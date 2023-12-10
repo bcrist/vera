@@ -5,7 +5,7 @@ pub const instructions = .{
         \\b .i ip + 1
         ;
         pub const encoding = .{
-            opcodes.Lo8.nop1,
+            opcodes.Lo16.nop1,
         };
         pub fn entry(c: *Cycle) void {
             c.load_and_exec_next_insn();

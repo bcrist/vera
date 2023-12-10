@@ -1,8 +1,6 @@
 pub const Lo8 = enum (u8) {
-    nop1 = 0x00,
-    ip_relative_call__forward,
+    ip_relative_call__forward = 0x01,
     ip_relative_call__back,
-    call_return,
     load_registerset,
     store_registerset,
     copy_reg16_reg16,
@@ -328,7 +326,10 @@ pub const Lo12 = enum (u12) {
 };
 
 pub const Lo16 = enum (u16) {
+    nop1 = 0x00_00,
+
     absolute_call = 0xFF_00,
+    call_return,
     return_from_interrupt,
     return_from_fault,
     exit_handler,

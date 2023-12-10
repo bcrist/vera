@@ -159,7 +159,7 @@ fn process_instruction(
 
     var maybe_slot_handle: ?Slot_Data.Handle = null;
     var iter = Initial_Word_Encoding_Iterator.init(self.temp.allocator(), constraints, encoders, id_mode);
-    while (iter.next()) |base_addr| {
+    while (iter.next()) |addr| {
         const slot_handle = maybe_slot_handle orelse handle: {
             const result = Microcode_Processor.process(.{
                 .processor = self,
@@ -197,18 +197,14 @@ fn process_instruction(
             ik = hw.IK.init(@intCast(iter.encode(ik_encoders, "IK")));
         }
 
-        const entry: Decode_ROM_Builder.Entry = .{
+        self.decode_rom.add_entry(addr, .{
             .instruction_encoding = instruction_encoding,
             .slot_handle = slot_handle,
             .ij = ij, .ik = ik, .iw = iw,
-        };
+        });
 
-        var undefined_bits_iter: Initial_Word_Undefined_Bits_Iterator = .{
-            .base_address = base_addr,
-            .undefined_bits = iter.undefined_bits,
-        };
-        while (undefined_bits_iter.next()) |addr| {
-            self.decode_rom.add_entry(addr, entry);
+        if (iter.undefined_bits.raw() != 0) {
+            std.debug.panic("Bits {x} of the initial instruction word are undefined!", .{ iter.undefined_bits.raw() });
         }
     }
 }
@@ -534,40 +530,6 @@ pub const Initial_Word_Encoding_Iterator = struct {
         }
         return data;
     }
-};
-
-pub const Initial_Word_Undefined_Bits_Iterator = struct {
-    base_address: hw.decode.Address,
-    undefined_bits: hw.D,
-    next_permutation: ?hw.D.Raw = 0,
-
-    pub fn next(self: *Initial_Word_Undefined_Bits_Iterator) ?hw.decode.Address {
-        if (self.next_permutation) |permutation| {
-            var next_permutation = permutation;
-            const undefined_bits = self.undefined_bits.raw();
-            var bit = @as(hw.D.Raw, 1);
-            for (0..@bitSizeOf(hw.D)) |_| {
-                if (0 != (undefined_bits & bit)) {
-                    next_permutation ^= bit;
-                    if (0 == (permutation & bit)) {
-                        self.next_permutation = next_permutation;
-                        break;
-                    }
-                }
-                bit <<= 1;
-            } else {
-                self.next_permutation = null;
-            }
-            const base = self.base_address.raw();
-            if ((base | permutation) != (base ^ permutation)) {
-                log.err("base: {x}  permutation: {x}  undefined_bits: {x}", .{ base, permutation, self.undefined_bits.raw() });
-                std.debug.assert((base | permutation) == (base ^ permutation)); // base and undefined should deal with distinct bits
-            }
-            return hw.decode.Address.init(base | permutation);
-        }
-        return null;
-    }
-
 };
 
 fn resolve_cycles(self: *Processor, slot_handle: Slot_Data.Handle, lookup: *const Slot_Info.Lookup) void {

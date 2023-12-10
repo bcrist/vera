@@ -1,5 +1,3 @@
-[arch] Remove single-byte instructions
-[compile_arch] Error if there are undefined bits in the initial word of an instruction encoding
 [arch] Consider making some instructions only allow even registers
 [compile_arch] Add push/pop/ld/st instructions that use a bitset (like arm)
 [arch] Add Domain.bitset - encoded as (1 << value).  Encoders using it can overlap other bitsets, but not other types of domains
@@ -19,7 +17,6 @@
 [compile_arch] HTML instruction documentation with "disassembly" of control signals
 [compile_arch] cycle_builder.branch(): check that either base is .zero, or RSN is not being loaded this cycle
 [compile_arch] ensure exec_next_insn() is only used in microcode of instructions where isa.branch_kind returns nonbranching or conditional
-[compile_arch] count zeroes with mask instruction?
 
 [assembler] Fix EDB loading
 [assembler] CLI

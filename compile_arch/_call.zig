@@ -116,7 +116,7 @@ pub const instructions = .{
         }
     },
     struct { pub const spec = "ret";
-        pub const encoding = opcodes.Lo8.call_return;
+        pub const encoding = opcodes.Lo16.call_return;
         pub fn entry(c: *Cycle) void {
             c.zero_to_l();
             c.l_to_sr(.rp);
