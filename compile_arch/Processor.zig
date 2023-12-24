@@ -81,6 +81,7 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
             const ik_fn = if (@hasDecl(Struct, "ik")) comptime resolve_encoders(Struct.ik) else no_encoders;
             const iw_fn = if (@hasDecl(Struct, "iw")) comptime resolve_encoders(Struct.iw) else no_encoders;
             const ik_ij_fn = if (@hasDecl(Struct, "ik_ij")) comptime resolve_encoders(Struct.ik_ij) else no_encoders;
+            const iw_ik_ij_fn = if (@hasDecl(Struct, "iw_ik_ij")) comptime resolve_encoders(Struct.iw_ik_ij) else no_encoders;
 
             const constraints = if (@hasDecl(Struct, "constraints")) comptime resolve_constraints(Struct.constraints) else &.{};
 
@@ -94,11 +95,12 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
                     const ik_encoders = ik_fn(alloc, parsed.signature);
                     const iw_encoders = iw_fn(alloc, parsed.signature);
                     const ik_ij_encoders = ik_ij_fn(alloc, parsed.signature);
+                    const iw_ik_ij_encoders = iw_ik_ij_fn(alloc, parsed.signature);
 
                     const final_encoding = self.finalize_encoding(parsed, constraints, encoders);
 
                     self.process_instruction(&Struct.entry, final_encoding, constraints,
-                        encoders, ik_ij_encoders, ij_encoders, ik_encoders, iw_encoders, id_mode, &lookup);
+                        encoders, iw_ik_ij_encoders, ik_ij_encoders, ij_encoders, ik_encoders, iw_encoders, id_mode, &lookup);
 
                     self.encoding_list.append(final_encoding) catch @panic("OOM");
                 }
@@ -108,8 +110,9 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
                 const ik_encoders = ik_fn(alloc, null);
                 const iw_encoders = iw_fn(alloc, null);
                 const ik_ij_encoders = ik_ij_fn(alloc, null);
+                const iw_ik_ij_encoders = iw_ik_ij_fn(alloc, null);
                 self.process_instruction(&Struct.entry, null, constraints,
-                    encoders, ik_ij_encoders, ij_encoders, ik_encoders, iw_encoders, id_mode, &lookup);
+                    encoders, iw_ik_ij_encoders, ik_ij_encoders, ij_encoders, ik_encoders, iw_encoders, id_mode, &lookup);
             }
         } else if (@hasDecl(Struct, "slot")) {
             const result = Microcode_Processor.process(.{
@@ -139,6 +142,7 @@ fn process_instruction(
     instruction_encoding: ?isa.Instruction_Encoding,
     constraints: []const Constraint,
     encoders: []const Encoder,
+    iw_ik_ij_encoders: []const Encoder,
     ik_ij_encoders: []const Encoder,
     ij_encoders: []const Encoder,
     ik_encoders: []const Encoder,
@@ -151,6 +155,11 @@ fn process_instruction(
     if (ik_encoders.len > 0) cycle_flags.insert(.ik_valid);
     if (iw_encoders.len > 0) cycle_flags.insert(.iw_valid);
     if (ik_ij_encoders.len > 0) {
+        cycle_flags.insert(.ij_valid);
+        cycle_flags.insert(.ik_valid);
+    }
+    if (iw_ik_ij_encoders.len > 0) {
+        cycle_flags.insert(.iw_valid);
         cycle_flags.insert(.ij_valid);
         cycle_flags.insert(.ik_valid);
     }
@@ -182,19 +191,25 @@ fn process_instruction(
             break :handle result.slot_handle;
         };
 
-        var ij: hw.IJ = undefined;
-        var ik: hw.IK = undefined;
+        var ij = hw.IJ.init(@intCast(iter.encode(ij_encoders, "IJ")));
+        var ik = hw.IK.init(@intCast(iter.encode(ik_encoders, "IK")));
         var iw = hw.IW.init(@intCast(iter.encode(iw_encoders, "IW")));
 
-        if (ik_ij_encoders.len > 0) {
+        if (iw_ik_ij_encoders.len > 0) {
+            const combined = iter.encode(iw_ik_ij_encoders, "IW/IK/IJ");
+            ij = hw.IJ.init(@truncate(combined));
+            ik = hw.IK.init(@truncate(combined >> 4));
+            iw = hw.IW.init(@intCast(combined >> 8));
+            if (ik_ij_encoders.len > 0) @panic("Didn't expect both IK/IJ and IW/IK/IJ encoders");
+            if (iw_encoders.len > 0) @panic("Didn't expect both IW and IW/IK/IJ encoders");
+            if (ik_encoders.len > 0) @panic("Didn't expect both IK and IW/IK/IJ encoders");
+            if (ij_encoders.len > 0) @panic("Didn't expect both IJ and IW/IK/IJ encoders");
+        } else if (ik_ij_encoders.len > 0) {
             const combined = iter.encode(ik_ij_encoders, "IK/IJ");
             ij = hw.IJ.init(@truncate(combined));
             ik = hw.IK.init(@intCast(combined >> 4));
             if (ik_encoders.len > 0) @panic("Didn't expect both IK and IK/IJ encoders");
             if (ij_encoders.len > 0) @panic("Didn't expect both IJ and IK/IJ encoders");
-        } else {
-            ij = hw.IJ.init(@intCast(iter.encode(ij_encoders, "IJ")));
-            ik = hw.IK.init(@intCast(iter.encode(ik_encoders, "IK")));
         }
 
         self.decode_rom.add_entry(addr, .{
@@ -793,7 +808,7 @@ fn convert_constraints_to_constant_values(self: *Processor, parsed: Instruction_
 }
 
 fn finalize_encoding(self: *Processor, parsed: Instruction_Encoding, constraints: []const Constraint, encoders: []const Encoder) Instruction_Encoding {
-    const final_encoders = self.arena.dupe(Encoder, encoders) catch @panic("OOM");
+    var final_encoders = self.arena.dupe(Encoder, encoders) catch @panic("OOM");
     for (final_encoders) |*encoder| {
         fixup_placeholder_value(&encoder.value, parsed.encoders);
     }
@@ -828,11 +843,52 @@ fn finalize_encoding(self: *Processor, parsed: Instruction_Encoding, constraints
         }
     }
 
+    final_encoders = merge_adjacent_constant_encoders(final_encoders);
+
     return .{
         .signature = self.finalize_instruction_signature(parsed.signature),
         .constraints = final_constraints,
         .encoders = final_encoders,
     };
+}
+
+fn merge_adjacent_constant_encoders(encoders: []Encoder) []Encoder {
+    if (encoders.len <= 1) return encoders;
+
+    std.sort.block(Encoder, encoders, {}, struct {
+        pub fn less_than(_: void, a: Encoder, b: Encoder) bool {
+            return a.bit_offset < b.bit_offset;
+        } 
+    }.less_than);
+
+    var out_index: usize = 0;
+    for (encoders[1..]) |second| {
+        const first = &encoders[out_index];
+        if (first.value != .constant or second.value != .constant or first.bit_offset + first.bit_count != second.bit_offset) {
+            out_index += 1;
+            encoders[out_index] = second;
+            continue;
+        }
+
+        var data: isa.Encoded_Instruction.Data = 0;
+
+        const ok1 = first.encode_value(first.value.constant, &data);
+        std.debug.assert(ok1);
+
+        const ok2 = second.encode_value(second.value.constant, &data);
+        std.debug.assert(ok2);
+
+        first.arithmetic_offset = 0;
+        first.bit_count += second.bit_count;
+        first.domain = .{ .int = .{
+            .signedness = .unsigned,
+            .bits = @intCast(first.bit_count),
+            .multiple = 1,
+        }};
+        first.value = .{ .constant = first.decode_value(data) orelse unreachable };
+    }
+
+    return encoders[0..out_index + 1];
 }
 
 fn finalize_instruction_signature(self: *Processor, signature: Instruction_Signature) Instruction_Signature {
@@ -856,7 +912,7 @@ fn fixup_placeholder_info(info: *Placeholder_Info, parsed_encoders: []const Enco
         if (find_placeholder_info(info.name, parsed_encoders)) |parsed_info| {
             info.index = parsed_info.index;
             info.kind = parsed_info.kind;
-        } else {
+        } else if (!std.mem.eql(u8, info.name, "__")) {
             std.debug.panic("Encoder {s} not found in parsed instruction", .{ info.name });
         }
     }

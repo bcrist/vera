@@ -1,10 +1,10 @@
-[arch] Consider making some instructions only allow even registers
-[compile_arch] Add push/pop/ld/st instructions that use a bitset (like arm)
-[arch] Add Domain.bitset - encoded as (1 << value).  Encoders using it can overlap other bitsets, but not other types of domains
+[compile_arch] Multiple specs/encodings per set of microcode functions - check for `pub const forms = .{ ... }` - e.g. for things that take either an i16 or s16 immediate
+[arch/compile_arch] Can we remove transformations from encoding db?  Would need a way to represent numeric transforms in Encoder instead - add `.computed` to Value union?
+[arch/microsim] Fault if a block load/store instruction is executed on an invalid context
+
 [arch] Finish block diagram
 [arch] Finish Encoding_Database.similar_encodings
 [arch] print_encoding - print placeholders with valid ranges and constraints specified
-[arch/microsim] Fault if a block load/store instruction is executed on an invalid context
 
 [compile_arch] bp-relative loads/stores
 [compile_arch] rp-relative loads/stores

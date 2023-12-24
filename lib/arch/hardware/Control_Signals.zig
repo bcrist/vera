@@ -177,7 +177,7 @@ pub const K_Source = enum (u3) {
     sr2l = 3,
     kr = 4,
     ik_bit = 5,
-    ik_ij_zx = 6,
+    ik_ij_sx = 6,
     iw_ik_ij_zx = 7,
 };
 

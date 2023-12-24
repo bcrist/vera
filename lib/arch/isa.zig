@@ -15,9 +15,9 @@ pub const Mnemonic = enum {
     // Arithmetic:
     add, addc, cmp, cmpc, sub, subc, inc, incc, dec, decc, neg, negc,
     // Logical:
-    not, xor, xnor, @"or", nor, @"and", nand, andnot, @"test", testz,
+    xor, xnor, @"or", nor, @"and", nand,
     // Single bit:
-    testb, testbz, clrb, setb, tglb,
+    testbit, clrbit, setbit,
     // Shifts:
     shr, shl, shrc, shlc,
     // Multiply:
@@ -25,7 +25,7 @@ pub const Mnemonic = enum {
     // Bit counting:
     cb, cz, clb, clz, ctb, ctz,
     // Branches & Calls:
-    b, eab, dab, call, ret,
+    b, eab, dab, call, callx, ret,
     bb, bbn,
     bp, bpn,
     // Basic data movement:
@@ -132,8 +132,8 @@ pub fn branch_kind(mnemonic: Mnemonic, suffix: Mnemonic_Suffix) Branch_Kind {
         ._reserved => unreachable,
 
         .add, .addc, .cmp, .cmpc, .sub, .subc, .inc, .incc, .dec, .decc, .neg, .negc,
-        .not, .xor, .xnor, .@"or", .nor, .@"and", .nand, .andnot, .@"test", .testz,
-        .testb, .testbz, .clrb, .setb, .tglb,
+        .xor, .xnor, .@"or", .nor, .@"and", .nand,
+        .testbit, .clrbit, .setbit,
         .shr, .shl, .shrc, .shlc,
         .mul, .mulh,
         .cb, .cz, .clb, .clz, .ctb, .ctz,
@@ -153,7 +153,7 @@ pub fn branch_kind(mnemonic: Mnemonic, suffix: Mnemonic_Suffix) Branch_Kind {
             else => .conditional,
         },
 
-        .call => .call,
+        .call, .callx => .call,
     };
 }
 

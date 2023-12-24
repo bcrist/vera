@@ -68,7 +68,7 @@ pub fn simulate(
         .kr => rs.reg[ik].raw(),
         .ik_bit => @as(u16, 1) << ik,
         .iw_ik_ij_zx => bits.concat(.{ ij, ik, iw }),
-        .ik_ij_zx => bits.concat(.{ ij, ik }),
+        .ik_ij_sx => bits.sx(u16, bits.concat(.{ ij, ik })),
     });
 
     const addr_base: u32 =

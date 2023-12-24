@@ -28,15 +28,16 @@ pub fn encode_value(self: Encoder, value: i64, out: *Encoded_Instruction.Data) b
 }
 
 pub fn decode(self: Encoder, data: Encoded_Instruction.Data, out: []isa.Parameter) bool {
+    return self.value.assign(self.decode_value(data) orelse return false, out);
+}
+
+pub fn decode_value(self: Encoder, data: Encoded_Instruction.Data) ?i64 {
     const shifted_data = data >> self.bit_offset;
     const bits = self.bit_count;
     const mask = (@as(u64, 1) << @intCast(bits)) - 1;
-    if (shifted_data < self.arithmetic_offset) return false;
+    if (shifted_data < self.arithmetic_offset) return null;
     const raw: u64 = @intCast((shifted_data - self.arithmetic_offset) & mask);
-    if (self.domain.decode(raw)) |value| {
-        return self.value.assign(value, out);
-    }
-    return false;
+    return self.domain.decode(raw);
 }
 
 pub fn identity(what: anytype) Encoder {

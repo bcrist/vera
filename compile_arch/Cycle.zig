@@ -129,7 +129,7 @@ pub fn finish(cycle: *Cycle) void {
             cycle.validate_ik();
             cycle.validate_iw();
         },
-        .ik_ij_zx => {
+        .ik_ij_sx => {
             cycle.validate_ij();
             cycle.validate_ik();
         },
@@ -291,7 +291,7 @@ fn validate_k(cycle: *Cycle) void {
     if (!cycle.is_set(.k_src)) {
         cycle.warn("Expected k_src to be set", .{});
     } else switch (cycle.signals.k_src) {
-        .zero, .kr, .ik_bit, .iw_ik_ij_zx, .ik_ij_zx => {},
+        .zero, .kr, .ik_bit, .iw_ik_ij_zx, .ik_ij_sx => {},
         .literal_sx => cycle.ensure_set(.literal),
         .sr1l => cycle.ensure_set(.sr1_ri),
         .sr2l => cycle.ensure_set(.sr2_ri),
@@ -576,8 +576,8 @@ pub fn zero_to_k(c: *Cycle) void {
     c.set_control_signal(.k_src, .zero);
 }
 
-pub fn ik_ij_zx_to_k(c: *Cycle) void {
-    c.set_control_signal(.k_src, .ik_ij_zx);
+pub fn ik_ij_sx_to_k(c: *Cycle) void {
+    c.set_control_signal(.k_src, .ik_ij_sx);
 }
 
 pub fn iw_ik_ij_zx_to_k(c: *Cycle) void {
@@ -720,8 +720,8 @@ pub fn k_to_ll(c: *Cycle) void {
     c.jl_plus_k_to_ll(.fresh, .no_flags);
 }
 
-pub fn ik_ij_zx_to_ll(c: *Cycle) void {
-    c.ik_ij_zx_to_k();
+pub fn ik_ij_sx_to_ll(c: *Cycle) void {
+    c.ik_ij_sx_to_k();
     c.k_to_ll();
 }
 
@@ -990,27 +990,36 @@ pub fn invalidate_address_translation_from_l(c: *Cycle, base: Control_Signals.An
     c.set_control_signal(.bus_width, .word);
 }
 
-pub fn address(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_Offset_Literal) void {
+pub fn address(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: anytype) void {
     c.set_control_signal(.base_ri, base);
 
-    if (offset == 0) {
-        c.set_control_signal(.offset_src, .zero);
-    } else if (offset == 2) {
-        c.set_control_signal(.offset_src, .two);
-    } else {
-        const raw_offset = Control_Signals.Literal.init(offset);
-        c.set_control_signal(.offset_src, .literal_sx);
-        c.set_control_signal(.literal, raw_offset);
+    switch (@typeInfo(@TypeOf(offset))) {
+        .Int, .ComptimeInt => {
+            if (offset == 0) {
+                c.set_control_signal(.offset_src, .zero);
+            } else if (offset == 2) {
+                c.set_control_signal(.offset_src, .two);
+            } else {
+                const raw_offset = Control_Signals.Literal.init(@intCast(offset));
+                c.set_control_signal(.offset_src, .literal_sx);
+                c.set_control_signal(.literal, raw_offset);
+            }
+        },
+        .EnumLiteral => {
+            const typed: Control_Signals.Address_Offset_Source = offset;
+            c.set_control_signal(.offset_src, typed);
+        },
+        else => unreachable,
     }
 }
 
-pub fn read_to_d(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_Offset_Literal, width: Control_Signals.Bus_Width, space: Control_Signals.Address_Space) void {
+pub fn read_to_d(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: anytype, width: Control_Signals.Bus_Width, space: Control_Signals.Address_Space) void {
     c.address(base, offset);
     c.set_control_signal(.at_op, .translate);
     c.set_control_signal(.addr_space, space);
     c.set_control_signal(.bus_width, width);
     c.set_control_signal(.bus_dir, .read);
-    if (base == .ip and space == .insn and c.signals.sr2_wi != .ip and c.signals.sr2_wi != .next_ip) {
+    if (base == .ip and space == .insn and c.signals.sr2_wi != .ip and c.signals.sr2_wi != .next_ip and @typeInfo(@TypeOf(offset)) != .EnumLiteral) {
         if (c.encoding_len) |len| {
             var end_offset: i64 = offset;
             end_offset += switch (width) {
@@ -1026,7 +1035,7 @@ pub fn read_to_d(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_
     }
 }
 
-pub fn read_to_dr(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_Offset_Literal, what: Low_High_Or_Full, space: Control_Signals.Address_Space) void {
+pub fn read_to_dr(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: anytype, what: Low_High_Or_Full, space: Control_Signals.Address_Space) void {
     c.read_to_d(base, offset, switch (what) {
         .low => .byte,
         .high, .full => .word,
@@ -1038,15 +1047,15 @@ pub fn read_to_dr(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address
     }));
 }
 
-pub fn ip_read_to_d(c: *Cycle, offset: Address_Offset_Literal, width: Control_Signals.Bus_Width) void {
+pub fn ip_read_to_d(c: *Cycle, offset: anytype, width: Control_Signals.Bus_Width) void {
     c.read_to_d(.ip, offset, width, .insn);
 }
 
-pub fn ip_read_to_dr(c: *Cycle, offset: Address_Offset_Literal, what: Low_High_Or_Full) void {
+pub fn ip_read_to_dr(c: *Cycle, offset: anytype, what: Low_High_Or_Full) void {
     c.read_to_dr(.ip, offset, what, .insn);
 }
 
-pub fn write_from_ll(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_Offset_Literal, width: Control_Signals.Bus_Width, space: Control_Signals.Address_Space) void {
+pub fn write_from_ll(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: anytype, width: Control_Signals.Bus_Width, space: Control_Signals.Address_Space) void {
     c.address(base, offset);
     c.set_control_signal(.at_op, .translate);
     c.set_control_signal(.addr_space, space);
@@ -1054,7 +1063,7 @@ pub fn write_from_ll(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Addr
     c.set_control_signal(.bus_dir, .write_from_ll);
 }
 
-pub fn write_from_dr(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_Offset_Literal, width: Control_Signals.Bus_Width, space: Control_Signals.Address_Space) void {
+pub fn write_from_dr(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: anytype, width: Control_Signals.Bus_Width, space: Control_Signals.Address_Space) void {
     c.address(base, offset);
     c.set_control_signal(.at_op, .translate);
     c.set_control_signal(.addr_space, space);
@@ -1062,7 +1071,7 @@ pub fn write_from_dr(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Addr
     c.set_control_signal(.bus_dir, .write_from_dr);
 }
 
-pub fn block_transfer_to_ram(c: *Cycle, base: Control_Signals.Any_SR_Index, preincrement: Address_Offset_Literal, space: Control_Signals.Address_Space) void {
+pub fn block_transfer_to_ram(c: *Cycle, base: Control_Signals.Any_SR_Index, preincrement: anytype, space: Control_Signals.Address_Space) void {
     c.address(base, preincrement);
     c.set_control_signal(.at_op, .translate);
     c.set_control_signal(.addr_space, space);
@@ -1072,7 +1081,7 @@ pub fn block_transfer_to_ram(c: *Cycle, base: Control_Signals.Any_SR_Index, prei
     c.virtual_address_to_sr(base);
 }
 
-pub fn block_transfer_from_ram(c: *Cycle, base: Control_Signals.Any_SR_Index, preincrement: Address_Offset_Literal, space: Control_Signals.Address_Space) void {
+pub fn block_transfer_from_ram(c: *Cycle, base: Control_Signals.Any_SR_Index, preincrement: anytype, space: Control_Signals.Address_Space) void {
     c.address(base, preincrement);
     c.set_control_signal(.at_op, .translate);
     c.set_control_signal(.addr_space, space);
@@ -1131,8 +1140,18 @@ pub fn load_and_exec_next_insn_no_atomic_end(c: *Cycle) void {
     c.load_and_exec_next_insn();
 }
 
-pub fn branch(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_Offset_Literal) void {
-    if (base != .ip or offset != 0) {
+pub fn call_or_branch(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: anytype, mnemonic: isa.Mnemonic) void {
+    if (mnemonic == .call) {
+        c.sr_to_j(.ip);
+        c.literal_to_k(c.encoding_len.?);
+        c.j_plus_k_to_l(.zx, .fresh, .no_flags);
+        c.l_to_sr(.rp);
+    }
+    c.branch(base, offset);
+}
+
+pub fn branch(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: anytype) void {
+    if (base != .ip or @typeInfo(@TypeOf(offset)) != .EnumLiteral and offset != 0) {
         c.set_control_signal(.sr2_wi, .ip);
         c.set_control_signal(.sr2_wsrc, .virtual_addr);
     }
@@ -1141,7 +1160,7 @@ pub fn branch(c: *Cycle, base: Control_Signals.Any_SR_Index, offset: Address_Off
 }
 
 pub fn decode_and_exec_dr(c: *Cycle, id_mode: Control_Signals.ID_Mode) void {
-    c.decode_dr_to_ij_ik_iw(id_mode);
+    c.decode_dr_to_iw_ik_ij(id_mode);
     c.allow_interrupt();
     c.set_control_signal(.seq_op, .next_instruction);
     if (c.is_set(.special)) {
@@ -1156,7 +1175,7 @@ pub fn decode_and_exec_dr(c: *Cycle, id_mode: Control_Signals.ID_Mode) void {
     }
 }
 
-pub fn decode_dr_to_ij_ik_iw(c: *Cycle, id_mode: Control_Signals.ID_Mode) void {
+pub fn decode_dr_to_iw_ik_ij(c: *Cycle, id_mode: Control_Signals.ID_Mode) void {
     c.next_ij_from_decode(id_mode);
     c.next_ik_from_decode(id_mode);
     c.next_iw_from_decode(id_mode);
@@ -1210,7 +1229,7 @@ pub fn next_ik_bit(c: *Cycle, constant: hw.K.Raw) void {
     c.next_ik(@intCast(@ctz(constant)));
 }
 
-pub fn next_ik_ij_zx(c: *Cycle, constant: std.meta.Int(.unsigned, @bitSizeOf(hw.IJ) + @bitSizeOf(hw.IK))) void {
+pub fn next_ik_ij_sx(c: *Cycle, constant: std.meta.Int(.signed, @bitSizeOf(hw.IJ) + @bitSizeOf(hw.IK))) void {
     c.next_ik(@intCast(constant >> @bitSizeOf(hw.IK)));
     c.next_ij(@truncate(constant));
 }
@@ -1369,7 +1388,6 @@ pub const Bit_Count_Direction = enum {
     trailing,
 };
 
-pub const Address_Offset_Literal = Control_Signals.Literal.Raw;
 pub const K_Literal = Control_Signals.Literal.Raw;
 
 const log = std.log.scoped(.cycle);

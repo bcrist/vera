@@ -28,23 +28,27 @@ pub const Placeholder_Info = struct {
     name: []const u8,
 
     pub fn evaluate(self: Placeholder_Info, params: []const Parameter) i64 {
+        const index = self.index.raw();
+        if (params.len <= index) return 0; // this is part of a "don't care" encoder
         return switch (self.kind) {
-            .param_constant => params[self.index.raw()].constant,
-            .param_base_register => params[self.index.raw()].base_register_index,
-            .param_offset_register => params[self.index.raw()].offset_register_index,
+            .param_constant => params[index].constant,
+            .param_base_register => params[index].base_register_index,
+            .param_offset_register => params[index].offset_register_index,
         };
     }
 
     pub fn assign(self: Placeholder_Info, value: i64, out: []Parameter) bool {
+        const index = self.index.raw();
+        if (out.len <= index) return true; // this is part of a "don't care" encoder
         switch (self.kind) {
-            .param_constant => out[self.index.raw()].constant = value,
+            .param_constant => out[index].constant = value,
             .param_base_register => {
                 if (value < 0 or value >= hw.register_count) return false;
-                out[self.index.raw()].base_register_index = @intCast(value);
+                out[index].base_register_index = @intCast(value);
             },
             .param_offset_register => {
                 if (value < 0 or value >= hw.register_count) return false;
-                out[self.index.raw()].offset_register_index = @intCast(value);
+                out[index].offset_register_index = @intCast(value);
             },
         }
         return true;

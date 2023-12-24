@@ -10,6 +10,7 @@ pub const instructions = .{
             c.srh_to_lh(.fault_rsn_stat);
             c.stat_to_ll();
             c.l_to_sr(.fault_rsn_stat);
+            c.next_iw(@intCast(vector_register.raw() >> 24));
             c.next(swap_rsn);
         }
 
@@ -17,14 +18,15 @@ pub const instructions = .{
             c.rsn_to_sr1h(.int_rsn_fault_iw_ik_ij);
             c.pipeline_id_to_ll();
             c.ll_to_rsn();
-            c.next_ik_ij_zx(@truncate(vector_register.raw() >> 16));
+            c.next_ij(@truncate(vector_register.raw() >> 16));
+            c.next_ik(@truncate(vector_register.raw() >> 20));
             c.next(compute_vector_address);
         }
 
         pub fn compute_vector_address(c: *Cycle) void {
             c.reload_asn();
             c.srl_to_jl(.one);
-            c.ik_ij_zx_to_k();
+            c.iw_ik_ij_zx_to_k();
             c.jl_times_k__swap_result_halves_to_l(.zx, .zx, .fresh, .no_flags);
             c.l_to_sr(.temp_1);
             c.next(read_vector);

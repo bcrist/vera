@@ -171,18 +171,20 @@ fn generate_encoding_table(processor: *Processor, decode_rom: []const hw.decode.
     defer f.close();
 
     const Cell_Info = struct {
-        has_slots: bool = false,
+        used_slots: u9 = 0,
         multiple_encodings: bool = false,
         instruction_encoding: ?Instruction_Encoding = null,
+        mnemonic: Mnemonic = ._reserved,
+        suffix: Mnemonic_Suffix = .none,
     };
 
     var cells: [256]Cell_Info = .{ .{} } ** 256;
 
     for (0.., processor.decode_rom.entries[0..0x10000], decode_rom[0..0x10000]) |addr, entry, result| {
         if (result.slot != .invalid_instruction) {
-            const first_byte: u8 = @truncate(addr);
-            const cell = &cells[first_byte];
-            cell.has_slots = true;
+            const high_byte: u8 = @truncate(addr >> 8);
+            const cell = &cells[high_byte];
+            cell.used_slots += 1;
 
             if (!cell.multiple_encodings) {
                 if (entry.instruction_encoding) |ie| {
@@ -193,7 +195,18 @@ fn generate_encoding_table(processor: *Processor, decode_rom: []const hw.decode.
                         }
                     } else {
                         cell.instruction_encoding = ie;
+                        cell.mnemonic = ie.signature.mnemonic;
+                        cell.suffix = ie.signature.suffix;
                     }
+                }
+            }
+            if (entry.instruction_encoding) |ie| {
+                if (ie.signature.mnemonic != cell.mnemonic) {
+                    cell.mnemonic = ._reserved;
+                    cell.suffix = .none;
+                }
+                if (ie.signature.suffix != cell.suffix) {
+                    cell.suffix = .none;
                 }
             }
         }
@@ -208,14 +221,14 @@ fn generate_encoding_table(processor: *Processor, decode_rom: []const hw.decode.
         \\</style>
         \\</head>
         \\<body>
-        \\<h1>Instruction Encodings by Initial Byte</h1>
+        \\<h1>Instruction Encodings by Initial Word MSB</h1>
         \\<table class="encoding_table">
         \\<tr><th></th>
         , .{ style });
 
     for (0..0x10) |col| {
         try w.print(
-            \\<th><code>+{X:0>1}</code></th>
+            \\<th><code>+{X:0>1}xx</code></th>
             , .{ col });
     }
 
@@ -226,7 +239,7 @@ fn generate_encoding_table(processor: *Processor, decode_rom: []const hw.decode.
         const row: u4 = @intCast(row_usize);
         try w.print(
             \\</tr>
-            \\<tr><th><code>{X:0>1}0</code></th>
+            \\<tr><th><code>{X:0>1}000</code></th>
             , .{ row });
 
         for (0..0x10) |col_usize| {
@@ -236,13 +249,22 @@ fn generate_encoding_table(processor: *Processor, decode_rom: []const hw.decode.
             const cell = cells[byte];
 
             const color: u24 = c: {
-                if (cell.instruction_encoding) |ie| {
-                    break :c mnemonic_color(ie.signature.mnemonic);
-                } else if (cell.has_slots) {
-                    break :c 0x777777;
-                } else {
-                    break :c 0xffffff;
+                // if (cell.mnemonic != ._reserved) {
+                //     break :c mnemonic_color(cell.mnemonic);
+                // } else if (cell.has_slots) {
+                //     break :c 0x777777;
+                // } else {
+                //     break :c 0xffffff;
+                // }
+                var red_factor: u24 = cell.used_slots / 2;
+                var green_factor: u24 = 0;
+                if (cell.used_slots > 0) {
+                    red_factor += 0x30;
                 }
+                if (cell.used_slots == 256) {
+                    green_factor += 0x50;
+                }
+                break :c 0xffffff - red_factor * 0x10000 - green_factor * 0x100;
             };
 
             try w.print(
@@ -258,14 +280,18 @@ fn generate_encoding_table(processor: *Processor, decode_rom: []const hw.decode.
             try w.writeAll(">");
 
             var end: []const u8 = "";
-            if (cell.has_slots) {
+            if (cell.used_slots > 0) {
                 try w.print("<a href=\"encoding_table_{x:0>2}.html\">", .{ byte });
                 end = "</a>";
                 try generate_encoding_table_inner(processor, decode_rom, byte);
             }
 
-            if (cell.instruction_encoding) |ie| {
-                try w.writeAll(@tagName(ie.signature.mnemonic));
+            if (cell.mnemonic != ._reserved) {
+                try w.writeAll(@tagName(cell.mnemonic));
+                if (cell.suffix != .none) {
+                    try w.writeByte('.');
+                    try w.writeAll(@tagName(cell.suffix));
+                }
             }
 
             try w.writeAll(end);
@@ -281,7 +307,7 @@ fn generate_encoding_table(processor: *Processor, decode_rom: []const hw.decode.
         );
 }
 
-fn generate_encoding_table_inner(processor: *Processor, decode_rom: []const hw.decode.Result, prefix_byte: u8) !void {
+fn generate_encoding_table_inner(processor: *Processor, decode_rom: []const hw.decode.Result, msb: u8) !void {
     const Cell_Info = struct {
         slot: hw.microcode.Slot = .invalid_instruction,
         instruction_encoding: ?Instruction_Encoding = null,
@@ -290,7 +316,7 @@ fn generate_encoding_table_inner(processor: *Processor, decode_rom: []const hw.d
     var cells: [256]Cell_Info = .{ .{} } ** 256;
 
     for (0..256) |byte| {
-        const addr = bits.concat(.{ prefix_byte, @as(u8, @intCast(byte)) });
+        const addr = bits.concat(.{ @as(u8, @intCast(byte)), msb });
         const entry = processor.decode_rom.entries[addr];
         const result = decode_rom[addr];
         cells[byte] = .{
@@ -301,7 +327,7 @@ fn generate_encoding_table_inner(processor: *Processor, decode_rom: []const hw.d
 
     var temp_buf: [1024]u8 = undefined;
 
-    const filename = try std.fmt.bufPrint(&temp_buf, "doc/isa/encoding_table_{x:0>2}.html", .{ prefix_byte });
+    const filename = try std.fmt.bufPrint(&temp_buf, "doc/isa/encoding_table_{x:0>2}.html", .{ msb });
 
     var f = try std.fs.cwd().createFile(filename, .{});
     defer f.close();
@@ -315,14 +341,14 @@ fn generate_encoding_table_inner(processor: *Processor, decode_rom: []const hw.d
         \\</style>
         \\</head>
         \\<body>
-        \\<h1>Instruction Encodings with Initial Byte 0x{X:0>2}</h1>
+        \\<h1>Instruction Encodings with Initial Word 0x{X:0>2}xx</h1>
         \\<table class="encoding_table">
         \\<tr><th></th>
-        , .{ style, prefix_byte });
+        , .{ style, msb });
 
     for (0..0x10) |col| {
         try w.print(
-            \\<th><code>+{X:0>1}00</code></th>
+            \\<th><code>+{X:0>1}</code></th>
             , .{ col });
     }
 
@@ -330,8 +356,8 @@ fn generate_encoding_table_inner(processor: *Processor, decode_rom: []const hw.d
         const row: u4 = @intCast(row_usize);
         try w.print(
             \\</tr>
-            \\<tr><th><code>{X:0>1}0{X:0>2}</code></th>
-            , .{ row, prefix_byte });
+            \\<tr><th><code>{X:0>2}{X:0>1}0</code></th>
+            , .{ msb, row });
 
         for (0..0x10) |col_usize| {
             const col: u4 = @intCast(col_usize);
@@ -360,6 +386,10 @@ fn generate_encoding_table_inner(processor: *Processor, decode_rom: []const hw.d
 
             if (cell.instruction_encoding) |ie| {
                 try w.writeAll(@tagName(ie.signature.mnemonic));
+                if (ie.signature.suffix != .none) {
+                    try w.writeByte('.');
+                    try w.writeAll(@tagName(ie.signature.suffix));
+                }
             }
 
             try w.writeAll("</td>");
@@ -379,6 +409,8 @@ const style = @embedFile("style.css");
 const Processor = @import("Processor.zig");
 const opcodes = @import("opcodes.zig");
 const Instruction_Encoding = isa.Instruction_Encoding;
+const Mnemonic = isa.Mnemonic;
+const Mnemonic_Suffix = isa.Mnemonic_Suffix;
 const isa = arch.isa;
 const Control_Signals = hw.Control_Signals;
 const Control_Signal = hw.Control_Signal;

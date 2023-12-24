@@ -326,7 +326,8 @@ pub const Lo12 = enum (u12) {
 };
 
 pub const Lo16 = enum (u16) {
-    nop1 = 0x00_00,
+    nop2 = 0x00_00,
+    nop3 = 0x00_01,
 
     absolute_call = 0xFF_00,
     call_return,
@@ -339,8 +340,6 @@ pub const Lo16 = enum (u16) {
     add_sp_u16,
     sync,
 
-    nop2 = 0xFF_22,
-    nop3 = 0xFF_33,
 
     branch_imm16u,
     branch_imm16n,

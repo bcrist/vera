@@ -31,7 +31,28 @@ pub fn add_entry(self: *Decode_ROM_Builder, addr: hw.decode.Address, entry: Entr
             or existing.ik != entry.ik
             or existing.iw != entry.iw
         ) {
-            std.debug.panic("Can't set {any} to {any}, already assigned to {any}", .{ addr, entry, existing });
+            var buf: [32768]u8 = undefined;
+            var stream = std.io.fixedBufferStream(&buf);
+            var writer = stream.writer();
+
+            if (existing_handle != entry.slot_handle) {
+                writer.print("Handle: {d: >30} != {d}\n", .{ existing_handle.raw(), entry.slot_handle.?.raw() }) catch @panic("IO Error");
+            }
+            if (existing.ij != entry.ij) {
+                writer.print("IJ:     {d: >30} != {d}\n", .{ existing.ij.raw(), entry.ij.raw() }) catch @panic("IO Error");
+            }
+            if (existing.ik != entry.ik) {
+                writer.print("IK:     {d: >30} != {d}\n", .{ existing.ik.raw(), entry.ik.raw() }) catch @panic("IO Error");
+            }
+            if (existing.iw != entry.iw) {
+                writer.print("IW:     {d: >30} != {d}\n", .{ existing.iw.raw(), entry.iw.raw() }) catch @panic("IO Error");
+            }
+
+            // inline for (std.enums.values(hw.Control_Signal)) |field| {
+            //     if (@field(existing.
+            // }
+
+            std.debug.panic("Decode address .{s} 0x{X} already used:\n{s}", .{ @tagName(addr.mode), addr.d.raw(), stream.getWritten() });
         }
     } else self.entries[addr_raw] = entry;
 }

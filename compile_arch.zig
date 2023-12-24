@@ -23,19 +23,17 @@ pub fn main() !void {
     var temp = try TempAllocator.init(0x1000_0000);
     var processor = Processor.init(gpa.allocator(), arena.allocator(), &temp);
 
-    processor.process(@import("compile_arch/_reset.zig").instructions);
-    processor.process(@import("compile_arch/_fault.zig").instructions);
-    processor.process(@import("compile_arch/_interrupt.zig").instructions);
-    processor.process(@import("compile_arch/_alu.zig").instructions);
-    processor.process(@import("compile_arch/_copy.zig").instructions);  
-    processor.process(@import("compile_arch/_branch.zig").instructions);
-    processor.process(@import("compile_arch/_call.zig").instructions);
-    processor.process(@import("compile_arch/_load.zig").instructions);
-    processor.process(@import("compile_arch/_store.zig").instructions);
-    processor.process(@import("compile_arch/_stack.zig").instructions);
-    processor.process(@import("compile_arch/_address_translator.zig").instructions);
-    processor.process(@import("compile_arch/_sync.zig").instructions);
-    processor.process(@import("compile_arch/_memcpy.zig").instructions);
+    processor.process(@import("compile_arch/00.zig").instructions);
+    processor.process(@import("compile_arch/01.zig").instructions);
+    processor.process(@import("compile_arch/10.zig").instructions);
+    processor.process(@import("compile_arch/11.zig").instructions);
+    // processor.process(@import("compile_arch/_alu.zig").instructions);
+    // processor.process(@import("compile_arch/_reset.zig").instructions);
+    // processor.process(@import("compile_arch/_fault.zig").instructions);
+    // processor.process(@import("compile_arch/_interrupt.zig").instructions);
+    // processor.process(@import("compile_arch/_address_translator.zig").instructions);
+    // processor.process(@import("compile_arch/_sync.zig").instructions);
+    // processor.process(@import("compile_arch/_memcpy.zig").instructions);
 
     processor.process(@import("compile_arch/_alt.zig").instructions);
 

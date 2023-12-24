@@ -29,7 +29,7 @@ pub const instructions = .{
         pub fn restore_iw_ik_ij(c: *Cycle) void {
             c.sr_to_l(.int_rsn_fault_iw_ik_ij);
             c.ll_to_dr(.full);
-            c.decode_dr_to_ij_ik_iw(.alt);
+            c.decode_dr_to_iw_ik_ij(.alt);
             c.next(restore_dr_and_retry);
         }
 
@@ -106,7 +106,7 @@ pub const instructions = .{
         fn load_gpr(comptime n: hw.Register_Index) fn(c: *Cycle)void {
             return struct {
                 pub fn func(c: *Cycle) void {
-                    c.read_to_d(.rs_reserved, @as(Cycle.Address_Offset_Literal, n) * 2, .word, .data);
+                    c.read_to_d(.rs_reserved, @as(u7, n) * 2, .word, .data);
                     c.d_to_l(.zx);
                     c.ll_to_reg();
                     if (n < 15) {
@@ -243,7 +243,7 @@ pub const instructions = .{
                 pub fn func(c: *Cycle) void {
                     c.reg_to_k();
                     c.k_to_ll();
-                    c.write_from_ll(.rs_reserved, @as(Cycle.Address_Offset_Literal, n) * 2, .word, .data);
+                    c.write_from_ll(.rs_reserved, @as(u7, n) * 2, .word, .data);
                     if (n < 15) {
                         c.next_ik_increment();
                         c.next(@field(STRS, std.fmt.comptimePrint("store_r{}", .{ n + 1 })));
