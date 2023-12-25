@@ -398,7 +398,7 @@ fn count_required_bits_in_buf(buf: []const u8, num_bits: u63, sign: Signedness) 
     var byte = buf[byte_index];
     var useless_bits: u63 = 0;
 
-    var the_sign_bit: u1 = @truncate(byte >> bit_index);
+    const the_sign_bit: u1 = @truncate(byte >> bit_index);
 
     if (sign == .unsigned) {
         if (the_sign_bit == 0) {
@@ -470,7 +470,7 @@ pub fn clone_with_length(self: Constant, allocator: std.mem.Allocator, storage: 
     }
 
     var small_buf: [8]u8 = undefined;
-    var result = get_result_buffer(allocator, storage, &small_buf, result_bit_count);
+    const result = get_result_buffer(allocator, storage, &small_buf, result_bit_count);
 
     var iter = self.byte_iterator(null);
     for (result) |*b| {
@@ -484,7 +484,7 @@ pub fn clone_with_signedness(self: Constant, allocator: std.mem.Allocator, stora
     const num_bits = self.bits();
 
     var small_buf: [8]u8 = undefined;
-    var result = get_result_buffer(allocator, storage, &small_buf, num_bits);
+    const result = get_result_buffer(allocator, storage, &small_buf, num_bits);
 
     var iter = self.byte_iterator(sign);
     for (result) |*b| {
@@ -509,7 +509,7 @@ pub fn extend(self: Constant, allocator: std.mem.Allocator, storage: *std.ArrayL
     }
 
     var small_buf: [8]u8 = undefined;
-    var result = get_result_buffer(allocator, storage, &small_buf, result_bit_count);
+    const result = get_result_buffer(allocator, storage, &small_buf, result_bit_count);
 
     var iter = self.byte_iterator(ext);
     for (result) |*b| {
@@ -520,7 +520,7 @@ pub fn extend(self: Constant, allocator: std.mem.Allocator, storage: *std.ArrayL
 }
 
 pub fn byte_iterator(self: *const Constant, extension: ?Signedness) Byte_Iterator {
-    var str = self.as_string();
+    const str = self.as_string();
     if (str.len == 0) {
         return .{
             .remaining = &.{},
@@ -635,7 +635,7 @@ pub fn concat(self: Constant, allocator: std.mem.Allocator, storage: *std.ArrayL
     const combined_bits = self_bits + other_bits;
 
     var small_buf: [8]u8 = undefined;
-    var result = get_result_buffer(allocator, storage, &small_buf, combined_bits);
+    const result = get_result_buffer(allocator, storage, &small_buf, combined_bits);
     var i: usize = 0;
 
     const self_iter = self.byte_iterator(.unsigned);
@@ -661,7 +661,7 @@ pub fn repeat(self: Constant, allocator: std.mem.Allocator, storage: *std.ArrayL
     const combined_bits = self_bits * times_u63;
 
     var small_buf: [8]u8 = undefined;
-    var result = get_result_buffer(allocator, storage, &small_buf, combined_bits);
+    const result = get_result_buffer(allocator, storage, &small_buf, combined_bits);
     var i: usize = 0;
 
     const unsigned_iter = self.byte_iterator(.unsigned);
@@ -672,14 +672,14 @@ pub fn repeat(self: Constant, allocator: std.mem.Allocator, storage: *std.ArrayL
         leftover_bits = @intCast((leftover_bits + self_bits) & 7);
     }
 
-    var iter = self.byte_iterator(null);
+    const iter = self.byte_iterator(null);
     i = append_iter(result, i, leftover_bits, self_leftover_bits, iter);
 
     return init(result.ptr, combined_bits, self.signedness());
 }
 
 fn get_result_buffer(allocator: std.mem.Allocator, storage: *std.ArrayListUnmanaged(u8), small_buf: *[8]u8, num_bits: u64) []u8 {
-    var bytes = (num_bits + 7) / 8;
+    const bytes = (num_bits + 7) / 8;
     var result: []u8 = if (num_bits <= 64) small_buf else s: {
         storage.clearRetainingCapacity();
         storage.ensureTotalCapacity(allocator, bytes) catch @panic("OOM");
@@ -754,7 +754,7 @@ pub fn binary_op(self: Constant, allocator: std.mem.Allocator, storage: *std.Arr
     }
 
     var small_buf: [8]u8 = undefined;
-    var result = get_result_buffer(allocator, storage, &small_buf, result_bits);
+    const result = get_result_buffer(allocator, storage, &small_buf, result_bits);
 
     var self_iter = self.byte_iterator(null);
     var other_iter = other.byte_iterator(null);
@@ -777,7 +777,7 @@ pub fn binary_op(self: Constant, allocator: std.mem.Allocator, storage: *std.Arr
         .add => {
             var carry: u1 = 0;
             for (result) |*b| {
-                var sum: u9 = @as(u9, self_iter.next()) + @as(u9, other_iter.next()) + carry;
+                const sum: u9 = @as(u9, self_iter.next()) + @as(u9, other_iter.next()) + carry;
                 b.* = @truncate(sum);
                 carry = @truncate(sum >> 8);
             }
@@ -786,7 +786,7 @@ pub fn binary_op(self: Constant, allocator: std.mem.Allocator, storage: *std.Arr
         .subtract => {
             var carry: u1 = 1;
             for (result) |*b| {
-                var sum: u9 = @as(u9, self_iter.next()) + @as(u9, ~other_iter.next()) + carry;
+                const sum: u9 = @as(u9, self_iter.next()) + @as(u9, ~other_iter.next()) + carry;
                 b.* = @truncate(sum);
                 carry = @truncate(sum >> 8);
             }
@@ -801,7 +801,7 @@ pub fn complement(self: Constant, allocator: std.mem.Allocator, storage: *std.Ar
     const result_bits = self.bits();
 
     var small_buf: [8]u8 = undefined;
-    var result = get_result_buffer(allocator, storage, &small_buf, result_bits);
+    const result = get_result_buffer(allocator, storage, &small_buf, result_bits);
 
     var self_iter = self.byte_iterator(null);
     for (result) |*b| {
@@ -812,13 +812,13 @@ pub fn complement(self: Constant, allocator: std.mem.Allocator, storage: *std.Ar
 }
 
 pub fn intern(self: *const Constant, arena: std.mem.Allocator, gpa: std.mem.Allocator, pool: *Intern_Pool) *const Constant {
-    var result = pool.getOrPut(gpa, self) catch @panic("OOM");
+    const result = pool.getOrPut(gpa, self) catch @panic("OOM");
     errdefer _ = pool.remove(self);
     if (result.found_existing) {
         return result.key_ptr.*;
     }
 
-    var constant = arena.create(Constant) catch @panic("OOM");
+    const constant = arena.create(Constant) catch @panic("OOM");
     errdefer arena.destroy(constant);
     constant.* = self.clone(arena);
 

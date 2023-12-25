@@ -223,7 +223,7 @@ fn do_chunk_layout(a: *Assembler, chunk: Source_File.Chunk, initial_address: u32
     var check_for_alignment_holes = false;
     while (iter.next()) |insn_handle| {
         const old_insn_address = insn_addresses[insn_handle];
-        var new_insn_address = address;
+        const new_insn_address = address;
         switch (insn_operations[insn_handle]) {
             .none, .nil, .org, .keep, .def, .undef, .local, .range,
             .section, .boot, .code, .kcode, .entry, .kentry,
@@ -533,7 +533,7 @@ fn resolve_push_pop_directive_length(a: *Assembler, s: Source_File.Slices, insn_
         return insn_lengths[insn_handle];
     }
 
-    var stack_size = symbols.compute_push_or_pop_size(a, s, s.insn.items(.params)[insn_handle]);
+    const stack_size = symbols.compute_push_or_pop_size(a, s, s.insn.items(.params)[insn_handle]);
     s.insn.items(.operation)[insn_handle] = @unionInit(Instruction.Operation, @tagName(op), stack_size);
 
     const insn = isa.Instruction{
@@ -661,7 +661,7 @@ pub fn resolve_expression_constant(a: *Assembler, s: Source_File.Slices, ip: u32
         return constant;
     }
 
-    var expr_infos = s.expr.items(.info);
+    const expr_infos = s.expr.items(.info);
     const info = expr_infos[expr_handle];
     switch (info) {
         .local_label_def => unreachable,
@@ -965,7 +965,7 @@ fn resolve_insn_encoding(a: *Assembler, s: Source_File.Slices, ip: u32, insn_han
         op.* = .{ .bound_insn = enc };
         return enc.len();
     } else {
-        var err_flags = Error.Flag_Set.initOne(.remove_on_layout_reset);
+        const err_flags = Error.Flag_Set.initOne(.remove_on_layout_reset);
         a.record_insn_encoding_error(s.file.handle, insn_handle, err_flags);
         return 0;
     }
@@ -994,7 +994,7 @@ pub fn find_best_insn_encoding(a: *Assembler, insn: isa.Instruction) ?*const isa
 
 pub fn populate_page_chunks(a: *Assembler, chunks: []const Source_File.Chunk) void {
     var page_chunks = a.pages.items(.chunks);
-    var page_sections = a.pages.items(.section);
+    const page_sections = a.pages.items(.section);
     for (chunks) |chunk| {
         if (chunk.section) |section| {
             const addresses = chunk.address_range(a);
@@ -1156,7 +1156,7 @@ fn encode_instruction(
     const offset = hw.addr.Offset.init(@truncate(address));
 
     const page_data_handle = a.page_lookup.get(page) orelse return;
-    var buffer = page_datas[page_data_handle][offset.raw()..];
+    const buffer = page_datas[page_data_handle][offset.raw()..];
 
     const temp_insn = encoding.encode(insn);
 

@@ -563,7 +563,7 @@ pub fn Parser(comptime Reader: type) type {
         }
 
         fn parse_int_domain(self: *Self, signedness: Signedness) !Domain {
-            var b = try self.reader.require_any_int(u6, 0);
+            const b = try self.reader.require_any_int(u6, 0);
 
             var multiple: u8 = 1;
             if (try self.reader.expression("multiple")) {
@@ -580,8 +580,8 @@ pub fn Parser(comptime Reader: type) type {
         }
 
         fn parse_range_domain(self: *Self) !Domain {
-            var first = try self.reader.require_any_int(i64, 0);
-            var last = try self.reader.require_any_int(i64, 0);
+            const first = try self.reader.require_any_int(i64, 0);
+            const last = try self.reader.require_any_int(i64, 0);
             try self.reader.require_close();
             return .{ .range = .{
                 .first = first,

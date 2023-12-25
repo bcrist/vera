@@ -118,7 +118,7 @@ test "as_string" {
 }
 
 test "as_int" {
-    var alloc = std.testing.allocator;
+    const alloc = std.testing.allocator;
     var temp = std.ArrayListUnmanaged(u8) {};
     defer temp.deinit(alloc);
 
@@ -133,7 +133,7 @@ test "as_int" {
 }
 
 test "concat" {
-    var alloc = std.testing.allocator;
+    const alloc = std.testing.allocator;
     var temp = std.ArrayListUnmanaged(u8) {};
     defer temp.deinit(alloc);
 
@@ -169,7 +169,7 @@ test "concat" {
 }
 
 test "repeat" {
-    var alloc = std.testing.allocator;
+    const alloc = std.testing.allocator;
     var temp = std.ArrayListUnmanaged(u8) {};
     defer temp.deinit(alloc);
 
@@ -189,7 +189,7 @@ test "repeat" {
 }
 
 test "binary_op" {
-    var alloc = std.testing.allocator;
+    const alloc = std.testing.allocator;
     var temp = std.ArrayListUnmanaged(u8) {};
     defer temp.deinit(alloc);
 

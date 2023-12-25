@@ -164,7 +164,7 @@ fn process_instruction(
         cycle_flags.insert(.ik_valid);
     }
 
-    var encoding_len = if (instruction_encoding == null) null else encoding_length(encoders);
+    const encoding_len = if (instruction_encoding == null) null else encoding_length(encoders);
 
     var maybe_slot_handle: ?Slot_Data.Handle = null;
     var iter = Initial_Word_Encoding_Iterator.init(self.temp.allocator(), constraints, encoders, id_mode);
@@ -362,7 +362,7 @@ fn resolve_encoders(comptime encoders: anytype) Encoder_Provider {
         pub fn provider(allocator: std.mem.Allocator, signature: ?isa.Instruction_Signature) []const Encoder {
             switch (@typeInfo(@TypeOf(encoders))) {
                 .Struct => |info| if (info.is_tuple) {
-                    var out = allocator.alloc(Encoder, encoders.len) catch @panic("OOM");
+                    const out = allocator.alloc(Encoder, encoders.len) catch @panic("OOM");
                     inline for (encoders, out) |in, *encoder| {
                         encoder.* = resolve_single_encoder(in, signature);
                     }

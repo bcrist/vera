@@ -1,6 +1,8 @@
 pub fn generate(gpa: std.mem.Allocator, processor: *Processor, microcode: []const ?Control_Signals, decode_rom: []const hw.decode.Result) !void {
     _ = gpa;
 
+    try std.fs.cwd().makePath("doc/isa");
+
     try generate_encoding_table(processor, decode_rom);
     try generate_control_signal_analysis(processor, microcode);
 }
@@ -83,7 +85,7 @@ pub fn analyze_control_signal_usage(processor: *Processor, comptime signals: []c
 
         temp.items.len -= 1;
 
-        var result = try data.getOrPut(temp.items);
+        const result = try data.getOrPut(temp.items);
         if (result.found_existing) {
             result.value_ptr.* += 1;
         } else {
@@ -231,9 +233,6 @@ fn generate_encoding_table(processor: *Processor, decode_rom: []const hw.decode.
             \\<th><code>+{X:0>1}xx</code></th>
             , .{ col });
     }
-
-    var temp_buf: [1024]u8 = undefined;
-    _ = temp_buf;
 
     for (0..0x10) |row_usize| {
         const row: u4 = @intCast(row_usize);

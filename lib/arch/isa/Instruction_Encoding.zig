@@ -213,6 +213,7 @@ pub fn matches(self: Instruction_Encoding, insn: Instruction) bool {
         if (!std.meta.eql(ps, param.signature)) return false;
     }
     for (self.encoders) |enc| {
+        if (enc.value == .placeholder and enc.value.placeholder.index == .invalid) continue;
         const value = enc.value.evaluate(insn.params);
         if (enc.domain.encode(value) == null) return false;
     }

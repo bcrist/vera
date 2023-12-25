@@ -51,7 +51,7 @@ pub fn write_hex_files_for_section(a: *const Assembler, maybe_section_handle: ?S
             try filename_temp.writer().print(".{}.{s}", .{ rom_number, options.file_extension });
             var f = try dir.createFile(filename_temp.items, .{});
             defer f.close();
-            var writer = f.writer();
+            const writer = f.writer();
             try write_hex_for_section(a, maybe_section_handle, writer, @intCast(rom_number), options);
         }
     } else {
@@ -59,7 +59,7 @@ pub fn write_hex_files_for_section(a: *const Assembler, maybe_section_handle: ?S
         try filename_temp.writer().print(".{s}", .{ options.file_extension });
         var f = try dir.createFile(filename_temp.items, .{});
         defer f.close();
-        var writer = f.writer();
+        const writer = f.writer();
         try write_hex_for_section(a, maybe_section_handle, writer, 0, options);
     }
 }
@@ -426,7 +426,7 @@ fn add_listing_for_chunk(a: *Assembler, listing: *Listing, chunk: Source_File.Ch
 
     var iter = chunk.instructions;
     while (iter.next()) |i| {
-        var token_range = Instruction.token_range(i, tokens, token_kinds);
+        const token_range = Instruction.token_range(i, tokens, token_kinds);
         var line_source = file.source[token_offsets[token_range.first] .. token_offsets[token_range.last + 1]];
         if (line_source.len > 0 and line_source[line_source.len - 1] == '\r') {
             line_source.len -= 1;

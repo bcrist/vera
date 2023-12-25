@@ -114,7 +114,7 @@ pub fn process_labels_and_sections(a: *Assembler, file: *Source_File) void {
 
 fn process_stack_block(a: *Assembler, s: Source_File.Slices, block_handle: Source_File.Block.Handle, insn_handle: Instruction.Handle, maybe_stack_name: ?[]const u8) void {
     const name = maybe_stack_name orelse "";
-    var result = s.file.stacks.getOrPut(a.gpa, name) catch @panic("OOM");
+    const result = s.file.stacks.getOrPut(a.gpa, name) catch @panic("OOM");
     if (result.found_existing) {
         const canonical_insn_handle = s.block.items(.first_insn)[result.value_ptr.*];
         const canonical_line_number = s.insn.items(.line_number)[canonical_insn_handle];
@@ -612,8 +612,6 @@ fn try_resolve_symbol_type(a: *Assembler, s: Source_File.Slices, expr_handle: Ex
 pub fn check_instructions_and_directives_in_file(a: *Assembler, s: Source_File.Slices) void {
     var insn_operations = s.insn.items(.operation);
     var insn_params = s.insn.items(.params);
-    var insn_labels = s.insn.items(.label);
-    _ = insn_labels;
 
     var pushed_stacks = std.ArrayList([]const u8).init(a.gpa);
     defer pushed_stacks.deinit();

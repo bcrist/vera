@@ -71,10 +71,10 @@ pub const Decoder = struct {
 
         const param_signatures = encoding.signature.params;
 
-        var params = if (self.allocator) |alloc| try alloc.alloc(Parameter, param_signatures.len) else self.params_buffer[0..param_signatures.len];
+        const params = if (self.allocator) |alloc| try alloc.alloc(Parameter, param_signatures.len) else self.params_buffer[0..param_signatures.len];
         errdefer if (self.allocator) |alloc| alloc.free(params);
 
-        var insn: Instruction = .{
+        const insn: Instruction = .{
             .mnemonic = encoding.signature.mnemonic,
             .suffix = encoding.signature.suffix,
             .params = params,

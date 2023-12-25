@@ -20,8 +20,8 @@
             .hash = "12201a8c1ceb731f541d0eb4f37174129413643f6abf1e5cf18681e6c6555f5390de",
         },
         .@"Zig-SX" = .{
-            .url = "https://github.com/bcrist/Zig-SX/archive/7de3dc7d92d37aaf6ddbe14081577cdab1800220.tar.gz",
-            .hash = "12204fe87932f6fe030901423ee1fc780ecf34c13c1c5275bab0b5930cb83d31ae8b",
+            .url = "https://github.com/bcrist/Zig-SX/archive/887c965f40d9dc81dcaf0b07760194697ab89054.tar.gz",
+            .hash = "1220d1a206f48a9bb6cada84fe6c7ea67427ac8dced701bc8fa925fc30d9adff20bf",
         },
         .@"Zig-S-Records" = .{
             .url = "https://github.com/bcrist/Zig-S-Records/archive/e26c669a0ac15d2b8a9ab994a09d857d42dd11a6.tar.gz",
@@ -32,12 +32,12 @@
             .hash = "12205a7d43fbc647a21f669fa05a242eaec87dd0225ca71d9a1b28afd70df8ad0ae9",
         },
         .@"Zig-ROM-Compress" = .{
-            .url = "https://github.com/bcrist/Zig-ROM-Compress/archive/b2aeb08bac68b77477c9739cbfa22c103289b4f3.tar.gz",
-            .hash = "122068930f6a560e9d5052100c81f6124bf8d013e7c411f20504ef457cf973be401b",
+            .url = "https://github.com/bcrist/Zig-ROM-Compress/archive/b5f87d75433659d69c25372ca96f109dd285bac1.tar.gz",
+            .hash = "1220d63ed1630f4baba2a28f584a0de88dc27488748fba4af05cb2c23197652e70e0",
         },
         .zbox = .{
-            .url = "https://github.com/bcrist/zbox/archive/c5e79096bf974a2c060ce2cd95c712ae0baffd19.tar.gz",
-            .hash = "12206be6fb423c4642d24d11e69a3d7fc263ca2a889775fe3901efa8fa719edfe25b",
+            .url = "https://github.com/bcrist/zbox/archive/2d1ccb60aa9d664d38f744cecc1399e17357d4ca.tar.gz",
+            .hash = "1220f3926981e48c7ae4f691500c24bfbaace12929b24b0a10377d93275ff4175b8d",
         },
         .dawn_x86_64_windows_gnu = .{
             .url = "https://github.com/michal-z/webgpu_dawn-x86_64-windows-gnu/archive/d3a68014e6b6b53fd330a0ccba99e4dcfffddae5.tar.gz",

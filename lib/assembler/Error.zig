@@ -20,7 +20,7 @@ pub fn print(self: Error, a: *Assembler, writer: anytype) !void {
     const file = a.get_source(self.file);
     const s = file.slices();
 
-    var context = switch (self.context) {
+    const context = switch (self.context) {
         .token => |handle| lex.Token.Range.expand(null, handle),
         .instruction => |handle| get_instruction_context(s, handle),
         .expression => |handle| get_expression_context(handle, null, s.expr.items(.token), s.expr.items(.info)),

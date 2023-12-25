@@ -15,7 +15,7 @@ window: ?Gui.Window_Settings,
 frames: []zgui.WindowSettings,
 
 pub fn init(alloc: std.mem.Allocator, gui: *const Gui) !Config {
-    var frame_settings = try zgui.getWindowSettings(alloc);
+    const frame_settings = try zgui.getWindowSettings(alloc);
     return .{
         .allocator = alloc,
         .window = .{

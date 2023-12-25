@@ -91,7 +91,7 @@ fn simulate_alu(in: Compute_Stage, out: *Transact_Stage) void {
             .sx => bits.sx(u32, in.k.raw()),
             .@"1x" => bits._1x(u32, in.k.raw()),
         };
-        var c_in: u1 = if (mode.carry) @intFromBool(in.stat_c) else if (mode.subtract) 1 else 0;
+        const c_in: u1 = if (mode.carry) @intFromBool(in.stat_c) else if (mode.subtract) 1 else 0;
 
         if (mode.subtract) k = ~k;
 
@@ -263,7 +263,7 @@ fn simulate_count(in: Compute_Stage, out: *Transact_Stage) void {
     const mode = in.cs.mode.count;
 
     var jl = in.j.lo.raw();
-    var k = in.k.raw();
+    const k = in.k.raw();
 
     if (mode.invert_jl) jl = ~jl;
 

@@ -51,7 +51,7 @@ pub const Token = struct {
     };
 
     pub fn count_new_lines(self: Token, source: []const u8) u32 {
-        var remaining = source[self.offset..];
+        const remaining = source[self.offset..];
         return switch (self.kind) {
             .newline => 1,
 
@@ -125,7 +125,7 @@ pub const Token = struct {
 
     pub fn location(self: Token, source: []const u8) []const u8 {
         var remaining = source[self.offset..];
-        var token_len = switch (self.kind) {
+        const token_len = switch (self.kind) {
             .eof => 0,
 
             .reserved,

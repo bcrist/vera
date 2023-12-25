@@ -14,7 +14,7 @@ pub fn print_mnemonic_and_suffix(mnemonic: Mnemonic, suffix: Mnemonic_Suffix, wr
 }
 
 pub fn print_encoding(encoding: Instruction_Encoding, writer: anytype) !void {
-    var len = try print_mnemonic_and_suffix(encoding.signature.mnemonic, encoding.signature.suffix, writer);
+    const len = try print_mnemonic_and_suffix(encoding.signature.mnemonic, encoding.signature.suffix, writer);
     if (len < 5) {
         try writer.writeByteNTimes(' ', 5 - len);
     }
@@ -33,7 +33,7 @@ pub fn print_encoding(encoding: Instruction_Encoding, writer: anytype) !void {
 }
 
 pub fn print_instruction(insn: Instruction, insn_address: ?u32, writer: anytype) !void {
-    var len = try print_mnemonic_and_suffix(insn.mnemonic, insn.suffix, writer);
+    const len = try print_mnemonic_and_suffix(insn.mnemonic, insn.suffix, writer);
     if (len < 5) {
         try writer.writeByteNTimes(' ', 5 - len);
     }

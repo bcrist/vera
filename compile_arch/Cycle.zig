@@ -323,7 +323,7 @@ fn validate_bus_read(cycle: *Cycle, width: ?Control_Signals.Bus_Width) void {
 fn set_control_signal(c: *Cycle, comptime signal: Control_Signal, raw_value: anytype) void {
     const current_value = @field(c.signals, @tagName(signal));
     const T = @TypeOf(current_value);
-    var value = @as(T, raw_value);
+    const value = @as(T, raw_value);
     switch (@typeInfo(T)) {
         .Union => if (c.is_set(signal)) {
             const Unsigned = std.meta.Int(.unsigned, @bitSizeOf(T));

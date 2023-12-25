@@ -74,6 +74,7 @@ pub fn init(allocator: std.mem.Allocator, decode_rom: []const hw.decode.Result, 
         for (devices) |d| {
             if (d.updatable()) |ud| {
                 updatable_devices[next] = ud;
+                next += 1;
             }
         }
     }

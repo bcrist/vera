@@ -302,7 +302,7 @@ fn write_instruction_line(
 
     try writer.writeAll(stream.getWritten());
 
-    var line_cursor: u32 = @intCast(stream.pos);
+    const line_cursor: u32 = @intCast(stream.pos);
 
     var d = [_]u8{0}**8;
     for (0..length) |offset| {
@@ -448,7 +448,7 @@ fn write_grouped_data_and_source(address: u32, line_cursor: u32, data: []const u
 
 fn write_remaining_source_lines(line_cursor: u32, line_number: u32, line_iter: std.mem.SplitIterator(u8, .scalar), writer: anytype, source_only: bool) !void {
     var iter = line_iter;
-    var first_line = iter.next() orelse return;
+    const first_line = iter.next() orelse return;
     var i = line_number;
     if (first_line.len > 0) {
         if (!source_only and line_cursor < listing_width) {

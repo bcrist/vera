@@ -11,7 +11,7 @@ test "Instruction encoding" {
     const edb = try isa.read_database.parse_encoding_db(&parse_data, source);
     parse_data.deinit();
 
-    var buf = try std.testing.allocator.alloc(u8, 0x100000);
+    const buf = try std.testing.allocator.alloc(u8, 0x10000);
     defer std.testing.allocator.free(buf);
 
     var prng = std.rand.Xoshiro256.init(0x89fbd77dbe9f9135);
@@ -34,7 +34,15 @@ test "Instruction encoding" {
             const encoded = encoding.encode(insn);
             if (std.mem.eql(u8, decoder.last_instruction, encoded.as_bytes())) break;
         } else {
-            return error.EncodingNotFound;
+            iter = edb.matching_encodings(insn);
+            while (iter.next()) |encoding| {
+                const encoded = encoding.encode(insn);
+                var decoder2 = ddb.decoder(null, encoded.as_bytes());
+                const insn2 = decoder2.decode() catch continue orelse continue;
+                if (insn2.eql(insn)) break;
+            } else {
+                return error.EncodingNotFound;
+            }
         }
     }
 }

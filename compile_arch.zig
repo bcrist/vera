@@ -87,7 +87,7 @@ pub fn main() !void {
         log.info("Microcode ROM {}: {} bytes compressed", .{ n, data.len });
 
         var path_buf: [32]u8 = undefined;
-        var path = try std.fmt.bufPrint(&path_buf, "roms/compressed/microcode_{}", .{ n });
+        const path = try std.fmt.bufPrint(&path_buf, "roms/compressed/microcode_{}", .{ n });
         if (std.fs.path.dirname(path)) |dir| {
             try std.fs.cwd().makePath(dir);
         }
@@ -100,7 +100,7 @@ pub fn main() !void {
     uc_rom_data = try hw.microcode_roms.write_srec_roms(gpa.allocator(), temp.allocator(), uc);
     for (uc_rom_data, 0..) |data, n| {
         var path_buf: [32]u8 = undefined;
-        var path = try std.fmt.bufPrint(&path_buf, "roms/srec/microcode_{}.srec", .{ n });
+        const path = try std.fmt.bufPrint(&path_buf, "roms/srec/microcode_{}.srec", .{ n });
         if (std.fs.path.dirname(path)) |dir| {
             try std.fs.cwd().makePath(dir);
         }
@@ -115,7 +115,7 @@ pub fn main() !void {
         log.info("Decode ROM {}: {} bytes compressed", .{ n, data.len });
 
         var path_buf: [32]u8 = undefined;
-        var path = try std.fmt.bufPrint(&path_buf, "roms/compressed/decode_{}", .{ n });
+        const path = try std.fmt.bufPrint(&path_buf, "roms/compressed/decode_{}", .{ n });
         if (std.fs.path.dirname(path)) |dir| {
             try std.fs.cwd().makePath(dir);
         }
@@ -128,7 +128,7 @@ pub fn main() !void {
     decode_rom_data = try hw.decode_roms.write_srec_roms(gpa.allocator(), temp.allocator(), decode);
     for (decode_rom_data, 0..) |data, n| {
         var path_buf: [32]u8 = undefined;
-        var path = try std.fmt.bufPrint(&path_buf, "roms/srec/decode_{}.srec", .{ n });
+        const path = try std.fmt.bufPrint(&path_buf, "roms/srec/decode_{}.srec", .{ n });
         if (std.fs.path.dirname(path)) |dir| {
             try std.fs.cwd().makePath(dir);
         }

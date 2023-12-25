@@ -39,7 +39,7 @@ pub fn parse_symbol(a: *Assembler, s: Source_File.Slices, expr_handle: Expressio
             return constant.intern(a.arena, a.gpa, &a.constants);
         },
         .directive_symbol_def, .directive_symbol_ref => |inner_expr| {
-            var expr_resolved_constants = s.expr.items(.resolved_constant);
+            const expr_resolved_constants = s.expr.items(.resolved_constant);
             if (expr_resolved_constants[inner_expr]) |interned_symbol_name| {
                 return interned_symbol_name;
             } else if (typechecking.try_resolve_expr_type(a, s, inner_expr)) {
@@ -102,9 +102,9 @@ pub fn lookup_symbol(a: *Assembler, s: Source_File.Slices, symbol_token_handle: 
         }
     }
 
-    var maybe_private_label = if (std.mem.startsWith(u8, symbol, "_")) s.block.items(.labels)[block_handle].get(symbol) else null;
-    var maybe_local = s.file.locals.get(symbol);
-    var maybe_public = a.public_labels.get(symbol);
+    const maybe_private_label = if (std.mem.startsWith(u8, symbol, "_")) s.block.items(.labels)[block_handle].get(symbol) else null;
+    const maybe_local = s.file.locals.get(symbol);
+    const maybe_public = a.public_labels.get(symbol);
 
     if (check_ambiguity) {
         var num_matches: u32 = 0;

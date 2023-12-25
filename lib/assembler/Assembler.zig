@@ -54,17 +54,15 @@ pub fn init(gpa: std.mem.Allocator, arena: std.mem.Allocator, edb: isa.Encoding_
     // Note also that the EncoderDatabase is not owned by the Assembler
     // but its lifetime must not be less than the Assembler lifetime.
 
-    var self = Assembler{
+    return .{
         .edb = edb,
         .gpa = gpa,
         .arena = arena,
     };
-
-    return self;
 }
 
 pub fn deinit(self: *Assembler, deinit_arena: bool) void {
-    var maybe_arena = if (deinit_arena) self.arena else null;
+    const maybe_arena = if (deinit_arena) self.arena else null;
 
     if (deinit_arena) {
         var constant_iter = self.constants.keyIterator();
@@ -197,7 +195,7 @@ fn reset_layout(self: *Assembler) void {
         }
     }
 
-    var errors = self.errors.items;
+    const errors = self.errors.items;
     var i = errors.len;
     while (i > 0) {
         i -= 1;

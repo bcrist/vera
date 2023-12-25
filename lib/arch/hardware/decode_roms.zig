@@ -47,7 +47,7 @@ pub fn read_compressed_roms(roms: Compressed_Rom_Data, results: []hw.decode.Resu
 }
 
 fn convert_microcode_to_srec(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, comptime n: u8, results: []const hw.decode.Result) ![]u8 {
-    var rom_name = std.fmt.comptimePrint("Decode Rom {}", .{n});
+    const rom_name = std.fmt.comptimePrint("Decode Rom {}", .{n});
 
     var temp = std.ArrayList(u8).init(temp_allocator);
     defer temp.deinit();

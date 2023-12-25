@@ -181,7 +181,7 @@ fn print_expression_type(expr_type: Expression.Type, writer: anytype) !void {
 fn print_constant(writer: anytype, constant: *const Constant) !void {
     try writer.print("{:>4}b: ", .{ constant.bit_count });
     if (constant.as_int(i64) catch null) |int_value| {
-        var uint_value = constant.as_int(u64) catch unreachable;
+        const uint_value = constant.as_int(u64) catch unreachable;
         try writer.print("0x{X} {} ", .{ uint_value, int_value });
     }
     try writer.print("'{s}'", .{ std.fmt.fmtSliceEscapeUpper(constant.as_string()) });

@@ -54,7 +54,7 @@ pub fn main() !void {
     const simsx_filename = try std.fmt.allocPrint(arena.allocator(), "{s}.ssx", .{ output_file.items });
     var f = try std.fs.cwd().createFile(simsx_filename, .{});
     defer f.close();
-    var writer = f.writer();
+    const writer = f.writer();
     try output.write_sim_sx(&a, gpa.allocator(), writer, .{});
 
 }
