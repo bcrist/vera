@@ -606,54 +606,27 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = // sub[c] (imm16u), r(src) -> r(dest)
+    struct { pub const spec = // sub[c] (imm16), r(src) -> r(dest)
         \\sub (imm), r(src) -> r(dest)
         \\subc (imm), r(src) -> r(dest)
         ;
-        pub const encoding = .{
-            opcode,
-            Encoder.shifted(8, Reg(.src)),
-            Encoder.shifted(12, Reg(.dest)),
-            Encoder.shifted(16, Int(.imm, u16)),
-        };
-        pub const ik = Reg(.src);
-        pub const iw = Reg(.dest);
-
-        fn opcode(mnemonic: isa.Mnemonic) opcodes.Lo8 {
-            return switch (mnemonic) {
-                .sub => .subtract_i16_reg16,
-                .subc => .subtract_i16_reg16_with_carry,
-                else => unreachable,
-            };
-        }
-
-        pub fn entry (c: *Cycle) void {
-            c.ip_read_to_d(2, .word);
-            c.d_to_l(.zx);
-            c.l_to_sr(.temp_1);
-            c.next(subtract);
-        }
-
-        pub fn subtract(c: *Cycle, mnemonic: isa.Mnemonic) void {
-            c.srl_to_jl(.temp_1);
-            c.reg_to_k();
-            c.jl_minus_k_to_ll(switch (mnemonic) {
-                .sub => .fresh,
-                .subc => .cont,
-                else => unreachable,
-            }, .flags);
-            c.load_and_exec_next_insn();
-        }
-    },
-    struct { pub const spec = // sub[c] (imm16s), r(src) -> r(dest)
-        \\sub (imm), r(src) -> r(dest)
-        \\subc (imm), r(src) -> r(dest)
-        ;
-        pub const encoding = .{
-            opcode,
-            Encoder.shifted(8, Reg(.src)),
-            Encoder.shifted(12, Reg(.dest)),
-            Encoder.shifted(16, Int(.imm, i16)),
+        pub const forms = .{
+            struct {
+                pub const encoding = .{
+                    opcode,
+                    Encoder.shifted(8, Reg(.src)),
+                    Encoder.shifted(12, Reg(.dest)),
+                    Encoder.shifted(16, Int(.imm, u16)),
+                };
+            },
+            struct {
+                pub const encoding = .{
+                    opcode,
+                    Encoder.shifted(8, Reg(.src)),
+                    Encoder.shifted(12, Reg(.dest)),
+                    Encoder.shifted(16, Int(.imm, i16)),
+                };
+            },
         };
         pub const ik = Reg(.src);
         pub const iw = Reg(.dest);

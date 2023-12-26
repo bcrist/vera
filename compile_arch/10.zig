@@ -194,77 +194,33 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = // <add/addc/sub/subc> r(src), (imm16u) -> r(dest)
+    struct { pub const spec = // <add/addc/sub/subc> r(src), (imm16) -> r(dest)
         \\add r(src), (imm) -> r(dest)
         \\addc r(src), (imm) -> r(dest)
         \\sub (imm), r(src) -> r(dest)
         \\subc (imm), r(src) -> r(dest)
         ;
-        pub const encoding = .{
-            Reg(.dest),
-            Encoder.shifted(4, Reg(.src)),
-            mnemonic_encoder,
-            Encoder.shifted(10, @as(u4, 5)),
-            region_encoder,
-            Encoder.shifted(16, Int(.imm, u16)),
-        };
-        pub const ij = Reg(.src);
-        pub const ik = Reg(.src);
-        pub const iw = Reg(.dest);
-
-        fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
-            return Encoder.shifted(8, @as(u2, switch (mnemonic) {
-                .add => 0,
-                .addc => 1,
-                .sub => 2,
-                .subc => 3,
-                else => unreachable,
-            }));
-        }
-
-        pub fn entry(c: *Cycle) void {
-            c.ip_read_to_d(2, .word);
-            c.d_to_l(.zx);
-            c.l_to_sr(.temp_1);
-            c.next(add);
-        }
-
-        pub fn add(c: *Cycle, mnemonic: isa.Mnemonic) void {
-            const freshness: Cycle.Freshness = switch (mnemonic) {
-                .add, .sub => .fresh,
-                .addc, .subc => .cont,
-                else => unreachable,
-            };
-            switch (mnemonic) {
-                .add, .addc => {
-                    c.reg_to_jl();
-                    c.srl_to_k(.temp_1);
-                    c.jl_plus_k_to_ll(freshness, .flags);
-                },
-                .sub, .subc => {
-                    c.sr_to_j(.temp_1);
-                    c.reg_to_k();
-                    c.jl_minus_k_to_ll(freshness, .flags);
-                },
-                else => unreachable,
-            }
-            c.ll_to_reg();
-            c.load_and_exec_next_insn();
-        }
-    },
-    struct { pub const spec = // <add/addc/sub/subc> r(src), (imm16s) -> r(dest)
-        \\add r(src), (imm) -> r(dest)
-        \\addc r(src), (imm) -> r(dest)
-        \\sub (imm), r(src) -> r(dest)
-        \\subc (imm), r(src) -> r(dest)
-        ;
-        pub const encoding = .{
-            Reg(.dest),
-            Encoder.shifted(4, Reg(.src)),
-            mnemonic_encoder,
-            Encoder.shifted(10, @as(u4, 5)),
-            region_encoder,
-            Encoder.shifted(16, Int(.imm, i16)),
+        pub const forms = .{
+            struct {
+                pub const encoding = .{
+                    Reg(.dest),
+                    Encoder.shifted(4, Reg(.src)),
+                    mnemonic_encoder,
+                    Encoder.shifted(10, @as(u4, 5)),
+                    region_encoder,
+                    Encoder.shifted(16, Int(.imm, u16)),
+                };
+            },
+            struct {
+                pub const encoding = .{
+                    Reg(.dest),
+                    Encoder.shifted(4, Reg(.src)),
+                    mnemonic_encoder,
+                    Encoder.shifted(10, @as(u4, 5)),
+                    region_encoder,
+                    Encoder.shifted(16, Int(.imm, i16)),
+                };
+            },
         };
         pub const ij = Reg(.src);
         pub const ik = Reg(.src);
@@ -369,7 +325,7 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = // <op> r(reg), (imm16u) -> r(reg)
+    struct { pub const spec = // <op> r(reg), (imm16) -> r(reg)
         \\cmp   r(reg), (imm)
         \\cmpc  r(reg), (imm)
         \\and   r(reg), (imm)
@@ -385,77 +341,25 @@ pub const instructions = .{
         \\xnor  r(reg), (imm)
         \\xnor  r(reg), (imm) -> r(reg)
         ;
-        pub const encoding = .{
-            Reg(.reg),
-            mnemonic_encoder,
-            Encoder.shifted(7, @as(u7, 0x1f)),
-            region_encoder,
-            Encoder.shifted(16, Int(.imm, u16)),
-        };
-        pub const ij = Reg(.reg);
-        pub const iw = Reg(.reg);
-
-        fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
-            return Encoder.shifted(4, @as(u3, switch (mnemonic) {
-                .cmp => 0,
-                .cmpc => 1,
-                .@"and" => 2,
-                .nand => 3,
-                .@"or" => 4,
-                .nor => 5,
-                .xor => 6,
-                .xnor => 7,
-                else => unreachable,
-            }));
-        }
-
-        pub fn entry(c: *Cycle) void {
-            c.ip_read_to_d(2, .word);
-            c.d_to_l(.zx);
-            c.l_to_sr(.temp_1);
-            c.next(compute);
-        }
-
-        pub fn compute(c: *Cycle, mnemonic: isa.Mnemonic) void {
-            c.reg_to_jl();
-            c.srl_to_k(.temp_1);
-            switch (mnemonic) {
-                .cmp => c.jl_minus_k(.fresh, .flags),
-                .cmpc => c.jl_minus_k(.cont, .flags),
-                .@"and" => c.jl_logic_k_to_ll(._and, .fresh, .flags),
-                .nand => c.jl_logic_k_to_ll(.nand, .fresh, .flags),
-                .@"or" => c.jl_logic_k_to_ll(._or, .fresh, .flags),
-                .nor => c.jl_logic_k_to_ll(.nor, .fresh, .flags),
-                .xor => c.jl_logic_k_to_ll(.xor, .fresh, .flags),
-                .xnor => c.jl_logic_k_to_ll(.xnor, .fresh, .flags),
-                else => unreachable,
-            }
-            c.ll_to_reg();
-            c.load_and_exec_next_insn();
-        }
-    },
-    struct { pub const spec = // <op> r(reg), (imm16s) -> r(reg)
-        \\cmp   r(reg), (imm)
-        \\cmpc  r(reg), (imm)
-        \\and   r(reg), (imm)
-        \\and   r(reg), (imm) -> r(reg)
-        \\nand  r(reg), (imm)
-        \\nand  r(reg), (imm) -> r(reg)
-        \\or    r(reg), (imm)
-        \\or    r(reg), (imm) -> r(reg)
-        \\nor   r(reg), (imm)
-        \\nor   r(reg), (imm) -> r(reg)
-        \\xor   r(reg), (imm)
-        \\xor   r(reg), (imm) -> r(reg)
-        \\xnor  r(reg), (imm)
-        \\xnor  r(reg), (imm) -> r(reg)
-        ;
-        pub const encoding = .{
-            Reg(.reg),
-            mnemonic_encoder,
-            Encoder.shifted(7, @as(u7, 0x1f)),
-            region_encoder,
-            Encoder.shifted(16, Int(.imm, i16)),
+        pub const forms = .{
+            struct {
+                pub const encoding = .{
+                    Reg(.reg),
+                    mnemonic_encoder,
+                    Encoder.shifted(7, @as(u7, 0x1f)),
+                    region_encoder,
+                    Encoder.shifted(16, Int(.imm, u16)),
+                };
+            },
+            struct {
+                pub const encoding = .{
+                    Reg(.reg),
+                    mnemonic_encoder,
+                    Encoder.shifted(7, @as(u7, 0x1f)),
+                    region_encoder,
+                    Encoder.shifted(16, Int(.imm, i16)),
+                };
+            },
         };
         pub const ij = Reg(.reg);
         pub const iw = Reg(.reg);
