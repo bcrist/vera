@@ -61,6 +61,7 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
             continue;
         }
 
+        // Microcode function enumeration
         var lookup = Slot_Info.Lookup.init(alloc);
         inline for (@typeInfo(Struct).Struct.decls) |decl| {
             const T = @TypeOf(@field(Struct, decl.name));
@@ -75,45 +76,12 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
             }
         }
 
-        if (@hasDecl(Struct, "encoding")) {
-            const encoders_fn = comptime resolve_encoders(Struct.encoding);
-            const ij_fn = if (@hasDecl(Struct, "ij")) comptime resolve_encoders(Struct.ij) else no_encoders;
-            const ik_fn = if (@hasDecl(Struct, "ik")) comptime resolve_encoders(Struct.ik) else no_encoders;
-            const iw_fn = if (@hasDecl(Struct, "iw")) comptime resolve_encoders(Struct.iw) else no_encoders;
-            const ik_ij_fn = if (@hasDecl(Struct, "ik_ij")) comptime resolve_encoders(Struct.ik_ij) else no_encoders;
-            const iw_ik_ij_fn = if (@hasDecl(Struct, "iw_ik_ij")) comptime resolve_encoders(Struct.iw_ik_ij) else no_encoders;
-
-            const constraints = if (@hasDecl(Struct, "constraints")) comptime resolve_constraints(Struct.constraints) else &.{};
-
-            const id_mode: hw.Control_Signals.ID_Mode = if (@hasDecl(Struct, "decode_mode")) Struct.decode_mode else .normal;
-
-            if (@hasDecl(Struct, "spec")) {
-                var parser = Spec_Parser.init(alloc, Struct.spec);
-                while (parser.next()) |parsed| {
-                    const encoders = encoders_fn(alloc, parsed.signature, parsed.encoders);
-                    const ij_encoders = ij_fn(alloc, parsed.signature, parsed.encoders);
-                    const ik_encoders = ik_fn(alloc, parsed.signature, parsed.encoders);
-                    const iw_encoders = iw_fn(alloc, parsed.signature, parsed.encoders);
-                    const ik_ij_encoders = ik_ij_fn(alloc, parsed.signature, parsed.encoders);
-                    const iw_ik_ij_encoders = iw_ik_ij_fn(alloc, parsed.signature, parsed.encoders);
-
-                    const final_encoding = self.finalize_encoding(parsed, constraints, encoders);
-
-                    self.process_instruction(&Struct.entry, final_encoding, constraints,
-                        encoders, iw_ik_ij_encoders, ik_ij_encoders, ij_encoders, ik_encoders, iw_encoders, id_mode, &lookup);
-
-                    self.encoding_list.append(final_encoding) catch @panic("OOM");
-                }
-            } else {
-                const encoders = encoders_fn(alloc, null, &.{});
-                const ij_encoders = ij_fn(alloc, null, &.{});
-                const ik_encoders = ik_fn(alloc, null, &.{});
-                const iw_encoders = iw_fn(alloc, null, &.{});
-                const ik_ij_encoders = ik_ij_fn(alloc, null, &.{});
-                const iw_ik_ij_encoders = iw_ik_ij_fn(alloc, null, &.{});
-                self.process_instruction(&Struct.entry, null, constraints,
-                    encoders, iw_ik_ij_encoders, ik_ij_encoders, ij_encoders, ik_encoders, iw_encoders, id_mode, &lookup);
+        if (@hasDecl(Struct, "forms")) {
+            inline for (Struct.forms) |Form| {
+                self.process_form(Form, Struct, &lookup);
             }
+        } else if (@hasDecl(Struct, "encoding")) {
+            self.process_form(Struct, Struct, &lookup);
         } else if (@hasDecl(Struct, "slot")) {
             const result = Microcode_Processor.process(.{
                 .processor = self,
@@ -134,6 +102,62 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
             @compileError("Expected either encoding or slot declaration");
         }
     }
+}
+
+fn process_form(
+    self: *Processor,
+    comptime Form: type,
+    comptime Outer: type,
+    lookup: *Slot_Info.Lookup,
+) void {
+    const alloc = self.temp.allocator();
+
+    const encoders_fn = comptime resolve_encoders(locate_decl(.{ Form, Outer }, "encoding").encoding);
+
+    const search_types = .{ Form, Outer, Fallback_Form };
+    const ij_fn = comptime resolve_encoders(locate_decl(search_types, "ij").ij);
+    const ik_fn = comptime resolve_encoders(locate_decl(search_types, "ik").ik);
+    const iw_fn = comptime resolve_encoders(locate_decl(search_types, "iw").iw);
+    const ik_ij_fn = comptime resolve_encoders(locate_decl(search_types, "ik_ij").ik_ij);
+    const iw_ik_ij_fn = comptime resolve_encoders(locate_decl(search_types, "iw_ik_ij").iw_ik_ij);
+    const constraints = comptime resolve_constraints(locate_decl(search_types, "constraints").constraints);
+    const id_mode = locate_decl(search_types, "decode_mode").decode_mode;
+    const Spec_Type = locate_decl(search_types, "spec");
+
+    if (Spec_Type != Fallback_Form) {
+        var parser = Spec_Parser.init(alloc, Spec_Type.spec);
+        while (parser.next()) |parsed| {
+            const encoders = encoders_fn(alloc, parsed.signature, parsed.encoders);
+            const ij_encoders = ij_fn(alloc, parsed.signature, parsed.encoders);
+            const ik_encoders = ik_fn(alloc, parsed.signature, parsed.encoders);
+            const iw_encoders = iw_fn(alloc, parsed.signature, parsed.encoders);
+            const ik_ij_encoders = ik_ij_fn(alloc, parsed.signature, parsed.encoders);
+            const iw_ik_ij_encoders = iw_ik_ij_fn(alloc, parsed.signature, parsed.encoders);
+
+            const final_encoding = self.finalize_encoding(parsed, constraints, encoders);
+
+            self.process_instruction(&Outer.entry, final_encoding, constraints,
+                encoders, iw_ik_ij_encoders, ik_ij_encoders, ij_encoders, ik_encoders, iw_encoders, id_mode, lookup);
+
+            self.encoding_list.append(final_encoding) catch @panic("OOM");
+        }
+    } else {
+        const encoders = encoders_fn(alloc, null, &.{});
+        const ij_encoders = ij_fn(alloc, null, &.{});
+        const ik_encoders = ik_fn(alloc, null, &.{});
+        const iw_encoders = iw_fn(alloc, null, &.{});
+        const ik_ij_encoders = ik_ij_fn(alloc, null, &.{});
+        const iw_ik_ij_encoders = iw_ik_ij_fn(alloc, null, &.{});
+        self.process_instruction(&Outer.entry, null, constraints,
+            encoders, iw_ik_ij_encoders, ik_ij_encoders, ij_encoders, ik_encoders, iw_encoders, id_mode, lookup);
+    }
+}
+
+fn locate_decl(comptime Types: anytype, comptime name: []const u8) type {
+    for (Types) |T| {
+        if (@hasDecl(T, name)) return T;
+    }
+    @compileError("Could not find " ++ name ++ " decl");
 }
 
 fn process_instruction(
@@ -351,13 +375,6 @@ fn resolve_constraint_value(comptime value: anytype) Value {
 }
 
 const Encoder_Provider = *const fn (allocator: std.mem.Allocator, signature: ?isa.Instruction_Signature, parsed_encoders: []const Encoder) []const Encoder;
-
-fn no_encoders(allocator: std.mem.Allocator, signature: ?isa.Instruction_Signature, parsed_encoders: []const Encoder) []const Encoder {
-    _ = allocator;
-    _ = signature;
-    _ = parsed_encoders;
-    return &.{};
-}
 
 fn resolve_encoders(comptime encoders: anytype) Encoder_Provider {
     return struct {
@@ -974,6 +991,18 @@ fn is_placeholder(needle: []const u8, value: Value) bool {
         .placeholder => |info| std.mem.eql(u8, info.name, needle),
     };
 }
+
+const Fallback_Form = struct {
+    pub const spec = "";
+    pub const encoders = .{};
+    pub const ij = .{};
+    pub const ik = .{};
+    pub const iw = .{};
+    pub const ik_ij = .{};
+    pub const iw_ik_ij = .{};
+    pub const constraints = .{};
+    pub const decode_mode: hw.Control_Signals.ID_Mode = .normal;
+};
 
 const log = std.log.scoped(.compile_arch);
 

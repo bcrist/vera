@@ -747,57 +747,32 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = // cmp[c] r(a), (imm16u)
-        \\cmp r(a), (imm)
-        \\cmpc r(a), (imm)
-        ;
-        pub const encoding = .{
-            Reg(.a),
-            mnemonic_encoder,
-            Encoder.shifted(5, @as(u9, 0x40)),
-            region_encoder,
-            Encoder.shifted(16, Int(.imm, u16)),
-        };
+    struct { // cmp[c] r(a), (imm16)
+        pub const spec = 
+            \\cmp r(a), (imm)
+            \\cmpc r(a), (imm)
+            ;
         pub const ij = Reg(.a);
-
-        fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
-            return Encoder.shifted(4, @as(u1, switch (mnemonic) {
-                .cmp => 0,
-                .cmpc => 1,
-                else => unreachable,
-            }));
-        }
-
-        pub fn entry(c: *Cycle) void {
-            c.ip_read_to_d(2, .word);
-            c.d_to_l(.zx);
-            c.l_to_sr(.temp_1);
-            c.next(compare);
-        }
-
-        pub fn compare(c: *Cycle, mnemonic: isa.Mnemonic) void {
-            c.reg_to_jl();
-            c.srl_to_k(.temp_1);
-            c.jl_minus_k(switch (mnemonic) {
-                .cmp => .fresh,
-                .cmpc => .cont,
-                else => unreachable,
-            }, .flags);
-            c.load_and_exec_next_insn();
-        }
-    },
-    struct { pub const spec = // cmp[c] r(a), (imm16s)
-        \\cmp r(a), (imm)
-        \\cmpc r(a), (imm)
-        ;
-        pub const encoding = .{
-            Reg(.a),
-            mnemonic_encoder,
-            Encoder.shifted(5, @as(u9, 0x40)),
-            region_encoder,
-            Encoder.shifted(16, Int(.imm, i16)),
+        pub const forms = .{
+            struct {
+                pub const encoding = .{
+                    Reg(.a),
+                    mnemonic_encoder,
+                    Encoder.shifted(5, @as(u9, 0x40)),
+                    region_encoder,
+                    Encoder.shifted(16, Int(.imm, u16)),
+                };
+            },
+            struct {
+                pub const encoding = .{
+                    Reg(.a),
+                    mnemonic_encoder,
+                    Encoder.shifted(5, @as(u9, 0x40)),
+                    region_encoder,
+                    Encoder.shifted(16, Int(.imm, i16)),
+                };
+            },
         };
-        pub const ij = Reg(.a);
 
         fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
             return Encoder.shifted(4, @as(u1, switch (mnemonic) {

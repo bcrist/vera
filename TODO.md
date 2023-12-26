@@ -1,4 +1,3 @@
-[compile_arch] Multiple specs/encodings per set of microcode functions - check for `pub const forms = .{ ... }` - e.g. for things that take either an i16 or s16 immediate
 [arch/compile_arch] Can we remove transformations from encoding db?  Would need a way to represent numeric transforms in Encoder instead - add `.computed` to Value union?
 [arch/microsim] Fault if a block load/store instruction is executed on an invalid context
 
