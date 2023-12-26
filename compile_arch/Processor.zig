@@ -90,12 +90,12 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
             if (@hasDecl(Struct, "spec")) {
                 var parser = Spec_Parser.init(alloc, Struct.spec);
                 while (parser.next()) |parsed| {
-                    const encoders = encoders_fn(alloc, parsed.signature);
-                    const ij_encoders = ij_fn(alloc, parsed.signature);
-                    const ik_encoders = ik_fn(alloc, parsed.signature);
-                    const iw_encoders = iw_fn(alloc, parsed.signature);
-                    const ik_ij_encoders = ik_ij_fn(alloc, parsed.signature);
-                    const iw_ik_ij_encoders = iw_ik_ij_fn(alloc, parsed.signature);
+                    const encoders = encoders_fn(alloc, parsed.signature, parsed.encoders);
+                    const ij_encoders = ij_fn(alloc, parsed.signature, parsed.encoders);
+                    const ik_encoders = ik_fn(alloc, parsed.signature, parsed.encoders);
+                    const iw_encoders = iw_fn(alloc, parsed.signature, parsed.encoders);
+                    const ik_ij_encoders = ik_ij_fn(alloc, parsed.signature, parsed.encoders);
+                    const iw_ik_ij_encoders = iw_ik_ij_fn(alloc, parsed.signature, parsed.encoders);
 
                     const final_encoding = self.finalize_encoding(parsed, constraints, encoders);
 
@@ -105,12 +105,12 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
                     self.encoding_list.append(final_encoding) catch @panic("OOM");
                 }
             } else {
-                const encoders = encoders_fn(alloc, null);
-                const ij_encoders = ij_fn(alloc, null);
-                const ik_encoders = ik_fn(alloc, null);
-                const iw_encoders = iw_fn(alloc, null);
-                const ik_ij_encoders = ik_ij_fn(alloc, null);
-                const iw_ik_ij_encoders = iw_ik_ij_fn(alloc, null);
+                const encoders = encoders_fn(alloc, null, &.{});
+                const ij_encoders = ij_fn(alloc, null, &.{});
+                const ik_encoders = ik_fn(alloc, null, &.{});
+                const iw_encoders = iw_fn(alloc, null, &.{});
+                const ik_ij_encoders = ik_ij_fn(alloc, null, &.{});
+                const iw_ik_ij_encoders = iw_ik_ij_fn(alloc, null, &.{});
                 self.process_instruction(&Struct.entry, null, constraints,
                     encoders, iw_ik_ij_encoders, ik_ij_encoders, ij_encoders, ik_encoders, iw_encoders, id_mode, &lookup);
             }
@@ -178,6 +178,7 @@ fn process_instruction(
                     .cycle_flags = cycle_flags,
                     .initial_word_encoding = &iter,
                     .signature = if (instruction_encoding) |ie| ie.signature else null,
+                    .parsed_encoders = if (instruction_encoding) |ie| ie.encoders else &.{},
                     .encoding_len = encoding_len,
                 },
                 .slot = .{ .forced_bits = 0 },
@@ -349,22 +350,23 @@ fn resolve_constraint_value(comptime value: anytype) Value {
     }
 }
 
-const Encoder_Provider = *const fn (allocator: std.mem.Allocator, signature: ?isa.Instruction_Signature) []const Encoder;
+const Encoder_Provider = *const fn (allocator: std.mem.Allocator, signature: ?isa.Instruction_Signature, parsed_encoders: []const Encoder) []const Encoder;
 
-fn no_encoders(allocator: std.mem.Allocator, signature: ?isa.Instruction_Signature) []const Encoder {
+fn no_encoders(allocator: std.mem.Allocator, signature: ?isa.Instruction_Signature, parsed_encoders: []const Encoder) []const Encoder {
     _ = allocator;
     _ = signature;
+    _ = parsed_encoders;
     return &.{};
 }
 
 fn resolve_encoders(comptime encoders: anytype) Encoder_Provider {
     return struct {
-        pub fn provider(allocator: std.mem.Allocator, signature: ?isa.Instruction_Signature) []const Encoder {
+        pub fn provider(allocator: std.mem.Allocator, signature: ?isa.Instruction_Signature, parsed_encoders: []const Encoder) []const Encoder {
             switch (@typeInfo(@TypeOf(encoders))) {
                 .Struct => |info| if (info.is_tuple) {
                     const out = allocator.alloc(Encoder, encoders.len) catch @panic("OOM");
                     inline for (encoders, out) |in, *encoder| {
-                        encoder.* = resolve_single_encoder(in, signature);
+                        encoder.* = resolve_single_encoder(in, signature, parsed_encoders);
                     }
                     return out;
                 },
@@ -372,13 +374,13 @@ fn resolve_encoders(comptime encoders: anytype) Encoder_Provider {
             }
 
             var out = allocator.alloc(Encoder, 1) catch @panic("OOM");
-            out[0] = resolve_single_encoder(encoders, signature);
+            out[0] = resolve_single_encoder(encoders, signature, parsed_encoders);
             return out;
         }
     }.provider;
 }
 
-fn resolve_single_encoder(encoder: anytype, signature: ?isa.Instruction_Signature) Encoder {
+fn resolve_single_encoder(encoder: anytype, signature: ?isa.Instruction_Signature, parsed_encoders: []const Encoder) Encoder {
     const T = @TypeOf(encoder);
     if (T == Encoder) return encoder;
     switch (@typeInfo(T)) {
@@ -394,14 +396,22 @@ fn resolve_single_encoder(encoder: anytype, signature: ?isa.Instruction_Signatur
                     a.* = signature.?.suffix;
                 } else if (Arg == []const isa.Parameter.Signature) {
                     a.* = signature.?.params;
-                } else switch (@typeInfo(Arg)) {
-                    else => {
-                        @compileLog(Arg);
-                        @compileError("Unsupported argument for encoding function");
-                    },
+                } else {
+                    for (parsed_encoders) |enc| {
+                        const placeholder_info = enc.value.placeholder;
+                        if (placeholder_info.index != .invalid and std.mem.eql(u8, placeholder_info.name, Arg.placeholder)) {
+                            a.* = .{
+                                .value = null,
+                                .signature = signature.?.params[placeholder_info.index.raw()],
+                            };
+                            break;
+                        }
+                    } else {
+                        std.debug.panic("Failed to find placeholder '{s}'", .{ Arg.placeholder });
+                    }
                 }
             }
-            return resolve_single_encoder(@call(.auto, encoder, args), signature);
+            return resolve_single_encoder(@call(.auto, encoder, args), signature, parsed_encoders);
         },
         else => return Encoder.identity(encoder),
     }
@@ -669,6 +679,7 @@ pub const Slot_Info = struct {
         cycle_flags: Cycle_Flag_Set,
         initial_word_encoding: ?*const Initial_Word_Encoding_Iterator,
         signature: ?isa.Instruction_Signature,
+        parsed_encoders: []const Encoder,
         encoding_len: ?Encoded_Instruction.Length_Type,
     };
 
@@ -728,7 +739,27 @@ pub const Slot_Info = struct {
                     } else if (Arg == []const isa.Parameter.Signature) {
                         a.* = ctx.signature.?.params;
                     } else {
-                        if (ctx.initial_word_encoding) |encoding| {
+                        if (@hasField(Arg, "signature")) {
+                            const signature = for (ctx.parsed_encoders) |enc| {
+                                if (enc.value == .placeholder) {
+                                    const placeholder_info = enc.value.placeholder;
+                                    if (placeholder_info.index != .invalid and std.mem.eql(u8, placeholder_info.name, Arg.placeholder)) {
+                                        break ctx.signature.?.params[placeholder_info.index.raw()];
+                                    }
+                                }
+                            } else {
+                                std.debug.panic("Placeholder {s} not found!", .{ Arg.placeholder });
+                            };
+                            if (ctx.initial_word_encoding) |encoding| {
+                                if (encoding.value(Arg.placeholder)) |value| {
+                                    a.* = Arg { .value = value, .signature = signature };
+                                } else {
+                                    a.* = Arg { .value = null, .signature = signature };
+                                }
+                            } else {
+                                a.* = Arg { .value = null, .signature = signature };
+                            }
+                        } else if (ctx.initial_word_encoding) |encoding| {
                             if (encoding.value(Arg.placeholder)) |value| {
                                 a.* = Arg { .value = value };
                             } else {

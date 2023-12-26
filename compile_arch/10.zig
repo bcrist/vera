@@ -687,7 +687,7 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = //
+    struct { pub const spec = // <op> r(src) -> r(dest)
         \\neg r(src) -> r(dest)
         \\negc r(src) -> r(dest)
         \\cb r(src) -> b(dest)
@@ -744,6 +744,134 @@ pub const instructions = .{
                 },
             }
             c.ll_to_reg();
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // cmp[c] r(a), (imm16u)
+        \\cmp r(a), (imm)
+        \\cmpc r(a), (imm)
+        ;
+        pub const encoding = .{
+            Reg(.a),
+            mnemonic_encoder,
+            Encoder.shifted(5, @as(u9, 0x40)),
+            region_encoder,
+            Encoder.shifted(16, Int(.imm, u16)),
+        };
+        pub const ij = Reg(.a);
+
+        fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
+            return Encoder.shifted(4, @as(u1, switch (mnemonic) {
+                .cmp => 0,
+                .cmpc => 1,
+                else => unreachable,
+            }));
+        }
+
+        pub fn entry(c: *Cycle) void {
+            c.ip_read_to_d(2, .word);
+            c.d_to_l(.zx);
+            c.l_to_sr(.temp_1);
+            c.next(compare);
+        }
+
+        pub fn compare(c: *Cycle, mnemonic: isa.Mnemonic) void {
+            c.reg_to_jl();
+            c.srl_to_k(.temp_1);
+            c.jl_minus_k(switch (mnemonic) {
+                .cmp => .fresh,
+                .cmpc => .cont,
+                else => unreachable,
+            }, .flags);
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // cmp[c] r(a), (imm16s)
+        \\cmp r(a), (imm)
+        \\cmpc r(a), (imm)
+        ;
+        pub const encoding = .{
+            Reg(.a),
+            mnemonic_encoder,
+            Encoder.shifted(5, @as(u9, 0x40)),
+            region_encoder,
+            Encoder.shifted(16, Int(.imm, i16)),
+        };
+        pub const ij = Reg(.a);
+
+        fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
+            return Encoder.shifted(4, @as(u1, switch (mnemonic) {
+                .cmp => 0,
+                .cmpc => 1,
+                else => unreachable,
+            }));
+        }
+
+        pub fn entry(c: *Cycle) void {
+            c.ip_read_to_d(2, .word);
+            c.d_to_l(.zx);
+            c.l_to_sr(.temp_1);
+            c.next(compare);
+        }
+
+        pub fn compare(c: *Cycle, mnemonic: isa.Mnemonic) void {
+            c.reg_to_jl();
+            c.srl_to_k(.temp_1);
+            c.jl_minus_k(switch (mnemonic) {
+                .cmp => .fresh,
+                .cmpc => .cont,
+                else => unreachable,
+            }, .flags);
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // cmp[c] x(a), (imm16u)
+        \\cmp x(a), (imm)
+        ;
+        pub const encoding = .{
+            Reg(.a),
+            Encoder.shifted(4, @as(u10, 0x082)),
+            region_encoder,
+            Encoder.shifted(16, Int(.imm, u16)),
+        };
+        pub const ij = Reg(.a);
+
+        pub fn entry(c: *Cycle) void {
+            c.ip_read_to_d(2, .word);
+            c.d_to_l(.zx);
+            c.l_to_sr(.temp_1);
+            c.next(compare);
+        }
+
+        pub fn compare(c: *Cycle) void {
+            c.reg32_to_j();
+            c.srl_to_k(.temp_1);
+            c.j_minus_k(.zx, .fresh, .flags);
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = // cmp[c] x(a), (imm16n)
+        \\cmp x(a), (imm)
+        ;
+        pub const encoding = .{
+            Reg(.a),
+            Encoder.shifted(4, @as(u10, 0x083)),
+            region_encoder,
+            Encoder.shifted(16, Range(.imm, -0x10000, -1)),
+        };
+        pub const ij = Reg(.a);
+
+        pub fn entry(c: *Cycle) void {
+            c.ip_read_to_d(2, .word);
+            c.d_to_l(.zx);
+            c.l_to_sr(.temp_1);
+            c.next(compare);
+        }
+
+        pub fn compare(c: *Cycle) void {
+            c.reg32_to_j();
+            c.srl_to_k(.temp_1);
+            c.j_minus_k(._1x, .fresh, .flags);
             c.load_and_exec_next_insn();
         }
     },

@@ -78,6 +78,16 @@ fn parse_name(comptime name_or_enum_literal: anytype) []const u8 {
     };
 }
 
+pub fn Param(comptime name_or_enum_literal: anytype) type {
+    return struct {
+        value: ?i64,
+        signature: Parameter.Signature,
+
+        pub const placeholder = parse_name(name_or_enum_literal);
+    };
+}
+
+const Parameter = isa.Parameter;
 const Domain = isa.Instruction_Encoding.Domain;
 const isa = arch.isa;
 const Register_Index = hw.Register_Index;
