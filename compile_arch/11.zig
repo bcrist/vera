@@ -83,7 +83,6 @@ pub const instructions = .{
 
 const Cycle = @import("Cycle.zig");
 const Encoder = isa.Instruction_Encoding.Encoder;
-const Instruction_Signature = isa.Instruction_Signature;
 const Parameter = isa.Parameter;
 const Options = placeholders.Options;
 const Range = placeholders.Range;

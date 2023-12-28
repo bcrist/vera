@@ -102,8 +102,8 @@ pub const instructions = .{
         pub const ik = Reg(.b);
         pub const iw = Reg(.dest);
 
-        fn signedness_encoder(params: []const Parameter.Signature) Encoder {
-            return Encoder.shifted(9, @as(u1, switch (params[1].base.reg16.?) {
+        fn signedness_encoder(b: Param(.b)) Encoder {
+            return Encoder.shifted(9, @as(u1, switch (b.signature.base.reg16.?) {
                 .unsigned => 0,
                 .signed => 1,
             }));
@@ -116,10 +116,10 @@ pub const instructions = .{
             }));
         }
 
-        pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic, params: []const Parameter.Signature) void {
+        pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic, b: Param(.b)) void {
             c.reg32_to_j();
             c.reg_to_k();
-            const ext: Cycle.Zero_Sign_Or_One_Extension = switch (params[1].base.reg16.?) {
+            const ext: Cycle.Zero_Sign_Or_One_Extension = switch (b.signature.base.reg16.?) {
                 .unsigned => .zx,
                 .signed => .sx,
             };
@@ -150,8 +150,8 @@ pub const instructions = .{
         pub const ij = Reg(.src);
         pub const iw = Reg(.dest);
 
-        fn width_encoder(params: []const Parameter.Signature) Encoder {
-            return Encoder.shifted(9, @as(u1, switch (params[0].base) {
+        fn width_encoder(src: Param(.src)) Encoder {
+            return Encoder.shifted(9, @as(u1, switch (src.signature.base) {
                 .reg16 => 0,
                 .reg32 => 1,
                 else => unreachable,
@@ -165,14 +165,14 @@ pub const instructions = .{
             }));
         }
 
-        pub fn entry(c: *Cycle, imm: placeholders.Any(.imm), mnemonic: isa.Mnemonic, params: []const Parameter.Signature) void {
-            switch (params[0].base) {
+        pub fn entry(c: *Cycle, imm: placeholders.Any(.imm), mnemonic: isa.Mnemonic, src: Param(.src)) void {
+            switch (src.signature.base) {
                 .reg16 => c.reg_to_jl(),
                 .reg32 => c.reg32_to_j(),
                 else => unreachable,
             }
             c.literal_to_k(@intCast(imm.value));
-            switch (params[0].base) {
+            switch (src.signature.base) {
                 .reg16 => {
                     switch (mnemonic) {
                         .add => c.jl_plus_k_to_ll(.fresh, .flags),
@@ -512,17 +512,17 @@ pub const instructions = .{
         pub const ij = Reg(.a);
         pub const ik = Reg(.b);
 
-        fn signedness_encoder(params: []const Parameter.Signature) Encoder {
-            return Encoder.shifted(6, @as(u1, switch (params[1].base.reg16.?) {
+        fn signedness_encoder(b: Param(.b)) Encoder {
+            return Encoder.shifted(6, @as(u1, switch (b.signature.base.reg16.?) {
                 .unsigned => 0,
                 .signed => 1,
             }));
         }
 
-        pub fn entry(c: *Cycle, params: []const Parameter.Signature) void {
+        pub fn entry(c: *Cycle, b: Param(.b)) void {
             c.reg32_to_j();
             c.reg_to_k();
-            c.j_minus_k(switch (params[1].base.reg16.?) {
+            c.j_minus_k(switch (b.signature.base.reg16.?) {
                 .unsigned => .zx,
                 .signed => .sx,
             }, .fresh, .flags);
@@ -550,8 +550,8 @@ pub const instructions = .{
         pub const ij = Reg(.src);
         pub const iw = Reg(.dest);
 
-        fn width_encoder(params: []const Parameter.Signature) Encoder {
-            return Encoder.shifted(6, @as(u1, switch (params[0].base) {
+        fn width_encoder(src: Param(.src)) Encoder {
+            return Encoder.shifted(6, @as(u1, switch (src.signature.base) {
                 .reg16 => 0,
                 .reg32 => 1,
                 else => unreachable,
@@ -565,9 +565,9 @@ pub const instructions = .{
             }));
         }
 
-        pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic, params: []const Parameter.Signature) void {
+        pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic, src: Param(.src)) void {
             c.zero_to_k();
-            switch (params[0].base) {
+            switch (src.signature.base) {
                 .reg16 => {
                     c.reg_to_jl();
                     switch (mnemonic) {
@@ -758,7 +758,6 @@ pub const instructions = .{
 
 const Cycle = @import("Cycle.zig");
 const Encoder = isa.Instruction_Encoding.Encoder;
-const Instruction_Signature = isa.Instruction_Signature;
 const Parameter = isa.Parameter;
 const Options = placeholders.Options;
 const Range = placeholders.Range;
@@ -768,6 +767,7 @@ const Reg = placeholders.Reg;
 const Reg_Bit = placeholders.Reg_Bit;
 const Even_Reg = placeholders.Even_Reg;
 const Odd_Reg = placeholders.Odd_Reg;
+const Param = placeholders.Param;
 const conditions = @import("conditions.zig");
 const placeholders = @import("placeholders.zig");
 const opcodes = @import("opcodes.zig");

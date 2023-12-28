@@ -18,8 +18,8 @@ pub const instructions = .{
         pub const ik = Imm;
         pub const iw = Reg(.dest);
 
-        fn signedness_encoder(params: []const Parameter.Signature) Encoder {
-            return Encoder.shifted(10, @as(u1, switch (params[2].base.reg8.?) {
+        fn signedness_encoder(dest: Param(.dest)) Encoder {
+            return Encoder.shifted(10, @as(u1, switch (dest.signature.base.reg8.?) {
                 .unsigned => 0,
                 .signed => 1,
             }));
@@ -187,8 +187,8 @@ pub const instructions = .{
         pub const ik_ij = Int(.imm, u7);
         pub const iw = Reg(.dest);
 
-        fn width_encoder(params: []const Parameter.Signature) Encoder {
-            return Encoder.shifted(9, @as(u1, switch (params[2].base) {
+        fn width_encoder(dest: Param(.dest)) Encoder {
+            return Encoder.shifted(9, @as(u1, switch (dest.signature.base) {
                 .reg16 => 0,
                 .reg32 => 1,
                 else => unreachable,
@@ -220,8 +220,8 @@ pub const instructions = .{
         pub const ik_ij = Int(.imm, u7);
         pub const iw = Reg(.src);
 
-        fn width_encoder(params: []const Parameter.Signature) Encoder {
-            return Encoder.shifted(9, @as(u1, switch (params[0].base) {
+        fn width_encoder(src: Param(.src)) Encoder {
+            return Encoder.shifted(9, @as(u1, switch (src.signature.base) {
                 .reg16 => 0,
                 .reg32 => 1,
                 else => unreachable,
@@ -257,8 +257,8 @@ pub const instructions = .{
         pub const ik = Reg(.offset);
         pub const iw = Reg(.dest);
 
-        fn dest_encoder(params: []const Parameter.Signature) Encoder {
-            return Encoder.shifted(9, @as(u2, switch (params[2].base) {
+        fn dest_encoder(dest: Param(.dest)) Encoder {
+            return Encoder.shifted(9, @as(u2, switch (dest.signature.base) {
                 .reg8 => |signedness| switch (signedness.?) {
                     .unsigned => 0,
                     .signed => 1,
@@ -300,8 +300,8 @@ pub const instructions = .{
         pub const ik = Reg(.offset);
         pub const iw = Reg(.src);
 
-        fn src_encoder(params: []const Parameter.Signature) Encoder {
-            return Encoder.shifted(9, @as(u2, switch (params[0].base) {
+        fn src_encoder(src: Param(.src)) Encoder {
+            return Encoder.shifted(9, @as(u2, switch (src.signature.base) {
                 .reg8 => 0,
                 .reg16 => 2,
                 .reg32 => 3,
@@ -404,19 +404,19 @@ pub const instructions = .{
         pub const ik_ij = Int(.imm, u5);
         pub const iw = Reg(.dest);
 
-        fn base_encoder(params: []const Parameter.Signature) Encoder {
-            return Encoder.shifted(7, @as(u1, switch (params[0].base.sr) {
+        fn base_encoder(base: Param(.imm)) Encoder {
+            return Encoder.shifted(7, @as(u1, switch (base.signature.base.sr) {
                 .uxp => 0,
                 .kxp => 1,
                 else => unreachable,
             }));
         }
 
-        pub fn entry(c: *Cycle, params: []const Parameter.Signature, flags: Flags) void {
-            if (params[0].base.sr != .uxp and !flags.kernel()) {
+        pub fn entry(c: *Cycle, base: Param(.imm), flags: Flags) void {
+            if (base.signature.base.sr != .uxp and !flags.kernel()) {
                 return c.illegal_instruction();
             }
-            c.sr_to_j(switch (params[0].base.sr) {
+            c.sr_to_j(switch (base.signature.base.sr) {
                 .uxp => .uxp,
                 .kxp => .kxp,
                 else => unreachable,
@@ -444,19 +444,19 @@ pub const instructions = .{
         pub const ik_ij = Int(.imm, u6);
         pub const iw = Reg(.dest);
 
-        fn base_encoder(params: []const Parameter.Signature) Encoder {
-            return Encoder.shifted(7, @as(u1, switch (params[0].base.sr) {
+        fn base_encoder(base: Param(.imm)) Encoder {
+            return Encoder.shifted(7, @as(u1, switch (base.signature.base.sr) {
                 .uxp => 0,
                 .kxp => 1,
                 else => unreachable,
             }));
         }
 
-        pub fn entry(c: *Cycle, params: []const Parameter.Signature, flags: Flags) void {
-            if (params[0].base.sr != .uxp and !flags.kernel()) {
+        pub fn entry(c: *Cycle, base: Param(.imm), flags: Flags) void {
+            if (base.signature.base.sr != .uxp and !flags.kernel()) {
                 return c.illegal_instruction();
             }
-            c.sr_to_j(switch (params[0].base.sr) {
+            c.sr_to_j(switch (base.signature.base.sr) {
                 .uxp => .uxp,
                 .kxp => .kxp,
                 else => unreachable,
@@ -500,8 +500,8 @@ pub const instructions = .{
             }));
         }
 
-        fn dest_encoder(params: []const Parameter.Signature) Encoder {
-            return Encoder.shifted(6, @as(u2, switch (params[2].base) {
+        fn dest_encoder(dest: Param(.dest)) Encoder {
+            return Encoder.shifted(6, @as(u2, switch (dest.signature.base) {
                 .reg8 => |signedness| switch (signedness.?) {
                     .unsigned => 0,
                     .signed => 1,
@@ -512,9 +512,9 @@ pub const instructions = .{
             }));
         }
 
-        pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic, params: []const Parameter.Signature) void {
+        pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic, dest: Param(.dest)) void {
             c.reg32_to_j();
-            c.literal_to_k(switch (params[2].base) {
+            c.literal_to_k(switch (dest.signature.base) {
                 .reg8 => 1,
                 .reg16 => 2,
                 .reg32 => 4,
@@ -566,8 +566,8 @@ pub const instructions = .{
             }));
         }
 
-        fn src_encoder(params: []const Parameter.Signature) Encoder {
-            return Encoder.shifted(6, @as(u2, switch (params[0].base) {
+        fn src_encoder(src: Param(.src)) Encoder {
+            return Encoder.shifted(6, @as(u2, switch (src.signature.base) {
                 .reg8 => 0,
                 .reg16 => 2,
                 .reg32 => 3,
@@ -575,9 +575,9 @@ pub const instructions = .{
             }));
         }
 
-        pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic, params: []const Parameter.Signature) void {
+        pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic, src: Param(.src)) void {
             c.reg32_to_j();
-            c.literal_to_k(switch (params[0].base) {
+            c.literal_to_k(switch (src.signature.base) {
                 .reg8 => 1,
                 .reg16 => 2,
                 .reg32 => 4,
@@ -614,8 +614,8 @@ pub const instructions = .{
         pub const ij = Reg(.src);
         pub const iw = Reg(.dest);
 
-        fn dest_encoder(params: []const Parameter.Signature) Encoder {
-            return Encoder.shifted(6, @as(u1, switch (params[2].base) {
+        fn dest_encoder(dest: Param(.dest)) Encoder {
+            return Encoder.shifted(6, @as(u1, switch (dest.signature.base) {
                 .reg16 => 0,
                 .reg32 => 1,
                 else => unreachable,
@@ -645,8 +645,8 @@ pub const instructions = .{
         pub const ik = Reg(.offset);
         pub const iw = Reg(.dest);
 
-        fn dest_encoder(params: []const Parameter.Signature) Encoder {
-            return Encoder.shifted(6, @as(u1, switch (params[2].base) {
+        fn dest_encoder(dest: Param(.dest)) Encoder {
+            return Encoder.shifted(6, @as(u1, switch (dest.signature.base) {
                 .reg16 => 0,
                 .reg32 => 1,
                 else => unreachable,
@@ -680,8 +680,8 @@ pub const instructions = .{
         pub const ik = Reg(.offset);
         pub const iw = Reg(.dest);
 
-        fn dest_encoder(params: []const Parameter.Signature) Encoder {
-            return Encoder.shifted(6, @as(u2, switch (params[2].base) {
+        fn dest_encoder(dest: Param(.dest)) Encoder {
+            return Encoder.shifted(6, @as(u2, switch (dest.signature.base) {
                 .reg8 => |signedness| switch (signedness.?) {
                     .unsigned => 0,
                     .signed => 1,
@@ -718,8 +718,8 @@ pub const instructions = .{
         pub const ij = Reg(.src);
         pub const ik = Reg(.offset);
 
-        fn src_encoder(params: []const Parameter.Signature) Encoder {
-            return Encoder.shifted(6, @as(u2, switch (params[0].base) {
+        fn src_encoder(src: Param(.src)) Encoder {
+            return Encoder.shifted(6, @as(u2, switch (src.signature.base) {
                 .reg8  => 0,
                 .reg16 => 2,
                 .reg32 => 3,
@@ -853,18 +853,18 @@ pub const instructions = .{
         pub const ij = Reg(.reg);
         pub const ik: u4 = 0;
 
-        fn width_encoder(params: []const Parameter.Signature) Encoder {
-            return Encoder.shifted(4, @as(u1, switch (params[0].base) {
+        fn width_encoder(reg: Param(.reg)) Encoder {
+            return Encoder.shifted(4, @as(u1, switch (reg.signature.base) {
                 .reg16 => 0,
                 .reg32 => 1,
                 else => unreachable,
             }));
         }
 
-        pub fn entry(c: *Cycle, params: []const Parameter.Signature) void {
+        pub fn entry(c: *Cycle, reg: Param(.reg)) void {
             c.reg_to_jl();
             c.jl_to_ll();
-            if (params[0].base == .reg32) {
+            if (reg.signature.base == .reg32) {
                 c.write_from_ll(.sp, -4, .word, .stack);
                 c.next_ij_xor1();
                 c.next(write_high);
@@ -904,26 +904,26 @@ pub const instructions = .{
         pub const ik_ij = bytes_encoder;
         pub const iw = Reg(.reg);
 
-        fn width_encoder(params: []const Parameter.Signature) Encoder {
-            return Encoder.shifted(4, @as(u1, switch (params[0].base) {
+        fn width_encoder(reg: Param(.reg)) Encoder {
+            return Encoder.shifted(4, @as(u1, switch (reg.signature.base) {
                 .reg16 => 0,
                 .reg32 => 1,
                 else => unreachable,
             }));
         }
-        fn bytes_encoder(params: []const Parameter.Signature) u3 {
-            return switch (params[0].base) {
+        fn bytes_encoder(reg: Param(.reg)) u3 {
+            return switch (reg.signature.base) {
                 .reg16 => 2,
                 .reg32 => 4,
                 else => unreachable,
             };
         }
 
-        pub fn entry(c: *Cycle, params: []const Parameter.Signature) void {
+        pub fn entry(c: *Cycle, reg: Param(.reg)) void {
             c.read_to_d(.sp, 0, .word, .stack);
             c.d_to_l(.zx);
             c.ll_to_reg();
-            if (params[0].base == .reg32) {
+            if (reg.signature.base == .reg32) {
                 c.next_iw_xor1();
                 c.next(read_high);
             } else {
@@ -1033,8 +1033,8 @@ pub const instructions = .{
         };
         pub const iw = Reg(.dest);
 
-        fn dest_encoder(params: []const Parameter.Signature) Encoder {
-            return Encoder.shifted(3, @as(u2, switch (params[2].base) {
+        fn dest_encoder(dest: Param(.dest)) Encoder {
+            return Encoder.shifted(3, @as(u2, switch (dest.signature.base) {
                 .reg8 => |signedness| switch (signedness.?) {
                     .unsigned => 0,
                     .signed => 1,
@@ -1077,8 +1077,8 @@ pub const instructions = .{
         };
         pub const ik = Reg(.src);
 
-        fn src_encoder(params: []const Parameter.Signature) Encoder {
-            return Encoder.shifted(3, @as(u2, switch (params[0].base) {
+        fn src_encoder(src: Param(.src)) Encoder {
+            return Encoder.shifted(3, @as(u2, switch (src.signature.base) {
                 .reg8 => 0,
                 .reg16 => 2,
                 .reg32 => 3,
@@ -1120,21 +1120,21 @@ fn load_from_temp_1(comptime offset_kind: Offset_Kind) type {
             .imm, .half_imm => load_with_imm,
         };
 
-        fn load_without_imm(c: *Cycle, params: []const Parameter.Signature) void {
-            load_with_imm(c, params, .{ .value = 0 });
+        fn load_without_imm(c: *Cycle, src: Param(0), dest: Param(2)) void {
+            load_with_imm(c, src, dest, .{ .value = 0 });
         }
 
-        fn load_with_imm(c: *Cycle, params: []const Parameter.Signature, imm: placeholders.Any(.imm)) void {
+        fn load_with_imm(c: *Cycle, src: Param(0), dest: Param(2), imm: placeholders.Any(.imm)) void {
             var signedness: std.builtin.Signedness = .unsigned;
             var width: Control_Signals.Bus_Width = .word;
             var width_bytes: u3 = 2;
-            const addr_space: Control_Signals.Address_Space = switch(params[0].address_space.?) {
+            const addr_space: Control_Signals.Address_Space = switch(src.signature.address_space.?) {
                 .data => .data,
                 .insn => .insn,
                 .stack => .stack,
             };
 
-            switch (params[2].base) {
+            switch (dest.signature.base) {
                 .reg8 => |s| {
                     signedness = s.?;
                     width = .byte;
@@ -1156,7 +1156,7 @@ fn load_from_temp_1(comptime offset_kind: Offset_Kind) type {
                 .signed => .sx,
             });
             c.ll_to_reg();
-            if (params[2].base == .reg32) {
+            if (dest.signature.base == .reg32) {
                 c.next_iw_xor1();
                 c.virtual_address_to_sr(.temp_1);
                 c.next(load_high);
@@ -1165,8 +1165,8 @@ fn load_from_temp_1(comptime offset_kind: Offset_Kind) type {
             }
         }
 
-        pub fn load_high(c: *Cycle, params: []const Parameter.Signature) void {
-            const addr_space: Control_Signals.Address_Space = switch(params[0].address_space.?) {
+        pub fn load_high(c: *Cycle, src: Param(0)) void {
+            const addr_space: Control_Signals.Address_Space = switch(src.signature.address_space.?) {
                 .data => .data,
                 .insn => .insn,
                 .stack => .stack,
@@ -1187,20 +1187,20 @@ fn store_from_temp_1(comptime offset_kind: Offset_Kind) type {
             .ik_ij_sx => unreachable, // we need IK to source the data being stored!
         };
 
-        fn store_without_imm(c: *Cycle, params: []const Parameter.Signature) void {
-            store_with_imm(c, params, .{ .value = 0 });
+        fn store_without_imm(c: *Cycle, src: Param(0), dest: Param(2)) void {
+            store_with_imm(c, src, dest, .{ .value = 0 });
         }
 
-        fn store_with_imm(c: *Cycle, params: []const Parameter.Signature, imm: placeholders.Any(.imm)) void {
+        fn store_with_imm(c: *Cycle, src: Param(0), dest: Param(2), imm: placeholders.Any(.imm)) void {
             var width: Control_Signals.Bus_Width = .word;
             var width_bytes: u3 = 2;
-            const addr_space: Control_Signals.Address_Space = switch(params[2].address_space.?) {
+            const addr_space: Control_Signals.Address_Space = switch(dest.signature.address_space.?) {
                 .data => .data,
                 .insn => .insn,
                 .stack => .stack,
             };
 
-            switch (params[0].base) {
+            switch (src.signature.base) {
                 .reg8 => {
                     width = .byte;
                     width_bytes = 1;
@@ -1219,7 +1219,7 @@ fn store_from_temp_1(comptime offset_kind: Offset_Kind) type {
                 .half_imm => c.write_from_ll(.temp_1, @divExact(imm.value, 2), width, addr_space),
                 .minus_width => c.write_from_ll(.temp_1, -@as(i4, width_bytes), width, addr_space),
             }
-            if (params[0].base == .reg32) {
+            if (src.signature.base == .reg32) {
                 c.virtual_address_to_sr(.temp_1);
                 c.next_ik_xor1();
                 c.next(store_high);
@@ -1228,8 +1228,8 @@ fn store_from_temp_1(comptime offset_kind: Offset_Kind) type {
             }
         }
 
-        pub fn store_high(c: *Cycle, params: []const Parameter.Signature) void {
-            const addr_space: Control_Signals.Address_Space = switch(params[2].address_space.?) {
+        pub fn store_high(c: *Cycle, dest: Param(2)) void {
+            const addr_space: Control_Signals.Address_Space = switch(dest.signature.address_space.?) {
                 .data => .data,
                 .insn => .insn,
                 .stack => .stack,
@@ -1245,7 +1245,6 @@ fn store_from_temp_1(comptime offset_kind: Offset_Kind) type {
 
 const Cycle = @import("Cycle.zig");
 const Encoder = isa.Instruction_Encoding.Encoder;
-const Instruction_Signature = isa.Instruction_Signature;
 const Parameter = isa.Parameter;
 const Options = placeholders.Options;
 const Range = placeholders.Range;
@@ -1255,6 +1254,7 @@ const Reg = placeholders.Reg;
 const Reg_Bit = placeholders.Reg_Bit;
 const Even_Reg = placeholders.Even_Reg;
 const Odd_Reg = placeholders.Odd_Reg;
+const Param = placeholders.Param;
 const conditions = @import("conditions.zig");
 const placeholders = @import("placeholders.zig");
 const opcodes = @import("opcodes.zig");

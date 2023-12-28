@@ -617,16 +617,16 @@ pub const instructions = .{
         pub const ik_ij = Imm;
         pub const iw = Reg(.dest);
 
-        fn Source_Encoder(params: []const Parameter.Signature) Encoder {
-            return Encoder.shifted(8, @as(u1, switch (params[0].base.sr) {
+        fn Source_Encoder(base: Param(.imm)) Encoder {
+            return Encoder.shifted(8, @as(u1, switch (base.signature.base.sr) {
                 .sp => 0,
                 .bp => 1,
                 else => unreachable,
             }));
         }
 
-        pub fn entry(c: *Cycle, params: []const Parameter.Signature) void {
-            c.sr_to_j(switch (params[0].base.sr) {
+        pub fn entry(c: *Cycle, base: Param(.imm)) void {
+            c.sr_to_j(switch (base.signature.base.sr) {
                 .sp => .sp,
                 .bp => .bp,
                 else => unreachable,
@@ -651,15 +651,15 @@ pub const instructions = .{
         };
         pub const iw = Reg(.dest);
 
-        pub fn entry(c: *Cycle, flags: Flags, params: []const Parameter.Signature) void {
-            switch (params[0].base.sr) {
+        pub fn entry(c: *Cycle, flags: Flags, base: Param(0)) void {
+            switch (base.signature.base.sr) {
                 .kxp, .asn => if (!flags.kernel()) {
                     return c.illegal_instruction();
                 },
                 .rp, .uxp => {},
                 else => unreachable,
             }
-            c.sr_to_l(switch (params[0].base.sr) {
+            c.sr_to_l(switch (base.signature.base.sr) {
                 .rp => .rp,
                 .uxp => .uxp,
                 .kxp => .kxp,
@@ -684,8 +684,8 @@ pub const instructions = .{
         };
         pub const ij = Reg(.src);
 
-        pub fn entry(c: *Cycle, flags: Flags, params: []const Parameter.Signature) void {
-            const sr: Control_Signals.Any_SR_Index = switch (params[2].base.sr) {
+        pub fn entry(c: *Cycle, flags: Flags, dest: Param(2)) void {
+            const sr: Control_Signals.Any_SR_Index = switch (dest.signature.base.sr) {
                 .rp => .rp,
                 .uxp => .uxp,
                 .kxp => .kxp,
@@ -755,8 +755,8 @@ pub const instructions = .{
         };
         pub const iw = Reg(.dest);
 
-        fn sr_encoder(params: []const Parameter.Signature) Encoder {
-            return Encoder.shifted(3, @as(u3, switch (params[0].base.sr) {
+        fn sr_encoder(base: Param(.imm)) Encoder {
+            return Encoder.shifted(3, @as(u3, switch (base.signature.base.sr) {
                 .ip => 2,
                 .rp => 3,
                 .sp => 4,
@@ -767,8 +767,8 @@ pub const instructions = .{
             }));
         }
 
-        pub fn entry(c: *Cycle, flags: Flags, params: []const Parameter.Signature) void {
-            switch (params[0].base.sr) {
+        pub fn entry(c: *Cycle, flags: Flags, base: Param(.imm)) void {
+            switch (base.signature.base.sr) {
                 .kxp => if (!flags.kernel()) {
                     return c.illegal_instruction();
                 },
@@ -777,7 +777,7 @@ pub const instructions = .{
             }
             c.ip_read_to_d(2, .word);
             c.d_to_l(.sx);
-            c.l_to_sr(switch (params[0].base.sr) {
+            c.l_to_sr(switch (base.signature.base.sr) {
                 .ip, .uxp, .kxp => .temp_1,
                 .rp, .sp, .bp => .temp_2,
                 else => unreachable
@@ -785,8 +785,8 @@ pub const instructions = .{
             c.next(offset_sr);
         }
 
-        pub fn offset_sr(c: *Cycle, params: []const Parameter.Signature) void {
-           c.sr_to_j(switch (params[0].base.sr) {
+        pub fn offset_sr(c: *Cycle, base: Param(.imm)) void {
+           c.sr_to_j(switch (base.signature.base.sr) {
                 .ip => .ip,
                 .rp => .rp,
                 .sp => .sp,
@@ -795,7 +795,7 @@ pub const instructions = .{
                 .kxp => .kxp,
                 else => unreachable,
             });
-            c.srl_to_k(switch (params[0].base.sr) {
+            c.srl_to_k(switch (base.signature.base.sr) {
                 .ip, .uxp, .kxp => .temp_1,
                 .rp, .sp, .bp => .temp_2,
                 else => unreachable
@@ -923,17 +923,17 @@ pub const instructions = .{
         pub const ik = Reg(.src);
         pub const iw = Reg(.dest);
 
-        fn ext_encoder(params: []const Parameter.Signature) Encoder {
-            return Encoder.shifted(7, @as(u1, switch (params[0].base.reg16.?) {
+        fn ext_encoder(src: Param(.src)) Encoder {
+            return Encoder.shifted(7, @as(u1, switch (src.signature.base.reg16.?) {
                 .unsigned => 0,
                 .signed => 1,
             }));
         }
 
-        pub fn entry(c: *Cycle, params: []const Parameter.Signature) void {
+        pub fn entry(c: *Cycle, src: Param(.src)) void {
             c.zero_to_j();
             c.reg_to_k();
-            c.j_plus_k_to_l(switch (params[0].base.reg16.?) {
+            c.j_plus_k_to_l(switch (src.signature.base.reg16.?) {
                 .unsigned => .zx,
                 .signed => .sx,
             }, .fresh, .no_flags);
@@ -1234,19 +1234,19 @@ pub const instructions = .{
         const Imm = Int_Mult(.imm, u4, 4);
         const ik_ij = Imm;
 
-        fn base_encoder(params: []const Parameter.Signature) Encoder {
-            return Encoder.shifted(4, @as(u2, switch (params[0].base.sr) {
+        fn base_encoder(base: Param(.imm)) Encoder {
+            return Encoder.shifted(4, @as(u2, switch (base.signature.base.sr) {
                 .uxp => 1,
                 .kxp => 2,
                 else => unreachable,
             }));
         }
 
-        pub fn entry(c: *Cycle, params: []const Parameter.Signature, imm: Imm, flags: Flags) void {
-            if (params[0].base.sr == .kxp and !flags.kernel()) {
+        pub fn entry(c: *Cycle, base: Param(.imm), imm: Imm, flags: Flags) void {
+            if (base.signature.base.sr == .kxp and !flags.kernel()) {
                 return c.illegal_instruction();
             }
-            c.read_to_d(switch (params[0].base.sr) {
+            c.read_to_d(switch (base.signature.base.sr) {
                 .uxp => .uxp,
                 .kxp => .kxp,
                 else => unreachable,
@@ -1256,8 +1256,8 @@ pub const instructions = .{
             c.next(load_ptr_low);
         }
 
-        pub fn load_ptr_low(c: *Cycle, params: []const Parameter.Signature) void {
-            c.read_to_d(switch (params[0].base.sr) {
+        pub fn load_ptr_low(c: *Cycle, base: Param(.imm)) void {
+            c.read_to_d(switch (base.signature.base.sr) {
                 .uxp => .uxp,
                 .kxp => .kxp,
                 else => unreachable,
@@ -1285,16 +1285,16 @@ pub const instructions = .{
         const Imm = Int_Mult(.imm, u4, 4);
         const ik_ij = Imm;
 
-        fn base_encoder(params: []const Parameter.Signature) Encoder {
-            return Encoder.shifted(4, @as(u1, switch (params[0].base.sr) {
+        fn base_encoder(base: Param(.imm)) Encoder {
+            return Encoder.shifted(4, @as(u1, switch (base.signature.base.sr) {
                 .bp => 0,
                 .sp => 1,
                 else => unreachable,
             }));
         }
 
-        pub fn entry(c: *Cycle, params: []const Parameter.Signature, imm: Imm) void {
-            c.read_to_d(switch (params[0].base.sr) {
+        pub fn entry(c: *Cycle, base: Param(.imm), imm: Imm) void {
+            c.read_to_d(switch (base.signature.base.sr) {
                 .bp => .bp,
                 .sp => .sp,
                 else => unreachable,
@@ -1304,8 +1304,8 @@ pub const instructions = .{
             c.next(load_ptr_low);
         }
 
-        pub fn load_ptr_low(c: *Cycle, params: []const Parameter.Signature) void {
-            c.read_to_d(switch (params[0].base.sr) {
+        pub fn load_ptr_low(c: *Cycle, base: Param(.imm)) void {
+            c.read_to_d(switch (base.signature.base.sr) {
                 .bp => .bp,
                 .sp => .sp,
                 else => unreachable,
@@ -1322,10 +1322,10 @@ pub const instructions = .{
     },
 };
 
-fn rp_uxp_kxp_asn_encoder(comptime shift: u8, comptime param_index: Parameter.Index.Raw) fn(params: []const Parameter.Signature) Encoder {
+fn rp_uxp_kxp_asn_encoder(comptime shift: u8, comptime param_index: Parameter.Index.Raw) fn(param: Param(param_index)) Encoder {
     return struct {
-        pub fn func(params: []const Parameter.Signature) Encoder {
-            return Encoder.shifted(shift, @as(u2, switch (params[param_index].base.sr) {
+        pub fn func(param: Param(param_index)) Encoder {
+            return Encoder.shifted(shift, @as(u2, switch (param.signature.base.sr) {
                 .rp => 0,
                 .uxp => 1,
                 .asn => 2,
@@ -1338,13 +1338,13 @@ fn rp_uxp_kxp_asn_encoder(comptime shift: u8, comptime param_index: Parameter.In
 
 const Cycle = @import("Cycle.zig");
 const Encoder = isa.Instruction_Encoding.Encoder;
-const Instruction_Signature = isa.Instruction_Signature;
 const Parameter = isa.Parameter;
 const Options = placeholders.Options;
 const Range = placeholders.Range;
 const Int = placeholders.Int;
 const Int_Mult = placeholders.Int_Mult;
 const Reg = placeholders.Reg;
+const Param = placeholders.Param;
 const Reg_Bit = placeholders.Reg_Bit;
 const Even_Reg = placeholders.Even_Reg;
 const Odd_Reg = placeholders.Odd_Reg;

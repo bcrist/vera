@@ -413,14 +413,16 @@ fn resolve_single_encoder(encoder: anytype, signature: ?isa.Instruction_Signatur
                     a.* = signature.?.suffix;
                 } else if (Arg == []const isa.Parameter.Signature) {
                     a.* = signature.?.params;
-                } else {
-                    for (parsed_encoders) |enc| {
+                } else if (@hasField(Arg, "signature")) {
+                    if (@hasDecl(Arg, "index")) {
+                        if (Arg.index.raw() >= signature.?.params.len) {
+                            @panic("Param index out of range");
+                        }
+                        a.* = .{ .signature = signature.?.params[Arg.index.raw()] };
+                    } else for (parsed_encoders) |enc| {
                         const placeholder_info = enc.value.placeholder;
                         if (placeholder_info.index != .invalid and std.mem.eql(u8, placeholder_info.name, Arg.placeholder)) {
-                            a.* = .{
-                                .value = null,
-                                .signature = signature.?.params[placeholder_info.index.raw()],
-                            };
+                            a.* = .{ .signature = signature.?.params[placeholder_info.index.raw()] };
                             break;
                         }
                     } else {
@@ -711,7 +713,7 @@ pub const Slot_Info = struct {
             const Arg = arg.type.?;
             if (Arg == hw.microcode.Flags) {
                 has_flags = true;
-            } else if (@typeInfo(Arg) == .Struct and @hasDecl(Arg, "placeholder")) {
+            } else if (@typeInfo(Arg) == .Struct and @hasField(Arg, "value") and @hasDecl(Arg, "placeholder")) {
                 uses_placeholders = true;
             }
         }
@@ -757,24 +759,22 @@ pub const Slot_Info = struct {
                         a.* = ctx.signature.?.params;
                     } else {
                         if (@hasField(Arg, "signature")) {
-                            const signature = for (ctx.parsed_encoders) |enc| {
-                                if (enc.value == .placeholder) {
-                                    const placeholder_info = enc.value.placeholder;
-                                    if (placeholder_info.index != .invalid and std.mem.eql(u8, placeholder_info.name, Arg.placeholder)) {
-                                        break ctx.signature.?.params[placeholder_info.index.raw()];
+                            if (@hasDecl(Arg, "index")) {
+                                if (Arg.index.raw() >= ctx.signature.?.params.len) {
+                                    @panic("Param index out of range");
+                                }
+                                a.* = Arg { .signature = ctx.signature.?.params[Arg.index.raw()] };
+                            } else {
+                                a.* = Arg { .signature = for (ctx.parsed_encoders) |enc| {
+                                    if (enc.value == .placeholder) {
+                                        const placeholder_info = enc.value.placeholder;
+                                        if (placeholder_info.index != .invalid and std.mem.eql(u8, placeholder_info.name, Arg.placeholder)) {
+                                            break ctx.signature.?.params[placeholder_info.index.raw()];
+                                        }
                                     }
-                                }
-                            } else {
-                                std.debug.panic("Placeholder {s} not found!", .{ Arg.placeholder });
-                            };
-                            if (ctx.initial_word_encoding) |encoding| {
-                                if (encoding.value(Arg.placeholder)) |value| {
-                                    a.* = Arg { .value = value, .signature = signature };
                                 } else {
-                                    a.* = Arg { .value = null, .signature = signature };
-                                }
-                            } else {
-                                a.* = Arg { .value = null, .signature = signature };
+                                    std.debug.panic("Placeholder {s} not found!", .{ Arg.placeholder });
+                                }};
                             }
                         } else if (ctx.initial_word_encoding) |encoding| {
                             if (encoding.value(Arg.placeholder)) |value| {

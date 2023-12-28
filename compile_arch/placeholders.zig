@@ -78,13 +78,18 @@ fn parse_name(comptime name_or_enum_literal: anytype) []const u8 {
     };
 }
 
-pub fn Param(comptime name_or_enum_literal: anytype) type {
-    return struct {
-        value: ?i64,
-        signature: Parameter.Signature,
-
-        pub const placeholder = parse_name(name_or_enum_literal);
+pub fn Param(comptime index_name_or_enum_literal: anytype) type {
+    return switch (@typeInfo(@TypeOf(index_name_or_enum_literal))) {
+        .Int, .ComptimeInt => struct {
+            signature: Parameter.Signature,
+            pub const index = Parameter.Index.init(index_name_or_enum_literal);
+        },
+        else => return struct {
+            signature: Parameter.Signature,
+            pub const placeholder = parse_name(index_name_or_enum_literal);
+        },
     };
+    
 }
 
 const Parameter = isa.Parameter;
