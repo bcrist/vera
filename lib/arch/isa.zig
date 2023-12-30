@@ -35,7 +35,7 @@ pub const Mnemonic = enum {
     // Stack:
     frame, unframe, pop, push,
     // Atomics:
-    sync, ald, ast, astz, aadd, ainc, adecnz, ax, axe,
+    sync, ald, ast, astz, aadd, adecnz, ax, axe,
     // Memcopy & streaming:
     mc, mcb, mcf, mcfb, si, sib, so, sob, bld, bst,
     // Faults, interrupts, and context switching:
@@ -140,7 +140,7 @@ pub fn branch_kind(mnemonic: Mnemonic, suffix: Mnemonic_Suffix) Branch_Kind {
         .c, .swap, .ld, .ldi, .ild, .st, .sti, .ist,
         .sat, .rat,
         .frame, .unframe, .pop, .push,
-        .sync, .ald, .ast, .astz, .aadd, .ainc, .adecnz, .ax, .axe,
+        .sync, .ald, .ast, .astz, .aadd, .adecnz, .ax, .axe,
         .mc, .mcb, .mcf, .mcfb, .si, .sib, .so, .sob, .bld, .bst,
         .ifex, .ldrs, .strs, .srs,
         .nop,

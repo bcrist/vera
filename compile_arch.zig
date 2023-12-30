@@ -26,8 +26,6 @@ pub fn main() !void {
     processor.process(@import("compile_arch/01.zig").instructions);
     processor.process(@import("compile_arch/10.zig").instructions);
     processor.process(@import("compile_arch/11.zig").instructions);
-    // processor.process(@import("compile_arch/_sync.zig").instructions);
-
     processor.process(@import("compile_arch/handlers.zig").instructions);
     processor.process(@import("compile_arch/alt.zig").instructions);
 

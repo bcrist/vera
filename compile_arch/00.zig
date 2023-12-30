@@ -113,6 +113,14 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
+    struct { pub const spec = "sync";
+        pub const encoding = @as(u16, 0x0700);
+        
+        pub fn entry(c: *Cycle) void {
+            c.atomic_next_cycle_until_end();
+            c.load_and_exec_next_insn();
+        }
+    },
     struct { pub const spec = //eab/dab .i x0
         \\eab .i x0
         \\dab .i x0

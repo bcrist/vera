@@ -1,6 +1,5 @@
 pub const instructions = .{
     struct {
-        // Used by SAT, RAT, FRET
         pub const decode_mode = ID_Mode.alt;
         pub const encoding = .{
             Encoder.identity(Reg(.ij)),
