@@ -5,10 +5,7 @@
 [arch] Finish Encoding_Database.similar_encodings
 [arch] print_encoding - print placeholders with valid ranges and constraints specified
 
-[compile_arch] bp-relative loads/stores
-[compile_arch] rp-relative loads/stores
 [compile_arch] Microcode_Builder.Slot_Location.forced_bits - don't include in hashing; just update it to add more bits if necessary
-[compile_arch] Refactor opcodes.zig - just a bunch of Encoder constants instead of enums?
 [compile_arch] Compute min/max cycles per instruction, add to encoding sx
 [compile_arch] Decompile/dump to HTML
 [compile_arch] Validate that the same instruction encoding doesn't map to multiple opcodes/aliases

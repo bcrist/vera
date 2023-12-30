@@ -90,6 +90,7 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
                     .allocator = self.temp.allocator(),
                     .cycle_flags = Cycle_Flag_Set.initEmpty(),
                     .initial_word_encoding = null,
+                    .parsed_encoders = &.{},
                     .signature = null,
                     .encoding_len = null,
                 },

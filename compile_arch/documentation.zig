@@ -406,7 +406,6 @@ fn generate_encoding_table_inner(processor: *Processor, decode_rom: []const hw.d
 const style = @embedFile("style.css");
 
 const Processor = @import("Processor.zig");
-const opcodes = @import("opcodes.zig");
 const Instruction_Encoding = isa.Instruction_Encoding;
 const Mnemonic = isa.Mnemonic;
 const Mnemonic_Suffix = isa.Mnemonic_Suffix;

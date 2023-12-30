@@ -321,75 +321,6 @@ pub const instructions = .{
 
         pub usingnamespace store_from_temp_1(.zero);
     },
-    struct { pub const spec = // push r(a), r(b)
-        \\push r(a), r(b)
-        ;
-        pub const encoding = .{
-            Reg(.a),
-            Encoder.shifted(4, Reg(.b)),
-            Encoder.shifted(8, @as(u6, 0x2a)),
-            region_encoder,
-        };
-        pub const ij = Reg(.a);
-        pub const ik = Reg(.b);
-
-        pub fn entry(c: *Cycle) void {
-            c.reg_to_jl();
-            c.jl_to_ll();
-            c.write_from_ll(.sp, -2, .word, .stack);
-            c.next(write_b);
-        }
-
-        pub fn write_b(c: *Cycle) void {
-            c.reg_to_k();
-            c.k_to_ll();
-            c.write_from_ll(.sp, -4, .word, .stack);
-            c.next(modify_sp);
-        }
-
-        pub fn modify_sp(c: *Cycle) void {
-            c.sr_to_j(.sp);
-            c.literal_to_k(4);
-            c.j_minus_k_to_l(.zx, .fresh, .no_flags);
-            c.l_to_sr(.sp);
-            c.load_and_exec_next_insn();
-        }
-    },
-    struct { pub const spec = // pop r(b), r(a)
-        \\pop r(b), r(a)
-        ;
-        pub const encoding = .{
-            Reg(.a),
-            Encoder.shifted(4, Reg(.b)),
-            Encoder.shifted(8, @as(u6, 0x2b)),
-            region_encoder,
-        };
-        pub const ik = Reg(.a);
-        pub const iw = Reg(.b);
-
-        pub fn entry(c: *Cycle) void {
-            c.read_to_d(.sp, 0, .word, .stack);
-            c.d_to_l(.zx);
-            c.ll_to_reg();
-            c.next_iw_from_ik();
-            c.next(read_b);
-        }
-
-        pub fn read_b(c: *Cycle) void {
-            c.read_to_d(.sp, 2, .word, .stack);
-            c.d_to_l(.zx);
-            c.ll_to_reg();
-            c.next(modify_sp);
-        }
-
-        pub fn modify_sp(c: *Cycle) void {
-            c.sr_to_j(.sp);
-            c.literal_to_k(4);
-            c.j_plus_k_to_l(.zx, .fresh, .no_flags);
-            c.l_to_sr(.sp);
-            c.load_and_exec_next_insn();
-        }
-    },
     struct { pub const spec = // ld .d <uxp/kxp> + (imm4u_m2) -> r(dest)
         \\ld .d uxp + (imm) -> r(dest)
         \\ld .d kxp + (imm) -> r(dest)
@@ -739,213 +670,6 @@ pub const instructions = .{
 
         pub usingnamespace store_from_temp_1(.zero);
     },
-    struct { pub const spec = // push x(a), x(b)
-        \\push x(a), x(b)
-        ;
-        pub const encoding = .{
-            Even_Reg(.a),
-            Encoder.shifted(3, Even_Reg(.b)),
-            Encoder.shifted(6, @as(u8, 0xe9)),
-            region_encoder,
-        };
-        pub const ij = Reg(.a);
-        pub const ik = Reg(.b);
-
-        pub fn entry(c: *Cycle) void {
-            c.reg_to_jl();
-            c.jl_to_ll();
-            c.write_from_ll(.sp, -4, .word, .stack);
-            c.next_ij_xor1();
-            c.next(write_a_high);
-        }
-
-        pub fn write_a_high(c: *Cycle) void {
-            c.reg_to_jl();
-            c.jl_to_ll();
-            c.write_from_ll(.sp, -2, .word, .stack);
-            c.next(write_b);
-        }
-
-        pub fn write_b(c: *Cycle) void {
-            c.reg_to_k();
-            c.k_to_ll();
-            c.write_from_ll(.sp, -8, .word, .stack);
-            c.next_ik_xor1();
-            c.next(write_b_high);
-        }
-
-        pub fn write_b_high(c: *Cycle) void {
-            c.reg_to_k();
-            c.k_to_ll();
-            c.write_from_ll(.sp, -6, .word, .stack);
-            c.next(modify_sp);
-        }
-
-        pub fn modify_sp(c: *Cycle) void {
-            c.sr_to_j(.sp);
-            c.literal_to_k(8);
-            c.j_minus_k_to_l(.zx, .fresh, .no_flags);
-            c.l_to_sr(.sp);
-            c.load_and_exec_next_insn();
-        }
-    },
-    struct { pub const spec = // pop x(b), x(a)
-        \\pop x(b), x(a)
-        ;
-        pub const encoding = .{
-            Even_Reg(.a),
-            Encoder.shifted(3, Even_Reg(.b)),
-            Encoder.shifted(6, @as(u8, 0xed)),
-            region_encoder,
-        };
-        pub const ik = Reg(.a);
-        pub const iw = Reg(.b);
-
-        pub fn entry(c: *Cycle) void {
-            c.read_to_d(.sp, 0, .word, .stack);
-            c.d_to_l(.zx);
-            c.ll_to_reg();
-            c.next_iw_xor1();
-            c.next(read_a_high);
-        }
-
-        pub fn read_a_high(c: *Cycle) void {
-            c.read_to_d(.sp, 2, .word, .stack);
-            c.d_to_l(.zx);
-            c.ll_to_reg();
-            c.next_iw_from_ik();
-            c.next(read_b);
-        }
-
-        pub fn read_b(c: *Cycle) void {
-            c.read_to_d(.sp, 4, .word, .stack);
-            c.d_to_l(.zx);
-            c.ll_to_reg();
-            c.next_iw_xor1();
-            c.next(read_b_high);
-        }
-
-        pub fn read_b_high(c: *Cycle) void {
-            c.read_to_d(.sp, 6, .word, .stack);
-            c.d_to_l(.zx);
-            c.ll_to_reg();
-            c.next(modify_sp);
-        }
-
-        pub fn modify_sp(c: *Cycle) void {
-            c.sr_to_j(.sp);
-            c.literal_to_k(8);
-            c.j_plus_k_to_l(.zx, .fresh, .no_flags);
-            c.l_to_sr(.sp);
-            c.load_and_exec_next_insn();
-        }
-    },
-    struct { pub const spec = // push <reg>
-        \\push r(reg)
-        \\push x(reg)
-        ;
-        pub const encoding = .{
-            Reg(.reg),
-            width_encoder,
-            Encoder.shifted(5, @as(u9, 0x1d0)),
-            region_encoder,
-        };
-        pub const ij = Reg(.reg);
-        pub const ik: u4 = 0;
-
-        fn width_encoder(reg: Param(.reg)) Encoder {
-            return Encoder.shifted(4, @as(u1, switch (reg.signature.base) {
-                .reg16 => 0,
-                .reg32 => 1,
-                else => unreachable,
-            }));
-        }
-
-        pub fn entry(c: *Cycle, reg: Param(.reg)) void {
-            c.reg_to_jl();
-            c.jl_to_ll();
-            if (reg.signature.base == .reg32) {
-                c.write_from_ll(.sp, -4, .word, .stack);
-                c.next_ij_xor1();
-                c.next(write_high);
-            } else {
-                c.write_from_ll(.sp, -2, .word, .stack);
-                c.next_ij(2);
-                c.next(modify_sp);
-            }
-        }
-
-        pub fn write_high(c: *Cycle) void {
-            c.reg_to_jl();
-            c.jl_to_ll();
-            c.write_from_ll(.sp, -2, .word, .stack);
-            c.next_ij(4);
-            c.next(modify_sp);
-        }
-
-        pub fn modify_sp(c: *Cycle) void {
-            c.sr_to_j(.sp);
-            c.ik_ij_sx_to_k();
-            c.j_minus_k_to_l(.zx, .fresh, .no_flags);
-            c.l_to_sr(.sp);
-            c.load_and_exec_next_insn();
-        }
-    },
-    struct { pub const spec = // pop x(b), x(a)
-        \\pop r(reg)
-        \\pop x(reg)
-        ;
-        pub const encoding = .{
-            Reg(.reg),
-            width_encoder,
-            Encoder.shifted(5, @as(u9, 0x1d8)),
-            region_encoder,
-        };
-        pub const ik_ij = bytes_encoder;
-        pub const iw = Reg(.reg);
-
-        fn width_encoder(reg: Param(.reg)) Encoder {
-            return Encoder.shifted(4, @as(u1, switch (reg.signature.base) {
-                .reg16 => 0,
-                .reg32 => 1,
-                else => unreachable,
-            }));
-        }
-        fn bytes_encoder(reg: Param(.reg)) u3 {
-            return switch (reg.signature.base) {
-                .reg16 => 2,
-                .reg32 => 4,
-                else => unreachable,
-            };
-        }
-
-        pub fn entry(c: *Cycle, reg: Param(.reg)) void {
-            c.read_to_d(.sp, 0, .word, .stack);
-            c.d_to_l(.zx);
-            c.ll_to_reg();
-            if (reg.signature.base == .reg32) {
-                c.next_iw_xor1();
-                c.next(read_high);
-            } else {
-                c.next(modify_sp);
-            }
-        }
-
-        pub fn read_high(c: *Cycle) void {
-            c.read_to_d(.sp, 2, .word, .stack);
-            c.d_to_l(.zx);
-            c.ll_to_reg();
-            c.next(modify_sp);
-        }
-
-        pub fn modify_sp(c: *Cycle) void {
-            c.sr_to_j(.sp);
-            c.ik_ij_sx_to_k();
-            c.j_plus_k_to_l(.zx, .fresh, .no_flags);
-            c.l_to_sr(.sp);
-            c.load_and_exec_next_insn();
-        }
-    },
     struct { pub const spec = // [un]frame (imm6u*2)
         \\unframe (imm)
         \\frame (imm)
@@ -1104,6 +828,411 @@ pub const instructions = .{
 
         pub usingnamespace store_from_temp_1(.zero);
     },
+    struct { // st <reg> -> .d bp + (imm4)
+        pub const forms = .{
+            struct {
+                pub const spec = "st b(src) -> .d bp + (imm)";
+                pub const encoding = .{
+                    Even_Reg(.src),
+                    Encoder.shifted(3, Int(.imm, u4)),
+                    Encoder.shifted(7, @as(u7, 0x54)),
+                    region_encoder,
+                };
+            },
+            struct {
+                pub const spec = "st r(src) -> .d bp + (imm)";
+                pub const encoding = .{
+                    Even_Reg(.src),
+                    Encoder.shifted(3, Int_Mult(.imm, u4, 2)),
+                    Encoder.shifted(7, @as(u7, 0x56)),
+                    region_encoder,
+                };
+            },
+            struct {
+                pub const spec = "st x(src) -> .d bp + (imm)";
+                pub const encoding = .{
+                    Even_Reg(.src),
+                    Encoder.shifted(3, Int_Mult(.imm, u4, 4)),
+                    Encoder.shifted(7, @as(u7, 0x57)),
+                    region_encoder,
+                };
+            },
+        };
+        pub const ik_ij = Int(.imm, u7);
+        pub const iw = Reg(.src);
+
+        pub fn entry(c: *Cycle) void {
+            c.sr_to_j(.bp);
+            c.ik_ij_sx_to_k();
+            c.j_plus_k_to_l(.zx, .fresh, .no_flags);
+            c.l_to_sr(.temp_1);
+            c.load_next_insn();
+            c.next(@This().store);
+        }
+
+        pub usingnamespace store_from_temp_1(.zero);
+    },
+    struct { // ld .d bp + (imm4) -> <reg>
+        pub const forms = .{
+            struct {
+                pub const spec = 
+                    \\ld .d bp + (imm) -> b(dest) .unsigned
+                    \\ld .d bp + (imm) -> b(dest) .signed
+                    ;
+                pub const encoding = .{
+                    Even_Reg(.dest),
+                    Encoder.shifted(3, Int(.imm, u4)),
+                    signedness_encoder,
+                    Encoder.shifted(8, @as(u6, 0x3a)),
+                    region_encoder,
+                };
+                fn signedness_encoder(dest: Param(.dest)) Encoder {
+                    return Encoder.shifted(7, @as(u1, switch (dest.signature.base.reg8.?) {
+                        .unsigned => 0,
+                        .signed => 1,
+                    }));
+                }
+            },
+            struct {
+                pub const spec = "ld .d bp + (imm) -> r(dest)";
+                pub const encoding = .{
+                    Even_Reg(.dest),
+                    Encoder.shifted(3, Int_Mult(.imm, u4, 2)),
+                    Encoder.shifted(7, @as(u7, 0x76)),
+                    region_encoder,
+                };
+            },
+            struct {
+                pub const spec = "ld .d bp + (imm) -> x(dest)";
+                pub const encoding = .{
+                    Even_Reg(.dest),
+                    Encoder.shifted(3, Int_Mult(.imm, u4, 4)),
+                    Encoder.shifted(7, @as(u7, 0x77)),
+                    region_encoder,
+                };
+            },
+        };
+        pub const ik_ij = Int(.imm, u7);
+        pub const iw = Reg(.dest);
+
+        pub fn entry(c: *Cycle) void {
+            c.sr_to_j(.bp);
+            c.ik_ij_sx_to_k();
+            c.j_plus_k_to_l(.zx, .fresh, .no_flags);
+            c.l_to_sr(.temp_1);
+            c.load_next_insn();
+            c.next(@This().load);
+        }
+
+        pub usingnamespace load_from_temp_1(.zero);
+    },
+
+
+
+
+    struct { pub const spec = "ldrs .d x(src) -> b(registerset)";
+        pub const encoding = .{
+            Even_Reg(.registerset),
+            Encoder.shifted(3, Even_Reg(.src)),
+            Encoder.shifted(6, @as(u8, 0xd1)),
+            region_encoder,
+        };
+        pub const ij = Reg(.src);
+        pub const ik = Reg(.registerset);
+        pub const iw: u4 = 0;
+
+        const LDRS = @This();
+
+        pub fn entry(c: *Cycle, flags: Flags) void {
+            if (!flags.kernel()) return c.illegal_instruction();
+
+            // Move the base address into SR2 so that we can move it to .RS_reserved without using L:
+            c.reg32_to_l(); // x(src)
+            c.l_to_sr(.temp_2);
+            c.next(switch_rsn);
+        }
+
+        pub fn switch_rsn(c: *Cycle) void {
+            c.rsn_to_sr1h(.fault_rsn_stat);
+            c.reg_to_k(); // r(registerset)
+            c.k_to_ll();
+            c.ll_to_rsn();
+            c.sr2_to_sr2(.temp_2, .rs_reserved);
+            c.next(load_r0);
+        }
+
+        pub const load_r0 = load_gpr(0);
+        pub const load_r1 = load_gpr(1);
+        pub const load_r2 = load_gpr(2);
+        pub const load_r3 = load_gpr(3);
+        pub const load_r4 = load_gpr(4);
+        pub const load_r5 = load_gpr(5);
+        pub const load_r6 = load_gpr(6);
+        pub const load_r7 = load_gpr(7);
+        pub const load_r8 = load_gpr(8);
+        pub const load_r9 = load_gpr(9);
+        pub const load_r10 = load_gpr(10);
+        pub const load_r11 = load_gpr(11);
+        pub const load_r12 = load_gpr(12);
+        pub const load_r13 = load_gpr(13);
+        pub const load_r14 = load_gpr(14);
+        pub const load_r15 = load_gpr(15);
+
+        fn load_gpr(comptime n: hw.Register_Index) fn(c: *Cycle)void {
+            return struct {
+                pub fn func(c: *Cycle) void {
+                    c.read_to_d(.rs_reserved, @as(u7, n) * 2, .word, .data);
+                    c.d_to_l(.zx);
+                    c.ll_to_reg();
+                    if (n < 15) {
+                        c.next_iw_increment();
+                        c.next(@field(LDRS, std.fmt.comptimePrint("load_r{}", .{ n + 1 })));
+                    } else {
+                        c.next_ik_bit(hw.register_count * @sizeOf(hw.R));
+                        c.next(offset_rs_reserved);
+                    }
+                }
+            }.func;
+        }
+
+        pub fn offset_rs_reserved(c: *Cycle) void {
+            c.sr_to_j(.rs_reserved);
+            c.ik_bit_to_k();
+            c.j_plus_k_to_l(.zx, .fresh, .no_flags);
+            c.l_to_sr(.rs_reserved);
+            c.next(load_rp);
+        }
+
+        pub const load_rp                      = load_sr_pt1(.rp);
+        pub const load_sp                      = load_sr_pt1(.sp);
+        pub const load_bp                      = load_sr_pt1(.bp);
+        pub const load_fault_uc_slot_dr        = load_sr_pt1(.fault_uc_slot_dr);
+        pub const load_fault_rsn_stat          = load_sr_pt1(.fault_rsn_stat);
+        pub const load_int_rsn_fault_iw_ik_ij  = load_sr_pt1(.int_rsn_fault_iw_ik_ij);
+        pub const load_ip                      = load_sr_pt1(.ip);
+        pub const load_next_ip                 = load_sr_pt1(.next_ip);
+        pub const load_asn                     = load_sr_pt1(.asn);
+        pub const load_kxp                     = load_sr_pt1(.kxp);
+        pub const load_uxp                     = load_sr_pt1(.uxp);
+        pub const load_temp_2                  = load_sr_pt1(.temp_2);
+        pub const load_temp_1                  = load_sr_pt1(.temp_1);
+
+        pub const load_rp_2                      = load_sr_pt2(.rp, load_sp);
+        pub const load_sp_2                      = load_sr_pt2(.sp, load_bp);
+        pub const load_bp_2                      = load_sr_pt2(.bp, load_fault_uc_slot_dr);
+        pub const load_fault_uc_slot_dr_2        = load_sr_pt2(.fault_uc_slot_dr, load_fault_rsn_stat);
+        pub const load_fault_rsn_stat_2          = load_sr_pt2(.fault_rsn_stat, load_int_rsn_fault_iw_ik_ij);
+        pub const load_int_rsn_fault_iw_ik_ij_2  = load_sr_pt2(.int_rsn_fault_iw_ik_ij, load_ip);
+        pub const load_ip_2                      = load_sr_pt2(.ip, load_next_ip);
+        pub const load_next_ip_2                 = load_sr_pt2(.next_ip, load_asn);
+        pub const load_asn_2                     = load_sr_pt2(.asn, load_kxp);
+        pub const load_kxp_2                     = load_sr_pt2(.kxp, load_uxp);
+        pub const load_uxp_2                     = load_sr_pt2(.uxp, load_temp_2);
+        pub const load_temp_2_2                  = load_sr_pt2(.temp_2, load_temp_1);
+        pub const load_temp_1_2                  = load_sr_pt2(.temp_1, restore_rsn);
+
+        fn load_sr_pt1(comptime sr: hw.Control_Signals.Any_SR_Index) fn(c: *Cycle)void {
+            const offset = @offsetOf(arch.Context_State, @tagName(sr)) - (hw.register_count * @sizeOf(hw.R));
+            return struct {
+                pub fn func(c: *Cycle) void {
+                    c.read_to_d(.rs_reserved, offset + 2, .word, .data);
+                    c.d_to_l(.zx);
+                    c.l_to_sr(.temp_1);
+                    c.next(@field(LDRS, "load_" ++ @tagName(sr) ++ "_2"));
+                }
+            }.func;
+        }
+        fn load_sr_pt2(comptime sr: hw.Control_Signals.Any_SR_Index, comptime next: *const anyopaque) fn(c: *Cycle)void {
+            const offset = @offsetOf(arch.Context_State, @tagName(sr)) - (hw.register_count * @sizeOf(hw.R));
+            return struct {
+                pub fn func(c: *Cycle) void {
+                    c.read_to_d(.rs_reserved, offset, .word, .data);
+                    c.srl_to_lh(.temp_1);
+                    c.d_to_ll();
+                    c.l_to_sr(sr);
+                    c.next(next);
+                }
+            }.func;
+        }
+
+        pub fn restore_rsn(c: *Cycle) void {
+            c.srh_to_ll(.fault_rsn_stat);
+            c.ll_to_rsn();
+            c.next(load_next_insn);
+        }
+
+        pub fn load_next_insn(c: *Cycle) void {
+            c.load_and_exec_next_insn();
+        }
+
+    },
+    struct { pub const spec = "strs b(registerset) -> .d x(dest)";
+        pub const encoding = .{
+            Even_Reg(.registerset),
+            Encoder.shifted(3, Even_Reg(.dest)),
+            Encoder.shifted(6, @as(u8, 0xd5)),
+            region_encoder,
+        };
+        pub const ij = Reg(.dest);
+        pub const ik = Reg(.registerset);
+
+        const STRS = @This();
+
+        pub fn entry(c: *Cycle, flags: Flags) void {
+            if (!flags.kernel()) return c.illegal_instruction();
+            // Move the base address into .temp_2 so that we can move it to .rs_reserved without using L:
+            c.reg32_to_l();
+            c.l_to_sr(.temp_2);
+            c.next(switch_rsn);
+        }
+
+        pub fn switch_rsn(c: *Cycle) void {
+            // switch RSN, copy base address to .RS_reserved:
+            c.rsn_to_sr1h(.fault_rsn_stat);
+            c.reg_to_k(); // r(registerset)
+            c.k_to_ll();
+            c.ll_to_rsn();
+            c.sr2_to_sr2(.temp_2, .rs_reserved);
+            c.next_ik(0);
+            c.next(store_r0);
+        }
+
+        pub const store_r0 = store_gpr(0);
+        pub const store_r1 = store_gpr(1);
+        pub const store_r2 = store_gpr(2);
+        pub const store_r3 = store_gpr(3);
+        pub const store_r4 = store_gpr(4);
+        pub const store_r5 = store_gpr(5);
+        pub const store_r6 = store_gpr(6);
+        pub const store_r7 = store_gpr(7);
+        pub const store_r8 = store_gpr(8);
+        pub const store_r9 = store_gpr(9);
+        pub const store_r10 = store_gpr(10);
+        pub const store_r11 = store_gpr(11);
+        pub const store_r12 = store_gpr(12);
+        pub const store_r13 = store_gpr(13);
+        pub const store_r14 = store_gpr(14);
+        pub const store_r15 = store_gpr(15);
+
+        fn store_gpr(comptime n: hw.Register_Index) fn(c: *Cycle)void {
+            return struct {
+                pub fn func(c: *Cycle) void {
+                    c.reg_to_k();
+                    c.k_to_ll();
+                    c.write_from_ll(.rs_reserved, @as(u7, n) * 2, .word, .data);
+                    if (n < 15) {
+                        c.next_ik_increment();
+                        c.next(@field(STRS, std.fmt.comptimePrint("store_r{}", .{ n + 1 })));
+                    } else {
+                        c.next_ik_bit(hw.register_count * @sizeOf(hw.R));
+                        c.next(offset_rs_reserved);
+                    }
+                }
+            }.func;
+        }
+
+        pub fn offset_rs_reserved(c: *Cycle) void {
+            c.sr_to_j(.rs_reserved);
+            c.ik_bit_to_k();
+            c.j_plus_k_to_l(.zx, .fresh, .no_flags);
+            c.l_to_sr(.rs_reserved);
+            c.next(store_rp);
+        }
+
+        pub const store_rp                      = store_sr_pt1(.rp);
+        pub const store_sp                      = store_sr_pt1(.sp);
+        pub const store_bp                      = store_sr_pt1(.bp);
+        pub const store_fault_uc_slot_dr        = store_sr_pt1(.fault_uc_slot_dr);
+        pub const store_fault_rsn_stat          = store_sr_pt1(.fault_rsn_stat);
+        pub const store_int_rsn_fault_iw_ik_ij  = store_sr_pt1(.int_rsn_fault_iw_ik_ij);
+        pub const store_ip                      = store_sr_pt1(.ip);
+        pub const store_next_ip                 = store_sr_pt1(.next_ip);
+        pub const store_asn                     = store_sr_pt1(.asn);
+        pub const store_kxp                     = store_sr_pt1(.kxp);
+        pub const store_uxp                     = store_sr_pt1(.uxp);
+        pub const store_temp_2                  = store_sr_pt1(.temp_2);
+        pub const store_temp_1                  = store_sr_pt1(.temp_1);
+
+        pub const store_rp_2                      = store_sr_pt2(.rp, store_sp);
+        pub const store_sp_2                      = store_sr_pt2(.sp, store_bp);
+        pub const store_bp_2                      = store_sr_pt2(.bp, store_fault_uc_slot_dr);
+        pub const store_fault_uc_slot_dr_2        = store_sr_pt2(.fault_uc_slot_dr, store_fault_rsn_stat);
+        pub const store_fault_rsn_stat_2          = store_sr_pt2(.fault_rsn_stat, store_int_rsn_fault_iw_ik_ij);
+        pub const store_int_rsn_fault_iw_ik_ij_2  = store_sr_pt2(.int_rsn_fault_iw_ik_ij, store_ip);
+        pub const store_ip_2                      = store_sr_pt2(.ip, store_next_ip);
+        pub const store_next_ip_2                 = store_sr_pt2(.next_ip, store_asn);
+        pub const store_asn_2                     = store_sr_pt2(.asn, store_kxp);
+        pub const store_kxp_2                     = store_sr_pt2(.kxp, store_uxp);
+        pub const store_uxp_2                     = store_sr_pt2(.uxp, store_temp_2);
+        pub const store_temp_2_2                  = store_sr_pt2(.temp_2, store_temp_1);
+        pub const store_temp_1_2                  = store_sr_pt2(.temp_1, restore_rsn);
+
+        fn store_sr_pt1(comptime sr: hw.Control_Signals.Any_SR_Index) fn(c: *Cycle)void {
+            const offset = @offsetOf(arch.Context_State, @tagName(sr)) - (hw.register_count * @sizeOf(hw.R));
+            return struct {
+                pub fn func(c: *Cycle) void {
+                    c.srh_to_ll(sr);
+                    c.write_from_ll(.rs_reserved, offset + 2, .word, .data);
+                    c.next(@field(STRS, "store_" ++ @tagName(sr) ++ "_2"));
+                }
+            }.func;
+        }
+        fn store_sr_pt2(comptime sr: hw.Control_Signals.Any_SR_Index, comptime next: *const anyopaque) fn(c: *Cycle)void {
+            const offset = @offsetOf(arch.Context_State, @tagName(sr)) - (hw.register_count * @sizeOf(hw.R));
+            return struct {
+                pub fn func(c: *Cycle) void {
+                    c.srl_to_ll(sr);
+                    c.write_from_ll(.rs_reserved, offset, .word, .data);
+                    c.next(next);
+                }
+            }.func;
+        }
+
+        pub fn restore_rsn(c: *Cycle) void {
+            c.srh_to_ll(.fault_rsn_stat);
+            c.ll_to_rsn();
+            c.next(load_next_insn);
+        }
+
+        pub fn load_next_insn(c: *Cycle) void {
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { pub const spec = "srs b(registerset)";
+        pub const encoding = .{
+            Even_Reg(.registerset),
+            Encoder.shifted(3, @as(u11, 0x729)),
+            region_encoder,
+        };
+        pub const ij = Reg(.registerset);
+
+        pub fn entry(c: *Cycle, flags: Flags) void {
+            if (!flags.kernel()) return c.illegal_instruction();
+            // Increment IP so that if/when someone switches back to this registerset,
+            // this instruction doesn't get executed a second time.
+            c.sr_to_j(.ip);
+            c.literal_to_k(2);
+            c.j_plus_k_to_l(.zx, .fresh, .no_flags);
+            c.l_to_sr(.ip);
+            c.next(switch_rsn);
+        }
+
+        pub fn switch_rsn(c: *Cycle) void {
+            c.reg_to_jl();
+            c.jl_to_ll();
+            c.ll_to_rsn();
+            c.next(reload_asn);
+        }
+
+        pub fn reload_asn(c: *Cycle) void {
+            c.reload_asn();
+            c.next(branch);
+        }
+
+        pub fn branch(c: *Cycle) void {
+            c.branch(.ip, 0);
+        }
+    },
 };
 
 const Offset_Kind = enum {
@@ -1257,9 +1386,9 @@ const Odd_Reg = placeholders.Odd_Reg;
 const Param = placeholders.Param;
 const conditions = @import("conditions.zig");
 const placeholders = @import("placeholders.zig");
-const opcodes = @import("opcodes.zig");
 const Control_Signals = arch.hw.Control_Signals;
 const Flags = arch.hw.microcode.Flags;
 const isa = arch.isa;
+const hw = arch.hw;
 const arch = @import("lib_arch");
 const std = @import("std");

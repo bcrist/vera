@@ -45,6 +45,74 @@ pub const instructions = .{
             c.branch(.rp, 0);
         }
     },
+    struct { pub const spec = "iret";
+        pub const encoding = @as(u16, 0x0400);
+
+        pub fn entry(c: *Cycle, flags: hw.microcode.Flags) void {
+            if (!flags.kernel()) return c.illegal_instruction();
+
+            c.srh_to_ll(.int_rsn_fault_iw_ik_ij);
+            c.ll_to_rsn();
+            c.next(restore_stat);
+        }
+
+        pub fn restore_stat(c: *Cycle) void {
+            c.reload_asn();
+            c.srl_to_ll(.fault_rsn_stat);
+            c.ll_to_stat_zncvka();
+            c.force_normal_execution(branch);
+        }
+
+        pub fn branch(c: *Cycle) void {
+            c.branch(.ip, 0);
+        }
+    },
+    struct { pub const spec = "fret";
+        pub const encoding = @as(u16, 0x0500);
+
+        pub fn entry(c: *Cycle, flags: Flags) void {
+            if (!flags.kernel()) return c.illegal_instruction();
+            c.toggle_rsn();
+            c.next(restore_stat);
+        }
+
+        pub fn restore_stat(c: *Cycle) void {
+            c.reload_asn();
+            c.sr_to_l(.fault_rsn_stat);
+            c.ll_to_stat_zncvka();
+            c.next(restore_iw_ik_ij);
+        }
+
+        pub fn restore_iw_ik_ij(c: *Cycle) void {
+            c.sr_to_l(.int_rsn_fault_iw_ik_ij);
+            c.ll_to_dr(.full);
+            c.decode_dr_to_iw_ik_ij(.alt);
+            c.next(restore_dr_and_retry);
+        }
+
+        pub fn restore_dr_and_retry(c: *Cycle) void {
+            c.sr_to_l(.fault_uc_slot_dr);
+            c.ll_to_dr(.full);
+            // If a page fault occurs during an instruction preceeded by SYNC,
+            // we want to make sure it's still atomic when we retry.
+            // It doesn't hurt to "upgrade" a non-atomic instruction, so we
+            // just assume all faults happen during atomic instructions
+            c.atomic_next_cycle_until_end();
+            c.fault_return();
+        }
+    },
+    struct { pub const spec = "ifex"; // Exit interrupt or fault handler without changing registersets or retrying the faulted operation
+        pub const encoding = @as(u16, 0x0600);
+
+        pub fn entry(c: *Cycle, flags: Flags) void {
+            if (!flags.kernel()) return c.illegal_instruction();
+            c.force_normal_execution(load_next_insn);
+        }
+
+        pub fn load_next_insn(c: *Cycle) void {
+            c.load_and_exec_next_insn();
+        }
+    },
     struct { pub const spec = //eab/dab .i x0
         \\eab .i x0
         \\dab .i x0
@@ -1350,9 +1418,9 @@ const Even_Reg = placeholders.Even_Reg;
 const Odd_Reg = placeholders.Odd_Reg;
 const conditions = @import("conditions.zig");
 const placeholders = @import("placeholders.zig");
-const opcodes = @import("opcodes.zig");
 const Control_Signals = arch.hw.Control_Signals;
 const Flags = arch.hw.microcode.Flags;
 const isa = arch.isa;
+const hw = arch.hw;
 const arch = @import("lib_arch");
 const std = @import("std");

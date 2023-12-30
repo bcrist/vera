@@ -7,7 +7,6 @@ pub const Cycle = @import("compile_arch/Cycle.zig");
 pub const Processor = @import("compile_arch/Processor.zig");
 pub const Microcode_Builder = @import("compile_arch/Microcode_Builder.zig");
 pub const Decode_ROM_Builder = @import("compile_arch/Decode_ROM_Builder.zig");
-pub const opcodes = @import("compile_arch/opcodes.zig");
 pub const placeholders = @import("compile_arch/placeholders.zig");
 
 pub const std_options = struct {
@@ -27,15 +26,10 @@ pub fn main() !void {
     processor.process(@import("compile_arch/01.zig").instructions);
     processor.process(@import("compile_arch/10.zig").instructions);
     processor.process(@import("compile_arch/11.zig").instructions);
-    // processor.process(@import("compile_arch/_alu.zig").instructions);
-    // processor.process(@import("compile_arch/_reset.zig").instructions);
-    // processor.process(@import("compile_arch/_fault.zig").instructions);
-    // processor.process(@import("compile_arch/_interrupt.zig").instructions);
-    // processor.process(@import("compile_arch/_address_translator.zig").instructions);
     // processor.process(@import("compile_arch/_sync.zig").instructions);
-    // processor.process(@import("compile_arch/_memcpy.zig").instructions);
 
-    processor.process(@import("compile_arch/_alt.zig").instructions);
+    processor.process(@import("compile_arch/handlers.zig").instructions);
+    processor.process(@import("compile_arch/alt.zig").instructions);
 
     processor.microcode.assign_slots();
 

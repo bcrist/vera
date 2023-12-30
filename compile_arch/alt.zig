@@ -23,5 +23,4 @@ const Encoder = arch.isa.Instruction_Encoding.Encoder;
 const Reg = placeholders.Reg;
 const ID_Mode = arch.hw.Control_Signals.ID_Mode;
 const placeholders = @import("placeholders.zig");
-const opcodes = @import("opcodes.zig");
 const arch = @import("lib_arch");
