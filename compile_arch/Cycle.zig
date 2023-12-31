@@ -1107,6 +1107,16 @@ pub fn assume_next_insn_loaded(c: *Cycle) void {
 }
 
 pub fn exec_next_insn(c: *Cycle) void {
+    if (c.instruction_signature) |signature| {
+        switch (isa.branch_kind(signature.mnemonic, signature.suffix)) {
+            .nonbranching, .conditional => {},
+            .unconditional, .call => {
+                c.warn("Cycle executes next instruction, but this mnemonic/suffix indicates it should be an unconditional branch or call", .{});
+            },
+        }
+    } else {
+        c.warn("Cycle executes next instruction, but no instruction signature is available", .{});
+    }
     if (!c.flags.contains(.next_insn_loaded)) {
         c.warn("Cycle executes next instruction, but it has not been loaded yet, or has been clobbered", .{});
     }
