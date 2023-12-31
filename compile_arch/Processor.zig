@@ -579,7 +579,7 @@ pub const Initial_Word_Encoding_Iterator = struct {
 
 fn resolve_cycles(self: *Processor, slot_handle: Slot_Data.Handle, lookup: *const Slot_Info.Lookup) void {
     const slot_data = self.microcode.slot_data.items[@intFromEnum(slot_handle)];
-    if (slot_data.acyclic) return;
+    if (slot_data.max_remaining_cycles != null) return;
 
     next_cycle: for (slot_data.cycles, 0..) |cycle_handle, i| {
         for (slot_data.cycles[0..i]) |prev_cycle_handle| {
@@ -618,13 +618,16 @@ pub const Microcode_Processor = struct {
 
         var uses_placeholders = slot_info.uses_placeholders;
         var cycle_recursion = [_]?*const anyopaque { null } ** hw.microcode.Address.count_per_slot;
-        var slot_data: Slot_Data = undefined;
-        slot_data.slot = self.slot;
-        slot_data.acyclic = true;
+        var slot_data: Slot_Data = .{
+            .cycles = undefined,
+            .slot = self.slot,
+            .min_remaining_cycles = 0,
+            .max_remaining_cycles = 0,
+        };
         for (0.., cycles) |i, *cycle| {
             if (cycle.next_func) |next_func_ptr| {
                 if (self.has_processed(next_func_ptr)) {
-                    slot_data.acyclic = false;
+                    slot_data.max_remaining_cycles = null;
                 } else {
                     // Except in the case of loops, we will wipe out cycle.next_func after recursively computing the next slot handle.
                     // But to avoid excessive fan-out of descendant cycles (for slots using flags) we keep track of the original
@@ -652,8 +655,18 @@ pub const Microcode_Processor = struct {
                         if (result.uses_placeholders) uses_placeholders = true;
                         cycle.next_slot = result.slot_handle;
                         cycle.next_func = null;
-                        if (slot_data.acyclic and !self.processor.microcode.slot_data.items[result.slot_handle.raw()].acyclic) {
-                            slot_data.acyclic = false;
+                        const result_slot_data = self.processor.microcode.get_slot_data(result.slot_handle);
+                        if (slot_data.min_remaining_cycles == 0) {
+                            slot_data.min_remaining_cycles = result_slot_data.min_remaining_cycles + 1;
+                            slot_data.max_remaining_cycles = if (result_slot_data.max_remaining_cycles) |c| c + 1 else null;
+                        }
+                        slot_data.min_remaining_cycles = @min(slot_data.min_remaining_cycles, result_slot_data.min_remaining_cycles + 1);
+                        if (slot_data.max_remaining_cycles) |current_max| {
+                            if (result_slot_data.max_remaining_cycles) |result_max| {
+                                slot_data.max_remaining_cycles = @max(current_max, result_max + 1);
+                            } else {
+                                slot_data.max_remaining_cycles = null;
+                            }
                         }
                     }
                 }

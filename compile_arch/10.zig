@@ -2188,7 +2188,6 @@ const Reg_Bit = placeholders.Reg_Bit;
 const Even_Reg = placeholders.Even_Reg;
 const Odd_Reg = placeholders.Odd_Reg;
 const Param = placeholders.Param;
-const conditions = @import("conditions.zig");
 const placeholders = @import("placeholders.zig");
 const Control_Signals = arch.hw.Control_Signals;
 const Flags = arch.hw.microcode.Flags;

@@ -1,3 +1,7 @@
+[compile_arch] cycle_builder.branch(): check that either base is .zero, or RSN is not being loaded this cycle
+[compile_arch] ensure exec_next_insn() is only used in microcode of instructions where isa.branch_kind returns nonbranching or conditional
+[compile_arch] HTML instruction documentation with "disassembly" of control signals
+[compile_arch] Add Slot_Data flag for slots that may require kernel mode
 [arch/compile_arch] Can we remove transformations from encoding db?  Would need a way to represent numeric transforms in Encoder instead - add `.computed` to Value union?
 [arch/microsim] Fault if a block load/store instruction is executed on an invalid context
 
@@ -5,14 +9,7 @@
 [arch] Finish Encoding_Database.similar_encodings
 [arch] print_encoding - print placeholders with valid ranges and constraints specified
 
-[compile_arch] Microcode_Builder.Slot_Location.forced_bits - don't include in hashing; just update it to add more bits if necessary
-[compile_arch] Compute min/max cycles per instruction, add to encoding sx
-[compile_arch] Decompile/dump to HTML
-[compile_arch] Validate that the same instruction encoding doesn't map to multiple opcodes/aliases
 [compile_arch] Revamp instruction_builder.print_cycle_path()
-[compile_arch] HTML instruction documentation with "disassembly" of control signals
-[compile_arch] cycle_builder.branch(): check that either base is .zero, or RSN is not being loaded this cycle
-[compile_arch] ensure exec_next_insn() is only used in microcode of instructions where isa.branch_kind returns nonbranching or conditional
 
 [assembler] Fix EDB loading
 [assembler] CLI

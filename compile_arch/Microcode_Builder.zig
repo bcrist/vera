@@ -16,7 +16,9 @@ pub const Cycle_Handle = enum(u16) {
 pub const Slot_Data = struct {
     cycles: [hw.microcode.Address.count_per_slot]Cycle_Handle,
     slot: Slot_Location,
-    acyclic: bool, // when true, this slot is part of a simple sequence or tree, but does not have any recursive/looping constructs
+    min_remaining_cycles: u15,
+    max_remaining_cycles: ?u15, // null if this slot is part of a recursive/looping construct, or leads into one
+
     pub const Handle = enum (u15) {
         _,
         pub fn init(raw_value: Raw) Handle {
@@ -83,13 +85,24 @@ pub fn intern_cycle(self: *Microcode_Builder, data: Cycle) Cycle_Handle {
 pub fn intern_slot_data(self: *Microcode_Builder, data: Slot_Data) Slot_Data.Handle {
     const result = self.slot_data_dedup.getOrPutContextAdapted(self.gpa, data, self.slot_data_ctx(), self.slot_data_handle_ctx()) catch @panic("OOM");
     if (result.found_existing) {
-        return result.key_ptr.*;
+        const handle = result.key_ptr.*;
+        switch (data.slot) {
+            .exact => {},
+            .forced_bits => |new_forced| if (new_forced != 0) {
+                self.slot_data.items[handle.raw()].slot.forced_bits |= new_forced;
+            },
+        }
+        return handle;
     } else {
         const handle: Slot_Data.Handle = @enumFromInt(self.slot_data.items.len);
         self.slot_data.append(self.gpa, data) catch @panic("OOM");
         result.key_ptr.* = handle;
         return handle;
     }
+}
+
+pub fn get_slot_data(self: *const Microcode_Builder, handle: Slot_Data.Handle) Slot_Data {
+    return self.slot_data.items[handle.raw()];
 }
 
 pub fn complete_loop(self: *Microcode_Builder, handle: Cycle_Handle, next: Slot_Data.Handle) void {
@@ -254,9 +267,7 @@ fn slot_data_handle_ctx(self: *const Microcode_Builder) Slot_Data_Handle_Hash_Co
 const Slot_Data_Handle_Hash_Context = struct {
     data: []const Slot_Data,
     pub fn hash(ctx: Slot_Data_Handle_Hash_Context, handle: Slot_Data.Handle) u64 {
-        var hasher = std.hash.Wyhash.init(0);
-        std.hash.autoHash(&hasher, ctx.data[@intFromEnum(handle)]);
-        return hasher.final();
+        return Slot_Data_Hash_Context.hash(undefined, ctx.data[handle.raw()]);
     }
     pub fn eql(_: Slot_Data_Handle_Hash_Context, a: Slot_Data.Handle, b: Slot_Data.Handle) bool {
         return a == b;
@@ -270,7 +281,14 @@ const Slot_Data_Hash_Context = struct {
     data: []const Slot_Data,
     pub fn hash(_: Slot_Data_Hash_Context, slot_data: Slot_Data) u64 {
         var hasher = std.hash.Wyhash.init(0);
-        std.hash.autoHash(&hasher, slot_data);
+        std.hash.autoHash(&hasher, slot_data.cycles);
+        switch (slot_data.slot) {
+            .forced_bits => std.hash.autoHash(&hasher, false),
+            .exact => |slot| {
+                std.hash.autoHash(&hasher, true);
+                std.hash.autoHash(&hasher, slot);
+            },
+        }
         return hasher.final();
     }
     pub fn eql(ctx: Slot_Data_Hash_Context, slot_data: Slot_Data, handle: Slot_Data.Handle) bool {
