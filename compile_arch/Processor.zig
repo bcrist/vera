@@ -4,6 +4,7 @@ microcode: Microcode_Builder,
 decode_rom: Decode_ROM_Builder,
 encoding_list: std.ArrayList(isa.Instruction_Encoding),
 transform_list: std.ArrayList(isa.Instruction_Transform),
+encoding_slots: std.AutoHashMap(usize, std.ArrayList(hw.decode.Address)), // key is index into encoding_list
 
 pub fn init(gpa: std.mem.Allocator, arena: std.mem.Allocator, temp: *TempAllocator) Processor {
     return .{
@@ -13,6 +14,7 @@ pub fn init(gpa: std.mem.Allocator, arena: std.mem.Allocator, temp: *TempAllocat
         .decode_rom = Decode_ROM_Builder.init(gpa),
         .encoding_list = std.ArrayList(isa.Instruction_Encoding).init(gpa),
         .transform_list = std.ArrayList(isa.Instruction_Transform).init(gpa),
+        .encoding_slots = std.AutoHashMap(usize, std.ArrayList(hw.decode.Address)).init(gpa),
     };
 }
 
@@ -136,11 +138,10 @@ fn process_form(
             const iw_ik_ij_encoders = iw_ik_ij_fn(alloc, parsed.signature, parsed.encoders);
 
             const final_encoding = self.finalize_encoding(parsed, constraints, encoders);
+            self.encoding_list.append(final_encoding) catch @panic("OOM");
 
             self.process_instruction(&Outer.entry, final_encoding, constraints,
                 encoders, iw_ik_ij_encoders, ik_ij_encoders, ij_encoders, ik_encoders, iw_encoders, id_mode, lookup);
-
-            self.encoding_list.append(final_encoding) catch @panic("OOM");
         }
     } else {
         const encoders = encoders_fn(alloc, null, &.{});
@@ -243,6 +244,14 @@ fn process_instruction(
             .slot_handle = slot_handle,
             .ij = ij, .ik = ik, .iw = iw,
         });
+
+        const encoding_list_index = self.encoding_list.items.len - 1;
+        const result = self.encoding_slots.getOrPut(encoding_list_index) catch @panic("OOM");
+        if (!result.found_existing) {
+            result.key_ptr.* = encoding_list_index;
+            result.value_ptr.* = std.ArrayList(hw.decode.Address).init(self.encoding_slots.allocator);
+        }
+        result.value_ptr.append(addr) catch @panic("OOM");
 
         if (iter.undefined_bits.raw() != 0) {
             std.debug.panic("Bits {x} of the initial instruction word are undefined!", .{ iter.undefined_bits.raw() });
@@ -579,7 +588,7 @@ pub const Initial_Word_Encoding_Iterator = struct {
 
 fn resolve_cycles(self: *Processor, slot_handle: Slot_Data.Handle, lookup: *const Slot_Info.Lookup) void {
     const slot_data = self.microcode.slot_data.items[@intFromEnum(slot_handle)];
-    if (slot_data.max_remaining_cycles != null) return;
+    if (slot_data.remaining_cycles.max != .unknown_cyclical) return;
 
     next_cycle: for (slot_data.cycles, 0..) |cycle_handle, i| {
         for (slot_data.cycles[0..i]) |prev_cycle_handle| {
@@ -621,13 +630,12 @@ pub const Microcode_Processor = struct {
         var slot_data: Slot_Data = .{
             .cycles = undefined,
             .slot = self.slot,
-            .min_remaining_cycles = 0,
-            .max_remaining_cycles = 0,
+            .remaining_cycles = .{},
         };
         for (0.., cycles) |i, *cycle| {
             if (cycle.next_func) |next_func_ptr| {
                 if (self.has_processed(next_func_ptr)) {
-                    slot_data.max_remaining_cycles = null;
+                    slot_data.remaining_cycles.max = .unknown_cyclical;
                 } else {
                     // Except in the case of loops, we will wipe out cycle.next_func after recursively computing the next slot handle.
                     // But to avoid excessive fan-out of descendant cycles (for slots using flags) we keep track of the original
@@ -656,18 +664,8 @@ pub const Microcode_Processor = struct {
                         cycle.next_slot = result.slot_handle;
                         cycle.next_func = null;
                         const result_slot_data = self.processor.microcode.get_slot_data(result.slot_handle);
-                        if (slot_data.min_remaining_cycles == 0) {
-                            slot_data.min_remaining_cycles = result_slot_data.min_remaining_cycles + 1;
-                            slot_data.max_remaining_cycles = if (result_slot_data.max_remaining_cycles) |c| c + 1 else null;
-                        }
-                        slot_data.min_remaining_cycles = @min(slot_data.min_remaining_cycles, result_slot_data.min_remaining_cycles + 1);
-                        if (slot_data.max_remaining_cycles) |current_max| {
-                            if (result_slot_data.max_remaining_cycles) |result_max| {
-                                slot_data.max_remaining_cycles = @max(current_max, result_max + 1);
-                            } else {
-                                slot_data.max_remaining_cycles = null;
-                            }
-                        }
+
+                        slot_data.remaining_cycles.merge(result_slot_data.remaining_cycles.inc());
                     }
                 }
             }

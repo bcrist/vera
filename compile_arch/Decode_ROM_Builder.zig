@@ -57,6 +57,10 @@ pub fn add_entry(self: *Decode_ROM_Builder, addr: hw.decode.Address, entry: Entr
     } else self.entries[addr_raw] = entry;
 }
 
+pub fn get_entry(self: *Decode_ROM_Builder, addr: hw.decode.Address) Entry {
+    return self.entries[addr.raw()];
+}
+
 pub fn generate_rom_data(self: *Decode_ROM_Builder, allocator: std.mem.Allocator, microcode: *const Microcode_Builder) []hw.decode.Result {
     const data = allocator.alloc(hw.decode.Result, hw.decode.Address.count) catch @panic("OOM");
 

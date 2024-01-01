@@ -16,8 +16,7 @@ pub const Cycle_Handle = enum(u16) {
 pub const Slot_Data = struct {
     cycles: [hw.microcode.Address.count_per_slot]Cycle_Handle,
     slot: Slot_Location,
-    min_remaining_cycles: u15,
-    max_remaining_cycles: ?u15, // null if this slot is part of a recursive/looping construct, or leads into one
+    remaining_cycles: Min_Max,
 
     pub const Handle = enum (u15) {
         _,
@@ -348,6 +347,7 @@ const Cycle_Hash_Context = struct {
 const log = std.log.scoped(.microcode_builder);
 
 const Microcode_Builder = @This();
+const Min_Max = @import("Min_Max.zig");
 const Cycle = @import("Cycle.zig");
 const isa = arch.isa;
 const Control_Signals = hw.Control_Signals;

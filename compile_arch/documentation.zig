@@ -1,13 +1,58 @@
 pub fn generate(gpa: std.mem.Allocator, processor: *Processor, microcode: []const ?Control_Signals, decode_rom: []const hw.decode.Result) !void {
-    _ = gpa;
-
     try std.fs.cwd().makePath("doc/isa");
-
-    try generate_encoding_table(processor, decode_rom);
-    try generate_control_signal_analysis(processor, microcode);
+    const header = try generate_header(gpa);
+    const footer = try generate_footer(gpa);
+    try generate_encoding_table(header, footer, processor, decode_rom);
+    try generate_control_signal_analysis(header, footer, processor, microcode);
+    try generate_mnemonic_pages(header, footer, processor);
 }
 
-fn generate_control_signal_analysis(processor: *Processor, microcode: []const ?Control_Signals) !void {
+fn generate_header(gpa: std.mem.Allocator) ![]const u8 {
+    var header = std.ArrayList(u8).init(gpa);
+    const w = header.writer();
+
+    try w.print(
+        \\<nav>
+        \\<h2>ISA Reference</h2>
+        \\<ul>
+        \\
+        , .{});
+
+    var temp_buf_1: [32]u8 = undefined;
+
+    for (std.enums.values(isa.Mnemonic)) |mnemonic| {
+        if (mnemonic == ._reserved) continue;
+        try w.print(
+            \\<li><a href="{s}.html">{s}</a></li>
+            \\
+            , .{ @tagName(mnemonic), std.ascii.upperString(&temp_buf_1, @tagName(mnemonic)) });
+    }
+
+    try w.print(
+        \\</ul>
+        \\</nav>
+        \\<div id="content">
+        \\<main>
+        \\
+        , .{});
+
+    return header.toOwnedSlice();
+}
+
+fn generate_footer(gpa: std.mem.Allocator) ![]const u8 {
+    var footer = std.ArrayList(u8).init(gpa);
+    const w = footer.writer();
+
+    try w.print(
+        \\</main>
+        \\</div>
+        \\
+        , .{});
+
+    return footer.toOwnedSlice();
+}
+
+fn generate_control_signal_analysis(header: []const u8, footer: []const u8, processor: *Processor, microcode: []const ?Control_Signals) !void {
     _ = microcode;
 
 
@@ -23,8 +68,9 @@ fn generate_control_signal_analysis(processor: *Processor, microcode: []const ?C
         \\</style>
         \\</head>
         \\<body>
+        \\{s}
         \\<h1>Control Signal Usage Analysis</h1>
-        , .{ style });
+        , .{ style, header });
 
     inline for (comptime std.enums.values(Control_Signal)) |signal| {
         try analyze_control_signal_usage(processor, &.{ signal }, w);
@@ -46,13 +92,14 @@ fn generate_control_signal_analysis(processor: *Processor, microcode: []const ?C
     try analyze_control_signal_usage(processor, &.{ .allow_int, .seq_op }, w);
     try analyze_control_signal_usage(processor, &.{ .ll_src, .lh_src }, w);
 
-    try w.writeAll(
+    try w.print(
+        \\{s}
         \\</body>
         \\</html>
-        );
+        , .{ footer });
 }
 
-pub fn analyze_control_signal_usage(processor: *Processor, comptime signals: []const Control_Signal, writer: anytype) !void {
+fn analyze_control_signal_usage(processor: *Processor, comptime signals: []const Control_Signal, writer: anytype) !void {
     processor.temp.reset();
     var temp = std.ArrayList(u8).init(processor.temp.allocator());
     var data = std.StringHashMap(u16).init(processor.temp.allocator());
@@ -168,7 +215,7 @@ fn hue_to_rgb(p: f32, q: f32, t: f32) u8 {
     return @intFromFloat(@min(255, w * 256));
 }
 
-fn generate_encoding_table(processor: *Processor, decode_rom: []const hw.decode.Result) !void {
+fn generate_encoding_table(header: []const u8, footer: []const u8, processor: *Processor, decode_rom: []const hw.decode.Result) !void {
     var f = try std.fs.cwd().createFile("doc/isa/encoding_table.html", .{});
     defer f.close();
 
@@ -223,10 +270,11 @@ fn generate_encoding_table(processor: *Processor, decode_rom: []const hw.decode.
         \\</style>
         \\</head>
         \\<body>
+        \\{s}
         \\<h1>Instruction Encodings by Initial Word MSB</h1>
         \\<table class="encoding_table">
         \\<tr><th></th>
-        , .{ style });
+        , .{ style, header });
 
     for (0..0x10) |col| {
         try w.print(
@@ -282,7 +330,7 @@ fn generate_encoding_table(processor: *Processor, decode_rom: []const hw.decode.
             if (cell.used_slots > 0) {
                 try w.print("<a href=\"encoding_table_{x:0>2}.html\">", .{ byte });
                 end = "</a>";
-                try generate_encoding_table_inner(processor, decode_rom, byte);
+                try generate_encoding_table_inner(header, footer, processor, decode_rom, byte);
             }
 
             if (cell.mnemonic != ._reserved) {
@@ -298,15 +346,16 @@ fn generate_encoding_table(processor: *Processor, decode_rom: []const hw.decode.
         }
     }
 
-    try w.writeAll(
+    try w.print(
         \\</tr>
         \\</table>
+        \\{s}
         \\</body>
         \\</html>
-        );
+        , .{ footer });
 }
 
-fn generate_encoding_table_inner(processor: *Processor, decode_rom: []const hw.decode.Result, msb: u8) !void {
+fn generate_encoding_table_inner(header: []const u8, footer: []const u8, processor: *Processor, decode_rom: []const hw.decode.Result, msb: u8) !void {
     const Cell_Info = struct {
         slot: hw.microcode.Slot = .invalid_instruction,
         instruction_encoding: ?Instruction_Encoding = null,
@@ -340,10 +389,11 @@ fn generate_encoding_table_inner(processor: *Processor, decode_rom: []const hw.d
         \\</style>
         \\</head>
         \\<body>
+        \\{s}
         \\<h1>Instruction Encodings with Initial Word 0x{X:0>2}xx</h1>
         \\<table class="encoding_table">
         \\<tr><th></th>
-        , .{ style, msb });
+        , .{ style, header, msb });
 
     for (0..0x10) |col| {
         try w.print(
@@ -395,16 +445,93 @@ fn generate_encoding_table_inner(processor: *Processor, decode_rom: []const hw.d
         }
     }
 
-    try w.writeAll(
+    try w.print(
         \\</tr>
         \\</table>
+        \\{s}
         \\</body>
         \\</html>
-        );
+        , .{ footer });
+}
+
+fn generate_mnemonic_pages(header: []const u8, footer: []const u8, processor: *Processor) !void {
+    for (std.enums.values(isa.Mnemonic)) |mnemonic| {
+        if (mnemonic == ._reserved) continue;
+        try generate_mnemonic_page(header, footer, processor, mnemonic);
+    }
+}
+
+fn generate_mnemonic_page(header: []const u8, footer: []const u8, processor: *Processor, mnemonic: isa.Mnemonic) !void {
+
+    var filename_buf: [64]u8 = undefined;
+    const filename = try std.fmt.bufPrint(&filename_buf, "doc/isa/{s}.html", .{ @tagName(mnemonic) });
+
+    var mnemonic_buf: [32]u8 = undefined;
+    const mnemonic_str = std.ascii.upperString(&mnemonic_buf, @tagName(mnemonic));
+
+    var f = try std.fs.cwd().createFile(filename, .{ });
+    defer f.close();
+
+
+    var w = f.writer();
+    try w.print(
+        \\<html>
+        \\<head>
+        \\<style>
+        \\{s}
+        \\</style>
+        \\</head>
+        \\<body>
+        \\{s}
+        \\<h1>{s}</h1>
+        \\
+        , .{ style, header, mnemonic_str });
+
+    for (processor.encoding_list.items, 0..) |ie, index| {
+        if (ie.signature.mnemonic == mnemonic) {
+            try w.writeAll(
+                \\<h3>
+            );
+            try isa.print.print_encoding(ie, w);
+            try w.writeAll(
+                \\</h3>
+                \\
+            );
+
+            var cycles: Min_Max = .{};
+
+            for (processor.encoding_slots.get(index).?.items) |addr| {
+                const entry = processor.decode_rom.get_entry(addr);
+                if (entry.slot_handle) |slot| {
+                    const slot_data = processor.microcode.get_slot_data(slot);
+                    cycles.merge(slot_data.remaining_cycles);
+                }
+            }
+
+            cycles = cycles.inc();
+
+            if (cycles.max == .unknown_cyclical) {
+                try w.print("Cycles: {} - ?<br>\n", .{ cycles.min.value });
+            } else if (cycles.max.value == cycles.min.value) {
+                try w.print("Cycles: {}<br>\n", .{ cycles.min.value });
+            } else {
+                try w.print("Cycles: {} - {}<br>\n", .{ cycles.min.value, cycles.max.value });
+            }
+        }
+    }
+
+    try w.print(
+        \\{s}
+        \\</body>
+        \\</html>
+        , .{ footer });
 }
 
 const style = @embedFile("style.css");
 
+const Slot_Data = Microcode_Builder.Slot_Data;
+const Microcode_Builder = @import("Microcode_Builder.zig");
+const Min_Max = @import("Min_Max.zig");
 const Processor = @import("Processor.zig");
 const Instruction_Encoding = isa.Instruction_Encoding;
 const Mnemonic = isa.Mnemonic;
