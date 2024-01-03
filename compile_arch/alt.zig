@@ -2,10 +2,10 @@ pub const instructions = .{
     struct {
         pub const decode_mode = ID_Mode.alt;
         pub const encoding = .{
-            Encoder.identity(Reg(.ij)),
-            Encoder.shifted(4, Reg(.ik)),
-            Encoder.shifted(8, Reg(.iw)),
-            Encoder.shifted(12, @as(u4, 0)),
+            Reg(.ij),
+            Encoder.init(4, Reg(.ik)),
+            Encoder.init(8, Reg(.iw)),
+            Encoder.init(12, @as(u4, 0)),
         };
         pub const ij = Reg(.ij);
         pub const ik = Reg(.ik);

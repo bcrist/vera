@@ -6,7 +6,7 @@ pub fn encoder(comptime shift: u8) fn(mnemonic: isa.Mnemonic, condition: isa.Mne
                 .call => std.debug.assert(condition == .none),
                 else => unreachable,
             }
-            return Encoder.shifted(shift, @as(u4, switch (condition) {
+            return Encoder.init(shift, @as(u4, switch (condition) {
                 .none => switch (mnemonic) {
                     .b, .bb, .bbn, .bp, .bpn => 0,
                     .call => 15,
@@ -35,7 +35,7 @@ pub fn encoder(comptime shift: u8) fn(mnemonic: isa.Mnemonic, condition: isa.Mne
 pub fn short_encoder(comptime shift: u8) fn(condition: isa.Mnemonic_Suffix) Encoder {
     return struct {
         pub fn func(condition: isa.Mnemonic_Suffix) Encoder {
-            return Encoder.shifted(shift, @as(u3, switch (condition) {
+            return Encoder.init(shift, @as(u3, switch (condition) {
                 .none => 0,
                 .n => 1,
                 .z => 2,
@@ -54,7 +54,7 @@ pub fn short_encoder(comptime shift: u8) fn(condition: isa.Mnemonic_Suffix) Enco
 pub fn double_encoder(comptime shift: u8) fn(condition: isa.Mnemonic_Suffix) Encoder {
     return struct {
         pub fn func(condition: isa.Mnemonic_Suffix) Encoder {
-            return Encoder.shifted(shift, @as(u3, switch (condition) {
+            return Encoder.init(shift, @as(u3, switch (condition) {
                 .lu_gu => 0,
                 .lu_z => 1,
                 .gu_z => 2,

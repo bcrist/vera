@@ -361,7 +361,6 @@ pub fn Parser(comptime Reader: type) type {
                 var enc: Encoder = .{
                     .value = .{ .constant = 0 },
                     .domain = .{ .range = .{ .first = 0, .last = 0 }},
-                    .arithmetic_offset = 0,
                     .bit_offset = 0,
                     .bit_count = 0,
                 };
@@ -375,9 +374,6 @@ pub fn Parser(comptime Reader: type) type {
                         try self.reader.require_close();
                     } else if (std.mem.eql(u8, expr, "shift")) {
                         enc.bit_offset = try self.reader.require_any_int(Encoded_Instruction.Bit_Length_Type, 0);
-                        try self.reader.require_close();
-                    } else if (std.mem.eql(u8, expr, "base")) {
-                        enc.arithmetic_offset = try self.reader.require_any_int(u64, 0);
                         try self.reader.require_close();
                     } else if (std.mem.eql(u8, expr, "unsigned")) {
                         enc.domain = try self.parse_int_domain(.unsigned);

@@ -1,9 +1,9 @@
-const region_encoder = Encoder.shifted(14, @as(u2, 2));
+const region_encoder = Encoder.init(14, @as(u2, 2));
 
 fn atomic_width_encoder(params: []const Parameter.Signature) Encoder {
     for (params) |param| {
         if (param.address_space != null) continue;
-        return Encoder.shifted(6, @as(u1, switch (param.base) {
+        return Encoder.init(6, @as(u1, switch (param.base) {
             .reg16 => 0,
             .reg32 => 1,
             else => continue,
@@ -20,9 +20,9 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Imm,
-            Encoder.shifted(8, Even_Reg(.reg)),
+            Encoder.init(8, Even_Reg(.reg)),
             mnemonic_encoder,
-            Encoder.shifted(12, @as(u2, 3)),
+            Encoder.init(12, @as(u2, 3)),
             region_encoder,
         };
         const Imm = Int(.imm, i8);
@@ -30,7 +30,7 @@ pub const instructions = .{
         pub const iw = Reg(.reg);
 
         fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
-            return Encoder.shifted(11, @as(u1, switch (mnemonic) {
+            return Encoder.init(11, @as(u1, switch (mnemonic) {
                 .cmp => 0,
                 .add => 1,
                 else => unreachable,
@@ -61,10 +61,10 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.dest),
-            Encoder.shifted(3, Even_Reg(.a)),
-            Encoder.shifted(6, Even_Reg(.b)),
+            Encoder.init(3, Even_Reg(.a)),
+            Encoder.init(6, Even_Reg(.b)),
             mnemonic_encoder,
-            Encoder.shifted(11, @as(u3, 5)),
+            Encoder.init(11, @as(u3, 5)),
             region_encoder,
         };
         pub const ij = Reg(.a);
@@ -72,7 +72,7 @@ pub const instructions = .{
         pub const iw = Reg(.dest);
 
         fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
-            return Encoder.shifted(9, @as(u2, switch (mnemonic) {
+            return Encoder.init(9, @as(u2, switch (mnemonic) {
                 .add => 0,
                 .addc => 1,
                 .sub => 2,
@@ -103,11 +103,11 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.dest),
-            Encoder.shifted(3, Even_Reg(.a)),
-            Encoder.shifted(6, Even_Reg(.b)),
+            Encoder.init(3, Even_Reg(.a)),
+            Encoder.init(6, Even_Reg(.b)),
             signedness_encoder,
             mnemonic_encoder,
-            Encoder.shifted(11, @as(u3, 4)),
+            Encoder.init(11, @as(u3, 4)),
             region_encoder,
         };
         pub const ij = Reg(.a);
@@ -115,13 +115,13 @@ pub const instructions = .{
         pub const iw = Reg(.dest);
 
         fn signedness_encoder(b: Param(.b)) Encoder {
-            return Encoder.shifted(9, @as(u1, switch (b.signature.base.reg16.?) {
+            return Encoder.init(9, @as(u1, switch (b.signature.base.reg16.?) {
                 .unsigned => 0,
                 .signed => 1,
             }));
         }
         fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
-            return Encoder.shifted(10, @as(u1, switch (mnemonic) {
+            return Encoder.init(10, @as(u1, switch (mnemonic) {
                 .add => 0,
                 .sub => 1,
                 else => unreachable,
@@ -152,25 +152,25 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.dest),
-            Encoder.shifted(3, Even_Reg(.src)),
-            Encoder.shifted(6, Range(.imm, 1, 8)),
+            Encoder.init(3, Even_Reg(.src)),
+            Encoder.init(6, Range(.imm, 1, 8)),
             width_encoder,
             mnemonic_encoder,
-            Encoder.shifted(11, @as(u3, 3)),
+            Encoder.init(11, @as(u3, 3)),
             region_encoder,
         };
         pub const ij = Reg(.src);
         pub const iw = Reg(.dest);
 
         fn width_encoder(src: Param(.src)) Encoder {
-            return Encoder.shifted(9, @as(u1, switch (src.signature.base) {
+            return Encoder.init(9, @as(u1, switch (src.signature.base) {
                 .reg16 => 0,
                 .reg32 => 1,
                 else => unreachable,
             }));
         }
         fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
-            return Encoder.shifted(10, @as(u1, switch (mnemonic) {
+            return Encoder.init(10, @as(u1, switch (mnemonic) {
                 .add => 0,
                 .sub => 1,
                 else => unreachable,
@@ -216,21 +216,21 @@ pub const instructions = .{
             struct {
                 pub const encoding = .{
                     Reg(.dest),
-                    Encoder.shifted(4, Reg(.src)),
+                    Encoder.init(4, Reg(.src)),
                     mnemonic_encoder,
-                    Encoder.shifted(10, @as(u4, 5)),
+                    Encoder.init(10, @as(u4, 5)),
                     region_encoder,
-                    Encoder.shifted(16, Int(.imm, u16)),
+                    Encoder.init(16, Int(.imm, u16)),
                 };
             },
             struct {
                 pub const encoding = .{
                     Reg(.dest),
-                    Encoder.shifted(4, Reg(.src)),
+                    Encoder.init(4, Reg(.src)),
                     mnemonic_encoder,
-                    Encoder.shifted(10, @as(u4, 5)),
+                    Encoder.init(10, @as(u4, 5)),
                     region_encoder,
-                    Encoder.shifted(16, Int(.imm, i16)),
+                    Encoder.init(16, Int(.imm, i16)),
                 };
             },
         };
@@ -239,7 +239,7 @@ pub const instructions = .{
         pub const iw = Reg(.dest);
 
         fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
-            return Encoder.shifted(8, @as(u2, switch (mnemonic) {
+            return Encoder.init(8, @as(u2, switch (mnemonic) {
                 .add => 0,
                 .addc => 1,
                 .sub => 2,
@@ -296,9 +296,9 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Reg(.a),
-            Encoder.shifted(4, Even_Reg(.b)),
+            Encoder.init(4, Even_Reg(.b)),
             mnemonic_encoder,
-            Encoder.shifted(10, @as(u4, 4)),
+            Encoder.init(10, @as(u4, 4)),
             region_encoder,
         };
         pub const ij = Reg(.a);
@@ -306,7 +306,7 @@ pub const instructions = .{
         pub const iw = Reg(.a);
 
         fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
-            return Encoder.shifted(7, @as(u3, switch (mnemonic) {
+            return Encoder.init(7, @as(u3, switch (mnemonic) {
                 .cmp => 0,
                 .cmpc => 1,
                 .@"and" => 2,
@@ -358,18 +358,18 @@ pub const instructions = .{
                 pub const encoding = .{
                     Reg(.reg),
                     mnemonic_encoder,
-                    Encoder.shifted(7, @as(u7, 0x1f)),
+                    Encoder.init(7, @as(u7, 0x1f)),
                     region_encoder,
-                    Encoder.shifted(16, Int(.imm, u16)),
+                    Encoder.init(16, Int(.imm, u16)),
                 };
             },
             struct {
                 pub const encoding = .{
                     Reg(.reg),
                     mnemonic_encoder,
-                    Encoder.shifted(7, @as(u7, 0x1f)),
+                    Encoder.init(7, @as(u7, 0x1f)),
                     region_encoder,
-                    Encoder.shifted(16, Int(.imm, i16)),
+                    Encoder.init(16, Int(.imm, i16)),
                 };
             },
         };
@@ -377,7 +377,7 @@ pub const instructions = .{
         pub const iw = Reg(.reg);
 
         fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
-            return Encoder.shifted(4, @as(u3, switch (mnemonic) {
+            return Encoder.init(4, @as(u3, switch (mnemonic) {
                 .cmp => 0,
                 .cmpc => 1,
                 .@"and" => 2,
@@ -422,9 +422,9 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Reg_Bit(.imm),
-            Encoder.shifted(4, Even_Reg(.reg)),
+            Encoder.init(4, Even_Reg(.reg)),
             mnemonic_encoder,
-            Encoder.shifted(9, @as(u5, 7)),
+            Encoder.init(9, @as(u5, 7)),
             region_encoder,
         };
         pub const ij = Reg(.reg);
@@ -432,7 +432,7 @@ pub const instructions = .{
         pub const iw = Reg(.reg);
 
         fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
-            return Encoder.shifted(7, @as(u2, switch (mnemonic) {
+            return Encoder.init(7, @as(u2, switch (mnemonic) {
                 .clrbit => 0,
                 .setbit => 1,
                 .testbit => 2,
@@ -461,10 +461,10 @@ pub const instructions = .{
     struct { pub const spec = "add x(src), (imm) -> x(dest)";
         pub const encoding = .{
             Even_Reg(.dest),
-            Encoder.shifted(3, Even_Reg(.src)),
-            Encoder.shifted(6, @as(u8, 0x36)),
+            Encoder.init(3, Even_Reg(.src)),
+            Encoder.init(6, @as(u8, 0x36)),
             region_encoder,
-            Encoder.shifted(16, Int(.imm, u16)),
+            Encoder.init(16, Int(.imm, u16)),
         };
         pub const ij = Reg(.src);
         pub const iw = Reg(.dest);
@@ -487,10 +487,10 @@ pub const instructions = .{
     struct { pub const spec = "add x(src), (imm) -> x(dest)";
         pub const encoding = .{
             Even_Reg(.dest),
-            Encoder.shifted(3, Even_Reg(.src)),
-            Encoder.shifted(6, @as(u8, 0x37)),
+            Encoder.init(3, Even_Reg(.src)),
+            Encoder.init(6, @as(u8, 0x37)),
             region_encoder,
-            Encoder.shifted(16, Range(.imm, -0x10000, -1)),
+            Encoder.init(16, Range(.imm, -0x10000, -1)),
         };
         pub const ij = Reg(.src);
         pub const iw = Reg(.dest);
@@ -516,16 +516,16 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.a),
-            Encoder.shifted(3, Even_Reg(.b)),
+            Encoder.init(3, Even_Reg(.b)),
             signedness_encoder,
-            Encoder.shifted(7, @as(u7, 0x1a)),
+            Encoder.init(7, @as(u7, 0x1a)),
             region_encoder,
         };
         pub const ij = Reg(.a);
         pub const ik = Reg(.b);
 
         fn signedness_encoder(b: Param(.b)) Encoder {
-            return Encoder.shifted(6, @as(u1, switch (b.signature.base.reg16.?) {
+            return Encoder.init(6, @as(u1, switch (b.signature.base.reg16.?) {
                 .unsigned => 0,
                 .signed => 1,
             }));
@@ -553,24 +553,24 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.dest),
-            Encoder.shifted(3, Even_Reg(.src)),
+            Encoder.init(3, Even_Reg(.src)),
             width_encoder,
             mnemonic_encoder,
-            Encoder.shifted(8, @as(u6, 0xc)),
+            Encoder.init(8, @as(u6, 0xc)),
             region_encoder,
         };
         pub const ij = Reg(.src);
         pub const iw = Reg(.dest);
 
         fn width_encoder(src: Param(.src)) Encoder {
-            return Encoder.shifted(6, @as(u1, switch (src.signature.base) {
+            return Encoder.init(6, @as(u1, switch (src.signature.base) {
                 .reg16 => 0,
                 .reg32 => 1,
                 else => unreachable,
             }));
         }
         fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
-            return Encoder.shifted(7, @as(u1, switch (mnemonic) {
+            return Encoder.init(7, @as(u1, switch (mnemonic) {
                 .subc => 0,
                 .addc => 1,
                 else => unreachable,
@@ -615,9 +615,9 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.dest),
-            Encoder.shifted(3, Even_Reg(.src)),
+            Encoder.init(3, Even_Reg(.src)),
             mnemonic_encoder,
-            Encoder.shifted(9, @as(u5, 5)),
+            Encoder.init(9, @as(u5, 5)),
             region_encoder,
         };
         pub const ij = Reg(.src);
@@ -625,7 +625,7 @@ pub const instructions = .{
         pub const iw = Reg(.dest);
 
         fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
-            return Encoder.shifted(6, @as(u3, switch (mnemonic) {
+            return Encoder.init(6, @as(u3, switch (mnemonic) {
                 .neg => 0,
                 .negc => 1,
                 .cz => 2,
@@ -674,24 +674,24 @@ pub const instructions = .{
                 pub const encoding = .{
                     Reg(.a),
                     mnemonic_encoder,
-                    Encoder.shifted(5, @as(u9, 0x40)),
+                    Encoder.init(5, @as(u9, 0x40)),
                     region_encoder,
-                    Encoder.shifted(16, Int(.imm, u16)),
+                    Encoder.init(16, Int(.imm, u16)),
                 };
             },
             struct {
                 pub const encoding = .{
                     Reg(.a),
                     mnemonic_encoder,
-                    Encoder.shifted(5, @as(u9, 0x40)),
+                    Encoder.init(5, @as(u9, 0x40)),
                     region_encoder,
-                    Encoder.shifted(16, Int(.imm, i16)),
+                    Encoder.init(16, Int(.imm, i16)),
                 };
             },
         };
 
         fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
-            return Encoder.shifted(4, @as(u1, switch (mnemonic) {
+            return Encoder.init(4, @as(u1, switch (mnemonic) {
                 .cmp => 0,
                 .cmpc => 1,
                 else => unreachable,
@@ -721,9 +721,9 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Reg(.a),
-            Encoder.shifted(4, @as(u10, 0x082)),
+            Encoder.init(4, @as(u10, 0x082)),
             region_encoder,
-            Encoder.shifted(16, Int(.imm, u16)),
+            Encoder.init(16, Int(.imm, u16)),
         };
         pub const ij = Reg(.a);
 
@@ -746,9 +746,9 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Reg(.a),
-            Encoder.shifted(4, @as(u10, 0x083)),
+            Encoder.init(4, @as(u10, 0x083)),
             region_encoder,
-            Encoder.shifted(16, Range(.imm, -0x10000, -1)),
+            Encoder.init(16, Range(.imm, -0x10000, -1)),
         };
         pub const ij = Reg(.a);
 
@@ -771,8 +771,8 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Reg(.a),
-            Encoder.shifted(4, Reg(.b)),
-            Encoder.shifted(8, @as(u6, 0x0)),
+            Encoder.init(4, Reg(.b)),
+            Encoder.init(8, @as(u6, 0x0)),
             region_encoder,
         };
         pub const ij = Reg(.a);
@@ -805,8 +805,8 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Reg(.a),
-            Encoder.shifted(4, Reg(.b)),
-            Encoder.shifted(8, @as(u6, 0x2)),
+            Encoder.init(4, Reg(.b)),
+            Encoder.init(8, @as(u6, 0x2)),
             region_encoder,
         };
         pub const ik = Reg(.a);
@@ -840,8 +840,8 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.a),
-            Encoder.shifted(3, Even_Reg(.b)),
-            Encoder.shifted(6, @as(u8, 0x5)),
+            Encoder.init(3, Even_Reg(.b)),
+            Encoder.init(6, @as(u8, 0x5)),
             region_encoder,
         };
         pub const ij = Reg(.a);
@@ -890,8 +890,8 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.a),
-            Encoder.shifted(3, Even_Reg(.b)),
-            Encoder.shifted(6, @as(u8, 0xd)),
+            Encoder.init(3, Even_Reg(.b)),
+            Encoder.init(6, @as(u8, 0xd)),
             region_encoder,
         };
         pub const ik = Reg(.a);
@@ -943,14 +943,14 @@ pub const instructions = .{
         pub const encoding = .{
             Reg(.reg),
             width_encoder,
-            Encoder.shifted(5, @as(u9, 0x8)),
+            Encoder.init(5, @as(u9, 0x8)),
             region_encoder,
         };
         pub const ij = Reg(.reg);
         pub const ik: u4 = 0;
 
         fn width_encoder(reg: Param(.reg)) Encoder {
-            return Encoder.shifted(4, @as(u1, switch (reg.signature.base) {
+            return Encoder.init(4, @as(u1, switch (reg.signature.base) {
                 .reg16 => 0,
                 .reg32 => 1,
                 else => unreachable,
@@ -994,14 +994,14 @@ pub const instructions = .{
         pub const encoding = .{
             Reg(.reg),
             width_encoder,
-            Encoder.shifted(5, @as(u9, 0x18)),
+            Encoder.init(5, @as(u9, 0x18)),
             region_encoder,
         };
         pub const ik_ij = bytes_encoder;
         pub const iw = Reg(.reg);
 
         fn width_encoder(reg: Param(.reg)) Encoder {
-            return Encoder.shifted(4, @as(u1, switch (reg.signature.base) {
+            return Encoder.init(4, @as(u1, switch (reg.signature.base) {
                 .reg16 => 0,
                 .reg32 => 1,
                 else => unreachable,
@@ -1049,16 +1049,16 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.bytes),
-            Encoder.shifted(3, @as(u1, 0)),
+            Encoder.init(3, @as(u1, 0)),
             mnemonic_encoder,
-            Encoder.shifted(6, @as(u8, 0x21)),
+            Encoder.init(6, @as(u8, 0x21)),
             region_encoder,
         };
         pub const ij = Reg(.bytes);
         pub const iw = Reg(.bytes);
 
         fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
-            return Encoder.shifted(4, @as(u2, switch (mnemonic) {
+            return Encoder.init(4, @as(u2, switch (mnemonic) {
                 .mc => 0,
                 .si => 2,
                 .so => 3,
@@ -1183,16 +1183,16 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.bytes),
-            Encoder.shifted(3, @as(u1, 1)),
+            Encoder.init(3, @as(u1, 1)),
             mnemonic_encoder,
-            Encoder.shifted(6, @as(u8, 0x21)),
+            Encoder.init(6, @as(u8, 0x21)),
             region_encoder,
         };
         pub const ij = Reg(.bytes);
         pub const iw = Reg(.bytes);
 
         fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
-            return Encoder.shifted(4, @as(u2, switch (mnemonic) {
+            return Encoder.init(4, @as(u2, switch (mnemonic) {
                 .mcb => 0,
                 .sib => 2,
                 .sob => 3,
@@ -1277,9 +1277,9 @@ pub const instructions = .{
     struct { pub const spec = "mcf x(bytes) .signed, .d bp -> .d rp";
         pub const encoding = .{
             Even_Reg(.bytes),
-            Encoder.shifted(3, @as(u1, 0)),
-            Encoder.shifted(4, @as(u2, 1)),
-            Encoder.shifted(6, @as(u8, 0x21)),
+            Encoder.init(3, @as(u1, 0)),
+            Encoder.init(4, @as(u2, 1)),
+            Encoder.init(6, @as(u8, 0x21)),
             region_encoder,
         };
         pub const ij = Reg(.bytes);
@@ -1388,9 +1388,9 @@ pub const instructions = .{
     struct { pub const spec = "mcfb x(bytes) .signed, .d bp -> .d rp";
         pub const encoding = .{
             Even_Reg(.bytes),
-            Encoder.shifted(3, @as(u1, 1)),
-            Encoder.shifted(4, @as(u2, 1)),
-            Encoder.shifted(6, @as(u8, 0x21)),
+            Encoder.init(3, @as(u1, 1)),
+            Encoder.init(4, @as(u2, 1)),
+            Encoder.init(6, @as(u8, 0x21)),
             region_encoder,
         };
         pub const ij = Reg(.bytes);
@@ -1451,7 +1451,7 @@ pub const instructions = .{
         // Only one pipes 1 and 3 may perform block transfers.
         pub const encoding = .{
             Even_Reg(.bytes),
-            Encoder.shifted(3, @as(u11, 0x110)),
+            Encoder.init(3, @as(u11, 0x110)),
             region_encoder,
         };
         pub const ij = Reg(.bytes);
@@ -1489,7 +1489,7 @@ pub const instructions = .{
         // Only one pipes 1 and 3 may perform block transfers.
         pub const encoding = .{
             Even_Reg(.bytes),
-            Encoder.shifted(3, @as(u11, 0x111)),
+            Encoder.init(3, @as(u11, 0x111)),
             region_encoder,
         };
         pub const ij = Reg(.bytes);
@@ -1524,9 +1524,9 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.dest),
-            Encoder.shifted(3, Even_Reg(.src)),
+            Encoder.init(3, Even_Reg(.src)),
             atomic_width_encoder,
-            Encoder.shifted(7, @as(u7, 0x7)),
+            Encoder.init(7, @as(u7, 0x7)),
             region_encoder,
         };
         pub const ij = Reg(.src);
@@ -1566,9 +1566,9 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.dest),
-            Encoder.shifted(3, Even_Reg(.src)),
+            Encoder.init(3, Even_Reg(.src)),
             atomic_width_encoder,
-            Encoder.shifted(7, @as(u7, 0x3)),
+            Encoder.init(7, @as(u7, 0x3)),
             region_encoder,
         };
         pub const ij = Reg(.dest);
@@ -1608,9 +1608,9 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.mem),
-            Encoder.shifted(3, Even_Reg(.offset)),
+            Encoder.init(3, Even_Reg(.offset)),
             atomic_width_encoder,
-            Encoder.shifted(7, @as(u7, 0x8)),
+            Encoder.init(7, @as(u7, 0x8)),
             region_encoder,
         };
         pub const ij = Reg(.mem);
@@ -1680,10 +1680,10 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.mem),
-            Encoder.shifted(3, Imm),
-            Encoder.shifted(5, @as(u1, 0)),
+            Encoder.init(3, Imm),
+            Encoder.init(5, @as(u1, 0)),
             atomic_width_encoder,
-            Encoder.shifted(7, @as(u7, 0x9)),
+            Encoder.init(7, @as(u7, 0x9)),
             region_encoder,
         };
         const Imm = Options(.imm, .{ 1, 2, 4, 8 });
@@ -1753,10 +1753,10 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.mem),
-            Encoder.shifted(3, Imm),
-            Encoder.shifted(5, @as(u1, 1)),
+            Encoder.init(3, Imm),
+            Encoder.init(5, @as(u1, 1)),
             atomic_width_encoder,
-            Encoder.shifted(7, @as(u7, 0x9)),
+            Encoder.init(7, @as(u7, 0x9)),
             region_encoder,
         };
         const Imm = Options(.imm, .{ -1, -2, -4, -8 });
@@ -1826,9 +1826,9 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.dest),
-            Encoder.shifted(3, Even_Reg(.src)),
+            Encoder.init(3, Even_Reg(.src)),
             atomic_width_encoder,
-            Encoder.shifted(7, @as(u7, 0xb)),
+            Encoder.init(7, @as(u7, 0xb)),
             region_encoder,
         };
         pub const ij = Reg(.dest);
@@ -1898,9 +1898,9 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.mem),
-            Encoder.shifted(3, @as(u3, 2)),
+            Encoder.init(3, @as(u3, 2)),
             atomic_width_encoder,
-            Encoder.shifted(7, @as(u7, 0xa)),
+            Encoder.init(7, @as(u7, 0xa)),
             region_encoder,
         };
         pub const ij = Reg(.mem);
@@ -2010,14 +2010,14 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.mem),
-            Encoder.shifted(3, @as(u3, 0)),
+            Encoder.init(3, @as(u3, 0)),
             atomic_width_encoder,
-            Encoder.shifted(7, @as(u7, 0xa)),
+            Encoder.init(7, @as(u7, 0xa)),
             region_encoder,
-            Encoder.shifted(16, Reg(.src)),
-            Encoder.shifted(20, Int(.__, u4)),
-            Encoder.shifted(24, Reg(.dest)),
-            Encoder.shifted(28, @as(u4, 0)),
+            Encoder.init(16, Reg(.src)),
+            Encoder.init(20, Int(.__, u4)),
+            Encoder.init(24, Reg(.dest)),
+            Encoder.init(28, @as(u4, 0)),
         };
         pub const ij = Reg(.mem);
 
@@ -2085,14 +2085,14 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.mem),
-            Encoder.shifted(3, @as(u3, 1)),
+            Encoder.init(3, @as(u3, 1)),
             atomic_width_encoder,
-            Encoder.shifted(7, @as(u7, 0xa)),
+            Encoder.init(7, @as(u7, 0xa)),
             region_encoder,
-            Encoder.shifted(16, Reg(.src)),
-            Encoder.shifted(20, Reg(.expected)),
-            Encoder.shifted(24, Reg(.dest)),
-            Encoder.shifted(28, @as(u4, 0)),
+            Encoder.init(16, Reg(.src)),
+            Encoder.init(20, Reg(.expected)),
+            Encoder.init(24, Reg(.dest)),
+            Encoder.init(28, @as(u4, 0)),
         };
         pub const ij = Reg(.mem);
 

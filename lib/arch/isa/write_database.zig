@@ -56,12 +56,6 @@ pub fn write_encoding(comptime W: type, writer: *sx.Writer(W), compact: bool, en
             _ = try writer.close();
         }
 
-        if (enc.arithmetic_offset > 0) {
-            try writer.expression("base");
-            try writer.int(enc.arithmetic_offset, 10);
-            _ = try writer.close();
-        }
-
         _ = try writer.close();
     }
 

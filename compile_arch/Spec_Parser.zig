@@ -170,7 +170,6 @@ fn add_placeholder(self: *Spec_Parser, index: Parameter.Index, placeholder: []co
             .name = placeholder,
         }},
         .domain = .{ .enumerated = &.{} },
-        .arithmetic_offset = 0,
         .bit_offset = 0,
         .bit_count = 0,
     }) catch @panic("OOM");

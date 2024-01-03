@@ -1,6 +1,5 @@
 value: Value,
 domain: Domain,
-arithmetic_offset: u64,
 bit_offset: Encoded_Instruction.Bit_Length_Type,
 bit_count: Encoded_Instruction.Bit_Length_Type,
 
@@ -19,11 +18,10 @@ pub fn encode(self: Encoder, insn: isa.Instruction, out: *Encoded_Instruction.Da
 }
 
 pub fn encode_value(self: Encoder, value: i64, out: *Encoded_Instruction.Data) bool {
-    const raw = self.domain.encode(value) orelse return false;
-    var n: Encoded_Instruction.Data = raw + self.arithmetic_offset;
-    n = @shlExact(n, self.bit_offset);
-    n &= self.bit_mask();
-    out.* |= n;
+    const raw: Encoded_Instruction.Data = self.domain.encode(value) orelse return false;
+    var data = @shlExact(raw, self.bit_offset);
+    data &= self.bit_mask();
+    out.* |= data;
     return true;
 }
 
@@ -35,24 +33,11 @@ pub fn decode_value(self: Encoder, data: Encoded_Instruction.Data) ?i64 {
     const shifted_data = data >> self.bit_offset;
     const bits = self.bit_count;
     const mask = (@as(u64, 1) << @intCast(bits)) - 1;
-    if (shifted_data < self.arithmetic_offset) return null;
-    const raw: u64 = @intCast((shifted_data - self.arithmetic_offset) & mask);
+    const raw: u64 = @intCast(shifted_data & mask);
     return self.domain.decode(raw);
 }
 
-pub fn identity(what: anytype) Encoder {
-    return shifted_offset(0, 0, what);
-}
-
-pub fn shifted(bit_offset: Encoded_Instruction.Bit_Length_Type, what: anytype) Encoder {
-    return shifted_offset(bit_offset, 0, what);
-}
-
-pub fn offset(arith_offset: anytype, what: anytype) Encoder {
-    return shifted_offset(0, arith_offset, what);
-}
-
-pub fn shifted_offset(bit_offset: Encoded_Instruction.Bit_Length_Type, arith_offset: anytype, what: anytype) Encoder {
+pub fn init(bit_offset: Encoded_Instruction.Bit_Length_Type, what: anytype) Encoder {
     var value: Value = undefined;
     var domain: Domain = undefined;
     const T = @TypeOf(what);
@@ -114,9 +99,8 @@ pub fn shifted_offset(bit_offset: Encoded_Instruction.Bit_Length_Type, arith_off
     return .{
         .value = value,
         .domain = domain,
-        .arithmetic_offset = arith_offset,
         .bit_offset = bit_offset,
-        .bit_count = @max(@bitSizeOf(@TypeOf(arith_offset)), domain.min_bits()),
+        .bit_count = domain.min_bits(),
     };
 }
 

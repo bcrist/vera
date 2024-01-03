@@ -1,4 +1,4 @@
-const region_encoder = Encoder.shifted(14, @as(u2, 1));
+const region_encoder = Encoder.init(14, @as(u2, 1));
 
 pub const instructions = .{
     struct { pub const spec = // ld .d x(base) + (imm4) -> b(dest)
@@ -7,10 +7,10 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.dest),
-            Encoder.shifted(3, Even_Reg(.base)),
-            Encoder.shifted(6, Imm),
+            Encoder.init(3, Even_Reg(.base)),
+            Encoder.init(6, Imm),
             signedness_encoder,
-            Encoder.shifted(11, @as(u3, 0)),
+            Encoder.init(11, @as(u3, 0)),
             region_encoder,
         };
         const Imm = Int(.imm, u4);
@@ -19,7 +19,7 @@ pub const instructions = .{
         pub const iw = Reg(.dest);
 
         fn signedness_encoder(dest: Param(.dest)) Encoder {
-            return Encoder.shifted(10, @as(u1, switch (dest.signature.base.reg8.?) {
+            return Encoder.init(10, @as(u1, switch (dest.signature.base.reg8.?) {
                 .unsigned => 0,
                 .signed => 1,
             }));
@@ -41,9 +41,9 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.dest),
-            Encoder.shifted(3, Even_Reg(.base)),
-            Encoder.shifted(6, Imm),
-            Encoder.shifted(10, @as(u4, 2)),
+            Encoder.init(3, Even_Reg(.base)),
+            Encoder.init(6, Imm),
+            Encoder.init(10, @as(u4, 2)),
             region_encoder,
         };
         const Imm = Int_Mult(.imm, u4, 2);
@@ -69,9 +69,9 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.dest),
-            Encoder.shifted(3, Even_Reg(.base)),
-            Encoder.shifted(6, Imm),
-            Encoder.shifted(10, @as(u4, 3)),
+            Encoder.init(3, Even_Reg(.base)),
+            Encoder.init(6, Imm),
+            Encoder.init(10, @as(u4, 3)),
             region_encoder,
         };
         const Imm = Int_Mult(.imm, u4, 4);
@@ -97,9 +97,9 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.src),
-            Encoder.shifted(3, Even_Reg(.base)),
-            Encoder.shifted(6, Imm),
-            Encoder.shifted(10, @as(u4, 4)),
+            Encoder.init(3, Even_Reg(.base)),
+            Encoder.init(6, Imm),
+            Encoder.init(10, @as(u4, 4)),
             region_encoder,
         };
         const Imm = Int(.imm, u4);
@@ -124,9 +124,9 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.src),
-            Encoder.shifted(3, Even_Reg(.base)),
-            Encoder.shifted(6, Imm),
-            Encoder.shifted(10, @as(u4, 5)),
+            Encoder.init(3, Even_Reg(.base)),
+            Encoder.init(6, Imm),
+            Encoder.init(10, @as(u4, 5)),
             region_encoder,
         };
         const Imm = Int_Mult(.imm, u4, 2);
@@ -151,9 +151,9 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.src),
-            Encoder.shifted(3, Even_Reg(.base)),
-            Encoder.shifted(6, Imm),
-            Encoder.shifted(10, @as(u4, 6)),
+            Encoder.init(3, Even_Reg(.base)),
+            Encoder.init(6, Imm),
+            Encoder.init(10, @as(u4, 6)),
             region_encoder,
         };
         const Imm = Int_Mult(.imm, u4, 4);
@@ -179,16 +179,16 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Int_Mult(.imm, u6, 2),
-            Encoder.shifted(6, Even_Reg(.dest)),
+            Encoder.init(6, Even_Reg(.dest)),
             width_encoder,
-            Encoder.shifted(10, @as(u4, 0xf)),
+            Encoder.init(10, @as(u4, 0xf)),
             region_encoder,
         };
         pub const ik_ij = Int(.imm, u7);
         pub const iw = Reg(.dest);
 
         fn width_encoder(dest: Param(.dest)) Encoder {
-            return Encoder.shifted(9, @as(u1, switch (dest.signature.base) {
+            return Encoder.init(9, @as(u1, switch (dest.signature.base) {
                 .reg16 => 0,
                 .reg32 => 1,
                 else => unreachable,
@@ -212,16 +212,16 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Int_Mult(.imm, u6, 2),
-            Encoder.shifted(6, Even_Reg(.src)),
+            Encoder.init(6, Even_Reg(.src)),
             width_encoder,
-            Encoder.shifted(10, @as(u4, 0x7)),
+            Encoder.init(10, @as(u4, 0x7)),
             region_encoder,
         };
         pub const ik_ij = Int(.imm, u7);
         pub const iw = Reg(.src);
 
         fn width_encoder(src: Param(.src)) Encoder {
-            return Encoder.shifted(9, @as(u1, switch (src.signature.base) {
+            return Encoder.init(9, @as(u1, switch (src.signature.base) {
                 .reg16 => 0,
                 .reg32 => 1,
                 else => unreachable,
@@ -247,10 +247,10 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.dest),
-            Encoder.shifted(3, Even_Reg(.base)),
-            Encoder.shifted(6, Even_Reg(.offset)),
+            Encoder.init(3, Even_Reg(.base)),
+            Encoder.init(6, Even_Reg(.offset)),
             dest_encoder,
-            Encoder.shifted(11, @as(u3, 4)),
+            Encoder.init(11, @as(u3, 4)),
             region_encoder,
         };
         pub const ij = Reg(.base);
@@ -258,7 +258,7 @@ pub const instructions = .{
         pub const iw = Reg(.dest);
 
         fn dest_encoder(dest: Param(.dest)) Encoder {
-            return Encoder.shifted(9, @as(u2, switch (dest.signature.base) {
+            return Encoder.init(9, @as(u2, switch (dest.signature.base) {
                 .reg8 => |signedness| switch (signedness.?) {
                     .unsigned => 0,
                     .signed => 1,
@@ -289,10 +289,10 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.src),
-            Encoder.shifted(3, Even_Reg(.base)),
-            Encoder.shifted(6, Even_Reg(.offset)),
+            Encoder.init(3, Even_Reg(.base)),
+            Encoder.init(6, Even_Reg(.offset)),
             src_encoder,
-            Encoder.shifted(11, @as(u3, 5)),
+            Encoder.init(11, @as(u3, 5)),
             region_encoder,
         };
         const Imm = Int(.imm, u4);
@@ -301,7 +301,7 @@ pub const instructions = .{
         pub const iw = Reg(.src);
 
         fn src_encoder(src: Param(.src)) Encoder {
-            return Encoder.shifted(9, @as(u2, switch (src.signature.base) {
+            return Encoder.init(9, @as(u2, switch (src.signature.base) {
                 .reg8 => 0,
                 .reg16 => 2,
                 .reg32 => 3,
@@ -327,16 +327,16 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.dest),
-            Encoder.shifted(3, Int_Mult(.imm, u4, 2)),
+            Encoder.init(3, Int_Mult(.imm, u4, 2)),
             base_encoder,
-            Encoder.shifted(8, @as(u6, 0x30)),
+            Encoder.init(8, @as(u6, 0x30)),
             region_encoder,
         };
         pub const ik_ij = Int(.imm, u5);
         pub const iw = Reg(.dest);
 
         fn base_encoder(base: Param(.imm)) Encoder {
-            return Encoder.shifted(7, @as(u1, switch (base.signature.base.sr) {
+            return Encoder.init(7, @as(u1, switch (base.signature.base.sr) {
                 .uxp => 0,
                 .kxp => 1,
                 else => unreachable,
@@ -367,16 +367,16 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.dest),
-            Encoder.shifted(3, Int_Mult(.imm, u4, 4)),
+            Encoder.init(3, Int_Mult(.imm, u4, 4)),
             base_encoder,
-            Encoder.shifted(8, @as(u6, 0x31)),
+            Encoder.init(8, @as(u6, 0x31)),
             region_encoder,
         };
         pub const ik_ij = Int(.imm, u6);
         pub const iw = Reg(.dest);
 
         fn base_encoder(base: Param(.imm)) Encoder {
-            return Encoder.shifted(7, @as(u1, switch (base.signature.base.sr) {
+            return Encoder.init(7, @as(u1, switch (base.signature.base.sr) {
                 .uxp => 0,
                 .kxp => 1,
                 else => unreachable,
@@ -413,10 +413,10 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.src),
-            Encoder.shifted(3, Even_Reg(.dest)),
+            Encoder.init(3, Even_Reg(.dest)),
             dest_encoder,
             mnemonic_encoder,
-            Encoder.shifted(9, @as(u5, 0x19)),
+            Encoder.init(9, @as(u5, 0x19)),
             region_encoder,
         };
         pub const ij = Reg(.src);
@@ -424,7 +424,7 @@ pub const instructions = .{
         pub const iw = Reg(.src);
 
         fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
-            return Encoder.shifted(8, @as(u1, switch (mnemonic) {
+            return Encoder.init(8, @as(u1, switch (mnemonic) {
                 .ldi => 0,
                 .ild => 1,
                 else => unreachable,
@@ -432,7 +432,7 @@ pub const instructions = .{
         }
 
         fn dest_encoder(dest: Param(.dest)) Encoder {
-            return Encoder.shifted(6, @as(u2, switch (dest.signature.base) {
+            return Encoder.init(6, @as(u2, switch (dest.signature.base) {
                 .reg8 => |signedness| switch (signedness.?) {
                     .unsigned => 0,
                     .signed => 1,
@@ -479,10 +479,10 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.dest),
-            Encoder.shifted(3, Even_Reg(.src)),
+            Encoder.init(3, Even_Reg(.src)),
             src_encoder,
             mnemonic_encoder,
-            Encoder.shifted(9, @as(u5, 0x1a)),
+            Encoder.init(9, @as(u5, 0x1a)),
             region_encoder,
         };
         pub const ij = Reg(.dest);
@@ -490,7 +490,7 @@ pub const instructions = .{
         pub const iw = Reg(.dest);
 
         fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
-            return Encoder.shifted(8, @as(u1, switch (mnemonic) {
+            return Encoder.init(8, @as(u1, switch (mnemonic) {
                 .sti => 0,
                 .ist => 1,
                 else => unreachable,
@@ -498,7 +498,7 @@ pub const instructions = .{
         }
 
         fn src_encoder(src: Param(.src)) Encoder {
-            return Encoder.shifted(6, @as(u2, switch (src.signature.base) {
+            return Encoder.init(6, @as(u2, switch (src.signature.base) {
                 .reg8 => 0,
                 .reg16 => 2,
                 .reg32 => 3,
@@ -537,16 +537,16 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.dest),
-            Encoder.shifted(3, Even_Reg(.src)),
+            Encoder.init(3, Even_Reg(.src)),
             dest_encoder,
-            Encoder.shifted(7, @as(u7, 0x6c)),
+            Encoder.init(7, @as(u7, 0x6c)),
             region_encoder,
         };
         pub const ij = Reg(.src);
         pub const iw = Reg(.dest);
 
         fn dest_encoder(dest: Param(.dest)) Encoder {
-            return Encoder.shifted(6, @as(u1, switch (dest.signature.base) {
+            return Encoder.init(6, @as(u1, switch (dest.signature.base) {
                 .reg16 => 0,
                 .reg32 => 1,
                 else => unreachable,
@@ -568,16 +568,16 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.dest),
-            Encoder.shifted(3, Even_Reg(.offset)),
+            Encoder.init(3, Even_Reg(.offset)),
             dest_encoder,
-            Encoder.shifted(7, @as(u7, 0x6d)),
+            Encoder.init(7, @as(u7, 0x6d)),
             region_encoder,
         };
         pub const ik = Reg(.offset);
         pub const iw = Reg(.dest);
 
         fn dest_encoder(dest: Param(.dest)) Encoder {
-            return Encoder.shifted(6, @as(u1, switch (dest.signature.base) {
+            return Encoder.init(6, @as(u1, switch (dest.signature.base) {
                 .reg16 => 0,
                 .reg32 => 1,
                 else => unreachable,
@@ -603,16 +603,16 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.dest),
-            Encoder.shifted(3, Even_Reg(.offset)),
+            Encoder.init(3, Even_Reg(.offset)),
             dest_encoder,
-            Encoder.shifted(8, @as(u6, 0x37)),
+            Encoder.init(8, @as(u6, 0x37)),
             region_encoder,
         };
         pub const ik = Reg(.offset);
         pub const iw = Reg(.dest);
 
         fn dest_encoder(dest: Param(.dest)) Encoder {
-            return Encoder.shifted(6, @as(u2, switch (dest.signature.base) {
+            return Encoder.init(6, @as(u2, switch (dest.signature.base) {
                 .reg8 => |signedness| switch (signedness.?) {
                     .unsigned => 0,
                     .signed => 1,
@@ -641,16 +641,16 @@ pub const instructions = .{
         ;
         pub const encoding = .{
             Even_Reg(.src),
-            Encoder.shifted(3, Even_Reg(.offset)),
+            Encoder.init(3, Even_Reg(.offset)),
             src_encoder,
-            Encoder.shifted(8, @as(u6, 0x38)),
+            Encoder.init(8, @as(u6, 0x38)),
             region_encoder,
         };
         pub const ij = Reg(.src);
         pub const ik = Reg(.offset);
 
         fn src_encoder(src: Param(.src)) Encoder {
-            return Encoder.shifted(6, @as(u2, switch (src.signature.base) {
+            return Encoder.init(6, @as(u2, switch (src.signature.base) {
                 .reg8  => 0,
                 .reg16 => 2,
                 .reg32 => 3,
@@ -677,14 +677,14 @@ pub const instructions = .{
         pub const encoding = .{
             Imm,
             mnemonic_encoder,
-            Encoder.shifted(7, @as(u7, 0x73)),
+            Encoder.init(7, @as(u7, 0x73)),
             region_encoder,
         };
         const Imm = Int(.imm, u6);
         pub const iw_ik_ij = Imm;
 
         fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
-            return Encoder.shifted(6, @as(u1, switch (mnemonic) {
+            return Encoder.init(6, @as(u1, switch (mnemonic) {
                 .frame => 0,
                 .unframe => 1,
                 else => unreachable,
@@ -710,13 +710,13 @@ pub const instructions = .{
         pub const encoding = .{
             @as(u6, 0x20),
             mnemonic_encoder,
-            Encoder.shifted(7, @as(u7, 0x72)),
+            Encoder.init(7, @as(u7, 0x72)),
             region_encoder,
-            Encoder.shifted(16, Int(.imm, u16)),
+            Encoder.init(16, Int(.imm, u16)),
         };
 
         fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
-            return Encoder.shifted(6, @as(u1, switch (mnemonic) {
+            return Encoder.init(6, @as(u1, switch (mnemonic) {
                 .frame => 0,
                 .unframe => 1,
                 else => unreachable,
@@ -751,14 +751,14 @@ pub const instructions = .{
         pub const encoding = .{
             Even_Reg(.dest),
             dest_encoder,
-            Encoder.shifted(5, @as(u9, 0x1c8)),
+            Encoder.init(5, @as(u9, 0x1c8)),
             region_encoder,
-            Encoder.shifted(16, Int(.imm, i16)),
+            Encoder.init(16, Int(.imm, i16)),
         };
         pub const iw = Reg(.dest);
 
         fn dest_encoder(dest: Param(.dest)) Encoder {
-            return Encoder.shifted(3, @as(u2, switch (dest.signature.base) {
+            return Encoder.init(3, @as(u2, switch (dest.signature.base) {
                 .reg8 => |signedness| switch (signedness.?) {
                     .unsigned => 0,
                     .signed => 1,
@@ -795,14 +795,14 @@ pub const instructions = .{
         pub const encoding = .{
             Even_Reg(.src),
             src_encoder,
-            Encoder.shifted(5, @as(u9, 0x1ca)),
+            Encoder.init(5, @as(u9, 0x1ca)),
             region_encoder,
-            Encoder.shifted(16, Int(.imm, i16)),
+            Encoder.init(16, Int(.imm, i16)),
         };
         pub const ik = Reg(.src);
 
         fn src_encoder(src: Param(.src)) Encoder {
-            return Encoder.shifted(3, @as(u2, switch (src.signature.base) {
+            return Encoder.init(3, @as(u2, switch (src.signature.base) {
                 .reg8 => 0,
                 .reg16 => 2,
                 .reg32 => 3,
@@ -834,8 +834,8 @@ pub const instructions = .{
                 pub const spec = "st b(src) -> .d bp + (imm)";
                 pub const encoding = .{
                     Even_Reg(.src),
-                    Encoder.shifted(3, Int(.imm, u4)),
-                    Encoder.shifted(7, @as(u7, 0x54)),
+                    Encoder.init(3, Int(.imm, u4)),
+                    Encoder.init(7, @as(u7, 0x54)),
                     region_encoder,
                 };
             },
@@ -843,8 +843,8 @@ pub const instructions = .{
                 pub const spec = "st r(src) -> .d bp + (imm)";
                 pub const encoding = .{
                     Even_Reg(.src),
-                    Encoder.shifted(3, Int_Mult(.imm, u4, 2)),
-                    Encoder.shifted(7, @as(u7, 0x56)),
+                    Encoder.init(3, Int_Mult(.imm, u4, 2)),
+                    Encoder.init(7, @as(u7, 0x56)),
                     region_encoder,
                 };
             },
@@ -852,8 +852,8 @@ pub const instructions = .{
                 pub const spec = "st x(src) -> .d bp + (imm)";
                 pub const encoding = .{
                     Even_Reg(.src),
-                    Encoder.shifted(3, Int_Mult(.imm, u4, 4)),
-                    Encoder.shifted(7, @as(u7, 0x57)),
+                    Encoder.init(3, Int_Mult(.imm, u4, 4)),
+                    Encoder.init(7, @as(u7, 0x57)),
                     region_encoder,
                 };
             },
@@ -881,13 +881,13 @@ pub const instructions = .{
                     ;
                 pub const encoding = .{
                     Even_Reg(.dest),
-                    Encoder.shifted(3, Int(.imm, u4)),
+                    Encoder.init(3, Int(.imm, u4)),
                     signedness_encoder,
-                    Encoder.shifted(8, @as(u6, 0x3a)),
+                    Encoder.init(8, @as(u6, 0x3a)),
                     region_encoder,
                 };
                 fn signedness_encoder(dest: Param(.dest)) Encoder {
-                    return Encoder.shifted(7, @as(u1, switch (dest.signature.base.reg8.?) {
+                    return Encoder.init(7, @as(u1, switch (dest.signature.base.reg8.?) {
                         .unsigned => 0,
                         .signed => 1,
                     }));
@@ -897,8 +897,8 @@ pub const instructions = .{
                 pub const spec = "ld .d bp + (imm) -> r(dest)";
                 pub const encoding = .{
                     Even_Reg(.dest),
-                    Encoder.shifted(3, Int_Mult(.imm, u4, 2)),
-                    Encoder.shifted(7, @as(u7, 0x76)),
+                    Encoder.init(3, Int_Mult(.imm, u4, 2)),
+                    Encoder.init(7, @as(u7, 0x76)),
                     region_encoder,
                 };
             },
@@ -906,8 +906,8 @@ pub const instructions = .{
                 pub const spec = "ld .d bp + (imm) -> x(dest)";
                 pub const encoding = .{
                     Even_Reg(.dest),
-                    Encoder.shifted(3, Int_Mult(.imm, u4, 4)),
-                    Encoder.shifted(7, @as(u7, 0x77)),
+                    Encoder.init(3, Int_Mult(.imm, u4, 4)),
+                    Encoder.init(7, @as(u7, 0x77)),
                     region_encoder,
                 };
             },
@@ -933,8 +933,8 @@ pub const instructions = .{
     struct { pub const spec = "ldrs .d x(src) -> b(registerset)";
         pub const encoding = .{
             Even_Reg(.registerset),
-            Encoder.shifted(3, Even_Reg(.src)),
-            Encoder.shifted(6, @as(u8, 0xd1)),
+            Encoder.init(3, Even_Reg(.src)),
+            Encoder.init(6, @as(u8, 0xd1)),
             region_encoder,
         };
         pub const ij = Reg(.src);
@@ -1069,8 +1069,8 @@ pub const instructions = .{
     struct { pub const spec = "strs b(registerset) -> .d x(dest)";
         pub const encoding = .{
             Even_Reg(.registerset),
-            Encoder.shifted(3, Even_Reg(.dest)),
-            Encoder.shifted(6, @as(u8, 0xd5)),
+            Encoder.init(3, Even_Reg(.dest)),
+            Encoder.init(6, @as(u8, 0xd5)),
             region_encoder,
         };
         pub const ij = Reg(.dest);
@@ -1201,7 +1201,7 @@ pub const instructions = .{
     struct { pub const spec = "srs b(registerset)";
         pub const encoding = .{
             Even_Reg(.registerset),
-            Encoder.shifted(3, @as(u11, 0x729)),
+            Encoder.init(3, @as(u11, 0x729)),
             region_encoder,
         };
         pub const ij = Reg(.registerset);

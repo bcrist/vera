@@ -442,7 +442,7 @@ fn resolve_single_encoder(encoder: anytype, signature: ?isa.Instruction_Signatur
             }
             return resolve_single_encoder(@call(.auto, encoder, args), signature, parsed_encoders);
         },
-        else => return Encoder.identity(encoder),
+        else => return Encoder.init(0, encoder),
     }
 }
 
@@ -938,7 +938,6 @@ fn merge_adjacent_constant_encoders(encoders: []Encoder) []Encoder {
         const ok2 = second.encode_value(second.value.constant, &data);
         std.debug.assert(ok2);
 
-        first.arithmetic_offset = 0;
         first.bit_count += second.bit_count;
         first.domain = .{ .int = .{
             .signedness = .unsigned,
