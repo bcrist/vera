@@ -70,6 +70,26 @@ pub fn Reg_Bit(comptime name_or_enum_literal: anytype) type {
     return Options(name_or_enum_literal, .{ 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768 });
 }
 
+pub fn Negate(comptime I: type) type {
+    return struct {
+        value: i64,
+
+        pub const placeholder = I.placeholder;
+        pub const Inner = I;
+        pub const op = .negate;
+    };
+}
+pub fn Offset(comptime offset_amount: i64, comptime I: type) type {
+    return struct {
+        value: i64,
+
+        pub const placeholder = I.placeholder;
+        pub const Inner = I;
+        pub const op = .offset;
+        pub const offset = offset_amount;
+    };
+}
+
 fn parse_name(comptime name_or_enum_literal: anytype) []const u8 {
     return switch (@typeInfo(@TypeOf(name_or_enum_literal))) {
         .EnumLiteral => @tagName(name_or_enum_literal),

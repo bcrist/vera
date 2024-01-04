@@ -5,11 +5,18 @@ encoders: []const Encoder, // If there are multiple encoders, each must correspo
 pub const Value = union (enum) {
     constant: i64,
     placeholder: Placeholder_Info,
+    negate: *const Value,
+    offset: struct {
+        inner: *const Value,
+        offset: i64,
+    },
 
     pub fn evaluate(self: Value, params: []const Parameter) i64 {
         return switch (self) {
             .constant => |v| v,
             .placeholder => |info| info.evaluate(params),
+            .negate => |inner| -inner.evaluate(params),
+            .offset => |info| info.inner.evaluate(params) - info.offset,
         };
     }
 
@@ -17,8 +24,30 @@ pub const Value = union (enum) {
         switch (self) {
             .constant => |v| return v == value,
             .placeholder => |info| return info.assign(value, out),
+            .negate => |inner| return inner.assign(-value, out),
+            .offset => |info| return info.inner.assign(value + info.offset, out),
         }
         return true;
+    }
+
+    /// Convert a "logical" value (as would appear in asm) to a "raw" value that can be encoded by a Domain
+    pub fn raw_from_value(self: Value, logical: i64) i64 {
+        return switch (self) {
+            .constant => |v| v,
+            .placeholder => logical,
+            .negate => |inner| inner.raw_from_value(-logical),
+            .offset => |info| info.inner.raw_from_value(logical + info.offset),
+        };
+    }
+
+    /// Convert a "raw" value directly decoded by a Domain to a "logical" value as would appear in asm
+    pub fn value_from_raw(self: Value, raw: i64) i64 {
+        return switch (self) {
+            .constant => |v| v,
+            .placeholder => raw,
+            .negate => |inner| -inner.value_from_raw(raw),
+            .offset => |info| info.inner.value_from_raw(raw) - info.offset,
+        };
     }
 };
 

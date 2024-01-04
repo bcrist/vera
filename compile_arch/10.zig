@@ -1,53 +1,59 @@
 const region_encoder = Encoder.init(14, @as(u2, 2));
 
-fn atomic_width_encoder(params: []const Parameter.Signature) Encoder {
-    for (params) |param| {
-        if (param.address_space != null) continue;
-        return Encoder.init(6, @as(u1, switch (param.base) {
-            .reg16 => 0,
-            .reg32 => 1,
-            else => continue,
-        }));
-    }
-    @panic("Expected reg16 or reg32 parameter");
-}
-
 pub const instructions = .{
     struct { // <add/cmp> r(reg), (imm8s) -> r(reg)
-        pub const spec =
-            \\add r(reg), (imm)
-            \\add r(reg), (imm) -> r(reg)
-            \\add (imm), r(reg) -> r(reg)
-            \\cmp r(reg), (imm)
-            ;
-        pub const encoding = .{
-            Imm,
-            Encoder.init(8, Even_Reg(.reg)),
-            mnemonic_encoder,
-            Encoder.init(12, @as(u2, 3)),
-            region_encoder,
+        pub const forms = .{
+            struct {
+                pub const spec =
+                    \\add r(reg), (imm)
+                    \\add r(reg), (imm) -> r(reg)
+                    \\add (imm), r(reg) -> r(reg)
+                    \\cmp r(reg), (imm)
+                    ;
+                pub const encoding = .{
+                    Int(.imm, i8),
+                    Encoder.init(8, Even_Reg(.reg)),
+                    mnemonic_encoder,
+                    Encoder.init(12, @as(u2, 3)),
+                    region_encoder,
+                };
+            },
+            struct {
+                pub const spec =
+                    \\sub r(reg), (imm)
+                    \\sub r(reg), (imm) -> r(reg)
+                    ;
+                pub const encoding = .{
+                    Negate(Int(.imm, i8)),
+                    Encoder.init(8, Even_Reg(.reg)),
+                    mnemonic_encoder,
+                    Encoder.init(12, @as(u2, 3)),
+                    region_encoder,
+                };
+            },
         };
-        const Imm = Int(.imm, i8);
         pub const ij = Reg(.reg);
         pub const iw = Reg(.reg);
 
         fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
             return Encoder.init(11, @as(u1, switch (mnemonic) {
                 .cmp => 0,
-                .add => 1,
+                .add, .sub => 1,
                 else => unreachable,
             }));
         }
 
-        pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic, imm: Imm) void {
+        pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic, imm: placeholders.Any(.imm)) void {
             c.reg_to_jl();
-            c.literal_to_k(@intCast(imm.value));
             switch (mnemonic) {
-                .add => {
+                .add, .sub => {
+                    const value = imm.value * @as(i64, if (mnemonic == .sub) -1 else 1);
+                    c.literal_to_k(@intCast(value));
                     c.jl_plus_k_to_ll(.fresh, .flags);
                     c.ll_to_reg();
                 },
                 .cmp => {
+                    c.literal_to_k(@intCast(imm.value));
                     c.jl_minus_k(.fresh, .flags);
                 },
                 else => unreachable,
@@ -229,12 +235,81 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { // <add/addc/sub/subc> r(src), (imm16) -> r(dest)
+    struct { // <add/sub> <src_reg>, (imm3_n1_n8) -> <dest_reg>
         pub const spec =
             \\add r(src), (imm) -> r(dest)
-            \\addc r(src), (imm) -> r(dest)
+            \\add x(src), (imm) -> x(dest)
+            \\add (imm), r(src) -> r(dest)
+            \\add (imm), x(src) -> x(dest)
+            \\sub r(src), (imm) -> r(dest)
+            \\sub x(src), (imm) -> x(dest)
+            \\add r(src, dest), (imm)
+            \\add x(src, dest), (imm)
+            \\sub r(src, dest), (imm)
+            \\sub x(src, dest), (imm)
+            ;
+        pub const encoding = .{
+            Even_Reg(.dest),
+            Encoder.init(3, Even_Reg(.src)),
+            Encoder.init(6, Range(.imm, -1, -8)),
+            width_encoder,
+            mnemonic_encoder,
+            Encoder.init(11, @as(u3, 3)),
+            region_encoder,
+        };
+        pub const ij = Reg(.src);
+        pub const iw = Reg(.dest);
+
+        fn width_encoder(src: Param(.src)) Encoder {
+            return Encoder.init(9, @as(u1, switch (src.signature.base) {
+                .reg16 => 0,
+                .reg32 => 1,
+                else => unreachable,
+            }));
+        }
+        fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
+            return Encoder.init(10, @as(u1, switch (mnemonic) {
+                .add => 1,
+                .sub => 0,
+                else => unreachable,
+            }));
+        }
+
+        pub fn entry(c: *Cycle, imm: placeholders.Any(.imm), mnemonic: isa.Mnemonic, src: Param(.src)) void {
+            switch (src.signature.base) {
+                .reg16 => c.reg_to_jl(),
+                .reg32 => c.reg32_to_j(),
+                else => unreachable,
+            }
+            c.literal_to_k(@intCast(-imm.value));
+            switch (src.signature.base) {
+                .reg16 => {
+                    switch (mnemonic) {
+                        .add => c.jl_minus_k_to_ll(.fresh, .flags),
+                        .sub => c.jl_plus_k_to_ll(.fresh, .flags),
+                        else => unreachable,
+                    }
+                    c.ll_to_reg();
+                },
+                .reg32 => {
+                    switch (mnemonic) {
+                        .add => c.j_minus_k_to_l(.sx, .fresh, .flags),
+                        .sub => c.j_plus_k_to_l(.sx, .fresh, .flags),
+                        else => unreachable,
+                    }
+                    c.l_to_reg32();
+                },
+                else => unreachable,
+            }
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { // <add/addc/sub/subc> r(src), (imm16) -> r(dest)
+        pub const spec =
             \\add r(src, dest), (imm)
             \\addc r(src, dest), (imm)
+            \\add r(src), (imm) -> r(dest)
+            \\addc r(src), (imm) -> r(dest)
             \\addc (imm), r(src) -> r(dest)
             \\sub (imm), r(src) -> r(dest)
             \\subc (imm), r(src) -> r(dest)
@@ -301,6 +376,89 @@ pub const instructions = .{
                 },
                 else => unreachable,
             }
+            c.ll_to_reg();
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { // <sub/subc> r(src), (imm16) -> r(dest)
+        pub const forms = .{
+            struct {
+                pub const spec =
+                    \\sub r(src, dest), (imm)
+                    \\sub r(src), (imm) -> r(dest)
+                    ;
+                pub const encoding = .{
+                    Reg(.dest),
+                    Encoder.init(4, Reg(.src)),
+                    Encoder.init(8, @as(u2, 0)),
+                    Encoder.init(10, @as(u4, 5)),
+                    region_encoder,
+                    Encoder.init(16, Negate(Int(.imm, u16))),
+                };
+            },
+            struct {
+                pub const spec =
+                    \\sub r(src, dest), (imm)
+                    \\sub r(src), (imm) -> r(dest)
+                    ;
+                pub const encoding = .{
+                    Reg(.dest),
+                    Encoder.init(4, Reg(.src)),
+                    Encoder.init(8, @as(u2, 0)),
+                    Encoder.init(10, @as(u4, 5)),
+                    region_encoder,
+                    Encoder.init(16, Negate(Int(.imm, i16))),
+                };
+            },
+            struct {
+                pub const spec =
+                    \\subc r(src, dest), (imm)
+                    \\subc r(src), (imm) -> r(dest)
+                    ;
+                pub const encoding = .{
+                    Reg(.dest),
+                    Encoder.init(4, Reg(.src)),
+                    Encoder.init(8, @as(u2, 1)),
+                    Encoder.init(10, @as(u4, 5)),
+                    region_encoder,
+                    Encoder.init(16, Offset(-1, Negate(Int(.imm, u16)))),
+                };
+            },
+            struct {
+                pub const spec =
+                    \\subc r(src, dest), (imm)
+                    \\subc r(src), (imm) -> r(dest)
+                    ;
+                pub const encoding = .{
+                    Reg(.dest),
+                    Encoder.init(4, Reg(.src)),
+                    Encoder.init(8, @as(u2, 1)),
+                    Encoder.init(10, @as(u4, 5)),
+                    region_encoder,
+                    Encoder.init(16, Offset(-1, Negate(Int(.imm, i16)))),
+                };
+            },
+        };
+        pub const ij = Reg(.src);
+        pub const ik = Reg(.src);
+        pub const iw = Reg(.dest);
+
+        pub fn entry(c: *Cycle) void {
+            c.ip_read_to_d(2, .word);
+            c.d_to_l(.zx);
+            c.l_to_sr(.temp_1);
+            c.next(add);
+        }
+
+        pub fn add(c: *Cycle, mnemonic: isa.Mnemonic) void {
+            const freshness: Cycle.Freshness = switch (mnemonic) {
+                .sub => .fresh,
+                .subc => .cont,
+                else => unreachable,
+            };
+            c.reg_to_jl();
+            c.srl_to_k(.temp_1);
+            c.jl_plus_k_to_ll(freshness, .flags);
             c.ll_to_reg();
             c.load_and_exec_next_insn();
         }
@@ -495,17 +653,34 @@ pub const instructions = .{
         }
     },
     struct { // add x(src), (imm) -> x(dest)
-        pub const spec = 
-            \\add x(src, dest), (imm)
-            \\add x(src), (imm) -> x(dest)
-            \\add (imm), x(src) -> x(dest)
-            ;
-        pub const encoding = .{
-            Even_Reg(.dest),
-            Encoder.init(3, Even_Reg(.src)),
-            Encoder.init(6, @as(u8, 0x36)),
-            region_encoder,
-            Encoder.init(16, Int(.imm, u16)),
+        pub const forms = .{
+            struct {
+                pub const spec = 
+                    \\add x(src, dest), (imm)
+                    \\add x(src), (imm) -> x(dest)
+                    \\add (imm), x(src) -> x(dest)
+                    ;
+                pub const encoding = .{
+                    Even_Reg(.dest),
+                    Encoder.init(3, Even_Reg(.src)),
+                    Encoder.init(6, @as(u8, 0x36)),
+                    region_encoder,
+                    Encoder.init(16, Int(.imm, u16)),
+                };
+            },
+            struct {
+                pub const spec = 
+                    \\sub x(src, dest), (imm)
+                    \\sub x(src), (imm) -> x(dest)
+                    ;
+                pub const encoding = .{
+                    Even_Reg(.dest),
+                    Encoder.init(3, Even_Reg(.src)),
+                    Encoder.init(6, @as(u8, 0x36)),
+                    region_encoder,
+                    Encoder.init(16, Negate(Int(.imm, u16))),
+                };
+            },
         };
         pub const ij = Reg(.src);
         pub const iw = Reg(.dest);
@@ -526,17 +701,34 @@ pub const instructions = .{
         }
     },
     struct { // add x(src), (imm) -> x(dest)
-        pub const spec =
-            \\add x(src, dest), (imm)
-            \\add x(src), (imm) -> x(dest)
-            \\add (imm), x(src) -> x(dest)
-            ;
-        pub const encoding = .{
-            Even_Reg(.dest),
-            Encoder.init(3, Even_Reg(.src)),
-            Encoder.init(6, @as(u8, 0x37)),
-            region_encoder,
-            Encoder.init(16, Range(.imm, -0x10000, -1)),
+        pub const forms = .{
+            struct {
+                pub const spec =
+                    \\add x(src, dest), (imm)
+                    \\add x(src), (imm) -> x(dest)
+                    \\add (imm), x(src) -> x(dest)
+                    ;
+                pub const encoding = .{
+                    Even_Reg(.dest),
+                    Encoder.init(3, Even_Reg(.src)),
+                    Encoder.init(6, @as(u8, 0x37)),
+                    region_encoder,
+                    Encoder.init(16, Range(.imm, -0x10000, -1)),
+                };
+            },
+            struct {
+                pub const spec =
+                    \\sub x(src, dest), (imm)
+                    \\sub x(src), (imm) -> x(dest)
+                    ;
+                pub const encoding = .{
+                    Even_Reg(.dest),
+                    Encoder.init(3, Even_Reg(.src)),
+                    Encoder.init(6, @as(u8, 0x37)),
+                    region_encoder,
+                    Encoder.init(16, Negate(Range(.imm, -0x10000, -1))),
+                };
+            },
         };
         pub const ij = Reg(.src);
         pub const iw = Reg(.dest);
@@ -588,7 +780,7 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { // <addc/subc> x(a), r(b)
+    struct { // <addc/subc> <src> -> <dest>
         pub const spec =
             \\addc r(src, dest)
             \\addc r(src) -> r(dest)
@@ -665,8 +857,10 @@ pub const instructions = .{
         pub const spec =
             \\neg r(src, dest)
             \\neg r(src) -> r(dest)
+            \\sub 0, r(src) -> r(dest)
             \\negc r(src, dest)
             \\negc r(src) -> r(dest)
+            \\subc 0, r(src) -> r(dest)
             \\cb r(src, dest)
             \\cb r(src) -> b(dest)
             \\cz r(src, dest)
@@ -693,8 +887,8 @@ pub const instructions = .{
 
         fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
             return Encoder.init(6, @as(u3, switch (mnemonic) {
-                .neg => 0,
-                .negc => 1,
+                .neg, .sub => 0,
+                .negc, .subc => 1,
                 .cz => 2,
                 .cb => 3,
                 .clz => 4,
@@ -707,10 +901,15 @@ pub const instructions = .{
 
         pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
             switch (mnemonic) {
-                .neg, .negc => {
+                .neg, .sub => {
                     c.zero_to_jl();
                     c.reg_to_k();
                     c.jl_minus_k_to_ll(.fresh, .flags);
+                },
+                .negc, .subc => {
+                    c.zero_to_jl();
+                    c.reg_to_k();
+                    c.jl_minus_k_to_ll(.cont, .flags);
                 },
                 else => {
                     c.reg_to_jl();
@@ -2248,6 +2447,19 @@ pub const instructions = .{
     },
 };
 
+fn atomic_width_encoder(params: []const Parameter.Signature) Encoder {
+    for (params) |param| {
+        if (param.address_space != null) continue;
+        return Encoder.init(6, @as(u1, switch (param.base) {
+            .reg16 => 0,
+            .reg32 => 1,
+            else => continue,
+        }));
+    }
+    @panic("Expected reg16 or reg32 parameter");
+}
+
+
 const Cycle = @import("Cycle.zig");
 const Encoder = isa.Instruction_Encoding.Encoder;
 const Parameter = isa.Parameter;
@@ -2260,6 +2472,8 @@ const Reg_Bit = placeholders.Reg_Bit;
 const Even_Reg = placeholders.Even_Reg;
 const Odd_Reg = placeholders.Odd_Reg;
 const Param = placeholders.Param;
+const Negate = placeholders.Negate;
+const Offset = placeholders.Offset;
 const placeholders = @import("placeholders.zig");
 const Control_Signals = arch.hw.Control_Signals;
 const Flags = arch.hw.microcode.Flags;

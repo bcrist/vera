@@ -479,18 +479,17 @@ pub const Initial_Word_Encoding_Iterator = struct {
         return switch (val) {
             .constant => |k| k,
             .placeholder => |info| self.value(info.name),
+            .negate => |inner| self.constraint_value(inner.*),
+            .offset => |info| self.constraint_value(info.inner.*),
         };
     }
 
     pub fn value(self: Initial_Word_Encoding_Iterator, placeholder: []const u8) ?i64 {
         for (self.value_iters) |iter| {
-            switch (iter.encoder.value) {
-                .placeholder => |info| {
-                    if (std.mem.eql(u8, placeholder, info.name)) {
-                        return iter.last_value;
-                    }
-                },
-                .constant => {},
+            if (get_placeholder_info(iter.encoder.value)) |info| {
+                if (std.mem.eql(u8, placeholder, info.name)) {
+                    return iter.last_value;
+                }
             }
         }
         return null;
@@ -499,11 +498,10 @@ pub const Initial_Word_Encoding_Iterator = struct {
     pub fn encode(self: Initial_Word_Encoding_Iterator, encoders: []const Encoder, context: []const u8) isa.Encoded_Instruction.Data {
         var data: isa.Encoded_Instruction.Data = 0;
         for (encoders) |encoder| {
-            std.debug.assert(encoder.encode_value(switch (encoder.value) {
-                .placeholder => |info| self.value(info.name)
-                    orelse std.debug.panic("{s} references placeholder '{s}', but it is not present in the initial word of the instruction encoding", .{ context, info.name }),
-                .constant => |constant| constant,
-            }, &data));
+            const v = self.constraint_value(encoder.value) orelse std.debug.panic(
+                \\An encoder for {s} references a placeholder that is not encoded in the initial word of the instruction
+                , .{ context });
+            std.debug.assert(encoder.encode_value(v, &data));
         }
         return data;
     }
@@ -811,6 +809,12 @@ fn merge_adjacent_constant_encoders(encoders: []Encoder) []Encoder {
             .bits = @intCast(first.bit_count),
             .multiple = 1,
         }};
+        // wipe out first.value to ensure that first.decode_value will work correctly
+        first.value = .{ .placeholder = .{
+            .index = .invalid,
+            .kind =  .param_constant,
+            .name = "",
+        } };
         first.value = .{ .constant = first.decode_value(data) orelse unreachable };
     }
 
@@ -830,6 +834,8 @@ fn fixup_placeholder_value(value: *Value, parsed_encoders: []const Encoder) void
     switch (value.*) {
         .constant => {},
         .placeholder => |*info| fixup_placeholder_info(info, parsed_encoders),
+        .negate => |inner| fixup_placeholder_value(@constCast(inner), parsed_encoders), // TODO refactor to avoid @constCast
+        .offset => |info| fixup_placeholder_value(@constCast(info.inner), parsed_encoders), // TODO refactor to avoid @constCast
     }
 }
 
@@ -845,28 +851,38 @@ fn fixup_placeholder_info(info: *Placeholder_Info, parsed_encoders: []const Enco
 }
 
 fn find_placeholder_info(needle: []const u8, haystack: []const Encoder) ?Instruction_Encoding.Placeholder_Info {
-    for (haystack) |encoder| switch (encoder.value) {
-        .constant => {},
-        .placeholder => |info| {
-            if (std.mem.eql(u8, info.name, needle)) {
-                return info;
-            }
-        },
-    };
+    for (haystack) |encoder| {
+        if (get_placeholder_info(encoder.value)) |info| {
+            if (std.mem.eql(u8, info.name, needle)) return info;
+        }
+    }
     return null;
 }
 
 fn get_placeholder(value: Value) ?[]const u8 {
-    switch (value) {
-        .constant => return null,
-        .placeholder => |info| return info.name,
-    }
+    return switch (value) {
+        .constant => null,
+        .placeholder => |info| info.name,
+        .negate => |inner| get_placeholder(inner.*),
+        .offset => |info| get_placeholder(info.inner.*),
+    };
+}
+
+fn get_placeholder_info(val: Value) ?Instruction_Encoding.Placeholder_Info {
+    return switch (val) {
+        .constant => null,
+        .placeholder => |info| info,
+        .negate => |inner| get_placeholder_info(inner.*),
+        .offset => |info| get_placeholder_info(info.inner.*),
+    };
 }
 
 fn is_placeholder(needle: []const u8, value: Value) bool {
     return switch (value) {
         .constant => false,
         .placeholder => |info| std.mem.eql(u8, info.name, needle),
+        .negate => |inner| is_placeholder(needle, inner.*),
+        .offset => |info| is_placeholder(needle, info.inner.*),
     };
 }
 

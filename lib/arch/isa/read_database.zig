@@ -350,7 +350,21 @@ pub fn Parser(comptime Reader: type) type {
         }
 
         fn parse_value_source(self: *Self) !Value {
-            if (try self.parse_constant_optional()) |value| {
+            if (try self.reader.expression("negate")) {
+                const inner = try self.parse_value_source();
+                const array = try self.data.inner_values.intern(&.{ inner }, self.data);
+                try self.reader.require_close();
+                return .{ .negate = &array[0] };
+            } else if (try self.reader.expression("offset")) {
+                const offset = try self.reader.require_any_int(i64, 0);
+                const inner = try self.parse_value_source();
+                const array = try self.data.inner_values.intern(&.{ inner }, self.data);
+                try self.reader.require_close();
+                return .{ .offset = .{
+                    .inner = &array[0],
+                    .offset = offset,
+                } };
+            } else if (try self.parse_constant_optional()) |value| {
                 return .{ .constant = value };
             } else {
                 return .{ .placeholder = try self.parse_placeholder_info() };
@@ -446,9 +460,6 @@ pub fn Parser(comptime Reader: type) type {
     };
 }
 
-
-
-
 pub const Parser_Data = struct {
     arena: std.mem.Allocator,
     temp: std.mem.Allocator,
@@ -457,6 +468,7 @@ pub const Parser_Data = struct {
     constraints: Array_Intern_Pool(Constraint) = .{},
     encoders: Array_Intern_Pool(Encoder) = .{},
     enumerated_values: Array_Intern_Pool(i64) = .{},
+    inner_values: Array_Intern_Pool(Value) = .{},
     strings: Array_Intern_Pool(u8) = .{},
 
     pub fn deinit(self: *Parser_Data) void {
@@ -464,6 +476,7 @@ pub const Parser_Data = struct {
         self.constraints.deinit(self.temp);
         self.encoders.deinit(self.temp);
         self.enumerated_values.deinit(self.temp);
+        self.inner_values.deinit(self.temp);
         self.strings.deinit(self.temp);
     }
 };

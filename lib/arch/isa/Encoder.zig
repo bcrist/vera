@@ -14,10 +14,14 @@ pub fn bit_mask(self: Encoder) Encoded_Instruction.Data {
 }
 
 pub fn encode(self: Encoder, insn: isa.Instruction, out: *Encoded_Instruction.Data) bool {
-    return self.encode_value(self.value.evaluate(insn.params), out);
+    return self.encode_raw(self.value.evaluate(insn.params), out);
 }
 
 pub fn encode_value(self: Encoder, value: i64, out: *Encoded_Instruction.Data) bool {
+    return self.encode_raw(self.value.raw_from_value(value), out);
+}
+
+fn encode_raw(self: Encoder, value: i64, out: *Encoded_Instruction.Data) bool {
     const raw: Encoded_Instruction.Data = self.domain.encode(value) orelse return false;
     var data = @shlExact(raw, self.bit_offset);
     data &= self.bit_mask();
@@ -26,10 +30,14 @@ pub fn encode_value(self: Encoder, value: i64, out: *Encoded_Instruction.Data) b
 }
 
 pub fn decode(self: Encoder, data: Encoded_Instruction.Data, out: []isa.Parameter) bool {
-    return self.value.assign(self.decode_value(data) orelse return false, out);
+    return self.value.assign(self.decode_raw(data) orelse return false, out);
 }
 
 pub fn decode_value(self: Encoder, data: Encoded_Instruction.Data) ?i64 {
+    return self.value.value_from_raw(self.decode_raw(data) orelse return null);
+}
+
+fn decode_raw(self: Encoder, data: Encoded_Instruction.Data) ?i64 {
     const shifted_data = data >> self.bit_offset;
     const bits = self.bit_count;
     const mask = (@as(u64, 1) << @intCast(bits)) - 1;
@@ -43,12 +51,26 @@ pub fn init(bit_offset: Encoded_Instruction.Bit_Length_Type, what: anytype) Enco
     const T = @TypeOf(what);
     switch (@typeInfo(T)) {
         .Type => {
-            value = .{ .placeholder = .{
-                .kind = .param_constant,
-                .index = .invalid,
-                .name = what.placeholder,
-            }};
-            domain = what.domain;
+            if (@hasDecl(what, "Inner")) {
+                const inner_encoder = comptime Encoder.init(0, what.Inner);
+                if (comptime std.mem.eql(u8, @tagName(what.op), "negate")) {
+                    value = .{ .negate = &inner_encoder.value };
+                    domain = inner_encoder.domain;
+                } else if (comptime std.mem.eql(u8, @tagName(what.op), "offset")) {
+                    value = .{ .offset = .{
+                        .inner = &inner_encoder.value,
+                        .offset = what.offset,
+                    } };
+                    domain = inner_encoder.domain;
+                } else @compileError("Unsupported placeholder transformation");
+            } else {
+                value = .{ .placeholder = .{
+                    .kind = .param_constant,
+                    .index = .invalid,
+                    .name = what.placeholder,
+                }};
+                domain = what.domain;
+            }
         },
         .Enum => {
             const Tag = std.meta.Tag(T);
@@ -102,16 +124,11 @@ pub const Value_Iterator = struct {
     max_raw: u64,
 
     pub fn next(self: *Value_Iterator) ?i64 {
-        const raw = self.next_raw;
-        if (raw <= self.max_raw) {
-            self.next_raw += 1;
-            self.last_value = switch (self.encoder.value) {
-                .constant => |constant| constant,
-                .placeholder => self.encoder.domain.decode(raw).?,
-            };
-            return self.last_value;
-        }
-        return null;
+        if (self.next_raw > self.max_raw) return null;
+        const raw = self.encoder.domain.decode(self.next_raw).?;
+        self.last_value = self.encoder.value.value_from_raw(raw);
+        self.next_raw += 1;
+        return self.last_value;
     }
 
     pub fn reset(self: *Value_Iterator) void {
