@@ -1,3 +1,5 @@
+[arch] test_encoding: ignore encoders using __ placeholder
+
 [compile_arch] HTML instruction documentation with "disassembly" of control signals
 [compile_arch] Add Slot_Data flag for slots that may require kernel mode
 [arch/compile_arch] Can we remove transformations from encoding db?  Would need a way to represent numeric transforms in Encoder instead - add `.computed` to Value union?

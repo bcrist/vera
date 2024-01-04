@@ -23,9 +23,7 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
         self.temp.reset();
         const alloc = self.temp.allocator();
 
-        if (@hasDecl(Struct, "spec")) {
-            log.debug("Beginning processing of {s}:\n    {s}", .{ @typeName(Struct), Struct.spec });
-        } else if (@hasDecl(Struct, "slot")) {
+        if (@hasDecl(Struct, "slot")) {
             log.debug("Beginning processing of {s}:\n    {}", .{ @typeName(Struct), Struct.slot });
         } else {
             log.debug("Beginning processing of {s}", .{ @typeName(Struct) });
@@ -98,6 +96,7 @@ fn process_form(
     if (Spec_Type != Fallback_Form) {
         var parser = Spec_Parser.init(alloc, Spec_Type.spec);
         while (parser.next()) |parsed| {
+            log.debug("Processing encoding: {s}", .{ parser.prev_line(Spec_Type.spec) });
             const encoders = encoders_fn(alloc, parsed.signature, parsed.encoders);
             const ij_encoders = ij_fn(alloc, parsed.signature, parsed.encoders);
             const ik_encoders = ik_fn(alloc, parsed.signature, parsed.encoders);
@@ -547,7 +546,7 @@ pub const Microcode_Processor = struct {
         if (!gop.found_existing) @panic("Found c.next() for a function not puplicly visible within the instruction struct");
         const slot_info = gop.value_ptr.*;
         const cycles = slot_info.impl(self.ctx);
-        log.debug("Processed microcode function {s}", .{ cycles[0].func_name });
+        // log.debug("Processed microcode function {s}", .{ cycles[0].func_name });
 
         var uses_placeholders = slot_info.uses_placeholders;
         var cycle_recursion = [_]?*const anyopaque { null } ** hw.microcode.Address.count_per_slot;

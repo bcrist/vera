@@ -1,7 +1,11 @@
 const region_encoder = Encoder.init(14, @as(u2, 3));
 
 pub const instructions = .{
-    struct { pub const spec = "mul r(a), r(b) -> r(dest)";
+    struct { // mul r(a), r(b) -> r(dest)
+        pub const spec =
+            \\mul r(a, dest), r(b)
+            \\mul r(a), r(b) -> r(dest)
+            ;
         pub const encoding = .{
             Even_Reg(.dest),
             Encoder.init(3, Even_Reg(.a)),
@@ -21,10 +25,11 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = // mul r(a), r(b) -> x(dest)
-        \\mul r(a) .unsigned, r(b) .unsigned -> x(dest) .unsigned
-        \\mul r(a) .signed, r(b) .signed -> x(dest) .signed
-        ;
+    struct { // mul r(a), r(b) -> x(dest)
+        pub const spec =
+            \\mul r(a) .unsigned, r(b) .unsigned -> x(dest) .unsigned
+            \\mul r(a) .signed, r(b) .signed -> x(dest) .signed
+            ;
         pub const encoding = .{
             Even_Reg(.dest),
             Encoder.init(3, Even_Reg(.a)),
@@ -56,10 +61,12 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = // mulh r(a) .unsigned, r(b) .signed -> r(dest) .signed
-        \\mulh r(a) .unsigned, r(b) .signed -> r(dest) .signed
-        \\mulh r(b) .signed, r(a) .unsigned -> r(dest) .signed
-        ;
+    struct { // mulh r(a) .unsigned, r(b) .signed -> r(dest) .signed
+        pub const spec =
+            \\mulh r(a) .unsigned, r(b) .signed -> r(dest) .signed
+            \\mulh r(b, dest) .signed, r(a) .unsigned
+            \\mulh r(b) .signed, r(a) .unsigned -> r(dest) .signed
+            ;
         pub const encoding = .{
             Even_Reg(.dest),
             Encoder.init(3, Even_Reg(.a)),
@@ -79,10 +86,13 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = // mulh r(a), r(b) -> x(dest)
-        \\mulh r(a) .unsigned, r(b) .unsigned -> r(dest) .unsigned
-        \\mulh r(a) .signed, r(b) .signed -> r(dest) .signed
-        ;
+    struct { // mulh r(a), r(b) -> r(dest) // all registers same signedness
+        pub const spec =
+            \\mulh r(a, dest) .unsigned, r(b) .unsigned
+            \\mulh r(a) .unsigned, r(b) .unsigned -> r(dest) .unsigned
+            \\mulh r(a, dest) .signed, r(b) .signed
+            \\mulh r(a) .signed, r(b) .signed -> r(dest) .signed
+            ;
         pub const encoding = .{
             Even_Reg(.dest),
             Encoder.init(3, Even_Reg(.a)),
@@ -114,7 +124,12 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = "mul r(src), (imm) -> r(dest)";
+    struct { // mul r(src), (imm) -> r(dest)
+        pub const spec =
+            \\mul r(src, dest), (imm)
+            \\mul r(src), (imm) -> r(dest)
+            \\mul (imm), r(src) -> r(dest)
+            ;
         pub const forms = .{
             struct {
                 pub const encoding = .{
@@ -155,7 +170,10 @@ pub const instructions = .{
     struct { // mul r(src), (imm16) -> x(dest)
         pub const forms = .{
             struct {
-                pub const spec = "mul r(src) .unsigned, (imm) -> x(dest) .unsigned";
+                pub const spec =
+                    \\mul r(src) .unsigned, (imm) -> x(dest) .unsigned
+                    \\mul (imm), r(src) .unsigned -> x(dest) .unsigned
+                    ;
                 pub const encoding = .{
                     Even_Reg(.dest),
                     Encoder.init(3, Even_Reg(.src)),
@@ -165,7 +183,10 @@ pub const instructions = .{
                 };
             },
             struct {
-                pub const spec = "mul r(src) .signed, (imm) -> x(dest) .signed";
+                pub const spec =
+                    \\mul r(src) .signed, (imm) -> x(dest) .signed
+                    \\mul (imm), r(src) .signed -> x(dest) .signed
+                    ;
                 pub const encoding = .{
                     Even_Reg(.dest),
                     Encoder.init(3, Even_Reg(.src)),
@@ -200,8 +221,11 @@ pub const instructions = .{
         pub const forms = .{
             struct {
                 pub const spec =
+                    \\shr r(src, dest) .unsigned, b(amt)
                     \\shr r(src) .unsigned, b(amt) -> r(dest)
+                    \\shr r(src, dest) .signed, b(amt)
                     \\shr r(src) .signed, b(amt) -> r(dest)
+                    \\shr x(src, dest) .unsigned, b(amt)
                     \\shr x(src) .unsigned, b(amt) -> x(dest)
                     ;
                 pub const encoding = .{
@@ -226,8 +250,11 @@ pub const instructions = .{
             },
             struct {
                 pub const spec =
+                    \\shr r(src, dest) .unsigned, (amt)
                     \\shr r(src) .unsigned, (amt) -> r(dest)
+                    \\shr r(src, dest) .signed, (amt)
                     \\shr r(src) .signed, (amt) -> r(dest)
+                    \\shr x(src, dest) .unsigned, (amt)
                     \\shr x(src) .unsigned, (amt) -> x(dest)
                     ;
                 pub const encoding = .{
@@ -282,7 +309,9 @@ pub const instructions = .{
         pub const forms = .{
             struct {
                 pub const spec =
+                    \\shl r(src, dest), b(amt)
                     \\shl r(src), b(amt) -> r(dest)
+                    \\shl x(src, dest), b(amt)
                     \\shl x(src), b(amt) -> x(dest)
                     ;
                 pub const encoding = .{
@@ -304,7 +333,9 @@ pub const instructions = .{
             },
             struct {
                 pub const spec =
+                    \\shl r(src, dest), (amt)
                     \\shl r(src), (amt) -> r(dest)
+                    \\shl x(src, dest), (amt)
                     \\shl x(src), (amt) -> x(dest)
                     ;
                 pub const encoding = .{
@@ -349,10 +380,13 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = // shr <reg>, (imm4u) -> <reg>
-        \\shr r(reg) .unsigned, (amt) -> r(reg)
-        \\shr r(reg) .signed, (amt) -> r(reg)
-        ;
+    struct { // shr <reg>, (imm4u) -> <reg>
+        pub const spec =
+            \\shr r(reg) .unsigned, (amt)
+            \\shr r(reg) .unsigned, (amt) -> r(reg)
+            \\shr r(reg) .signed, (amt)
+            \\shr r(reg) .signed, (amt) -> r(reg)
+            ;
         pub const encoding = .{
             Reg(.reg),
             Encoder.init(4, Int(.amt, u4)),
@@ -380,7 +414,11 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = "shl r(reg), (amt) -> r(reg)";
+    struct { // shl r(reg), (amt) -> r(reg)
+        pub const spec =
+            \\shl r(reg), (amt)
+            \\shl r(reg), (amt) -> r(reg)
+            ;
         pub const encoding = .{
             Reg(.reg),
             Encoder.init(4, Int(.amt, u4)),
@@ -398,10 +436,13 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = // <shr/shl> x(reg), (imm5u) -> x(reg)
-        \\shr x(reg) .unsigned, (amt) -> x(reg)
-        \\shl x(reg), (amt) -> x(reg)
-        ;
+    struct { // <shr/shl> x(reg), (imm5u) -> x(reg)
+        pub const spec =
+            \\shr x(reg) .unsigned, (amt)
+            \\shr x(reg) .unsigned, (amt) -> x(reg)
+            \\shl x(reg), (amt)
+            \\shl x(reg), (amt) -> x(reg)
+            ;
         pub const encoding = .{
             Even_Reg(.reg),
             Encoder.init(3, Int(.amt, u5)),
@@ -432,10 +473,13 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = // <shrc/shlc> r(src) -> r(dest)
-        \\shrc r(src) -> r(dest)
-        \\shlc r(src) -> r(dest)
-        ;
+    struct { // <shrc/shlc> r(src) -> r(dest)
+        pub const spec =
+            \\shrc r(src, dest)
+            \\shrc r(src) -> r(dest)
+            \\shlc r(src, dest)
+            \\shlc r(src) -> r(dest)
+            ;
         pub const encoding = .{
             Reg(.dest),
             Encoder.init(4, Reg(.src)),
@@ -472,16 +516,17 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = // <sat/rat>
-        \\sat.w x(data) -> .d x(addr)
-        \\sat.r x(data) -> .d x(addr)
-        \\sat.s x(data) -> .s x(addr)
-        \\sat.i x(data) -> .i x(addr)
-        \\rat.w .d x(addr), r(data)
-        \\rat.r .d x(addr), r(data)
-        \\rat.s .s x(addr), r(data)
-        \\rat.i .i x(addr), r(data)
-        ;
+    struct { // <sat/rat>
+        pub const spec =
+            \\sat.w x(data) -> .d x(addr)
+            \\sat.r x(data) -> .d x(addr)
+            \\sat.s x(data) -> .s x(addr)
+            \\sat.i x(data) -> .i x(addr)
+            \\rat.w .d x(addr), r(data)
+            \\rat.r .d x(addr), r(data)
+            \\rat.s .s x(addr), r(data)
+            \\rat.i .i x(addr), r(data)
+            ;
         pub const encoding = .{
             Even_Reg(.data),
             Encoder.init(3, Even_Reg(.addr)),

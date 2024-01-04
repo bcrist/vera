@@ -1,7 +1,8 @@
 const region_encoder = Encoder.init(14, @as(u2, 0));
 
 pub const instructions = .{
-    struct { pub const spec = "park";
+    struct { // park
+        pub const spec = "park";
         pub const encoding = .{
             @as(u14, 0),
             region_encoder,
@@ -11,30 +12,35 @@ pub const instructions = .{
             c.decode_and_exec_dr(.normal);
         }
     },
-    struct { pub const spec = "nop 2";
-        pub const encoding = .{
-            @as(u14, 2),
-            region_encoder,
+    struct { // nop
+        pub const forms = .{
+            struct {
+                pub const spec =
+                    \\nop
+                    \\nop 2
+                    ;
+                pub const encoding = .{
+                    @as(u14, 2),
+                    region_encoder,
+                };
+                pub const ik_ij: u8 = 2;
+            },
+            struct {
+                pub const spec = "nop 3";
+                pub const encoding = .{
+                    @as(u14, 3),
+                    region_encoder,
+                    Encoder.init(16, Int(.__, u8)),
+                };
+                pub const ik_ij: u8 = 3;
+            },
         };
-        pub const ik_ij: u8 = 2;
         pub fn entry(c: *Cycle) void {
-            std.debug.assert(c.encoding_len.? == ik_ij); // equivalent to c.load_and_exec_next_insn()
             c.branch(.ip, .ik_ij_sx);
         }
     },
-    struct { pub const spec = "nop 3";
-        pub const encoding = .{
-            @as(u14, 3),
-            region_encoder,
-            Encoder.init(16, Int(.__, u8)),
-        };
-        pub const ik_ij: u8 = 3;
-        pub fn entry(c: *Cycle) void {
-            std.debug.assert(c.encoding_len.? == ik_ij); // equivalent to c.load_and_exec_next_insn()
-            c.branch(.ip, .ik_ij_sx);
-        }
-    },
-    struct { pub const spec = "ret";
+    struct { // ret
+        pub const spec = "ret";
         pub const encoding = .{
             @as(u14, 0x100),
             region_encoder,
@@ -45,8 +51,12 @@ pub const instructions = .{
             c.branch(.rp, 0);
         }
     },
-    struct { pub const spec = "iret";
-        pub const encoding = @as(u16, 0x0400);
+    struct { // iret
+        pub const spec = "iret";
+        pub const encoding = .{
+            @as(u14, 0x0400),
+            region_encoder,
+        };
 
         pub fn entry(c: *Cycle, flags: hw.microcode.Flags) void {
             if (!flags.kernel()) return c.illegal_instruction();
@@ -67,8 +77,12 @@ pub const instructions = .{
             c.branch(.ip, 0);
         }
     },
-    struct { pub const spec = "fret";
-        pub const encoding = @as(u16, 0x0500);
+    struct { // fret
+        pub const spec = "fret";
+        pub const encoding = .{
+            @as(u14, 0x0500),
+            region_encoder,
+        };
 
         pub fn entry(c: *Cycle, flags: Flags) void {
             if (!flags.kernel()) return c.illegal_instruction();
@@ -101,8 +115,13 @@ pub const instructions = .{
             c.fault_return();
         }
     },
-    struct { pub const spec = "ifex"; // Exit interrupt or fault handler without changing registersets or retrying the faulted operation
-        pub const encoding = @as(u16, 0x0600);
+    struct { // ifex
+        // Exit interrupt or fault handler without changing registersets or retrying the faulted operation
+        pub const spec = "ifex";
+        pub const encoding = .{
+            @as(u14, 0x0600),
+            region_encoder,
+        };
 
         pub fn entry(c: *Cycle, flags: Flags) void {
             if (!flags.kernel()) return c.illegal_instruction();
@@ -113,18 +132,23 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = "sync";
-        pub const encoding = @as(u16, 0x0700);
+    struct { // sync
+        pub const spec = "sync";
+        pub const encoding = .{
+            @as(u14, 0x0700),
+            region_encoder,
+        };
         
         pub fn entry(c: *Cycle) void {
             c.atomic_next_cycle_until_end();
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = //eab/dab .i x0
-        \\eab .i x0
-        \\dab .i x0
-        ;
+    struct { // <eab/dab> .i x0
+        pub const spec = 
+            \\eab .i x0
+            \\dab .i x0
+            ;
         pub const encoding = .{
             @as(u8, 0),
             mnemonic_encoder,
@@ -158,24 +182,25 @@ pub const instructions = .{
             c.branch(.next_ip, 0);
         }
     },
-    struct { pub const spec = // <b> .i ip + (imm) // imm in [-128, 127], not in [-1, 1]
-        \\b .i ip + (imm)
-        \\call .i ip + (imm)
-        \\b.v .i ip + (imm)
-        \\b.z .i ip + (imm)
-        \\b.nz .i ip + (imm)
-        \\b.n .i ip + (imm)
-        \\b.nn .i ip + (imm)
-        \\b.c .i ip + (imm)
-        \\b.nc .i ip + (imm)
-        \\b.gu .i ip + (imm)
-        \\b.ngu .i ip + (imm)
-        \\b.ls .i ip + (imm)
-        \\b.nls .i ip + (imm)
-        \\b.gs .i ip + (imm)
-        \\b.ngs .i ip + (imm)
-        \\b.p .i ip + (imm)
-        ;
+    struct { // <b> .i ip + (imm8i) // imm not in [-1, 1]
+        pub const spec =
+            \\b .i ip + (imm)
+            \\call .i ip + (imm)
+            \\b.v .i ip + (imm)
+            \\b.z .i ip + (imm)
+            \\b.nz .i ip + (imm)
+            \\b.n .i ip + (imm)
+            \\b.nn .i ip + (imm)
+            \\b.c .i ip + (imm)
+            \\b.nc .i ip + (imm)
+            \\b.gu .i ip + (imm)
+            \\b.ngu .i ip + (imm)
+            \\b.ls .i ip + (imm)
+            \\b.nls .i ip + (imm)
+            \\b.gs .i ip + (imm)
+            \\b.ngs .i ip + (imm)
+            \\b.p .i ip + (imm)
+            ;
         pub const constraints = .{
             .{ .imm, .not_equal, 0 },
             .{ .imm, .not_equal, 1 },
@@ -197,23 +222,24 @@ pub const instructions = .{
             }
         }
     },
-    struct { pub const spec = // <b> .i ip + (imm) // imm >= 128
-        \\b .i ip + (imm)
-        \\b.v .i ip + (imm)
-        \\b.z .i ip + (imm)
-        \\b.nz .i ip + (imm)
-        \\b.n .i ip + (imm)
-        \\b.nn .i ip + (imm)
-        \\b.c .i ip + (imm)
-        \\b.nc .i ip + (imm)
-        \\b.gu .i ip + (imm)
-        \\b.ngu .i ip + (imm)
-        \\b.ls .i ip + (imm)
-        \\b.nls .i ip + (imm)
-        \\b.gs .i ip + (imm)
-        \\b.ngs .i ip + (imm)
-        \\b.p .i ip + (imm)
-        ;
+    struct { // <b> .i ip + (imm8u) // imm in [128, 253]
+        pub const spec =
+            \\b .i ip + (imm)
+            \\b.v .i ip + (imm)
+            \\b.z .i ip + (imm)
+            \\b.nz .i ip + (imm)
+            \\b.n .i ip + (imm)
+            \\b.nn .i ip + (imm)
+            \\b.c .i ip + (imm)
+            \\b.nc .i ip + (imm)
+            \\b.gu .i ip + (imm)
+            \\b.ngu .i ip + (imm)
+            \\b.ls .i ip + (imm)
+            \\b.nls .i ip + (imm)
+            \\b.gs .i ip + (imm)
+            \\b.ngs .i ip + (imm)
+            \\b.p .i ip + (imm)
+            ;
         pub const constraints = .{
             .{ .imm, .greater_or_equal, 128 },
         };
@@ -243,23 +269,24 @@ pub const instructions = .{
             c.call_or_branch(.next_ip, Imm.domain.range.first, mnemonic);
         }
     },
-    struct { pub const spec = // <b> .i ip + (imm) // imm < -128
-        \\b .i ip + (imm)
-        \\b.v .i ip + (imm)
-        \\b.z .i ip + (imm)
-        \\b.nz .i ip + (imm)
-        \\b.n .i ip + (imm)
-        \\b.nn .i ip + (imm)
-        \\b.c .i ip + (imm)
-        \\b.nc .i ip + (imm)
-        \\b.gu .i ip + (imm)
-        \\b.ngu .i ip + (imm)
-        \\b.ls .i ip + (imm)
-        \\b.nls .i ip + (imm)
-        \\b.gs .i ip + (imm)
-        \\b.ngs .i ip + (imm)
-        \\b.p .i ip + (imm)
-        ;
+    struct { // <b> .i ip + (imm8n) // imm in [-255, -129]
+        pub const spec =
+            \\b .i ip + (imm)
+            \\b.v .i ip + (imm)
+            \\b.z .i ip + (imm)
+            \\b.nz .i ip + (imm)
+            \\b.n .i ip + (imm)
+            \\b.nn .i ip + (imm)
+            \\b.c .i ip + (imm)
+            \\b.nc .i ip + (imm)
+            \\b.gu .i ip + (imm)
+            \\b.ngu .i ip + (imm)
+            \\b.ls .i ip + (imm)
+            \\b.nls .i ip + (imm)
+            \\b.gs .i ip + (imm)
+            \\b.ngs .i ip + (imm)
+            \\b.p .i ip + (imm)
+            ;
         pub const constraints = .{
             .{ .imm, .less_or_equal, -129 },
         };
@@ -289,24 +316,25 @@ pub const instructions = .{
             c.call_or_branch(.next_ip, Imm.domain.range.first, mnemonic);
         }
     },
-    struct { pub const spec = // <b> .i ip + (imm16u)
-        \\b .i ip + (imm)
-        \\call .i ip + (imm)
-        \\b.v .i ip + (imm)
-        \\b.z .i ip + (imm)
-        \\b.nz .i ip + (imm)
-        \\b.n .i ip + (imm)
-        \\b.nn .i ip + (imm)
-        \\b.c .i ip + (imm)
-        \\b.nc .i ip + (imm)
-        \\b.gu .i ip + (imm)
-        \\b.ngu .i ip + (imm)
-        \\b.ls .i ip + (imm)
-        \\b.nls .i ip + (imm)
-        \\b.gs .i ip + (imm)
-        \\b.ngs .i ip + (imm)
-        \\b.p .i ip + (imm)
-        ;
+    struct { // <b> .i ip + (imm16u)
+        pub const spec =
+            \\b .i ip + (imm)
+            \\call .i ip + (imm)
+            \\b.v .i ip + (imm)
+            \\b.z .i ip + (imm)
+            \\b.nz .i ip + (imm)
+            \\b.n .i ip + (imm)
+            \\b.nn .i ip + (imm)
+            \\b.c .i ip + (imm)
+            \\b.nc .i ip + (imm)
+            \\b.gu .i ip + (imm)
+            \\b.ngu .i ip + (imm)
+            \\b.ls .i ip + (imm)
+            \\b.nls .i ip + (imm)
+            \\b.gs .i ip + (imm)
+            \\b.ngs .i ip + (imm)
+            \\b.p .i ip + (imm)
+            ;
         pub const encoding = .{
             @as(u8, 1),
             conditions.encoder(8),
@@ -338,24 +366,25 @@ pub const instructions = .{
             c.call_or_branch(.next_ip, 0, mnemonic);
         }
     },
-    struct { pub const spec = // <b> .i ip + (imm16n)
-        \\b .i ip + (imm)
-        \\call .i ip + (imm)
-        \\b.v .i ip + (imm)
-        \\b.z .i ip + (imm)
-        \\b.nz .i ip + (imm)
-        \\b.n .i ip + (imm)
-        \\b.nn .i ip + (imm)
-        \\b.c .i ip + (imm)
-        \\b.nc .i ip + (imm)
-        \\b.gu .i ip + (imm)
-        \\b.ngu .i ip + (imm)
-        \\b.ls .i ip + (imm)
-        \\b.nls .i ip + (imm)
-        \\b.gs .i ip + (imm)
-        \\b.ngs .i ip + (imm)
-        \\b.p .i ip + (imm)
-        ;
+    struct { // <b> .i ip + (imm16n)
+        pub const spec =
+            \\b .i ip + (imm)
+            \\call .i ip + (imm)
+            \\b.v .i ip + (imm)
+            \\b.z .i ip + (imm)
+            \\b.nz .i ip + (imm)
+            \\b.n .i ip + (imm)
+            \\b.nn .i ip + (imm)
+            \\b.c .i ip + (imm)
+            \\b.nc .i ip + (imm)
+            \\b.gu .i ip + (imm)
+            \\b.ngu .i ip + (imm)
+            \\b.ls .i ip + (imm)
+            \\b.nls .i ip + (imm)
+            \\b.gs .i ip + (imm)
+            \\b.ngs .i ip + (imm)
+            \\b.p .i ip + (imm)
+            ;
         pub const encoding = .{
             @as(u8, 1),
             conditions.encoder(8),
@@ -387,24 +416,25 @@ pub const instructions = .{
             c.call_or_branch(.next_ip, 0, mnemonic);
         }
     },
-    struct { pub const spec = // <b> .i (imm32)
-        \\b .i (imm)
-        \\call .i (imm)
-        \\b.v .i (imm)
-        \\b.z .i (imm)
-        \\b.nz .i (imm)
-        \\b.n .i (imm)
-        \\b.nn .i (imm)
-        \\b.c .i (imm)
-        \\b.nc .i (imm)
-        \\b.gu .i (imm)
-        \\b.ngu .i (imm)
-        \\b.ls .i (imm)
-        \\b.nls .i (imm)
-        \\b.gs .i (imm)
-        \\b.ngs .i (imm)
-        \\b.p .i (imm)
-        ;
+    struct { // <b> .i (imm32)
+        pub const spec =
+            \\b .i (imm)
+            \\call .i (imm)
+            \\b.v .i (imm)
+            \\b.z .i (imm)
+            \\b.nz .i (imm)
+            \\b.n .i (imm)
+            \\b.nn .i (imm)
+            \\b.c .i (imm)
+            \\b.nc .i (imm)
+            \\b.gu .i (imm)
+            \\b.ngu .i (imm)
+            \\b.ls .i (imm)
+            \\b.nls .i (imm)
+            \\b.gs .i (imm)
+            \\b.ngs .i (imm)
+            \\b.p .i (imm)
+            ;
         pub const encoding = .{
             @as(u8, 0),
             conditions.encoder(8),
@@ -436,16 +466,17 @@ pub const instructions = .{
             c.call_or_branch(.next_ip, 0, mnemonic);
         }
     },
-    struct { pub const spec = // b.<cond>.<cond> .i ip + (imm_s16), .i ip + (imm_s16)
-        \\b.lu.gu .i ip + (imm1), .i ip + (imm2)
-        \\b.lu.z .i ip + (imm1), .i ip + (imm2)
-        \\b.gu.z .i ip + (imm1), .i ip + (imm2)
-        \\b.ls.gs .i ip + (imm1), .i ip + (imm2)
-        \\b.ls.z .i ip + (imm1), .i ip + (imm2)
-        \\b.gs.z .i ip + (imm1), .i ip + (imm2)
-        \\b.n.z .i ip + (imm1), .i ip + (imm2)
-        \\b.n.p .i ip + (imm1), .i ip + (imm2)
-        ;
+    struct { // b.<cond>.<cond> .i ip + (imm16s), .i ip + (imm16s)
+        pub const spec =
+            \\b.lu.gu .i ip + (imm1), .i ip + (imm2)
+            \\b.lu.z .i ip + (imm1), .i ip + (imm2)
+            \\b.gu.z .i ip + (imm1), .i ip + (imm2)
+            \\b.ls.gs .i ip + (imm1), .i ip + (imm2)
+            \\b.ls.z .i ip + (imm1), .i ip + (imm2)
+            \\b.gs.z .i ip + (imm1), .i ip + (imm2)
+            \\b.n.z .i ip + (imm1), .i ip + (imm2)
+            \\b.n.p .i ip + (imm1), .i ip + (imm2)
+            ;
         pub const encoding = .{
             @as(u8, 0),
             conditions.double_encoder(8),
@@ -483,31 +514,32 @@ pub const instructions = .{
             c.call_or_branch(.next_ip, 0, mnemonic);
         }
     },
-    struct { pub const spec = // <b> .i ip + r(reg) .signed
-        \\b .i ip + r(reg) .signed
-        \\call .i ip + r(reg) .signed
-        \\b.v .i ip + r(reg) .signed
-        \\b.z .i ip + r(reg) .signed
-        \\b.nz .i ip + r(reg) .signed
-        \\b.n .i ip + r(reg) .signed
-        \\b.nn .i ip + r(reg) .signed
-        \\b.c .i ip + r(reg) .signed
-        \\b.nc .i ip + r(reg) .signed
-        \\b.gu .i ip + r(reg) .signed
-        \\b.ngu .i ip + r(reg) .signed
-        \\b.ls .i ip + r(reg) .signed
-        \\b.nls .i ip + r(reg) .signed
-        \\b.gs .i ip + r(reg) .signed
-        \\b.ngs .i ip + r(reg) .signed
-        \\b.p .i ip + r(reg) .signed
-        ;
+    struct { // <b> .i ip + r(offset) .signed
+        pub const spec =
+            \\b .i ip + r(offset) .signed
+            \\call .i ip + r(offset) .signed
+            \\b.v .i ip + r(offset) .signed
+            \\b.z .i ip + r(offset) .signed
+            \\b.nz .i ip + r(offset) .signed
+            \\b.n .i ip + r(offset) .signed
+            \\b.nn .i ip + r(offset) .signed
+            \\b.c .i ip + r(offset) .signed
+            \\b.nc .i ip + r(offset) .signed
+            \\b.gu .i ip + r(offset) .signed
+            \\b.ngu .i ip + r(offset) .signed
+            \\b.ls .i ip + r(offset) .signed
+            \\b.nls .i ip + r(offset) .signed
+            \\b.gs .i ip + r(offset) .signed
+            \\b.ngs .i ip + r(offset) .signed
+            \\b.p .i ip + r(offset) .signed
+            ;
         pub const encoding = .{
-            Reg(.reg),
+            Reg(.offset),
             conditions.encoder(4),
             Encoder.init(8, @as(u6, 0x20)),
             region_encoder,
         };
-        pub const ik = Reg(.reg);
+        pub const ik = Reg(.offset);
 
         pub fn entry(c: *Cycle, condition: isa.Mnemonic_Suffix, flags: Flags) void {
             if (conditions.check(condition, flags)) {
@@ -525,24 +557,25 @@ pub const instructions = .{
             c.call_or_branch(.next_ip, 0, mnemonic);
         }
     },
-    struct { pub const spec = // <b> .i x(reg)
-        \\b .i x(reg)
-        \\call .i x(reg)
-        \\b.v .i x(reg)
-        \\b.z .i x(reg)
-        \\b.nz .i x(reg)
-        \\b.n .i x(reg)
-        \\b.nn .i x(reg)
-        \\b.c .i x(reg)
-        \\b.nc .i x(reg)
-        \\b.gu .i x(reg)
-        \\b.ngu .i x(reg)
-        \\b.ls .i x(reg)
-        \\b.nls .i x(reg)
-        \\b.gs .i x(reg)
-        \\b.ngs .i x(reg)
-        \\b.p .i x(reg)
-        ;
+    struct { // <b> .i x(reg)
+        pub const spec =
+            \\b .i x(reg)
+            \\call .i x(reg)
+            \\b.v .i x(reg)
+            \\b.z .i x(reg)
+            \\b.nz .i x(reg)
+            \\b.n .i x(reg)
+            \\b.nn .i x(reg)
+            \\b.c .i x(reg)
+            \\b.nc .i x(reg)
+            \\b.gu .i x(reg)
+            \\b.ngu .i x(reg)
+            \\b.ls .i x(reg)
+            \\b.nls .i x(reg)
+            \\b.gs .i x(reg)
+            \\b.ngs .i x(reg)
+            \\b.p .i x(reg)
+            ;
         pub const encoding = .{
             Reg(.reg),
             conditions.encoder(4),
@@ -565,71 +598,72 @@ pub const instructions = .{
             c.call_or_branch(.next_ip, 0, mnemonic);
         }
     },
-    struct { pub const spec = // <bb/bbn/bp/bpn>
-        \\bb
-        \\bb.v
-        \\bb.z
-        \\bb.nz
-        \\bb.n
-        \\bb.nn
-        \\bb.c
-        \\bb.nc
-        \\bb.gu
-        \\bb.ngu
-        \\bb.ls
-        \\bb.nls
-        \\bb.gs
-        \\bb.ngs
-        \\bb.p
-        \\
-        \\bbn
-        \\bbn.v
-        \\bbn.z
-        \\bbn.nz
-        \\bbn.n
-        \\bbn.nn
-        \\bbn.c
-        \\bbn.nc
-        \\bbn.gu
-        \\bbn.ngu
-        \\bbn.ls
-        \\bbn.nls
-        \\bbn.gs
-        \\bbn.ngs
-        \\bbn.p
-        \\
-        \\bp
-        \\bp.v
-        \\bp.z
-        \\bp.nz
-        \\bp.n
-        \\bp.nn
-        \\bp.c
-        \\bp.nc
-        \\bp.gu
-        \\bp.ngu
-        \\bp.ls
-        \\bp.nls
-        \\bp.gs
-        \\bp.ngs
-        \\bp.p
-        \\
-        \\bpn
-        \\bpn.v
-        \\bpn.z
-        \\bpn.nz
-        \\bpn.n
-        \\bpn.nn
-        \\bpn.c
-        \\bpn.nc
-        \\bpn.gu
-        \\bpn.ngu
-        \\bpn.ls
-        \\bpn.nls
-        \\bpn.gs
-        \\bpn.ngs
-        \\bpn.p
-        ;
+    struct { // <bb/bbn/bp/bpn>
+        pub const spec =
+            \\bb
+            \\bb.v
+            \\bb.z
+            \\bb.nz
+            \\bb.n
+            \\bb.nn
+            \\bb.c
+            \\bb.nc
+            \\bb.gu
+            \\bb.ngu
+            \\bb.ls
+            \\bb.nls
+            \\bb.gs
+            \\bb.ngs
+            \\bb.p
+            \\
+            \\bbn
+            \\bbn.v
+            \\bbn.z
+            \\bbn.nz
+            \\bbn.n
+            \\bbn.nn
+            \\bbn.c
+            \\bbn.nc
+            \\bbn.gu
+            \\bbn.ngu
+            \\bbn.ls
+            \\bbn.nls
+            \\bbn.gs
+            \\bbn.ngs
+            \\bbn.p
+            \\
+            \\bp
+            \\bp.v
+            \\bp.z
+            \\bp.nz
+            \\bp.n
+            \\bp.nn
+            \\bp.c
+            \\bp.nc
+            \\bp.gu
+            \\bp.ngu
+            \\bp.ls
+            \\bp.nls
+            \\bp.gs
+            \\bp.ngs
+            \\bp.p
+            \\
+            \\bpn
+            \\bpn.v
+            \\bpn.z
+            \\bpn.nz
+            \\bpn.n
+            \\bpn.nn
+            \\bpn.c
+            \\bpn.nc
+            \\bpn.gu
+            \\bpn.ngu
+            \\bpn.ls
+            \\bpn.nls
+            \\bpn.gs
+            \\bpn.ngs
+            \\bpn.p
+            ;
         pub const encoding = .{
             conditions.encoder(0),
             mnemonic_encoder,
@@ -678,10 +712,11 @@ pub const instructions = .{
             }));
         }
     },
-    struct { pub const spec = // c <sp/bp> + (imm) -> x(dest)
-        \\c sp + (imm) -> x(dest)
-        \\c bp + (imm) -> x(dest)
-        ;
+    struct { // c <sp/bp> + (imm5u) -> x(dest)
+        pub const spec =
+            \\c sp + (imm) -> x(dest)
+            \\c bp + (imm) -> x(dest)
+            ;
         pub const encoding = .{
             Even_Reg(.dest),
             Encoder.init(3, Imm),
@@ -713,12 +748,13 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = // c <rp/uxp/kxp/asn> -> x(dest)
-        \\c rp  -> x(dest)
-        \\c uxp -> x(dest)
-        \\c kxp -> x(dest)
-        \\c asn -> x(dest)
-        ;
+    struct { // c <rp/uxp/kxp/asn> -> x(dest)
+        pub const spec =
+            \\c rp  -> x(dest)
+            \\c uxp -> x(dest)
+            \\c kxp -> x(dest)
+            \\c asn -> x(dest)
+            ;
         pub const encoding = .{
             Even_Reg(.dest),
             rp_uxp_kxp_asn_encoder(3, 0),
@@ -746,12 +782,13 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = // c x(src) -> <rp/uxp/kxp/asn> // src even
-        \\c x(src) -> rp
-        \\c x(src) -> uxp
-        \\c x(src) -> kxp
-        \\c x(src) -> asn
-        ;
+    struct { // c x(src) -> <rp/uxp/kxp/asn>
+        pub const spec =
+            \\c x(src) -> rp
+            \\c x(src) -> uxp
+            \\c x(src) -> kxp
+            \\c x(src) -> asn
+            ;
         pub const encoding = .{
             Even_Reg(.src),
             rp_uxp_kxp_asn_encoder(3, 2),
@@ -786,7 +823,8 @@ pub const instructions = .{
 
         pub const load_and_exec_next_insn = Cycle.load_and_exec_next_insn;
     },
-    struct { pub const spec = "c x(src) -> sp"; // src even
+    struct { // c x(src) -> sp
+        pub const spec = "c x(src) -> sp";
         pub const encoding = .{
             Even_Reg(.src),
             Encoder.init(3, @as(u11, 0x488)),
@@ -800,7 +838,8 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = "c x(src) -> bp"; // src even
+    struct { // c x(src) -> bp
+        pub const spec = "c x(src) -> bp";
         pub const encoding = .{
             Even_Reg(.src),
             Encoder.init(3, @as(u11, 0x489)),
@@ -814,14 +853,15 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = // c <ip/rp/sp/bp/uxp/kxp> + (imm16s) -> x(dest)
-        \\c ip  + (imm) -> x(dest)
-        \\c rp  + (imm) -> x(dest)
-        \\c sp  + (imm) -> x(dest)
-        \\c bp  + (imm) -> x(dest)
-        \\c uxp + (imm) -> x(dest)
-        \\c kxp + (imm) -> x(dest)
-        ;
+    struct { // c <ip/rp/sp/bp/uxp/kxp> + (imm16s) -> x(dest)
+        pub const spec =
+            \\c ip  + (imm) -> x(dest)
+            \\c rp  + (imm) -> x(dest)
+            \\c sp  + (imm) -> x(dest)
+            \\c bp  + (imm) -> x(dest)
+            \\c uxp + (imm) -> x(dest)
+            \\c kxp + (imm) -> x(dest)
+            ;
         pub const encoding = .{
             Even_Reg(.dest),
             sr_encoder,
@@ -881,7 +921,8 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = "c stat -> r(dest)";
+    struct { // c stat -> r(dest)
+        pub const spec = "c stat -> r(dest)";
         pub const encoding = .{
             Even_Reg(.dest),
             Encoder.init(3, @as(u11, 0x492)),
@@ -895,7 +936,8 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = "c r(src) -> stat";
+    struct { // c r(src) -> stat // zncv
+        pub const spec = "c r(src) -> stat";
         pub const encoding = .{
             Even_Reg(.src),
             Encoder.init(3, @as(u11, 0x493)),
@@ -910,16 +952,20 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = // c r(src) -> r(dest)
-        \\c r(src) -> r(dest)
-        \\c.n r(src) -> r(dest)
-        \\c.z r(src) -> r(dest)
-        \\c.nz r(src) -> r(dest)
-        \\c.c r(src) -> r(dest)
-        \\c.nc r(src) -> r(dest)
-        \\c.gs r(src) -> r(dest)
-        \\c.ngs r(src) -> r(dest)
-        ;
+    struct { // <c> r(src) -> r(dest)
+        pub const spec =
+            \\c r(src) -> r(dest)
+            \\c.n r(src) -> r(dest)
+            \\c.z r(src) -> r(dest)
+            \\c.nz r(src) -> r(dest)
+            \\c.c r(src) -> r(dest)
+            \\c.nc r(src) -> r(dest)
+            \\c.gs r(src) -> r(dest)
+            \\c.ngs r(src) -> r(dest)
+            ;
+        pub const constraints = .{
+            .{ .src, .not_equal, .dest },
+        };
         pub const encoding = .{
             Reg(.dest),
             Encoder.init(4, Reg(.src)),
@@ -939,16 +985,20 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = //c x(src) -> x(dest) // src even, dest even
-        \\c x(src) -> x(dest)
-        \\c.n x(src) -> x(dest)
-        \\c.z x(src) -> x(dest)
-        \\c.nz x(src) -> x(dest)
-        \\c.c x(src) -> x(dest)
-        \\c.nc x(src) -> x(dest)
-        \\c.gs x(src) -> x(dest)
-        \\c.ngs x(src) -> x(dest)
-        ;
+    struct { // c x(src) -> x(dest)
+        pub const spec =
+            \\c x(src) -> x(dest)
+            \\c.n x(src) -> x(dest)
+            \\c.z x(src) -> x(dest)
+            \\c.nz x(src) -> x(dest)
+            \\c.c x(src) -> x(dest)
+            \\c.nc x(src) -> x(dest)
+            \\c.gs x(src) -> x(dest)
+            \\c.ngs x(src) -> x(dest)
+            ;
+        pub const constraints = .{
+            .{ .src, .not_equal, .dest },
+        };
         pub const encoding = .{
             Even_Reg(.dest),
             Encoder.init(3, Even_Reg(.src)),
@@ -967,28 +1017,11 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = //c x(odd) -> x(even)
-        \\c x(odd) -> x(even)
-        ;
-        pub const encoding = .{
-            Even_Reg(.even),
-            Encoder.init(3, Odd_Reg(.odd)),
-            Encoder.init(6, @as(u8, 0x93)),
-            region_encoder,
-        };
-        pub const ij = Reg(.odd);
-        pub const iw = Reg(.even);
-
-        pub fn entry(c: *Cycle) void {
-            c.reg32_to_l();
-            c.l_to_reg32();
-            c.load_and_exec_next_insn();
-        }
-    },
-    struct { pub const spec = // c r(src) -> x(dest) // dest even
-        \\c r(src) .unsigned -> x(dest)
-        \\c r(src) .signed -> x(dest)
-        ;
+    struct { // c r(src) -> x(dest)
+        pub const spec =
+            \\c r(src) .unsigned -> x(dest)
+            \\c r(src) .signed -> x(dest)
+            ;
         pub const encoding = .{
             Even_Reg(.dest),
             Encoder.init(3, Reg(.src)),
@@ -1017,7 +1050,8 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = "c (imm) -> r(even)"; // imm in [-128, 127]
+    struct { // c (imm8i) -> r(even)
+        pub const spec = "c (imm) -> r(even)";
         pub const encoding = .{
             Int(.imm, i8),
             Encoder.init(8, Even_Reg(.even)),
@@ -1035,7 +1069,8 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = "c (bit) -> r(even)"; // bit in { 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768 }
+    struct { // c (bit) -> r(even) // bit in { 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768 }
+        pub const spec = "c (bit) -> r(even)";
         pub const constraints = .{
             .{ .bit, .greater_or_equal, 128 },
         };
@@ -1056,12 +1091,25 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = "c (imm) -> r(dest)"; // imm in [0, 0xFFFF]
-        pub const encoding = .{
-            Reg(.dest),
-            Encoder.init(4, @as(u10, 0x1f8)),
-            region_encoder,
-            Encoder.init(16, Int(.imm, u16)),
+    struct { // c (imm16) -> r(dest)
+        pub const spec = "c (imm) -> r(dest)";
+        pub const forms = .{
+            struct {
+                pub const encoding = .{
+                    Reg(.dest),
+                    Encoder.init(4, @as(u10, 0x1f8)),
+                    region_encoder,
+                    Encoder.init(16, Int(.imm, u16)),
+                };
+            },
+            struct {
+                pub const encoding = .{
+                    Reg(.dest),
+                    Encoder.init(4, @as(u10, 0x1f8)),
+                    region_encoder,
+                    Encoder.init(16, Int(.imm, i16)),
+                };
+            },
         };
         pub const iw = Reg(.dest);
 
@@ -1076,27 +1124,8 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = "c (imm) -> r(dest)"; // imm in [-0x8000, 0x7FFF]
-        pub const encoding = .{
-            Reg(.dest),
-            Encoder.init(4, @as(u10, 0x1f8)),
-            region_encoder,
-            Encoder.init(16, Int(.imm, i16)),
-        };
-        pub const iw = Reg(.dest);
-
-        pub fn entry(c: *Cycle) void {
-            c.ip_read_to_d(2, .word);
-            c.d_to_l(.zx);
-            c.ll_to_reg();
-            c.next(load_and_exec_next_insn);
-        }
-
-        pub fn load_and_exec_next_insn(c: *Cycle) void {
-            c.load_and_exec_next_insn();
-        }
-    },
-    struct { pub const spec = "c (imm) -> x(dest)"; // imm in [0, 0xFFFF]
+    struct { // c (imm16u) -> x(dest)
+        pub const spec = "c (imm) -> x(dest)";
         pub const encoding = .{
             Even_Reg(.dest),
             Encoder.init(3, @as(u11, 0x3f2)),
@@ -1116,7 +1145,8 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = "c (imm) -> x(dest)"; // imm in [-0x10000, -1]
+    struct { // c (imm16n) -> x(dest)
+        pub const spec = "c (imm) -> x(dest)";
         pub const encoding = .{
             Even_Reg(.dest),
             Encoder.init(3, @as(u11, 0x3f3)),
@@ -1127,7 +1157,7 @@ pub const instructions = .{
 
         pub fn entry(c: *Cycle) void {
             c.ip_read_to_d(2, .word);
-            c.d_to_l(.zx);
+            c.d_to_l(._1x);
             c.l_to_reg32();
             c.next(load_and_exec_next_insn);
         }
@@ -1136,12 +1166,25 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = "c (imm) -> x(dest)"; // imm in [0, 0xFFFF_FFFF]
-        pub const encoding = .{
-            Even_Reg(.dest),
-            Encoder.init(3, @as(u11, 0x3e6)),
-            region_encoder,
-            Encoder.init(16, Int(.imm, u32)),
+    struct { // c (imm32) -> x(dest)
+        pub const spec = "c (imm) -> x(dest)";
+        pub const forms = .{
+            struct {
+                pub const encoding = .{
+                    Even_Reg(.dest),
+                    Encoder.init(3, @as(u11, 0x3e6)),
+                    region_encoder,
+                    Encoder.init(16, Int(.imm, u32)),
+                };
+            },
+            struct {
+                pub const encoding = .{
+                    Even_Reg(.dest),
+                    Encoder.init(3, @as(u11, 0x3e6)),
+                    region_encoder,
+                    Encoder.init(16, Int(.imm, i32)),
+                };
+            },
         };
         pub const iw = Reg(.dest);
 
@@ -1164,35 +1207,8 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = "c (imm) -> x(dest)"; // imm in [-0x8000_0000, 0x7FFF_FFFF]
-        pub const encoding = .{
-            Even_Reg(.dest),
-            Encoder.init(3, @as(u11, 0x3e6)),
-            region_encoder,
-            Encoder.init(16, Int(.imm, i32)),
-        };
-        pub const iw = Reg(.dest);
-
-        pub fn entry(c: *Cycle) void {
-            c.ip_read_to_d(4, .word);
-            c.d_to_l(.zx);
-            c.l_to_sr(.temp_1);
-            c.next(load_imm_low);
-        }
-
-        pub fn load_imm_low(c: *Cycle) void {
-            c.ip_read_to_d(2, .word);
-            c.d_to_ll();
-            c.srl_to_lh(.temp_1);
-            c.l_to_reg32();
-            c.next(load_and_exec_next_insn);
-        }
-
-        pub fn load_and_exec_next_insn(c: *Cycle) void {
-            c.load_and_exec_next_insn();
-        }
-    },
-    struct { pub const spec = "c ip + (imm) -> x(dest)"; // imm in [-128, 127], dest even
+    struct { // c ip + (imm8i) -> x(dest)
+        pub const spec = "c ip + (imm) -> x(dest)";
         pub const encoding = .{
             Int(.imm, i8),
             Encoder.init(8, Even_Reg(.dest)),
@@ -1210,10 +1226,16 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = "c r(a), r(b) -> r(ad), r(bd)";
+    struct { // c r(a), r(b) -> r(ad), r(bd)
+        const opcode_encoder = Encoder.init(4, @as(u10, 0x24a));
+        pub const spec =
+            \\swap r(a, bd), r(b, ad)
+            \\swap r(a, bd), r(b, bd) -> r(ad), r(bd)
+            \\c r(a), r(b) -> r(ad), r(bd)
+            ;
         pub const encoding = .{
             Reg(.a),
-            Encoder.init(4, @as(u10, 0x24a)),
+            opcode_encoder,
             region_encoder,
             Encoder.init(16, Reg(.b)),
             Encoder.init(20, Reg(.ad)),
@@ -1246,7 +1268,12 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = "c x(a), x(b) -> x(ad), x(bd)";
+    struct { // c x(a), x(b) -> x(ad), x(bd)
+        pub const spec =
+            \\swap x(a, bd), x(b, ad)
+            \\swap x(a, bd), x(b, ad) -> x(ad), x(bd)
+            \\c x(a), x(b) -> x(ad), x(bd)
+            ;
         pub const encoding = .{
             Reg(.a),
             Encoder.init(4, @as(u10, 0x24b)),
@@ -1279,10 +1306,11 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = // callx .d <uxp/kxp> + (imm4u * 4)
-        \\callx .d uxp + (imm)
-        \\callx .d kxp + (imm)
-        ;
+    struct { // callx .d <uxp/kxp> + (imm4u * 4)
+        pub const spec =
+            \\callx .d uxp + (imm)
+            \\callx .d kxp + (imm)
+            ;
         pub const encoding = .{
             Imm,
             base_encoder,
@@ -1330,10 +1358,11 @@ pub const instructions = .{
             c.call_or_branch(.temp_1, 0, .call);
         }
     },
-    struct { pub const spec = // callx .d <sp/bp> + (imm4u * 4)
-        \\callx .d sp + (imm)
-        \\callx .d bp + (imm)
-        ;
+    struct { // callx .d <sp/bp> + (imm4u * 4)
+        pub const spec =
+            \\callx .d sp + (imm)
+            \\callx .d bp + (imm)
+            ;
         pub const encoding = .{
             Imm,
             base_encoder,

@@ -1,5 +1,6 @@
 pub const instructions = .{
-    struct { pub const slot = hw.microcode.Slot.reset;
+    struct { // reset
+        pub const slot = hw.microcode.Slot.reset;
         pub const entry = reset;
 
         pub fn reset(c: *Cycle) void {
@@ -212,7 +213,8 @@ pub const instructions = .{
     Fault_Handler(.instruction_protection_fault),
     Fault_Handler(.invalid_instruction_fault),
     Fault_Handler(.double_fault),
-    struct { pub const slot = hw.microcode.Slot.interrupt;
+    struct { // interrupt
+        pub const slot = hw.microcode.Slot.interrupt;
         const vector_register = hw.addr.Physical.interrupt_controller;
         pub const entry = persist_stat;
 
@@ -256,7 +258,8 @@ pub const instructions = .{
             c.branch(.next_ip, 0);
         }
     },
-    struct { pub const slot = .invalid_instruction;
+    struct { // invalid_instruction
+        pub const slot = .invalid_instruction;
         pub fn entry(c: *Cycle) void {
             c.invalid_instruction();
         }
