@@ -24,22 +24,6 @@ pub fn Int_Mult(comptime name_or_enum_literal: anytype, comptime T: type, compti
     };
 }
 
-pub fn Reg(comptime name_or_enum_literal: anytype) type {
-    return Int(name_or_enum_literal, Register_Index);
-}
-
-pub fn Even_Reg(comptime name_or_enum_literal: anytype) type {
-    return Int_Mult(name_or_enum_literal, std.meta.Int(.unsigned, @bitSizeOf(Register_Index) - 1), 2);
-}
-
-pub fn Odd_Reg(comptime name_or_enum_literal: anytype) type {
-    return Options(name_or_enum_literal, .{ 1, 3, 5, 7, 9, 11, 13, 15 });
-}
-
-pub fn Reg_Bit(comptime name_or_enum_literal:anytype) type {
-    return Options(name_or_enum_literal, .{ 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768 });
-}
-
 pub fn Range(comptime name_or_enum_literal: anytype, comptime first: i64, comptime last: i64) type {
     return struct {
         value: i64,
@@ -61,13 +45,29 @@ pub fn Options(comptime name_or_enum_literal: anytype, comptime options: anytype
     };
 }
 
-/// Can be used as a parameter in microcode functions, but not in Encoders.
+/// Can be used as a parameter in microcode functions, but not in Encoders, since it doesn't have a domain decl.
 pub fn Any(comptime name_or_enum_literal: anytype) type {
     return struct {
         value: i64,
 
         pub const placeholder = parse_name(name_or_enum_literal);
     };
+}
+
+pub fn Reg(comptime name_or_enum_literal: anytype) type {
+    return Int(name_or_enum_literal, Register_Index);
+}
+
+pub fn Even_Reg(comptime name_or_enum_literal: anytype) type {
+    return Int_Mult(name_or_enum_literal, std.meta.Int(.unsigned, @bitSizeOf(Register_Index) - 1), 2);
+}
+
+pub fn Odd_Reg(comptime name_or_enum_literal: anytype) type {
+    return Options(name_or_enum_literal, .{ 1, 3, 5, 7, 9, 11, 13, 15 });
+}
+
+pub fn Reg_Bit(comptime name_or_enum_literal: anytype) type {
+    return Options(name_or_enum_literal, .{ 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768 });
 }
 
 fn parse_name(comptime name_or_enum_literal: anytype) []const u8 {

@@ -41,36 +41,16 @@ pub fn init(bit_offset: Encoded_Instruction.Bit_Length_Type, what: anytype) Enco
     var value: Value = undefined;
     var domain: Domain = undefined;
     const T = @TypeOf(what);
-    const info = @typeInfo(T);
-    if (info == .Type) {
-        value = .{ .placeholder = .{
-            .kind = .param_constant,
-            .index = .invalid,
-            .name = what.placeholder,
-        }};
-        domain = what.domain;
-    } else {
-        if ((info == .Struct or info == .Enum) and @hasDecl(T, "value")) {
-            const constant_value = T.value(what);
-            const constant_value_info = @typeInfo(@TypeOf(constant_value));
-            if (constant_value_info == .Int) {
-                value = .{ .constant = constant_value };
-                domain = .{ .int = .{
-                    .signedness = constant_value_info.Int.signedness,
-                    .bits = constant_value_info.Int.bits,
-                    .multiple = 1,
-                }};
-            } else {
-                const bit_size = @bitSizeOf(@TypeOf(constant_value));
-                const Signed = std.meta.Int(.signed, bit_size);
-                value = .{ .constant = @as(Signed, @bitCast(constant_value)) };
-                domain = .{ .int = .{
-                    .signedness = .signed,
-                    .bits = bit_size,
-                    .multiple = 1,
-                }};
-            }
-        } else if (info == .Enum) {
+    switch (@typeInfo(T)) {
+        .Type => {
+            value = .{ .placeholder = .{
+                .kind = .param_constant,
+                .index = .invalid,
+                .name = what.placeholder,
+            }};
+            domain = what.domain;
+        },
+        .Enum => {
             const Tag = std.meta.Tag(T);
             value = .{ .constant = @intFromEnum(what) };
             domain = .{ .int = .{
@@ -78,14 +58,16 @@ pub fn init(bit_offset: Encoded_Instruction.Bit_Length_Type, what: anytype) Enco
                 .bits = @bitSizeOf(Tag),
                 .multiple = 1,
             }};
-        } else if (info == .Int) {
+        },
+        .Int => |info| {
             value = .{ .constant = what };
             domain = .{ .int = .{
-                .signedness = info.Int.signedness,
-                .bits = info.Int.bits,
+                .signedness = info.signedness,
+                .bits = info.bits,
                 .multiple = 1,
             }};
-        } else {
+        },
+        else => {
             const bit_size = @bitSizeOf(T);
             const Signed = std.meta.Int(.signed, bit_size);
             value = .{ .constant = @as(Signed, @bitCast(what)) };
