@@ -1972,38 +1972,6 @@ pub const instructions = .{
             c.exec_next_insn();
         }
     },
-    struct { pub const spec = "ax r(reg), .d x(mem)";
-        pub const transform = "ax r(src) -> .d x(mem) -> r(dest)";
-        pub const conversions = .{
-            .{ .reg, .src },
-            .{ .reg, .dest },
-            .{ .mem, .mem },
-        };
-    },
-    struct { pub const spec = "ax x(reg), .d x(mem)";
-        pub const transform = "ax x(src) -> .d x(mem) -> x(dest)";
-        pub const conversions = .{
-            .{ .reg, .src },
-            .{ .reg, .dest },
-            .{ .mem, .mem },
-        };
-    },
-    struct { pub const spec = "ax .d x(mem), r(reg)";
-        pub const transform = "ax r(src) -> .d x(mem) -> r(dest)";
-        pub const conversions = .{
-            .{ .reg, .src },
-            .{ .reg, .dest },
-            .{ .mem, .mem },
-        };
-    },
-    struct { pub const spec = "ax .d x(mem), x(reg)";
-        pub const transform = "ax x(src) -> .d x(mem) -> x(dest)";
-        pub const conversions = .{
-            .{ .reg, .src },
-            .{ .reg, .dest },
-            .{ .mem, .mem },
-        };
-    },
     struct { pub const spec = // ax <src> -> .d x(mem) -> <dest>
         \\ax r(src) -> .d x(mem) -> r(dest)
         \\ax x(src) -> .d x(mem) -> x(dest)

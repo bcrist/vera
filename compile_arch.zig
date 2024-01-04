@@ -68,10 +68,7 @@ pub fn main() !void {
         var writer = sx.writer(gpa.allocator(), f.writer());
         defer writer.deinit();
 
-        try isa.write_database.write(@TypeOf(writer.inner), &writer, false,
-            processor.transform_list.items,
-            processor.encoding_list.items
-        );
+        try isa.write_database.write(@TypeOf(writer.inner), &writer, false, processor.encoding_list.items);
     }
 
     var uc_rom_data = try hw.microcode_roms.write_compressed_roms(gpa.allocator(), temp.allocator(), uc);

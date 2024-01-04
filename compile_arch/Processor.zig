@@ -3,7 +3,6 @@ temp: *TempAllocator,
 microcode: Microcode_Builder,
 decode_rom: Decode_ROM_Builder,
 encoding_list: std.ArrayList(isa.Instruction_Encoding),
-transform_list: std.ArrayList(isa.Instruction_Transform),
 encoding_slots: std.AutoHashMap(usize, std.ArrayList(hw.decode.Address)), // key is index into encoding_list
 
 pub fn init(gpa: std.mem.Allocator, arena: std.mem.Allocator, temp: *TempAllocator) Processor {
@@ -13,7 +12,6 @@ pub fn init(gpa: std.mem.Allocator, arena: std.mem.Allocator, temp: *TempAllocat
         .microcode = Microcode_Builder.init(gpa),
         .decode_rom = Decode_ROM_Builder.init(gpa),
         .encoding_list = std.ArrayList(isa.Instruction_Encoding).init(gpa),
-        .transform_list = std.ArrayList(isa.Instruction_Transform).init(gpa),
         .encoding_slots = std.AutoHashMap(usize, std.ArrayList(hw.decode.Address)).init(gpa),
     };
 }
@@ -31,36 +29,6 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
             log.debug("Beginning processing of {s}:\n    {}", .{ @typeName(Struct), Struct.slot });
         } else {
             log.debug("Beginning processing of {s}", .{ @typeName(Struct) });
-        }
-
-        if (@hasDecl(Struct, "transform")) {
-            var transformed_parser = Spec_Parser.init(alloc, Struct.transform);
-            const dest = transformed_parser.next().?;
-            const dest_signature = self.finalize_instruction_signature(dest.signature);
-            const dest_constant_values = self.convert_constraints_to_constant_values(dest);
-            const raw_src_constraints = if (@hasDecl(Struct, "constraints")) comptime resolve_constraints(Struct.constraints) else &.{};
-            const raw_transforms = if (@hasDecl(Struct, "conversions")) comptime resolve_transforms(Struct.conversions) else &.{};
-
-            for (dest.encoders) |encoder| {
-                const placeholder = encoder.value.placeholder.name;
-                for (raw_transforms) |transform| {
-                    if (std.mem.eql(u8, transform.dest.name, placeholder)) {
-                        break;
-                    }
-                } else {
-                    // maybe it would be better to automatically create a conversion for the same name and with no ops instead?
-                    std.debug.panic("Transformed placeholder '{s}' does not have an associated conversion", .{ placeholder });
-                }
-            }
-
-            var parser = Spec_Parser.init(alloc, Struct.spec);
-            while (parser.next()) |parsed| {
-                const transform = self.finalize_transform(parsed, raw_src_constraints, dest_signature, dest_constant_values, dest.encoders, raw_transforms);
-                self.transform_list.append(transform) catch @panic("OOM");
-            }
-
-            std.debug.assert(transformed_parser.next() == null);
-            continue;
         }
 
         // Microcode function enumeration
@@ -256,50 +224,6 @@ fn process_instruction(
         if (iter.undefined_bits.raw() != 0) {
             std.debug.panic("Bits {x} of the initial instruction word are undefined!", .{ iter.undefined_bits.raw() });
         }
-    }
-}
-
-fn resolve_transforms(comptime transforms: anytype) []const Transform {
-    switch (@typeInfo(@TypeOf(transforms))) {
-        .Struct => |info| if (info.is_tuple) {
-            comptime var out: [transforms.len]Transform = undefined;
-            inline for (transforms, &out) |in, *transform| {
-                transform.* = comptime resolve_single_transform(in);
-            }
-            return &out;
-        },
-        else => {},
-    }
-
-    return &.{ resolve_single_transform(transforms) };
-}
-
-fn resolve_single_transform(comptime transform: anytype) Transform {
-    const T = @TypeOf(transform);
-    if (T == Transform) return transform;
-    switch (@typeInfo(T)) {
-        .Struct => |info| {
-            std.debug.assert(info.is_tuple);
-            std.debug.assert(transform.len >= 2);
-            comptime var ops: [transform.len - 2]Instruction_Transform.Op = undefined;
-            inline for (2..transform.len) |i| {
-                ops[i - 2] = transform[i];
-            }
-            return .{
-                .src = .{
-                    .index = .invalid,
-                    .kind = .param_constant,
-                    .name = @tagName(transform[0]),
-                },
-                .dest = .{
-                    .index = .invalid,
-                    .kind = .param_constant,
-                    .name = @tagName(transform[1]),
-                },
-                .ops = &ops,
-            };
-        },
-        else => @compileError("Expected .{ src, dest, ops... } or Transform"),
     }
 }
 
@@ -811,62 +735,6 @@ pub const Slot_Info = struct {
     }
 };
 
-fn finalize_transform(
-    self: *Processor,
-    parsed: Instruction_Encoding,
-    src_constraints: []const Constraint,
-    dest_signature: Instruction_Signature,
-    dest_constant_values: []const Constant_Value,
-    dest_encoders: []const Encoder,
-    raw_transforms: []const Transform
-) Instruction_Transform {
-    const src_signature = self.finalize_instruction_signature(parsed.signature);
-
-    const constraints = self.arena.dupe(Constraint, src_constraints) catch @panic("OOM");
-    for (constraints) |*constraint| {
-        fixup_placeholder_value(&constraint.left, parsed.encoders);
-        fixup_placeholder_value(&constraint.right, parsed.encoders);
-    }
-    const transforms = self.arena.dupe(Transform, raw_transforms) catch @panic("OOM");
-    for (transforms) |*transform| {
-        fixup_placeholder_info(&transform.src, parsed.encoders);
-        fixup_placeholder_info(&transform.dest, dest_encoders);
-    }
-    for (parsed.encoders) |encoder| {
-        const placeholder = encoder.value.placeholder.name;
-        for (raw_transforms) |transform| {
-            if (std.mem.eql(u8, transform.src.name, placeholder)) {
-                break;
-            }
-        } else {
-            std.debug.panic("Source placeholder '{s}' does not have an associated conversion", .{ placeholder });
-        }
-    }
-
-    return .{
-        .src_signature = src_signature,
-        .src_constraints = constraints,
-        .dest_signature = dest_signature,
-        .dest_constant_values = dest_constant_values,
-        .transforms = transforms,
-    };
-}
-
-/// Note this only works with .equal constraints where the left is a placeholder and the right is a constant,
-/// such as those that are generated by Spec_Parser for hardcoded numbers that can't be encoded in the instruction signature.
-fn convert_constraints_to_constant_values(self: *Processor, parsed: Instruction_Encoding) []const Constant_Value {
-    const constant_values = self.arena.alloc(Constant_Value, parsed.constraints.len) catch @panic("OOM");
-    for (parsed.constraints, constant_values) |constraint, *value| {
-        std.debug.assert(constraint.kind == .equal);
-        value.* = .{
-            .placeholder = constraint.left.placeholder,
-            .constant = constraint.right.constant,
-        };
-        fixup_placeholder_info(&value.placeholder, parsed.encoders);
-    }
-    return constant_values;
-}
-
 fn finalize_encoding(self: *Processor, parsed: Instruction_Encoding, constraints: []const Constraint, encoders: []const Encoder) Instruction_Encoding {
     var final_encoders = self.arena.dupe(Encoder, encoders) catch @panic("OOM");
     for (final_encoders) |*encoder| {
@@ -1025,9 +893,6 @@ const Slot_Data = Microcode_Builder.Slot_Data;
 const Slot_Location = Microcode_Builder.Slot_Location;
 const Microcode_Builder = @import("Microcode_Builder.zig");
 const Decode_ROM_Builder = @import("Decode_ROM_Builder.zig");
-const Transform = Instruction_Transform.Transform;
-const Constant_Value = Instruction_Transform.Constant_Value;
-const Instruction_Transform = isa.Instruction_Transform;
 const Value = Instruction_Encoding.Value;
 const Constraint = Instruction_Encoding.Constraint;
 const Placeholder_Info = Instruction_Encoding.Placeholder_Info;

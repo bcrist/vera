@@ -24,7 +24,7 @@ pub fn parse_decoding_db(data: *Parser_Data, source: []const u8) !Decoding_Datab
     }
     defer temp_extra.deinit();
 
-    while (p.next_encoding_or_transform() catch |err| {
+    while (p.next() catch |err| {
         if (err == error.SExpressionSyntaxError) {
             var stderr = std.io.getStdErr().writer();
             const context = p.reader.token_context() catch return err;
@@ -32,49 +32,46 @@ pub fn parse_decoding_db(data: *Parser_Data, source: []const u8) !Decoding_Datab
             context.print_for_string(source, stderr, 150) catch return err;
         }
         return err;
-    }) |what| switch (what) {
-        .transform => {},
-        .encoding => |encoding| {
-            for (encoding.encoders) |enc| {
-                if (enc.value == .constant and enc.bit_offset == 0 and enc.arithmetic_offset == 0) {
-                    var encoded: Encoded_Instruction.Data = 0;
-                    const ok = enc.encode(.{ .mnemonic = ._reserved, .suffix = .none, .params = &.{} }, &encoded);
-                    std.debug.assert(ok);
-                    const bits = enc.required_bits();
-                    if (bits >= 16) {
-                        const prefix: u16 = @truncate(encoded);
-                        const result = try temp_16b.getOrPut(prefix);
-                        if (!result.found_existing) {
-                            result.key_ptr.* = prefix;
-                            result.value_ptr.* = .{};
-                        }
-                        try result.value_ptr.append(data.temp, encoding);
-                        break;
-                    } else if (bits >= 12) {
-                        const prefix: u12 = @truncate(encoded);
-                        const result = try temp_12b.getOrPut(prefix);
-                        if (!result.found_existing) {
-                            result.key_ptr.* = prefix;
-                            result.value_ptr.* = .{};
-                        }
-                        try result.value_ptr.append(data.temp, encoding);
-                        break;
-                    } else if (bits >= 8) {
-                        const prefix: u8 = @truncate(encoded);
-                        const result = try temp_8b.getOrPut(prefix);
-                        if (!result.found_existing) {
-                            result.key_ptr.* = prefix;
-                            result.value_ptr.* = .{};
-                        }
-                        try result.value_ptr.append(data.temp, encoding);
-                        break;
+    }) |encoding| {
+        for (encoding.encoders) |enc| {
+            if (enc.value == .constant and enc.bit_offset == 0) {
+                var encoded: Encoded_Instruction.Data = 0;
+                const ok = enc.encode(.{ .mnemonic = ._reserved, .suffix = .none, .params = &.{} }, &encoded);
+                std.debug.assert(ok);
+                const bits = enc.required_bits();
+                if (bits >= 16) {
+                    const prefix: u16 = @truncate(encoded);
+                    const result = try temp_16b.getOrPut(prefix);
+                    if (!result.found_existing) {
+                        result.key_ptr.* = prefix;
+                        result.value_ptr.* = .{};
                     }
+                    try result.value_ptr.append(data.temp, encoding);
+                    break;
+                } else if (bits >= 12) {
+                    const prefix: u12 = @truncate(encoded);
+                    const result = try temp_12b.getOrPut(prefix);
+                    if (!result.found_existing) {
+                        result.key_ptr.* = prefix;
+                        result.value_ptr.* = .{};
+                    }
+                    try result.value_ptr.append(data.temp, encoding);
+                    break;
+                } else if (bits >= 8) {
+                    const prefix: u8 = @truncate(encoded);
+                    const result = try temp_8b.getOrPut(prefix);
+                    if (!result.found_existing) {
+                        result.key_ptr.* = prefix;
+                        result.value_ptr.* = .{};
+                    }
+                    try result.value_ptr.append(data.temp, encoding);
+                    break;
                 }
-            } else {
-                try temp_extra.append(encoding);
             }
-        },
-    };
+        } else {
+            try temp_extra.append(encoding);
+        }
+    }
 
     var self: Decoding_Database = .{
         .lookup_8b = .{},
@@ -120,18 +117,10 @@ pub fn parse_encoding_db(data: *Parser_Data, source: []const u8) !Encoding_Datab
         }
         temp_lookup.deinit();
     }
-    var temp_transforms = deep_hash_map.DeepAutoHashMap(Instruction_Signature, std.ArrayListUnmanaged(Instruction_Transform)).init(data.temp);
-    defer {
-        var iter = temp_transforms.valueIterator();
-        while (iter.next()) |list| {
-            list.deinit(data.temp);
-        }
-        temp_transforms.deinit();
-    }
 
     var total_encodings: usize = 0;
 
-    while (p.next_encoding_or_transform() catch |err| {
+    while (p.next() catch |err| {
         if (err == error.SExpressionSyntaxError) {
             var stderr = std.io.getStdErr().writer();
             const context = p.reader.token_context() catch return err;
@@ -139,29 +128,18 @@ pub fn parse_encoding_db(data: *Parser_Data, source: []const u8) !Encoding_Datab
             context.print_for_string(source, stderr, 150) catch return err;
         }
         return err;
-    }) |what| switch (what) {
-        .encoding => |encoding| {
-            var result = try temp_lookup.getOrPutAdapted(encoding, Encoding_Context{});
-            if (!result.found_existing) {
-                result.key_ptr.* = encoding.signature;
-                result.value_ptr.* = .{};
-            }
-            try result.value_ptr.append(data.temp, encoding);
-            total_encodings += 1;
-        },
-        .transform => |transform| {
-            var result = try temp_transforms.getOrPutAdapted(transform, Transform_Context{});
-            if (!result.found_existing) {
-                result.key_ptr.* = transform.src_signature;
-                result.value_ptr.* = .{};
-            }
-            try result.value_ptr.append(data.temp, transform);
-        },
-    };
+    }) |encoding| {
+        var result = try temp_lookup.getOrPutAdapted(encoding, Encoding_Context{});
+        if (!result.found_existing) {
+            result.key_ptr.* = encoding.signature;
+            result.value_ptr.* = .{};
+        }
+        try result.value_ptr.append(data.temp, encoding);
+        total_encodings += 1;
+    }
 
     var self: Encoding_Database = .{};
     try self.lookup.ensureTotalCapacity(data.arena, temp_lookup.count());
-    try self.transforms.ensureTotalCapacity(data.arena, temp_transforms.count());
 
     var all_encodings = try data.arena.alloc(*const Instruction_Encoding, total_encodings);
     self.all_encodings = all_encodings;
@@ -183,12 +161,6 @@ pub fn parse_encoding_db(data: *Parser_Data, source: []const u8) !Encoding_Datab
         self.lookup.putAssumeCapacity(entry.key_ptr.*, encodings);
     }
 
-    var transform_iter = temp_transforms.iterator();
-    while (transform_iter.next()) |entry| {
-        const transforms = try data.arena.dupe(Instruction_Transform, entry.value_ptr.items);
-        self.transforms.putAssumeCapacity(entry.key_ptr.*, transforms);
-    }
-
     return self;
 }
 
@@ -205,27 +177,9 @@ const Encoding_Context = struct {
     }
 };
 
-const Transform_Context = struct {
-    pub fn hash(_: @This(), key: Instruction_Transform) u64 {
-        var hasher = std.hash.Wyhash.init(0);
-        std.hash.autoHash(&hasher, key.src_signature.mnemonic);
-        std.hash.autoHash(&hasher, key.src_signature.suffix);
-        std.hash.autoHashStrat(&hasher, key.src_signature.params, .Deep);
-        return hasher.final();
-    }
-    pub fn eql(_: @This(), a: Instruction_Transform, b: Instruction_Signature) bool {
-        return a.src_signature.eql(b);
-    }
-};
-
 pub fn parser(data: *Parser_Data, reader: anytype) Parser(@TypeOf(reader)) {
     return Parser(@TypeOf(reader)).init(data, reader);
 }
-
-pub const Encoding_Or_Transform = union (enum) {
-    encoding: Instruction_Encoding,
-    transform: Instruction_Transform,
-};
 
 pub fn Parser(comptime Reader: type) type {
     return struct {
@@ -245,110 +199,7 @@ pub fn Parser(comptime Reader: type) type {
             self.reader.deinit();
         }
 
-        pub fn next_encoding_or_transform(self: *Self) !?Encoding_Or_Transform {
-            if (try self.next_transform_optional()) |transform| {
-                return .{ .transform = transform };
-            }
-            if (try self.next_encoding()) |encoding| {
-                return .{ .encoding = encoding };
-            }
-            return null;
-        }
-
-        pub fn next_transform(self: *Self) !?Instruction_Transform {
-            if (try self.next_transform_optional()) |transform| {
-                return transform;
-            } else {
-                try self.reader.require_done();
-                return null;
-            }
-        }
-
-        fn next_transform_optional(self: *Self) !?Instruction_Transform {
-            if (!try self.reader.expression("transform")) return null;
-
-            try self.reader.require_expression("match");
-            const src_signature = try self.parse_signature();
-            const constraints = try self.parse_constraints();
-            try self.reader.require_close();
-
-
-            try self.reader.require_expression("result");
-
-            const dest_signature = try self.parse_signature();
-
-            while (try self.reader.expression("constrain")) {
-                const placeholder = try self.parse_placeholder_info();
-                try self.reader.require_string("==");
-                const constant = try self.parse_constant_optional() orelse return error.SExpressionSyntaxError;
-                try self.reader.require_close();
-
-                try self.data.constant_values.temp.append(self.data.temp, .{
-                    .placeholder = placeholder,
-                    .constant = constant,
-                });
-            }
-            const constant_values = try self.data.constant_values.dedup(self.data);
-
-            try self.reader.require_close(); // result
-
-            while (try self.reader.expression("convert")) {
-                var src: ?Placeholder_Info = null;
-                var dest: ?Placeholder_Info = null;
-
-                while (try self.reader.any_expression()) |expr| {
-                    if (std.mem.eql(u8, expr, "src")) {
-                        src = try self.parse_placeholder_info();
-
-                    } else if (std.mem.eql(u8, expr, "dest")) {
-                        dest = try self.parse_placeholder_info();
-
-                    } else if (std.mem.eql(u8, expr, "negate")) {
-                        try self.data.transform_ops.temp.append(self.data.temp, .negate);
-
-                    } else if (std.mem.eql(u8, expr, "offset")) {
-                        try self.data.transform_ops.temp.append(self.data.temp, .{
-                            .offset = try self.reader.require_any_int(i64, 0),
-                        });
-
-                    } else if (std.mem.eql(u8, expr, "multiply")) {
-                        try self.data.transform_ops.temp.append(self.data.temp, .{
-                            .multiply = try self.reader.require_any_int(i64, 0),
-                        });
-
-                    } else if (std.mem.eql(u8, expr, "divide_trunc")) {
-                        try self.data.transform_ops.temp.append(self.data.temp, .{
-                            .divide_trunc = try self.reader.require_any_int(i64, 0),
-                        });
-
-                    } else {
-                        return error.SExpressionSyntaxError;
-                    }
-                    try self.reader.require_close();
-                }
-                const ops = try self.data.transform_ops.dedup(self.data);
-
-                try self.reader.require_close(); // ops
-                try self.data.transforms.temp.append(self.data.temp, .{
-                    .src = src orelse return error.SExpressionSyntaxError,
-                    .dest = dest orelse return error.SExpressionSyntaxError,
-                    .ops = ops,
-                });
-            }
-            const transforms = try self.data.transforms.dedup(self.data);
-
-            try self.reader.require_close(); // transform
-
-            return .{
-                .src_signature = src_signature,
-                .src_constraints = constraints,
-                .dest_signature = dest_signature,
-                .dest_constant_values = constant_values,
-                .transforms = transforms,
-            };
-        }
-
-        pub fn next_encoding(self: *Self) !?Instruction_Encoding {
+        pub fn next(self: *Self) !?Instruction_Encoding {
             if (!try self.reader.open()) {
                 try self.reader.require_done();
                 return null;
@@ -603,9 +454,6 @@ pub const Parser_Data = struct {
     temp: std.mem.Allocator,
 
     param_signatures: Array_Intern_Pool(Parameter.Signature) = .{},
-    constant_values: Array_Intern_Pool(Constant_Value) = .{},
-    transforms: Array_Intern_Pool(Transform) = .{},
-    transform_ops: Array_Intern_Pool(Instruction_Transform.Op) = .{},
     constraints: Array_Intern_Pool(Constraint) = .{},
     encoders: Array_Intern_Pool(Encoder) = .{},
     enumerated_values: Array_Intern_Pool(i64) = .{},
@@ -613,9 +461,6 @@ pub const Parser_Data = struct {
 
     pub fn deinit(self: *Parser_Data) void {
         self.param_signatures.deinit(self.temp);
-        self.constant_values.deinit(self.temp);
-        self.transforms.deinit(self.temp);
-        self.transform_ops.deinit(self.temp);
         self.constraints.deinit(self.temp);
         self.encoders.deinit(self.temp);
         self.enumerated_values.deinit(self.temp);
@@ -656,9 +501,6 @@ fn Array_Intern_Pool(comptime T: type) type {
 
 const Encoding_Database = isa.Encoding_Database;
 const Decoding_Database = isa.Decoding_Database;
-const Transform = Instruction_Transform.Transform;
-const Constant_Value = Instruction_Transform.Constant_Value;
-const Instruction_Transform = isa.Instruction_Transform;
 const Placeholder_Info = Instruction_Encoding.Placeholder_Info;
 const Domain = Instruction_Encoding.Domain;
 const Constraint = Instruction_Encoding.Constraint;

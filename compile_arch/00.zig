@@ -1279,24 +1279,6 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { pub const spec = "swap r(a), r(b)";
-        pub const transform = "c r(a), r(b) -> r(ad), r(bd)";
-        pub const conversions = .{
-            .{ .a, .a },
-            .{ .b, .b },
-            .{ .a, .bd },
-            .{ .b, .ad },
-        };
-    },
-    struct { pub const spec = "swap x(a), x(b)";
-        pub const transform = "c x(a), x(b) -> x(ad), x(bd)";
-        pub const conversions = .{
-            .{ .a, .a },
-            .{ .b, .b },
-            .{ .a, .bd },
-            .{ .b, .ad },
-        };
-    },
     struct { pub const spec = // callx .d <uxp/kxp> + (imm4u * 4)
         \\callx .d uxp + (imm)
         \\callx .d kxp + (imm)

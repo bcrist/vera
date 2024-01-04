@@ -1,7 +1,4 @@
-pub fn write(comptime W: type, writer: *sx.Writer(W), compact: bool, transforms: []const Instruction_Transform, encodings: []const Instruction_Encoding) !void {
-    for (transforms) |xform| {
-        try write_transform(W, writer, compact, xform);
-    }
+pub fn write(comptime W: type, writer: *sx.Writer(W), compact: bool, encodings: []const Instruction_Encoding) !void {
     for (encodings) |encoding| {
         try write_encoding(W, writer, compact, encoding);
     }
@@ -62,56 +59,6 @@ pub fn write_encoding(comptime W: type, writer: *sx.Writer(W), compact: bool, en
     _ = try writer.close();
 }
 
-pub fn write_transform(comptime W: type, writer: *sx.Writer(W), compact: bool, transform: Instruction_Transform) !void {
-    try writer.expression_expanded("transform");
-
-    try writer.expression("match");
-    try write_signature(transform.src_signature, writer, compact);
-    if (transform.src_constraints.len > 0) {
-        writer.set_compact(compact);
-        try write_constraints(transform.src_constraints, writer);
-    } else {
-        writer.set_compact(true);
-    }
-    _ = try writer.close();
-
-    try writer.expression("result");
-    try write_signature(transform.dest_signature, writer, compact);
-    if (transform.dest_constant_values.len > 0) {
-        writer.set_compact(compact);
-        try write_constant_values(transform.dest_constant_values, writer);
-    } else {
-        writer.set_compact(true);
-    }
-    _ = try writer.close();
-
-    for (transform.transforms) |xform| {
-        try writer.expression("convert");
-
-        try writer.expression("src");
-        try write_value_source(.{ .placeholder = xform.src }, writer);
-        _ = try writer.close();
-        try writer.expression("dest");
-        try write_value_source(.{ .placeholder = xform.dest }, writer);
-        _ = try writer.close();
-
-        for (xform.ops) |op| {
-            try writer.expression(@tagName(op));
-            switch (op) {
-                .negate => {},
-                .offset, .multiply, .divide_trunc => |n| {
-                    try writer.int(n, 10);
-                },
-            }
-            _ = try writer.close();
-        }
-
-        _ = try writer.close();
-    }
-
-    _ = try writer.close();
-}
-
 fn write_signature(signature: Instruction_Signature, writer: anytype, compact: bool) !void {
     try writer.tag(signature.mnemonic);
     if (signature.suffix != .none) {
@@ -154,16 +101,6 @@ fn write_constraints(constraints: []const Constraint, writer: anytype) !void {
             .greater => ">",
         });
         try write_value_source(constraint.right, writer);
-        _ = try writer.close();
-    }
-}
-
-fn write_constant_values(values: []const Instruction_Transform.Constant_Value, writer: anytype) !void {
-    for (values) |value| {
-        try writer.expression("constrain");
-        try write_value_source(.{ .placeholder = value.placeholder }, writer);
-        try writer.string("==");
-        try write_value_source(.{ .constant = value.constant }, writer);
         _ = try writer.close();
     }
 }
@@ -216,7 +153,6 @@ const Constraint = Instruction_Encoding.Constraint;
 const Encoder = Instruction_Encoding.Encoder;
 const Value = Instruction_Encoding.Value;
 const Instruction_Encoding = isa.Instruction_Encoding;
-const Instruction_Transform = isa.Instruction_Transform;
 const Instruction = isa.Instruction;
 const Parameter = isa.Parameter;
 const Mnemonic = isa.Mnemonic;
