@@ -484,8 +484,9 @@ fn generate_mnemonic_page(header: []const u8, footer: []const u8, processor: *Pr
         \\<body>
         \\{s}
         \\<h1>{s}</h1>
+        \\<h2>{s}</h2>
         \\
-        , .{ style, header, mnemonic_str });
+        , .{ style, header, mnemonic_str, mnemonic.name() });
 
     for (processor.encoding_list.items, 0..) |ie, index| {
         if (ie.signature.mnemonic == mnemonic) {
