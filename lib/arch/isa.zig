@@ -12,21 +12,19 @@ pub const database_source = @embedFile("isa/database.sx");
 pub const Mnemonic = enum {
     _reserved,
     // Arithmetic:
-    add, addc, cmp, cmpc, sub, subc, inc, incc, dec, decc, neg, negc,
+    add, addc, cmp, cmpc, sub, subc, inc, dec, neg, negc,
     // Logical:
     xor, xnor, @"or", nor, @"and", nand,
     // Single bit:
-    testbit, clrbit, setbit,
+    tb, cb, sb,
     // Shifts:
     shr, shl, shrc, shlc,
     // Multiply:
     mul, mulh,
     // Bit counting:
-    cb, cz, clb, clz, ctb, ctz,
+    csb, czb, csbl, czbl, csbt, czbt,
     // Branches & Calls:
-    b, eab, dab, call, callx, ret,
-    bb, bbn,
-    bp, bpn,
+    b, eab, dab, call, callx, ret, bb, bbn, bp, bpn,
     // Basic data movement:
     c, swap, ld, ldi, ild, st, sti, ist,
     // MMU:
@@ -36,7 +34,7 @@ pub const Mnemonic = enum {
     // Atomics:
     sync, ald, ast, astz, aadd, adecnz, ax, axe,
     // Memcopy & streaming:
-    mc, mcb, mcf, mcfb, si, sib, so, sob, bld, bst,
+    mcba, mcb, mcfa, mcf, sia, si, soa, so, bld, bst,
     // Faults, interrupts, and context switching:
     fret, iret, ifex, ldrs, strs, srs, park,
     // Misc:
@@ -130,17 +128,17 @@ pub fn branch_kind(mnemonic: Mnemonic, suffix: Mnemonic_Suffix) Branch_Kind {
     return switch (mnemonic) {
         ._reserved => unreachable,
 
-        .add, .addc, .cmp, .cmpc, .sub, .subc, .inc, .incc, .dec, .decc, .neg, .negc,
+        .add, .addc, .cmp, .cmpc, .sub, .subc, .inc, .dec, .neg, .negc,
         .xor, .xnor, .@"or", .nor, .@"and", .nand,
-        .testbit, .clrbit, .setbit,
+        .tb, .cb, .sb,
         .shr, .shl, .shrc, .shlc,
         .mul, .mulh,
-        .cb, .cz, .clb, .clz, .ctb, .ctz,
+        .csb, .czb, .csbl, .czbl, .csbt, .czbt,
         .c, .swap, .ld, .ldi, .ild, .st, .sti, .ist,
         .sat, .rat,
         .frame, .unframe, .pop, .push,
         .sync, .ald, .ast, .astz, .aadd, .adecnz, .ax, .axe,
-        .mc, .mcb, .mcf, .mcfb, .si, .sib, .so, .sob, .bld, .bst,
+        .mcba, .mcb, .mcfa, .mcf, .sia, .si, .soa, .so, .bld, .bst,
         .ifex, .ldrs, .strs, .srs,
         .nop,
         => .nonbranching,

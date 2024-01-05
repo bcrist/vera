@@ -168,16 +168,16 @@ pub const instructions = .{
     },
     struct { // <add/sub> <src_reg>, (imm3_1_8) -> <dest_reg>
         pub const spec =
-            \\add r(src), (imm) -> r(dest)
-            \\add x(src), (imm) -> x(dest)
-            \\add (imm), r(src) -> r(dest)
-            \\add (imm), x(src) -> x(dest)
-            \\sub r(src), (imm) -> r(dest)
-            \\sub x(src), (imm) -> x(dest)
             \\add r(src, dest), (imm)
+            \\add r(src), (imm) -> r(dest)
+            \\add (imm), r(src) -> r(dest)
             \\add x(src, dest), (imm)
+            \\add x(src), (imm) -> x(dest)
+            \\add (imm), x(src) -> x(dest)
             \\sub r(src, dest), (imm)
+            \\sub r(src), (imm) -> r(dest)
             \\sub x(src, dest), (imm)
+            \\sub x(src), (imm) -> x(dest)
             ;
         pub const encoding = .{
             Even_Reg(.dest),
@@ -295,6 +295,73 @@ pub const instructions = .{
                     switch (mnemonic) {
                         .add => c.j_minus_k_to_l(.sx, .fresh, .flags),
                         .sub => c.j_plus_k_to_l(.sx, .fresh, .flags),
+                        else => unreachable,
+                    }
+                    c.l_to_reg32();
+                },
+                else => unreachable,
+            }
+            c.load_and_exec_next_insn();
+        }
+    },
+    struct { // <inc/dec> <src> -> <dest>
+        pub const spec =
+            \\inc r(src, dest)
+            \\inc r(src) -> r(dest)
+            \\inc x(src, dest)
+            \\inc x(src) -> x(dest)
+            \\dec r(src, dest)
+            \\dec r(src) -> r(dest)
+            \\dec x(src, dest)
+            \\dec x(src) -> x(dest)
+            ;
+        pub const encoding = .{
+            Even_Reg(.dest),
+            Encoder.init(3, Even_Reg(.src)),
+            Encoder.init(6, @as(u3, 0)),
+            width_encoder,
+            mnemonic_encoder,
+            Encoder.init(11, @as(u3, 3)),
+            region_encoder,
+        };
+        pub const ij = Reg(.src);
+        pub const iw = Reg(.dest);
+
+        fn width_encoder(src: Param(.src)) Encoder {
+            return Encoder.init(9, @as(u1, switch (src.signature.base) {
+                .reg16 => 0,
+                .reg32 => 1,
+                else => unreachable,
+            }));
+        }
+        fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
+            return Encoder.init(10, @as(u1, switch (mnemonic) {
+                .inc => 0,
+                .dec => 1,
+                else => unreachable,
+            }));
+        }
+
+        pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic, src: Param(.src)) void {
+            switch (src.signature.base) {
+                .reg16 => c.reg_to_jl(),
+                .reg32 => c.reg32_to_j(),
+                else => unreachable,
+            }
+            c.literal_to_k(1);
+            switch (src.signature.base) {
+                .reg16 => {
+                    switch (mnemonic) {
+                        .inc => c.jl_plus_k_to_ll(.fresh, .flags),
+                        .dec => c.jl_minus_k_to_ll(.fresh, .flags),
+                        else => unreachable,
+                    }
+                    c.ll_to_reg();
+                },
+                .reg32 => {
+                    switch (mnemonic) {
+                        .inc => c.j_plus_k_to_l(.sx, .fresh, .flags),
+                        .dec => c.j_minus_k_to_l(.sx, .fresh, .flags),
                         else => unreachable,
                     }
                     c.l_to_reg32();
@@ -608,11 +675,11 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { // <test/set/clr>bit r(reg), (imm)
+    struct { // <tb/cb/sb> r(reg), (imm)
         pub const spec = 
-            \\testbit r(reg), (imm)
-            \\setbit r(reg), (imm)
-            \\clrbit r(reg), (imm)
+            \\tb r(reg), (imm)
+            \\sb r(reg), (imm)
+            \\cb r(reg), (imm)
             ;
         pub const encoding = .{
             Reg_Bit(.imm),
@@ -627,9 +694,9 @@ pub const instructions = .{
 
         fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
             return Encoder.init(7, @as(u2, switch (mnemonic) {
-                .clrbit => 0,
-                .setbit => 1,
-                .testbit => 2,
+                .cb => 0,
+                .sb => 1,
+                .tb => 2,
                 else => unreachable,
             }));
         }
@@ -638,12 +705,12 @@ pub const instructions = .{
             c.reg_to_jl();
             c.ik_bit_to_k();
             switch (mnemonic) {
-                .testbit => c.jl_logic_k(._and, .fresh, .flags),
-                .setbit => {
+                .tb => c.jl_logic_k(._and, .fresh, .flags),
+                .sb => {
                     c.jl_logic_k_to_ll(._or, .fresh, .flags);
                     c.ll_to_reg();
                 },
-                .clrbit => {
+                .cb => {
                     c.jl_logic_k_to_ll(.and_not, .fresh, .flags);
                     c.ll_to_reg();
                 },
@@ -861,18 +928,18 @@ pub const instructions = .{
             \\negc r(src, dest)
             \\negc r(src) -> r(dest)
             \\subc 0, r(src) -> r(dest)
-            \\cb r(src, dest)
-            \\cb r(src) -> b(dest)
-            \\cz r(src, dest)
-            \\cz r(src) -> b(dest)
-            \\clb r(src, dest)
-            \\clb r(src) -> b(dest)
-            \\clz r(src, dest)
-            \\clz r(src) -> b(dest)
-            \\ctb r(src, dest)
-            \\ctb r(src) -> b(dest)
-            \\ctz r(src, dest)
-            \\ctz r(src) -> b(dest)
+            \\csb r(src, dest)
+            \\csb r(src) -> b(dest)
+            \\czb r(src, dest)
+            \\czb r(src) -> b(dest)
+            \\csbl r(src, dest)
+            \\csbl r(src) -> b(dest)
+            \\czbl r(src, dest)
+            \\czbl r(src) -> b(dest)
+            \\csbt r(src, dest)
+            \\csbt r(src) -> b(dest)
+            \\czbt r(src, dest)
+            \\czbt r(src) -> b(dest)
             ;
         pub const encoding = .{
             Even_Reg(.dest),
@@ -889,12 +956,12 @@ pub const instructions = .{
             return Encoder.init(6, @as(u3, switch (mnemonic) {
                 .neg, .sub => 0,
                 .negc, .subc => 1,
-                .cz => 2,
-                .cb => 3,
-                .clz => 4,
-                .clb => 5,
-                .ctz => 6,
-                .ctb => 7,
+                .czb => 2,
+                .csb => 3,
+                .czbl => 4,
+                .csbl => 5,
+                .czbt => 6,
+                .csbt => 7,
                 else => unreachable,
             }));
         }
@@ -915,12 +982,12 @@ pub const instructions = .{
                     c.reg_to_jl();
                     c.literal_to_k(-1);
                     switch (mnemonic) {
-                        .cz => c.count_jl_and_k_to_ll(.zeroes, .all, .fresh, .flags),
-                        .cb => c.count_jl_and_k_to_ll(.ones, .all, .fresh, .flags),
-                        .clz => c.count_jl_and_k_to_ll(.zeroes, .leading, .fresh, .flags),
-                        .clb => c.count_jl_and_k_to_ll(.ones, .leading, .fresh, .flags),
-                        .ctz => c.count_jl_and_k_to_ll(.zeroes, .trailing, .fresh, .flags),
-                        .ctb => c.count_jl_and_k_to_ll(.ones, .trailing, .fresh, .flags),
+                        .czb => c.count_jl_and_k_to_ll(.zeroes, .all, .fresh, .flags),
+                        .csb => c.count_jl_and_k_to_ll(.ones, .all, .fresh, .flags),
+                        .czbl => c.count_jl_and_k_to_ll(.zeroes, .leading, .fresh, .flags),
+                        .csbl => c.count_jl_and_k_to_ll(.ones, .leading, .fresh, .flags),
+                        .czbt => c.count_jl_and_k_to_ll(.zeroes, .trailing, .fresh, .flags),
+                        .csbt => c.count_jl_and_k_to_ll(.ones, .trailing, .fresh, .flags),
                         else => unreachable,
                     }
                 },
@@ -1316,11 +1383,11 @@ pub const instructions = .{
             c.load_and_exec_next_insn();
         }
     },
-    struct { // <mc/si/so> x(bytes) .signed, .d bp -> .d rp
+    struct { // <mcba/sia/soa> x(bytes) .signed, .d bp -> .d rp
         pub const spec =
-            \\mc x(bytes) .signed, .d bp -> .d rp
-            \\si x(bytes) .signed, .d bp -> .d rp
-            \\so x(bytes) .signed, .d bp -> .d rp
+            \\mcba x(bytes) .signed, .d bp -> .d rp
+            \\sia x(bytes) .signed, .d bp -> .d rp
+            \\soa x(bytes) .signed, .d bp -> .d rp
             ;
         pub const encoding = .{
             Even_Reg(.bytes),
@@ -1334,9 +1401,9 @@ pub const instructions = .{
 
         fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
             return Encoder.init(4, @as(u2, switch (mnemonic) {
-                .mc => 0,
-                .si => 2,
-                .so => 3,
+                .mcba => 0,
+                .sia => 2,
+                .soa => 3,
                 else => unreachable,
             }));
         }
@@ -1405,7 +1472,7 @@ pub const instructions = .{
         }
 
         pub fn read(c: *Cycle, flags: Flags, mnemonic: isa.Mnemonic) void {
-            const offset: u2 = if (mnemonic == .si) 0 else 2;
+            const offset: u2 = if (mnemonic == .sia) 0 else 2;
             c.read_to_dr(.bp, offset, if (flags.negative()) .low else .full, .data);
             c.virtual_address_to_sr(.bp);
             c.reg32_to_j();
@@ -1425,7 +1492,7 @@ pub const instructions = .{
         }
 
         pub fn write_word(c: *Cycle, mnemonic: isa.Mnemonic) void {
-            const offset: u2 = if (mnemonic == .so) 0 else 2;
+            const offset: u2 = if (mnemonic == .soa) 0 else 2;
             c.write_from_dr(.rp, offset, .word, .data);
             c.virtual_address_to_sr(.rp);
             c.reg32_to_j();
@@ -1436,14 +1503,14 @@ pub const instructions = .{
         }
 
         pub fn write_final_word(c: *Cycle, mnemonic: isa.Mnemonic) void {
-            const offset: u2 = if (mnemonic == .so) 0 else 2;
+            const offset: u2 = if (mnemonic == .soa) 0 else 2;
             c.write_from_dr(.rp, offset, .word, .data);
             c.virtual_address_to_sr(.rp);
             c.next(load_and_exec_next_insn);
         }
 
         pub fn write_final_byte(c: *Cycle, mnemonic: isa.Mnemonic) void {
-            const offset: u2 = if (mnemonic == .so) 0 else 2;
+            const offset: u2 = if (mnemonic == .soa) 0 else 2;
             c.write_from_dr(.rp, offset, .byte, .data);
             c.virtual_address_to_sr(.rp);
             c.next(load_and_exec_next_insn);
@@ -1451,11 +1518,11 @@ pub const instructions = .{
 
         pub const load_and_exec_next_insn = Cycle.load_and_exec_next_insn;
     },
-    struct { // <mcb/sib/sob> x(bytes) .signed, .d bp -> .d rp
+    struct { // <mcb/si/so> x(bytes) .signed, .d bp -> .d rp
         pub const spec =
             \\mcb x(bytes) .signed, .d bp -> .d rp
-            \\sib x(bytes) .signed, .d bp -> .d rp
-            \\sob x(bytes) .signed, .d bp -> .d rp
+            \\si x(bytes) .signed, .d bp -> .d rp
+            \\so x(bytes) .signed, .d bp -> .d rp
             ;
         pub const encoding = .{
             Even_Reg(.bytes),
@@ -1470,8 +1537,8 @@ pub const instructions = .{
         fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
             return Encoder.init(4, @as(u2, switch (mnemonic) {
                 .mcb => 0,
-                .sib => 2,
-                .sob => 3,
+                .si => 2,
+                .so => 3,
                 else => unreachable,
             }));
         }
@@ -1550,8 +1617,8 @@ pub const instructions = .{
 
         pub const load_and_exec_next_insn = Cycle.load_and_exec_next_insn;
     },
-    struct { // mcf x(bytes) .signed, .d bp -> .d rp
-        pub const spec = "mcf x(bytes) .signed, .d bp -> .d rp";
+    struct { // mcfa x(bytes) .signed, .d bp -> .d rp
+        pub const spec = "mcfa x(bytes) .signed, .d bp -> .d rp";
         pub const encoding = .{
             Even_Reg(.bytes),
             Encoder.init(3, @as(u1, 0)),
@@ -1662,8 +1729,8 @@ pub const instructions = .{
 
         pub const load_and_exec_next_insn = Cycle.load_and_exec_next_insn;
     },
-    struct { // mcfb x(bytes) .signed, .d bp -> .d rp
-        pub const spec = "mcfb x(bytes) .signed, .d bp -> .d rp";
+    struct { // mcf x(bytes) .signed, .d bp -> .d rp
+        pub const spec = "mcf x(bytes) .signed, .d bp -> .d rp";
         pub const encoding = .{
             Even_Reg(.bytes),
             Encoder.init(3, @as(u1, 1)),
