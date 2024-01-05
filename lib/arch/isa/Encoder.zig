@@ -14,6 +14,15 @@ pub fn bit_mask(self: Encoder) Encoded_Instruction.Data {
 }
 
 pub fn encode(self: Encoder, insn: isa.Instruction, out: *Encoded_Instruction.Data) bool {
+    switch (self.value) {
+        .placeholder => |info| {
+            if (std.mem.eql(u8, info.name, "__")) {
+                // This is a "don't care" encoder; we don't encode it at all.
+                return true;
+            }
+        },
+        else => {},
+    }
     return self.encode_raw(self.value.evaluate(insn.params), out);
 }
 

@@ -11,6 +11,15 @@ pub const Value = union (enum) {
         offset: i64,
     },
 
+    pub fn get_placeholder_info(self: Value) ?Placeholder_Info {
+        return switch (self) {
+            .constant => null,
+            .placeholder => |info| info,
+            .negate => |inner| inner.get_placeholder_info(),
+            .offset => |info| info.inner.get_placeholder_info(),
+        };
+    }
+
     pub fn evaluate(self: Value, params: []const Parameter) i64 {
         return switch (self) {
             .constant => |v| v,
@@ -252,7 +261,7 @@ pub fn matches(self: Instruction_Encoding, insn: Instruction) bool {
     return true;
 }
 
-pub fn encode(self: Instruction_Encoding, insn: Instruction) Encoded_Instruction {
+pub fn encode(self: Instruction_Encoding, insn: Instruction, default_value: Encoded_Instruction.Data) Encoded_Instruction {
     std.debug.assert(self.signature.mnemonic == insn.mnemonic);
     std.debug.assert(self.signature.suffix == insn.suffix);
 
@@ -266,7 +275,7 @@ pub fn encode(self: Instruction_Encoding, insn: Instruction) Encoded_Instruction
     }
 
     var out: Encoded_Instruction = .{
-        .data = 0,
+        .data = default_value,
         .len = self.len(),
     };
 
@@ -278,32 +287,66 @@ pub fn encode(self: Instruction_Encoding, insn: Instruction) Encoded_Instruction
     return out;
 }
 
-// .equal constraints can be assumed to match if the .left side is not populated by any encoders.
-// To check this, we first decode the encoded parameters, then assign all the left sides of .equal
-// constraints to their right side values.  In the case that both sides of an .equal constraint
-// reference numbers that were decoded directly, this would normally mean we'd get some
-// false-positive matches, since we've overwritten the decoded data on the left with the decoded
-// data on the right.  To avoid that we re-decode the values from encoders again afterward.
-// Finally we can check all the constraints.
-//
-// @Speed: It might be better to just keep track of which parameter values have been decoded,
-// and then only assign constraints that deal with unencoded parameter values.
 pub fn matches_data(self: Instruction_Encoding, data: Encoded_Instruction.Data) bool {
     var temp: [Parameter.Index.count]Parameter = undefined;
+    var decoded_base_register_index = [_]bool { false } ** Parameter.Index.count;
+    var decoded_offset_register_index = [_]bool { false } ** Parameter.Index.count;
+    var decoded_constant = [_]bool { false } ** Parameter.Index.count;
 
     for (self.encoders) |enc| {
-        if (!enc.decode(data, &temp)) return false;
+        if (enc.value.get_placeholder_info()) |info| {
+            // Multiple encoders might be attached to the same constant/register index within a parameter.
+            // In this case, we need to make sure that the encoders write the same value to that constant/register index.
+            // Otherwise, this instruction encoding does not match this instruction data.
+            const index = info.index.raw();
+            const old = temp[index];
+            if (!enc.decode(data, &temp)) return false;
+            const new = temp[index];
+            switch (info.kind) {
+                .param_constant => {
+                    if (decoded_constant[index]) {
+                        if (old.constant != new.constant) return false;
+                    } else {
+                        decoded_constant[index] = true;
+                    }
+                },
+                .param_base_register => {
+                    if (decoded_base_register_index[index]) {
+                        if (old.base_register_index != new.base_register_index) return false;
+                    } else {
+                        decoded_base_register_index[index] = true;
+                    }
+                },
+                .param_offset_register => {
+                    if (decoded_offset_register_index[index]) {
+                        if (old.offset_register_index != new.offset_register_index) return false;
+                    } else {
+                        decoded_offset_register_index[index] = true;
+                    }
+                },
+            }
+        } else {
+            if (!enc.decode(data, &temp)) return false;
+        }
     }
 
     for (self.constraints) |constraint| {
         if (constraint.kind == .equal) {
+            // .equal constraints can be assumed to match if the .left side is not populated by any encoders.
+            // To check this, we keep track of which parameter data has been decoded explicitly by the encoders,
+            // then for any constraints where the left side hasn't been decoded yet, copy it from the right side.
+            if (constraint.left.get_placeholder_info()) |info| {
+                const index = info.index.raw();
+                const already_decoded = switch (info.kind) {
+                    .param_constant => decoded_constant[index],
+                    .param_base_register => decoded_base_register_index[index],
+                    .param_offset_register => decoded_offset_register_index[index],
+                };
+                if (already_decoded) continue;
+            }
             const ok = constraint.left.assign(constraint.right.evaluate(&temp), &temp);
             std.debug.assert(ok);
         }
-    }
-
-    for (self.encoders) |enc| {
-        if (!enc.decode(data, &temp)) return false;
     }
 
     for (self.constraints) |constraint| {

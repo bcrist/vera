@@ -1,12 +1,10 @@
-[arch] test_encoding: ignore encoders using __ placeholder
-
+[arch] print_encoding - print placeholders with valid ranges and constraints specified
 [compile_arch] HTML instruction documentation with "disassembly" of control signals
 [compile_arch] Add Slot_Data flag for slots that may require kernel mode
 [arch/microsim] Fault if a block load/store instruction is executed on an invalid context
 
 [arch] Finish block diagram
 [arch] Finish Encoding_Database.similar_encodings
-[arch] print_encoding - print placeholders with valid ranges and constraints specified
 
 [compile_arch] Revamp instruction_builder.print_cycle_path()
 

@@ -96,6 +96,15 @@ pub const Decoder = struct {
 
         return insn;
     }
+
+    pub fn last_instruction_data(self: *Decoder) Encoded_Instruction {
+        var data: Encoded_Instruction.Data = 0;
+        @memcpy(std.mem.asBytes(&data).ptr, self.last_instruction);
+        return .{
+            .data = data,
+            .len = @intCast(self.last_instruction.len),
+        };
+    }
 };
 
 const Decoding_Database = @This();

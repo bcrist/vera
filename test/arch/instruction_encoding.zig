@@ -25,24 +25,16 @@ test "Instruction encoding" {
         } orelse break;
 
         // const stderr = std.io.getStdErr().writer();
-        // try stderr.print("{any} ", .{ decoder.last_instruction });
+        // try stderr.print("{} ", .{ std.fmt.fmtSliceHexUpper(decoder.last_instruction) });
         // try isa.print.print_instruction(insn, null, stderr);
         // try stderr.writeByte('\n');
 
         var iter = edb.matching_encodings(insn);
         while (iter.next()) |encoding| {
-            const encoded = encoding.encode(insn);
+            const encoded = encoding.encode(insn, decoder.last_instruction_data().data);
             if (std.mem.eql(u8, decoder.last_instruction, encoded.as_bytes())) break;
         } else {
-            iter = edb.matching_encodings(insn);
-            while (iter.next()) |encoding| {
-                const encoded = encoding.encode(insn);
-                var decoder2 = ddb.decoder(null, encoded.as_bytes());
-                const insn2 = decoder2.decode() catch continue orelse continue;
-                if (insn2.eql(insn)) break;
-            } else {
-                return error.EncodingNotFound;
-            }
+            return error.EncodingNotFound;
         }
     }
 }

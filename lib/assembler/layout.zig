@@ -1158,7 +1158,7 @@ fn encode_instruction(
     const page_data_handle = a.page_lookup.get(page) orelse return;
     const buffer = page_datas[page_data_handle][offset.raw()..];
 
-    const temp_insn = encoding.encode(insn);
+    const temp_insn = encoding.encode(insn, 0);
 
     if (length > buffer.len) {
         if (@as(u1, @truncate(address)) == 1) {
