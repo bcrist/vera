@@ -58,7 +58,7 @@ pub const Entry = packed struct (u32) {
         return @bitCast(self);
     }
 
-    pub const format = fmt.format_raw;
+    pub const format = fmt.format_raw_hex;
 
     pub const Raw = u32;
 
@@ -75,7 +75,7 @@ pub const Entry = packed struct (u32) {
             return @bitCast(self);
         }
 
-        pub const format = fmt.format_raw;
+        pub const format = fmt.format_raw_hex;
 
         pub const Raw = u12;
         pub const count = std.math.maxInt(Address.Raw) + 1;
@@ -152,7 +152,7 @@ pub const Info = packed struct(u32) {
         return @bitCast(self);
     }
 
-    pub const format = fmt.format_raw;
+    pub const format = fmt.format_raw_hex;
 
     pub const Raw = u32;
 };

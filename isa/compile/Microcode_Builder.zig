@@ -161,7 +161,6 @@ pub fn generate_microcode(self: *Microcode_Builder, allocator: std.mem.Allocator
 
     for (self.slot_data.items, 0..) |slot_data, raw_slot_data_handle| {
         const slot = handle_to_slot[raw_slot_data_handle];
-        log.debug("Slot {}: {s}", .{ slot.raw(), cycles[@intFromEnum(slot_data.cycles[0])].func_name });
         for (slot_data.cycles, 0..) |cycle_handle, raw_flags| {
             const address = arch.microcode.Address {
                 .flags = arch.microcode.Flags.init(@intCast(raw_flags)),
@@ -172,6 +171,21 @@ pub fn generate_microcode(self: *Microcode_Builder, allocator: std.mem.Allocator
     }
 
     return uc;
+}
+
+pub fn generate_microcode_fn_names(self: *Microcode_Builder, allocator: std.mem.Allocator) *[arch.microcode.Slot.count][]const u8 {
+    const fn_names = allocator.create([arch.microcode.Slot.count][]const u8) catch @panic("OOM");
+    @memset(fn_names, "");
+
+    const cycles = self.cycles.items;
+    const handle_to_slot = self.handle_to_slot;
+
+    for (self.slot_data.items, 0..) |slot_data, raw_slot_data_handle| {
+        const slot = handle_to_slot[raw_slot_data_handle];
+        fn_names[slot.raw()] = cycles[@intFromEnum(slot_data.cycles[0])].func_name;
+    }
+
+    return fn_names;
 }
 
 fn update_cycle_continuation(self: *Microcode_Builder, cycle: *Cycle, handle: Slot_Data.Handle) void {

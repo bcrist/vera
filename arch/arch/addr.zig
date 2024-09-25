@@ -29,7 +29,7 @@ pub const Virtual = packed struct (u32) {
         return @bitCast(self);
     }
 
-    pub const format = fmt.format_raw;
+    pub const format = fmt.format_raw_hex;
 
     pub const Raw = u32;
 
@@ -135,7 +135,7 @@ pub const Physical = packed struct (u26) {
         return self.frame.device_slot();
     }
 
-    pub const format = fmt.format_raw;
+    pub const format = fmt.format_raw_hex;
 
     pub const Raw = u26;
 
@@ -164,7 +164,7 @@ pub const Page = packed struct (u20) {
         return @bitCast(self);
     }
 
-    pub const format = fmt.format_raw;
+    pub const format = fmt.format_raw_hex;
 
     pub const Raw = u20; // why doesn't std.meta.Tag work on packed structs?
     pub const zero = init(0);

@@ -360,7 +360,7 @@ pub const J = enum (u32) {
         return @intFromEnum(self);
     }
 
-    pub const format = fmt.format_raw;
+    pub const format = fmt.format_raw_hex;
 
     pub const Raw = std.meta.Tag(J);
 
@@ -412,7 +412,7 @@ pub const K = enum (u32) {
         return @intFromEnum(self);
     }
 
-    pub const format = fmt.format_raw;
+    pub const format = fmt.format_raw_hex;
 
     pub const Raw = std.meta.Tag(K);
 
@@ -488,7 +488,7 @@ pub const L = enum (u32) {
         return @intFromEnum(self);
     }
 
-    pub const format = fmt.format_raw;
+    pub const format = fmt.format_raw_hex;
 
     pub const Raw = std.meta.Tag(L);
 
@@ -527,7 +527,7 @@ pub const D = enum (u32) {
         return @intFromEnum(self);
     }
 
-    pub const format = fmt.format_raw;
+    pub const format = fmt.format_raw_hex;
 
     pub const Raw = std.meta.Tag(D);
 
@@ -582,7 +582,7 @@ pub const DA = packed struct (u16) {
         return @bitCast(self);
     }
 
-    pub const format = fmt.format_raw;
+    pub const format = fmt.format_raw_hex;
 
     pub const Raw = u16;
 };
@@ -599,7 +599,7 @@ pub const DB = packed struct (u16) {
         return @bitCast(self);
     }
 
-    pub const format = fmt.format_raw;
+    pub const format = fmt.format_raw_hex;
 
     pub const Raw = u16;
 };
@@ -645,7 +645,7 @@ pub const DR = enum (u32) {
         return self.byte21_i16();
     }
 
-    pub const format = fmt.format_raw;
+    pub const format = fmt.format_raw_hex;
 
     pub const Raw = std.meta.Tag(DR);
 };
@@ -706,7 +706,7 @@ pub const Compute_Mode = packed union {
         return @bitCast(self);
     }
 
-    pub const format = fmt.format_raw;
+    pub const format = fmt.format_raw_hex;
 
     pub const Raw = std.meta.Int(.unsigned, @bitSizeOf(Compute_Mode));
 };
@@ -846,7 +846,7 @@ pub const Status = packed struct (u32) {
         return @bitCast(self);
     }
 
-    pub const format = fmt.format_raw;
+    pub const format = fmt.format_raw_hex;
 
     pub const Raw = u16;
 
@@ -895,7 +895,7 @@ pub const Guarded_Memory_Register = packed struct (u20) {
         return @bitCast(self);
     }
 
-    pub const format = fmt.format_raw;
+    pub const format = fmt.format_raw_hex;
 
     pub const Raw = u20;
     pub const invalid = Guarded_Memory_Register.init(0);

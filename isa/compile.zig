@@ -92,6 +92,7 @@ pub fn main() !void {
     var microcode_address_usage: usize = 0;
 
     const uc = processor.microcode.generate_microcode(gpa.allocator());
+    const uc_fn_names = processor.microcode.generate_microcode_fn_names(gpa.allocator());
     for (uc, 0..) |maybe_cs, addr| {
         _ = addr;
         if (maybe_cs) |cs| {
@@ -111,7 +112,7 @@ pub fn main() !void {
         }
     }
 
-    log.info("Microcode Slot Usage: {} ({d:.1}%)", .{ microcode_address_usage / 32, @as(f32, @floatFromInt(microcode_address_usage)) / 1310.72 }); // TODO is this the right divisor?
+    log.info("Microcode Slot Usage: {} ({d:.1}%)", .{ microcode_address_usage / 16, @as(f32, @floatFromInt(microcode_address_usage)) / 655.36 });
     log.info("Instruction Decode Space Usage: {} ({d:.1}%)", .{ insn_decode_usage, @as(f32, @floatFromInt(insn_decode_usage)) / 655.36 });
 
     if (db_path) |path| {
@@ -126,7 +127,7 @@ pub fn main() !void {
     }
 
     if (uc_csv_path) |path| {
-        const uc_data = try arch.microcode.write_csv(gpa.allocator(), temp.allocator(), uc);
+        const uc_data = try arch.microcode.write_csv(gpa.allocator(), temp.allocator(), uc, uc_fn_names);
 
         if (std.fs.path.dirname(path)) |dir| {
             try std.fs.cwd().makePath(dir);

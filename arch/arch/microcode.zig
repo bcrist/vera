@@ -12,7 +12,7 @@ pub const Address = packed struct (u16) {
         return @bitCast(self);
     }
 
-    pub const format = fmt.format_raw;
+    pub const format = fmt.format_raw_hex;
 
     pub const Raw = u16;
     pub const count = std.math.maxInt(Raw) + 1;
@@ -67,10 +67,10 @@ pub const Slot = enum (u12) {
 };
 
 pub const Flags = packed struct (u4) {
-    z: bool,
-    n: bool,
-    k: bool,
     cv: bool,
+    n: bool,
+    z: bool,
+    k: bool,
 
     pub inline fn init(raw_value: Raw) Flags {
         return @bitCast(raw_value);
@@ -80,7 +80,15 @@ pub const Flags = packed struct (u4) {
         return @bitCast(self);
     }
 
-    pub const format = fmt.format_raw;
+    pub fn format(self: Flags, comptime f: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = f;
+        _ = options;
+
+        try writer.writeByte(if (self.k) 'K' else '.');
+        try writer.writeByte(if (self.z) 'Z' else '.');
+        try writer.writeByte(if (self.n) 'N' else '.');
+        try writer.writeByte(if (self.cv) 'X' else '.');
+    }
 
     pub inline fn zero(self: Flags) bool { return self.z; }
     pub inline fn negative(self: Flags) bool { return self.n; }
@@ -92,10 +100,10 @@ pub const Flags = packed struct (u4) {
 };
 
 pub const Flags_With_Carry = packed struct (u4) {
-    z: bool,
-    n: bool,
-    k: bool,
     c: bool,
+    n: bool,
+    z: bool,
+    k: bool,
 
     pub inline fn init(raw_value: Raw) Flags_With_Carry {
         return @bitCast(raw_value);
@@ -105,7 +113,15 @@ pub const Flags_With_Carry = packed struct (u4) {
         return @bitCast(self);
     }
 
-    pub const format = fmt.format_raw;
+    pub fn format(self: Flags, comptime f: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = f;
+        _ = options;
+
+        try writer.writeByte(if (self.k) 'K' else '.');
+        try writer.writeByte(if (self.z) 'Z' else '.');
+        try writer.writeByte(if (self.n) 'N' else '.');
+        try writer.writeByte(if (self.c) 'C' else '.');
+    }
 
     pub inline fn zero(self: Flags_With_Carry) bool { return self.z; }
     pub inline fn negative(self: Flags_With_Carry) bool { return self.n; }
@@ -119,10 +135,10 @@ pub const Flags_With_Carry = packed struct (u4) {
 };
 
 pub const Flags_With_Overflow = packed struct (u4) {
-    z: bool,
-    n: bool,
-    k: bool,
     v: bool,
+    n: bool,
+    z: bool,
+    k: bool,
 
     pub inline fn init(raw_value: Raw) Flags_With_Carry {
         return @bitCast(raw_value);
@@ -132,7 +148,15 @@ pub const Flags_With_Overflow = packed struct (u4) {
         return @bitCast(self);
     }
 
-    pub const format = fmt.format_raw;
+    pub fn format(self: Flags, comptime f: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = f;
+        _ = options;
+
+        try writer.writeByte(if (self.k) 'K' else '.');
+        try writer.writeByte(if (self.z) 'Z' else '.');
+        try writer.writeByte(if (self.n) 'N' else '.');
+        try writer.writeByte(if (self.v) 'V' else '.');
+    }
 
     pub inline fn zero(self: Flags_With_Carry) bool { return self.z; }
     pub inline fn negative(self: Flags_With_Carry) bool { return self.n; }
@@ -161,7 +185,7 @@ pub const Setup_Microcode_Entry = packed struct (u24) {
         return @bitCast(self);
     }
 
-    pub const format = fmt.format_raw;
+    pub const format = fmt.format_raw_hex;
 
     pub const Raw = u24;
 };
@@ -185,7 +209,7 @@ pub const Compute_Microcode_Entry = packed struct (u24) {
         return @bitCast(self);
     }
 
-    pub const format = fmt.format_raw;
+    pub const format = fmt.format_raw_hex;
 
     pub const Raw = u24;
 };
@@ -212,7 +236,7 @@ pub const Transact_Microcode_Entry = packed struct (u32) {
         return @bitCast(self);
     }
 
-    pub const format = fmt.format_raw;
+    pub const format = fmt.format_raw_hex;
 
     pub const Raw = u32;
 };
@@ -307,13 +331,18 @@ pub fn write_srec_rom(comptime Entry: type, result_allocator: std.mem.Allocator,
     return result_allocator.dupe(u8, encoded_data.items);
 }
 
-pub fn write_csv(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, microcode: *const [Address.count]?Control_Signals) ![]u8 {
+pub fn write_csv(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, microcode: *const [Address.count]?Control_Signals, fn_names: ?*const [Slot.count][]const u8) ![]u8 {
     var out = std.ArrayList(u8).init(temp_allocator);
     defer out.deinit();
 
     var w = out.writer();
 
-    try w.writeAll("UCA,Slot,Flags");
+    if (fn_names) |_| {
+        try w.writeAll("UCA,Slot,fn,Flags");
+    } else {
+        try w.writeAll("UCA,Slot,Flags");
+    }
+
     for (std.enums.values(arch.Control_Signal)) |signal| {
         try w.writeByte(',');
         try w.writeAll(@tagName(signal));
@@ -340,7 +369,11 @@ pub fn write_csv(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Al
 
         if (unconditional) {
             if (microcode[addr0.raw()]) |cs| {
-                try w.print("{X:0>4},{},*", .{ addr0.raw(), addr0.slot });
+                if (fn_names) |names| {
+                    try w.print("{},{},{s},****", .{ addr0, addr0.slot, names[slot] });
+                } else {
+                    try w.print("{},{},****", .{ addr0, addr0.slot });
+                }
                 try write_csv_signals(w, cs);
                 try w.writeByte('\n');
             }
@@ -349,7 +382,11 @@ pub fn write_csv(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Al
                 .slot = arch.microcode.Slot.init(@intCast(slot)),
                 .flags = arch.microcode.Flags.init(@intCast(raw_flags)),
             };
-            try w.print("{X:0>4},{},{X}", .{ addr.raw(), addr.slot, addr.flags.raw() });
+            if (fn_names) |names| {
+                try w.print("{},{},{s},{}", .{ addr, addr.slot, names[slot], addr.flags });
+            } else {
+                try w.print("{},{},{}", .{ addr, addr.slot, addr.flags });
+            }
             if (microcode[addr.raw()]) |cs| {
                 try write_csv_signals(w, cs);
             } else {

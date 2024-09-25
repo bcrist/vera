@@ -16,7 +16,7 @@ pub const Result = packed struct (u24) {
         return @bitCast(self);
     }
 
-    pub const format = fmt.format_raw;
+    pub const format = fmt.format_raw_hex;
 
     pub const Raw = std.meta.Int(.unsigned, @bitSizeOf(Result));
 };

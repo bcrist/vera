@@ -33,4 +33,15 @@ pub fn format_raw(value_or_ptr: anytype, comptime fmt: []const u8, options: std.
     try writer.print("{" ++ fmt ++ "}", .{ value_or_ptr.raw() });
 }
 
+pub fn format_raw_hex(value_or_ptr: anytype, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+    _ = fmt;
+    _ = options;
+
+    const raw = value_or_ptr.raw();
+    const T = @TypeOf(raw);
+
+    const hex_fmt = std.fmt.comptimePrint("0x{{X:0>{}}}", .{ (@bitSizeOf(T) + 3) / 4 });
+    try writer.print(hex_fmt, .{ raw });
+}
+
 const std = @import("std");
