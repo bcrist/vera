@@ -174,7 +174,7 @@ pub const Case_Insensitive_Enum_Map_Options = struct {
 pub fn case_insensitive_enum_map(comptime T: type, comptime options: Case_Insensitive_Enum_Map_Options, comptime extra_entries: anytype) std.StaticStringMapWithEql(T, std.ascii.eqlIgnoreCase) {
     comptime var tuple_types: []const type = &.{};
 
-    outer: inline for (std.enums.values(T)) |val| {
+    outer: inline for (comptime std.enums.values(T)) |val| {
         for (options.excluded_values) |excluded| {
             if (std.mem.eql(u8, @tagName(val), excluded)) {
                 continue :outer;
@@ -194,7 +194,7 @@ pub fn case_insensitive_enum_map(comptime T: type, comptime options: Case_Insens
 
     comptime var entries: std.meta.Tuple(tuple_types) = undefined;
     comptime var n = 0;
-    outer: inline for (std.enums.values(T)) |val| {
+    outer: inline for (comptime std.enums.values(T)) |val| {
         for (options.excluded_values) |excluded| {
             if (std.mem.eql(u8, @tagName(val), excluded)) {
                 continue :outer;
@@ -217,6 +217,6 @@ pub fn case_insensitive_enum_map(comptime T: type, comptime options: Case_Insens
     return std.StaticStringMapWithEql(T, std.ascii.eqlIgnoreCase).initComptime(entries);
 }
 
-const isa = @import("isa");
+const isa = @import("../isa.zig");
 const arch = @import("arch"); 
 const std = @import("std");

@@ -12,33 +12,6 @@ pub const instructions = .{
             c.decode_and_exec_dr(.normal);
         }
     },
-    struct { // nop
-        pub const forms = .{
-            struct {
-                pub const spec =
-                    \\nop
-                    \\nop 2
-                    ;
-                pub const encoding = .{
-                    @as(u14, 2),
-                    region_encoder,
-                };
-                pub const ik_ij: u8 = 2;
-            },
-            struct {
-                pub const spec = "nop 3";
-                pub const encoding = .{
-                    @as(u14, 3),
-                    region_encoder,
-                    Encoder.init(16, Int(.__, u8)),
-                };
-                pub const ik_ij: u8 = 3;
-            },
-        };
-        pub fn entry(c: *Cycle) void {
-            c.branch(.ip, .ik_ij_sx);
-        }
-    },
     struct { // ret
         pub const spec = "ret";
         pub const encoding = .{
@@ -798,7 +771,7 @@ pub const instructions = .{
         pub const ij = Reg(.src);
 
         pub fn entry(c: *Cycle, flags: Flags, dest: Param(2)) void {
-            const sr: Control_Signals.Any_SR_Index = switch (dest.signature.base.sr) {
+            const sr: arch.Any_SR_Index = switch (dest.signature.base.sr) {
                 .rp => .rp,
                 .uxp => .uxp,
                 .kxp => .kxp,

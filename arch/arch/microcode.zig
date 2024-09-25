@@ -215,7 +215,7 @@ pub const Compute_Microcode_Entry = packed struct (u24) {
 };
 
 pub const Transact_Microcode_Entry = packed struct (u32) {
-    next: arch.microcode.Slot,
+    next: Slot,
     sr1wi: arch.SR1_Index,
     sr1wsrc: arch.SR_Write_Source,
     seqop: arch.Sequencer_Op,
@@ -349,16 +349,16 @@ pub fn write_csv(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Al
     }
     try w.writeByte('\n');
 
-    for (0..arch.microcode.Slot.count) |slot| {
-        const addr0: arch.microcode.Address = .{
-            .slot = arch.microcode.Slot.init(@intCast(slot)),
-            .flags = arch.microcode.Flags.init(0),
+    for (0..Slot.count) |slot| {
+        const addr0: Address = .{
+            .slot = Slot.init(@intCast(slot)),
+            .flags = Flags.init(0),
         };
 
-        const unconditional = for (1..arch.microcode.Flags.count) |raw_flags| {
-            const addr: arch.microcode.Address = .{
-                .slot = arch.microcode.Slot.init(@intCast(slot)),
-                .flags = arch.microcode.Flags.init(@intCast(raw_flags)),
+        const unconditional = for (1..Flags.count) |raw_flags| {
+            const addr: Address = .{
+                .slot = Slot.init(@intCast(slot)),
+                .flags = Flags.init(@intCast(raw_flags)),
             };
             const cs0 = microcode[addr0.raw()];
             const cs = microcode[addr.raw()];
@@ -377,10 +377,10 @@ pub fn write_csv(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Al
                 try write_csv_signals(w, cs);
                 try w.writeByte('\n');
             }
-        } else for (0..arch.microcode.Flags.count) |raw_flags| {
-            const addr: arch.microcode.Address = .{
-                .slot = arch.microcode.Slot.init(@intCast(slot)),
-                .flags = arch.microcode.Flags.init(@intCast(raw_flags)),
+        } else for (0..Flags.count) |raw_flags| {
+            const addr: Address = .{
+                .slot = Slot.init(@intCast(slot)),
+                .flags = Flags.init(@intCast(raw_flags)),
             };
             if (fn_names) |names| {
                 try w.print("{},{},{s},{}", .{ addr, addr.slot, names[slot], addr.flags });

@@ -12,6 +12,7 @@ const CLI_Option = enum {
     transact_uc_path,
     uc_csv_path,
     id_rom_path,
+    id_csv_path,
 };
 
 const cli_options = std.StaticStringMap(CLI_Option).initComptime(.{
@@ -22,7 +23,8 @@ const cli_options = std.StaticStringMap(CLI_Option).initComptime(.{
     .{ "--compute-uc", .compute_uc_path },
     .{ "--transact-uc", .transact_uc_path },
     .{ "--uc-csv", .uc_csv_path },
-    .{ "--insn-decode-rom", .id_rom_path },
+    .{ "--id-rom", .id_rom_path },
+    .{ "--id-csv", .id_csv_path },
 });
 
 const ROM_Format = enum {
@@ -43,6 +45,7 @@ pub fn main() !void {
     var compute_uc_path: ?[]const u8 = null;
     var transact_uc_path: ?[]const u8 = null;
     var uc_csv_path: ?[]const u8 = null;
+    var id_csv_path: ?[]const u8 = null;
     var id_rom_path: ?[]const u8 = null;
 
     var arg_iter = try std.process.argsWithAllocator(temp.allocator());
@@ -57,7 +60,8 @@ pub fn main() !void {
                 .compute_uc_path => compute_uc_path = try arena.allocator().dupe(u8, arg_iter.next() orelse expected_output_path("--compute-uc")),
                 .transact_uc_path => transact_uc_path = try arena.allocator().dupe(u8, arg_iter.next() orelse expected_output_path("--transact-uc")),
                 .uc_csv_path => uc_csv_path = try arena.allocator().dupe(u8, arg_iter.next() orelse expected_output_path("--uc-csv")),
-                .id_rom_path => id_rom_path = try arena.allocator().dupe(u8, arg_iter.next() orelse expected_output_path("--insn-decode-rom")),
+                .id_rom_path => id_rom_path = try arena.allocator().dupe(u8, arg_iter.next() orelse expected_output_path("--id-rom")),
+                .id_csv_path => id_csv_path = try arena.allocator().dupe(u8, arg_iter.next() orelse expected_output_path("--id-csv")),
             }
         } else {
             try std.io.getStdErr().writer().print("Unrecognized option: {s}\n", .{ arg });
@@ -68,46 +72,41 @@ pub fn main() !void {
     temp.reset(.{});
 
     var processor = Processor.init(gpa.allocator(), arena.allocator(), &temp);
-
-    // processor.process(@import("instructions/00.zig").instructions);
-    // processor.process(@import("instructions/01.zig").instructions);
-    // processor.process(@import("instructions/10.zig").instructions);
-    // processor.process(@import("instructions/11.zig").instructions);
     processor.process(.{
         @import("handlers/reset.zig"),
-        // Fault_Handler(.page_fault),
-        // Fault_Handler(.access_fault),
-        // Fault_Handler(.page_align_fault),
-        // Fault_Handler(.align_fault),
-        // Fault_Handler(.overflow_fault),
-        // Fault_Handler(.instruction_protection_fault),
-        // Fault_Handler(.invalid_instruction_fault),
-        // Fault_Handler(.double_fault),
+        faults.Handler(.page_fault),
+        faults.Handler(.access_fault),
+        faults.Handler(.page_align_fault),
+        faults.Handler(.align_fault),
+        faults.Handler(.overflow_fault),
+        faults.Handler(.instruction_protection_fault),
+        faults.Handler(.invalid_instruction_fault),
+        faults.Handler(.double_fault),
         // @import("handlers/interrupt.zig"),
-        // @import("handlers/invalid_instruction.zig"),
+        @import("handlers/invalid_instruction.zig"),
+
+        @import("instructions/nop.zig"),
     });
 
     processor.microcode.assign_slots();
 
-    var microcode_address_usage: usize = 0;
-
     const uc = processor.microcode.generate_microcode(gpa.allocator());
     const uc_fn_names = processor.microcode.generate_microcode_fn_names(gpa.allocator());
+
+    var microcode_address_usage: usize = 0;
     for (uc, 0..) |maybe_cs, addr| {
         _ = addr;
         if (maybe_cs) |cs| {
             _ = cs;
-            //log.warn("{}", .{ addr });
             microcode_address_usage += 1;
         }
     }
 
-    var insn_decode_usage: usize = 0;
-
     const decode = processor.decode_rom.generate_rom_data(gpa.allocator(), &processor.microcode);
+
+    var insn_decode_usage: usize = 0;
     for (decode) |result| {
         if (result.entry != .invalid_instruction) {
-            // log.info("{X:0>5}: {any}", .{ addr, result });
             insn_decode_usage += 1;
         }
     }
@@ -128,6 +127,19 @@ pub fn main() !void {
 
     if (uc_csv_path) |path| {
         const uc_data = try arch.microcode.write_csv(gpa.allocator(), temp.allocator(), uc, uc_fn_names);
+
+        if (std.fs.path.dirname(path)) |dir| {
+            try std.fs.cwd().makePath(dir);
+        }
+
+        var af = try std.fs.cwd().atomicFile(path, .{});
+        defer af.deinit();
+        try af.file.writeAll(uc_data);
+        try af.finish();
+    }
+
+    if (id_csv_path) |path| {
+        const uc_data = try arch.insn_decode.write_csv(gpa.allocator(), temp.allocator(), decode);
 
         if (std.fs.path.dirname(path)) |dir| {
             try std.fs.cwd().makePath(dir);
@@ -256,7 +268,7 @@ pub const std_options: std.Options = .{
 
 const log = std.log.scoped(.compile);
 
-const Fault_Handler = @import("handlers/faults.zig").Fault_Handler;
+const faults = @import("handlers/faults.zig");
 const documentation = @import("compile/documentation.zig");
 const iedb = @import("iedb");
 const isa = @import("isa");

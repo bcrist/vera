@@ -38,13 +38,13 @@ pub fn add_entry(self: *Decode_ROM_Builder, addr: arch.insn_decode.Address, entr
             if (existing_handle != entry.slot_handle) {
                 writer.print("Handle: {d: >30} != {d}\n", .{ existing_handle.raw(), entry.slot_handle.?.raw() }) catch @panic("IO Error");
             }
-            if (existing.ij != entry.ij) {
+            if (existing.wio != entry.wio) {
                 writer.print("WIO:    {d: >30} != {d}\n", .{ existing.wio.raw(), entry.wio.raw() }) catch @panic("IO Error");
             }
-            if (existing.ik != entry.ik) {
+            if (existing.krio != entry.krio) {
                 writer.print("KRIO:   {d: >30} != {d}\n", .{ existing.krio.raw(), entry.krio.raw() }) catch @panic("IO Error");
             }
-            if (existing.iw != entry.iw) {
+            if (existing.cv != entry.cv) {
                 writer.print("CV:     {s: >30} != {d}\n", .{ @tagName(existing.cv), @tagName(entry.cv) }) catch @panic("IO Error");
             }
 

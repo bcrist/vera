@@ -16,6 +16,9 @@
         .sx = .{
             .path = "../../zig-sx",
         },
+        .console_helper = .{
+            .path = "../../zig-consolehelper",
+        },
         .Temp_Allocator = .{
             .path = "../../zig-tempallocator",
         },

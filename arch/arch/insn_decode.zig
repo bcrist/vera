@@ -95,6 +95,25 @@ pub fn write_srec_rom(result_allocator: std.mem.Allocator, temp_allocator: std.m
     return result_allocator.dupe(u8, encoded_data.items);
 }
 
+
+pub fn write_csv(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, rom_data: *const Rom) ![]u8 {
+    var out = std.ArrayList(u8).init(temp_allocator);
+    defer out.deinit();
+
+    var w = out.writer();
+
+    try w.writeAll("IR,entry,cv,wio,krio\n");
+
+    for (0.., rom_data) |raw_addr, data| {
+        if (data.entry != .invalid_instruction) {
+            const addr = Address.init(@intCast(raw_addr));
+            try w.print("{},{},{},{},{}\n", .{ addr, data.entry, data.cv, data.wio, data.krio });
+        }
+    }
+
+    return result_allocator.dupe(u8, out.items);
+}
+
 const arch = @import("../arch.zig");
 const fmt = @import("fmt.zig");
 const microcode = @import("microcode.zig");

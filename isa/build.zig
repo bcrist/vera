@@ -4,6 +4,7 @@ pub fn build(b: *std.Build) void {
     const sx = b.dependency("sx", .{}).module("sx");
     const deep_hash_map = b.dependency("deep_hash_map", .{}).module("deep_hash_map");
     const temp_alloc = b.dependency("Temp_Allocator", .{}).module("Temp_Allocator");
+    const console = b.dependency("console_helper", .{}).module("console");
 
     const isa = b.addModule("isa", .{
         .root_source_file = b.path("isa.zig"),
@@ -34,6 +35,7 @@ pub fn build(b: *std.Build) void {
     compile.root_module.addImport("sx",  sx);
     compile.root_module.addImport("Temp_Allocator",  temp_alloc);
     compile.root_module.addImport("deep_hash_map", deep_hash_map);
+    compile.root_module.addImport("console", console);
 
     b.installArtifact(compile);
 

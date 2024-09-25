@@ -1187,7 +1187,7 @@ pub const instructions = .{
         pub const store_temp_2_2                  = store_sr_pt2(.temp_2, store_temp_1);
         pub const store_temp_1_2                  = store_sr_pt2(.temp_1, restore_rsn);
 
-        fn store_sr_pt1(comptime sr: arch.Control_Signals.Any_SR_Index) fn(c: *Cycle)void {
+        fn store_sr_pt1(comptime sr: arch.Any_SR_Index) fn(c: *Cycle)void {
             const offset = @offsetOf(arch.Context_State, @tagName(sr)) - (arch.register_count * @sizeOf(arch.Reg));
             return struct {
                 pub fn func(c: *Cycle) void {
@@ -1197,7 +1197,7 @@ pub const instructions = .{
                 }
             }.func;
         }
-        fn store_sr_pt2(comptime sr: arch.Control_Signals.Any_SR_Index, comptime next: *const anyopaque) fn(c: *Cycle)void {
+        fn store_sr_pt2(comptime sr: arch.Any_SR_Index, comptime next: *const anyopaque) fn(c: *Cycle)void {
             const offset = @offsetOf(arch.Context_State, @tagName(sr)) - (arch.register_count * @sizeOf(arch.Reg));
             return struct {
                 pub fn func(c: *Cycle) void {
@@ -1314,9 +1314,9 @@ fn load_from_temp_1(comptime offset_kind: Offset_Kind) type {
 
         fn load_with_imm(c: *Cycle, src: Param(0), dest: Param(2), imm: placeholders.Any(.imm)) void {
             var signedness: std.builtin.Signedness = .unsigned;
-            var width: Control_Signals.Bus_Width = .word;
+            var width: arch.D.Width = .word;
             var width_bytes: u3 = 2;
-            const addr_space: Control_Signals.Address_Space = switch(src.signature.address_space.?) {
+            const addr_space: arch.addr.Space = switch(src.signature.address_space.?) {
                 .data => .data,
                 .insn => .insn,
                 .stack => .stack,
@@ -1354,7 +1354,7 @@ fn load_from_temp_1(comptime offset_kind: Offset_Kind) type {
         }
 
         pub fn load_high(c: *Cycle, src: Param(0)) void {
-            const addr_space: Control_Signals.Address_Space = switch(src.signature.address_space.?) {
+            const addr_space: arch.addr.Space = switch(src.signature.address_space.?) {
                 .data => .data,
                 .insn => .insn,
                 .stack => .stack,
@@ -1380,9 +1380,9 @@ fn store_from_temp_1(comptime offset_kind: Offset_Kind) type {
         }
 
         fn store_with_imm(c: *Cycle, src: Param(0), dest: Param(2), imm: placeholders.Any(.imm)) void {
-            var width: Control_Signals.Bus_Width = .word;
+            var width: arch.D.Width = .word;
             var width_bytes: u3 = 2;
-            const addr_space: Control_Signals.Address_Space = switch(dest.signature.address_space.?) {
+            const addr_space: arch.addr.Space = switch(dest.signature.address_space.?) {
                 .data => .data,
                 .insn => .insn,
                 .stack => .stack,
@@ -1417,7 +1417,7 @@ fn store_from_temp_1(comptime offset_kind: Offset_Kind) type {
         }
 
         pub fn store_high(c: *Cycle, dest: Param(2)) void {
-            const addr_space: Control_Signals.Address_Space = switch(dest.signature.address_space.?) {
+            const addr_space: arch.addr.Space = switch(dest.signature.address_space.?) {
                 .data => .data,
                 .insn => .insn,
                 .stack => .stack,

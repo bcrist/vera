@@ -206,7 +206,7 @@ pub const SR1_Index = enum (u4) {
     temp_1 = 7,
     int_stat = 8,       // Upon entering an interrupt handler, RSN is set to the current pipe number.  The old RSN is saved here, along with the rest of the status register.
     fault_stat = 9,     // Upon entering a fault handler, before toggling the RSN, the status register is saved here, including WI and UCA.
-    fault_ir = 10,      // Upon entering a fault handler, before toggling the RSN, the current IR is saved here.
+    fault_dr = 10,      // Upon entering a fault handler, before toggling the RSN, the current IR is saved here.
     _,
 
     pub inline fn init(raw_value: Raw) SR1_Index {
@@ -257,7 +257,7 @@ pub const Any_SR_Index = enum (u5) {
     temp_1 = raw_from_sr1(.temp_1),
     int_stat = raw_from_sr1(.int_stat),
     fault_stat = raw_from_sr1(.fault_stat),
-    fault_ir = raw_from_sr1(.fault_ir),
+    fault_dr = raw_from_sr1(.fault_dr),
     zero = raw_from_sr2(.zero),
     ip = raw_from_sr2(.ip),
     asn = raw_from_sr2(.asn),
@@ -667,7 +667,7 @@ pub const IR = enum (u16) {
         return @intFromEnum(self);
     }
 
-    pub const format = fmt.format_enum;
+    pub const format = fmt.format_raw_hex;
 
     pub const Raw = std.meta.Tag(IR);
     pub const count = std.math.maxInt(Raw) + 1;
@@ -924,6 +924,8 @@ pub const Vector_Table = extern struct {
     page_fault: u16,
     access_fault: u16,
     page_align_fault: u16,
+    align_fault: u16,
+    overflow_fault: u16,
     invalid_instruction_fault: u16,
     instruction_protection_fault: u16,
 };

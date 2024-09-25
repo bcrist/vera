@@ -200,38 +200,16 @@ fn parse_base_register(self: *Spec_Parser, addr_space: ?isa.Address_Space) bool 
     if (self.parse_sr()) |sr| {
         self.add_signature(addr_space, .{ .sr = sr }, .none);
 
-    } else if (self.parse_literal_reg8()) |reg_index| {
+    } else if (self.parse_literal_reg()) |reg_index| {
         self.add_base_register(param_index, reg_index);
-        self.add_signature(addr_space, .{ .reg8 = self.parse_signedness() }, .none);
+        self.add_signature(addr_space, .{ .reg = self.parse_signedness() }, .none);
 
-    } else if (self.parse_literal_reg16()) |reg_index| {
-        self.add_base_register(param_index, reg_index);
-        self.add_signature(addr_space, .{ .reg16 = self.parse_signedness() }, .none);
-
-    } else if (self.parse_literal_reg32()) |reg_index| {
-        self.add_base_register(param_index, reg_index);
-        self.add_signature(addr_space, .{ .reg32 = self.parse_signedness() }, .none);
-
-    } else if (self.parse_first_placeholder_reg8()) |placeholder| {
+    } else if (self.parse_first_placeholder_reg()) |placeholder| {
         self.add_placeholder_base_register(param_index, placeholder);
         while (self.parse_additional_placeholder()) |p| {
             self.add_placeholder_base_register(param_index, p);
         }
-        self.add_signature(addr_space, .{ .reg8 = self.parse_signedness() }, .none);
-
-    } else if (self.parse_first_placeholder_reg16()) |placeholder| {
-        self.add_placeholder_base_register(param_index, placeholder);
-        while (self.parse_additional_placeholder()) |p| {
-            self.add_placeholder_base_register(param_index, p);
-        }
-        self.add_signature(addr_space, .{ .reg16 = self.parse_signedness() }, .none);
-
-    } else if (self.parse_first_placeholder_reg32()) |placeholder| {
-        self.add_placeholder_base_register(param_index, placeholder);
-        while (self.parse_additional_placeholder()) |p| {
-            self.add_placeholder_base_register(param_index, p);
-        }
-        self.add_signature(addr_space, .{ .reg32 = self.parse_signedness() }, .none);
+        self.add_signature(addr_space, .{ .reg = self.parse_signedness() }, .none);
 
     } else {
         return false;
@@ -261,38 +239,16 @@ fn parse_offset(self: *Spec_Parser) void {
         } else if (self.parse_sr()) |sr| {
             self.temp_param_signatures.items[param_index.raw()].offset = .{ .sr = sr };
 
-        } else if (self.parse_literal_reg8()) |reg_index| {
+        } else if (self.parse_literal_reg()) |reg_index| {
             self.add_offset_register(param_index, reg_index);
-            self.temp_param_signatures.items[param_index.raw()].offset = .{ .reg8 = self.parse_signedness() };
+            self.temp_param_signatures.items[param_index.raw()].offset = .{ .reg = self.parse_signedness() };
 
-        } else if (self.parse_literal_reg16()) |reg_index| {
-            self.add_offset_register(param_index, reg_index);
-            self.temp_param_signatures.items[param_index.raw()].offset = .{ .reg16 = self.parse_signedness() };
-
-        } else if (self.parse_literal_reg32()) |reg_index| {
-            self.add_offset_register(param_index, reg_index);
-            self.temp_param_signatures.items[param_index.raw()].offset = .{ .reg32 = self.parse_signedness() };
-
-        } else if (self.parse_first_placeholder_reg8()) |placeholder| {
+        } else if (self.parse_first_placeholder_reg()) |placeholder| {
             self.add_placeholder_offset_register(param_index, placeholder);
             while (self.parse_additional_placeholder()) |p| {
                 self.add_placeholder_offset_register(param_index, p);
             }
-            self.temp_param_signatures.items[param_index.raw()].offset = .{ .reg8 = self.parse_signedness() };
-
-        } else if (self.parse_first_placeholder_reg16()) |placeholder| {
-            self.add_placeholder_offset_register(param_index, placeholder);
-            while (self.parse_additional_placeholder()) |p| {
-                self.add_placeholder_offset_register(param_index, p);
-            }
-            self.temp_param_signatures.items[param_index.raw()].offset = .{ .reg16 = self.parse_signedness() };
-
-        } else if (self.parse_first_placeholder_reg32()) |placeholder| {
-            self.add_placeholder_offset_register(param_index, placeholder);
-            while (self.parse_additional_placeholder()) |p| {
-                self.add_placeholder_offset_register(param_index, p);
-            }
-            self.temp_param_signatures.items[param_index.raw()].offset = .{ .reg32 = self.parse_signedness() };
+            self.temp_param_signatures.items[param_index.raw()].offset = .{ .reg = self.parse_signedness() };
 
         } else {
             self.record_error("Expected offset constant or register");
@@ -358,11 +314,11 @@ fn parse_int_literal(self: *Spec_Parser) ?i64 {
 }
 
 fn parse_addr_space(self: *Spec_Parser) ?isa.Address_Space {
-   const map = std.ComptimeStringMapWithEql(isa.Address_Space, .{
+   const map = std.StaticStringMapWithEql(isa.Address_Space, std.ascii.eqlIgnoreCase).initComptime(.{
         .{ "d", .data },
         .{ "i", .insn },
         .{ "s", .stack },
-    }, std.ascii.eqlIgnoreCase);
+    });
 
     const begin = self.next_token;
     self.skip_linespace();
@@ -375,10 +331,10 @@ fn parse_addr_space(self: *Spec_Parser) ?isa.Address_Space {
 }
 
 fn parse_signedness(self: *Spec_Parser) ?Signedness {
-   const map = std.ComptimeStringMapWithEql(Signedness, .{
+   const map = std.StaticStringMapWithEql(Signedness, std.ascii.eqlIgnoreCase).initComptime(.{
         .{ "unsigned", .unsigned },
         .{ "signed", .signed },
-    }, std.ascii.eqlIgnoreCase);
+    });
 
     const begin = self.next_token;
     self.skip_linespace();
@@ -425,7 +381,7 @@ fn parse_additional_placeholder(self: *Spec_Parser) ?[]const u8 {
 }
 
 fn parse_sr(self: *Spec_Parser) ?isa.Special_Register {
-    const map = parse_helpers.Case_Insensitive_Enum_Map(isa.Special_Register, .{}, .{});
+    const map = parse_helpers.case_insensitive_enum_map(isa.Special_Register, .{}, .{});
     const begin = self.next_token;
     self.skip_linespace();
     if (self.try_token(.id)) {
@@ -436,19 +392,7 @@ fn parse_sr(self: *Spec_Parser) ?isa.Special_Register {
     return null;
 }
 
-fn parse_literal_reg8(self: *Spec_Parser) ?Register_Index {
-    if (self.token_kinds[self.next_token] == .id) {
-        const id = self.token_location(self.next_token);
-        if (id.len >= 1 and std.ascii.toLower(id[0]) == 'b') {
-            const index = std.fmt.parseUnsigned(Register_Index, id[1..], 10) catch return null;
-            self.next_token += 1;
-            return index;
-        }
-    }
-    return null;
-}
-
-fn parse_literal_reg16(self: *Spec_Parser) ?Register_Index {
+fn parse_literal_reg(self: *Spec_Parser) ?Register_Index {
     if (self.token_kinds[self.next_token] == .id) {
         const id = self.token_location(self.next_token);
         if (id.len >= 1 and std.ascii.toLower(id[0]) == 'r') {
@@ -460,47 +404,11 @@ fn parse_literal_reg16(self: *Spec_Parser) ?Register_Index {
     return null;
 }
 
-fn parse_literal_reg32(self: *Spec_Parser) ?Register_Index {
-    if (self.token_kinds[self.next_token] == .id) {
-        const id = self.token_location(self.next_token);
-        if (id.len >= 1 and std.ascii.toLower(id[0]) == 'x') {
-            const index = std.fmt.parseUnsigned(Register_Index, id[1..], 10) catch return null;
-            self.next_token += 1;
-            return index;
-        }
-    }
-    return null;
-}
-
-fn parse_first_placeholder_reg8(self: *Spec_Parser) ?[]const u8 {
-    const begin = self.next_token;
-    if (self.try_token(.id)) {
-        const id = self.token_location(self.next_token - 1);
-        if (id.len == 1 and std.ascii.toLower(id[0]) == 'b') {
-            if (self.parse_first_placeholder()) |placeholder| return placeholder;
-        }
-    }
-    self.next_token = begin;
-    return null;
-}
-
-fn parse_first_placeholder_reg16(self: *Spec_Parser) ?[]const u8 {
+fn parse_first_placeholder_reg(self: *Spec_Parser) ?[]const u8 {
     const begin = self.next_token;
     if (self.try_token(.id)) {
         const id = self.token_location(self.next_token - 1);
         if (id.len == 1 and std.ascii.toLower(id[0]) == 'r') {
-            if (self.parse_first_placeholder()) |placeholder| return placeholder;
-        }
-    }
-    self.next_token = begin;
-    return null;
-}
-
-fn parse_first_placeholder_reg32(self: *Spec_Parser) ?[] const u8 {
-    const begin = self.next_token;
-    if (self.try_token(.id)) {
-        const id = self.token_location(self.next_token - 1);
-        if (id.len == 1 and std.ascii.toLower(id[0]) == 'x') {
             if (self.parse_first_placeholder()) |placeholder| return placeholder;
         }
     }
@@ -550,9 +458,8 @@ pub fn token_location(self: *Spec_Parser, handle: Token.Handle) []const u8 {
 const Spec_Parser = @This();
 const Token = lex.Token;
 const Token_Kind = lex.Token_Kind;
-const lex = assembler.lex;
-const parse_helpers = assembler.parse_helpers;
-const assembler = @import("lib_assembler");
+const lex = isa.lex;
+const parse_helpers = isa.parse_helpers;
 const Value = Instruction_Encoding.Value;
 const Constraint = Instruction_Encoding.Constraint;
 const Encoder = Instruction_Encoding.Encoder;
@@ -560,9 +467,9 @@ const Instruction_Encoding = isa.Instruction_Encoding;
 const Parameter = isa.Parameter;
 const Mnemonic = isa.Mnemonic;
 const Mnemonic_Suffix = isa.Mnemonic_Suffix;
-const isa = arch.isa;
-const Register_Index = arch.hw.Register_Index;
-const arch = @import("lib_arch");
+const isa = @import("isa");
+const Register_Index = arch.Register_Index;
+const arch = @import("arch");
 const Signedness = std.builtin.Signedness;
 const console = @import("console");
 const std = @import("std");

@@ -1,3 +1,6 @@
+/// A lexer for Vera assembly syntax
+/// See usage in assembler.Parser and compile.Spec_Parser
+
 pub const Token_Kind = enum (u8) {
     reserved,
     eof,

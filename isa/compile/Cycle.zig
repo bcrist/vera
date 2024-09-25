@@ -53,7 +53,7 @@ pub fn init(
             .sr1wsrc = .no_write,
             .sr2wsrc = .no_write,
             .statop = .hold,
-            .dir = .read,
+            .dir = .none,
             .width = .@"32b",
             .allowint = false,
             .seqop = .next_uop,
@@ -385,7 +385,7 @@ pub fn j_times_k__shl16(c: *Cycle,
 }
 
 pub fn count_j(c: *Cycle, count_what: Bit_Count_Polarity, dir: Bit_Count_Direction, freshness: Freshness, flags: Flags_Mode) void {
-    const mode: Control_Signals.Bit_Count_Mode = switch (dir) {
+    const mode: arch.Count_Extend_Mode = switch (dir) {
         .all => switch (count_what) {
             .zeroes => arch.Count_Extend_Mode.count_zeroes,
             .ones => arch.Count_Extend_Mode.count_ones,
@@ -720,13 +720,13 @@ pub fn virtual_address_to_sr(c: *Cycle, which: arch.Any_SR_Index) void {
     }
 }
 
-pub fn sr1_to_sr1(c: *Cycle, src_index: Control_Signals.SR1_Index, dest_index: Control_Signals.SR1_Index) void {
+pub fn sr1_to_sr1(c: *Cycle, src_index: arch.SR1_Index, dest_index: arch.SR1_Index) void {
     c.set_control_signal(.sr1ri, src_index);
     c.set_control_signal(.sr1wi, dest_index);
     c.set_control_signal(.sr1wsrc, .self);
 }
 
-pub fn sr2_to_sr2(c: *Cycle, src_index: Control_Signals.SR2_Index, dest_index: Control_Signals.SR2_Index) void {
+pub fn sr2_to_sr2(c: *Cycle, src_index: arch.SR2_Index, dest_index: arch.SR2_Index) void {
     c.set_control_signal(.sr2ri, src_index);
     c.set_control_signal(.sr2wi, dest_index);
     c.set_control_signal(.sr2wsrc, .self);

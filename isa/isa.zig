@@ -390,6 +390,8 @@ pub fn branch_kind(mnemonic: Mnemonic, suffix: Mnemonic_Suffix) Branch_Kind {
 }
 
 pub const print = @import("isa/print.zig");
+pub const lex = @import("isa/lex.zig");
+pub const parse_helpers = @import("isa/parse_helpers.zig");
 
 const arch = @import("arch");
 const deep_hash_map = @import("deep_hash_map");
