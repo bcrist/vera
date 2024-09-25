@@ -1,0 +1,165 @@
+(kicad_sch
+	(version 20231120)
+	(generator "eeschema")
+	(generator_version "8.0")
+	(uuid "4fcbf52c-9318-4f2a-af75-ac7dd4f76e99")
+	(paper "A4")
+	(lib_symbols)
+	(sheet
+		(at 177.8 50.8)
+		(size 12.7 3.81)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "072314c2-92dd-48e1-bc38-3b28e1a170c2")
+		(property "Sheetname" "Compute Stage"
+			(at 177.8 50.0884 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "compute.kicad_sch"
+			(at 177.8 55.1946 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "block_diagram"
+				(path "/4fcbf52c-9318-4f2a-af75-ac7dd4f76e99"
+					(page "4")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 177.8 38.1)
+		(size 12.7 3.81)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "2151fe41-2fa0-4c80-92de-bd4b1261dd8c")
+		(property "Sheetname" "Setup Stage"
+			(at 177.8 37.3884 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "setup.kicad_sch"
+			(at 177.8 42.4946 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "block_diagram"
+				(path "/4fcbf52c-9318-4f2a-af75-ac7dd4f76e99"
+					(page "3")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 177.8 25.4)
+		(size 12.7 3.81)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "359ff2ad-620c-4b2f-a500-ab2aef652f3f")
+		(property "Sheetname" "Decode Stage"
+			(at 177.8 24.6884 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "decode.kicad_sch"
+			(at 177.8 29.7946 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "block_diagram"
+				(path "/4fcbf52c-9318-4f2a-af75-ac7dd4f76e99"
+					(page "2")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 177.8 63.5)
+		(size 12.7 3.81)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "56a3a585-b759-4b8b-abf1-0dc1b72360df")
+		(property "Sheetname" "Transact Stage"
+			(at 177.8 62.7884 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "transact.kicad_sch"
+			(at 177.8 67.8946 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "block_diagram"
+				(path "/4fcbf52c-9318-4f2a-af75-ac7dd4f76e99"
+					(page "5")
+				)
+			)
+		)
+	)
+	(sheet_instances
+		(path "/"
+			(page "1")
+		)
+	)
+)

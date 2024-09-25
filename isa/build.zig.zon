@@ -1,0 +1,23 @@
+.{
+    .name = "isa",
+    .version = "0.0.0",
+    .minimum_zig_version = "0.13.0",
+    .paths = .{""},
+    .dependencies = .{
+        .arch = .{
+            .path = "../arch",
+        },
+        .bit_helper = .{
+            .path = "../../zig-bithelper",
+        },
+        .deep_hash_map = .{
+            .path = "../../zig-deephashmap",
+        },
+        .sx = .{
+            .path = "../../zig-sx",
+        },
+        .Temp_Allocator = .{
+            .path = "../../zig-tempallocator",
+        },
+    },
+}

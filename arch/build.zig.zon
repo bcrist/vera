@@ -1,0 +1,14 @@
+.{
+    .name = "arch",
+    .version = "0.0.0",
+    .minimum_zig_version = "0.13.0",
+    .paths = .{""},
+    .dependencies = .{
+        .rom_compress = .{
+            .path = "../../zig-rom-compress",
+        },
+        .srec = .{
+            .path = "../../zig-srec",
+        },
+    },
+}

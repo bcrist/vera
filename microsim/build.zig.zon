@@ -1,0 +1,17 @@
+.{
+    .name = "microsim",
+    .version = "0.0.0",
+    .minimum_zig_version = "0.13.0",
+    .paths = .{""},
+    .dependencies = .{
+        .arch = .{
+            .path = "../arch",
+        },
+        .isa = .{
+            .path = "../isa",
+        },
+        .bit_helper = .{
+            .path = "../../zig-bithelper",
+        },
+    },
+}

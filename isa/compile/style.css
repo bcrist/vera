@@ -1,0 +1,59 @@
+body {
+    font-family: sans-serif;
+}
+
+nav {
+    overflow: auto;
+    width: 20em;
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    padding: unset;
+    margin-left: 1em;
+}
+
+nav ul {
+    columns: 3;
+}
+
+#content {
+    margin-left: 22em;
+}
+
+main {
+    max-width: 60em;
+    margin: auto;
+    padding: 0 1em;
+}
+
+pre, code {
+    font-family: "Iosevka Custom", Consolas, monospace;
+}
+
+.encoding_table td, .encoding_table th {
+    width: 4em;
+    height: 4em;
+    text-align: center;
+    font-size: 90%;
+}
+
+.encoding_table td a {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    align-items: center; 
+    justify-content: center;
+    text-decoration: none;
+}
+
+.control_signal_freq {
+    padding-bottom: 2em;
+}
+
+.control_signal_freq .signal {
+    font-family: "Iosevka Custom", Consolas, monospace;
+    text-align: right;
+    padding-right: 1em;
+}
