@@ -199,7 +199,7 @@ fn process_instruction(
         const krio = maybe_krio orelse arch.K.Read_Index_Offset.init(@intCast(iter.encode(krio_encoders, "KRIO")));
         const wio = maybe_wio orelse arch.Write_Index_Offset.init(@intCast(iter.encode(wio_encoders, "WIO")));
 
-        self.decode_rom.add_entry(addr, .{
+        self.decode_rom.add_entry(addr, @truncate(iter.undefined_bits), .{
             .instruction_encoding = instruction_encoding,
             .slot_handle = slot_handle,
             .wio = wio,

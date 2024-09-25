@@ -21,40 +21,43 @@ pub fn deinit(self: *Decode_ROM_Builder) void {
     self.allocator.free(self.entries);
 }
 
-pub fn add_entry(self: *Decode_ROM_Builder, addr: arch.insn_decode.Address, entry: Entry) void {
+pub fn add_entry(self: *Decode_ROM_Builder, addr: arch.insn_decode.Address, undefined_bits: arch.insn_decode.Address.Raw, entry: Entry) void {
     std.debug.assert(entry.slot_handle != null);
-    const addr_raw = addr.raw();
-    const existing = self.entries[addr_raw];
-    if (existing.slot_handle) |existing_handle| {
-        if (existing_handle != entry.slot_handle
-            or existing.wio != entry.wio
-            or existing.krio != entry.krio
-            or existing.cv != entry.cv
-        ) {
-            var buf: [32768]u8 = undefined;
-            var stream = std.io.fixedBufferStream(&buf);
-            var writer = stream.writer();
+    var iter: Undefined_Bits_Iterator = .{ .mask = undefined_bits };
+    while (iter.next()) |extra_bits| {
+        const addr_raw = addr.raw() | extra_bits;
+        const existing = self.entries[addr_raw];
+        if (existing.slot_handle) |existing_handle| {
+            if (existing_handle != entry.slot_handle
+                or existing.wio != entry.wio
+                or existing.krio != entry.krio
+                or existing.cv != entry.cv
+            ) {
+                var buf: [32768]u8 = undefined;
+                var stream = std.io.fixedBufferStream(&buf);
+                var writer = stream.writer();
 
-            if (existing_handle != entry.slot_handle) {
-                writer.print("Handle: {d: >30} != {d}\n", .{ existing_handle.raw(), entry.slot_handle.?.raw() }) catch @panic("IO Error");
-            }
-            if (existing.wio != entry.wio) {
-                writer.print("WIO:    {d: >30} != {d}\n", .{ existing.wio.raw(), entry.wio.raw() }) catch @panic("IO Error");
-            }
-            if (existing.krio != entry.krio) {
-                writer.print("KRIO:   {d: >30} != {d}\n", .{ existing.krio.raw(), entry.krio.raw() }) catch @panic("IO Error");
-            }
-            if (existing.cv != entry.cv) {
-                writer.print("CV:     {s: >30} != {d}\n", .{ @tagName(existing.cv), @tagName(entry.cv) }) catch @panic("IO Error");
-            }
+                if (existing_handle != entry.slot_handle) {
+                    writer.print("Handle: {d: >30} != {d}\n", .{ existing_handle.raw(), entry.slot_handle.?.raw() }) catch @panic("IO Error");
+                }
+                if (existing.wio != entry.wio) {
+                    writer.print("WIO:    {d: >30} != {d}\n", .{ existing.wio.raw(), entry.wio.raw() }) catch @panic("IO Error");
+                }
+                if (existing.krio != entry.krio) {
+                    writer.print("KRIO:   {d: >30} != {d}\n", .{ existing.krio.raw(), entry.krio.raw() }) catch @panic("IO Error");
+                }
+                if (existing.cv != entry.cv) {
+                    writer.print("CV:     {s: >30} != {d}\n", .{ @tagName(existing.cv), @tagName(entry.cv) }) catch @panic("IO Error");
+                }
 
-            // inline for (std.enums.values(hw.Control_Signal)) |field| {
-            //     if (@field(existing.
-            // }
+                // inline for (std.enums.values(hw.Control_Signal)) |field| {
+                //     if (@field(existing.
+                // }
 
-            std.debug.panic("Decode address 0x{X} already used:\n{s}", .{ addr.raw(), stream.getWritten() });
-        }
-    } else self.entries[addr_raw] = entry;
+                std.debug.panic("Decode address 0x{X} already used:\n{s}", .{ addr.raw(), stream.getWritten() });
+            }
+        } else self.entries[addr_raw] = entry;
+    }
 }
 
 pub fn get_entry(self: *Decode_ROM_Builder, addr: arch.insn_decode.Address) Entry {
@@ -87,6 +90,28 @@ pub fn generate_rom_data(self: *Decode_ROM_Builder, allocator: std.mem.Allocator
 
     return data;
 }
+
+const Undefined_Bits_Iterator = struct {
+    mask: arch.insn_decode.Address.Raw,
+    last: ?arch.insn_decode.Address.Raw = null,
+
+    pub fn next(self: *Undefined_Bits_Iterator) ?arch.insn_decode.Address.Raw {
+        if (self.last) |last| {                                                                                     // e.g. 01001100
+            const mask = self.mask;                                                                                 // e.g. 11011100
+            const remaining_bits = mask ^ last;                                                                     // e.g. 10010000
+            if (remaining_bits == 0) return null;
+            const bits_to_clear = remaining_bits ^ (remaining_bits - 1);                                            // e.g. 00011111
+            const bit_to_set = remaining_bits & bits_to_clear;                                                      // e.g. 00010000
+            const value = last & ~bits_to_clear | bit_to_set;                                                       // e.g. 01010000
+            self.last = value;
+            return value;
+        } else {
+            self.last = 0;
+            return 0;
+        }
+    }
+};
+
 
 const log = std.log.scoped(.compile);
 
