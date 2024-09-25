@@ -74,12 +74,12 @@ pub const Virtual = packed struct (u32) {
 
         pub fn to_sr1(self: Base_SR_Index) ?arch.SR1_Index {
             const ord = @intFromEnum(self);
-            return if (ord >= 8) @enumFromInt(ord - 8) else null;
+            return if (ord < 8) @enumFromInt(ord) else null;
         }
 
         pub fn to_sr2(self: Base_SR_Index) ?arch.SR2_Index {
             const ord = @intFromEnum(self);
-            return if (ord >= 8) null else @enumFromInt(ord);
+            return if (ord >= 8) @enumFromInt(ord - 8) else null;
         }
 
         pub fn to_any(self: Base_SR_Index) arch.Any_SR_Index {

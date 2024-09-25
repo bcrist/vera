@@ -291,12 +291,12 @@ pub const Any_SR_Index = enum (u5) {
 
     pub fn to_sr1(self: Any_SR_Index) ?SR1_Index {
         const ord = @intFromEnum(self);
-        return if (ord >= 16) @enumFromInt(ord - 16) else null;
+        return if (ord < 16) @enumFromInt(ord) else null;
     }
 
     pub fn to_sr2(self: Any_SR_Index) ?SR2_Index {
         const ord = @intFromEnum(self);
-        return if (ord >= 16) null else @enumFromInt(ord);
+        return if (ord >= 16) @enumFromInt(ord - 16) else null;
     }
 
     pub const format = fmt.format_enum;
