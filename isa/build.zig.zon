@@ -19,6 +19,9 @@
         .console_helper = .{
             .path = "../../zig-consolehelper",
         },
+        .rom_compress = .{
+            .path = "../../zig-rom-compress",
+        },
         .Temp_Allocator = .{
             .path = "../../zig-tempallocator",
         },

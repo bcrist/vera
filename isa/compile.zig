@@ -29,6 +29,7 @@ const cli_options = std.StaticStringMap(CLI_Option).initComptime(.{
 
 const ROM_Format = enum {
     compressed,
+    compressed_dump,
     srec,
     ihex,
 };
@@ -153,12 +154,12 @@ pub fn main() !void {
 
     if (setup_uc_path) |path| {
         const T = arch.microcode.Setup_Microcode_Entry;
-        const uc_rom_data = switch (rom_fmt) {
-            .compressed => try arch.microcode.write_compressed_rom(T, gpa.allocator(), temp.allocator(), uc),
+        const rom_data = switch (rom_fmt) {
+            .compressed, .compressed_dump => try arch.microcode.write_compressed_rom(T, gpa.allocator(), temp.allocator(), uc),
             .srec => try arch.microcode.write_srec_rom(T, gpa.allocator(), temp.allocator(), uc),
             .ihex => try arch.microcode.write_ihex_rom(T, gpa.allocator(), temp.allocator(), uc),
         };
-        log.info("Setup Microcode ROM: {} bytes ({s})", .{ uc_rom_data.len, @tagName(rom_fmt) });
+        log.info("Setup Microcode ROM: {} bytes ({s})", .{ rom_data.len, @tagName(rom_fmt) });
 
         if (std.fs.path.dirname(path)) |dir| {
             try std.fs.cwd().makePath(dir);
@@ -166,18 +167,23 @@ pub fn main() !void {
 
         var af = try std.fs.cwd().atomicFile(path, .{});
         defer af.deinit();
-        try af.file.writeAll(uc_rom_data);
+        if (rom_fmt == .compressed_dump) {
+            var w = af.file.writer();
+            try rom_decompress.dump(rom_data, w.any());
+        } else {
+            try af.file.writeAll(rom_data);
+        }
         try af.finish();
     }
 
     if (compute_uc_path) |path| {
         const T = arch.microcode.Compute_Microcode_Entry;
-        const uc_rom_data = switch (rom_fmt) {
-            .compressed => try arch.microcode.write_compressed_rom(T, gpa.allocator(), temp.allocator(), uc),
+        const rom_data = switch (rom_fmt) {
+            .compressed, .compressed_dump => try arch.microcode.write_compressed_rom(T, gpa.allocator(), temp.allocator(), uc),
             .srec => try arch.microcode.write_srec_rom(T, gpa.allocator(), temp.allocator(), uc),
             .ihex => try arch.microcode.write_ihex_rom(T, gpa.allocator(), temp.allocator(), uc),
         };
-        log.info("Compute Microcode ROM: {} bytes ({s})", .{ uc_rom_data.len, @tagName(rom_fmt) });
+        log.info("Compute Microcode ROM: {} bytes ({s})", .{ rom_data.len, @tagName(rom_fmt) });
 
         if (std.fs.path.dirname(path)) |dir| {
             try std.fs.cwd().makePath(dir);
@@ -185,18 +191,23 @@ pub fn main() !void {
 
         var af = try std.fs.cwd().atomicFile(path, .{});
         defer af.deinit();
-        try af.file.writeAll(uc_rom_data);
+        if (rom_fmt == .compressed_dump) {
+            var w = af.file.writer();
+            try rom_decompress.dump(rom_data, w.any());
+        } else {
+            try af.file.writeAll(rom_data);
+        }
         try af.finish();
     }
 
     if (transact_uc_path) |path| {
         const T = arch.microcode.Transact_Microcode_Entry;
-        const uc_rom_data = switch (rom_fmt) {
-            .compressed => try arch.microcode.write_compressed_rom(T, gpa.allocator(), temp.allocator(), uc),
+        const rom_data = switch (rom_fmt) {
+            .compressed, .compressed_dump => try arch.microcode.write_compressed_rom(T, gpa.allocator(), temp.allocator(), uc),
             .srec => try arch.microcode.write_srec_rom(T, gpa.allocator(), temp.allocator(), uc),
             .ihex => try arch.microcode.write_ihex_rom(T, gpa.allocator(), temp.allocator(), uc),
         };
-        log.info("Transact Microcode ROM: {} bytes ({s})", .{ uc_rom_data.len, @tagName(rom_fmt) });
+        log.info("Transact Microcode ROM: {} bytes ({s})", .{ rom_data.len, @tagName(rom_fmt) });
 
         if (std.fs.path.dirname(path)) |dir| {
             try std.fs.cwd().makePath(dir);
@@ -204,13 +215,18 @@ pub fn main() !void {
 
         var af = try std.fs.cwd().atomicFile(path, .{});
         defer af.deinit();
-        try af.file.writeAll(uc_rom_data);
+        if (rom_fmt == .compressed_dump) {
+            var w = af.file.writer();
+            try rom_decompress.dump(rom_data, w.any());
+        } else {
+            try af.file.writeAll(rom_data);
+        }
         try af.finish();
     }
 
     if (id_rom_path) |path| {
         const rom_data = switch (rom_fmt) {
-            .compressed => try arch.insn_decode.write_compressed_rom(gpa.allocator(), temp.allocator(), decode),
+            .compressed, .compressed_dump => try arch.insn_decode.write_compressed_rom(gpa.allocator(), temp.allocator(), decode),
             .srec => try arch.insn_decode.write_srec_rom(gpa.allocator(), temp.allocator(), decode),
             .ihex => try arch.insn_decode.write_ihex_rom(gpa.allocator(), temp.allocator(), decode),
         };
@@ -221,7 +237,12 @@ pub fn main() !void {
         }
         var af = try std.fs.cwd().atomicFile(path, .{});
         defer af.deinit();
-        try af.file.writeAll(rom_data);
+        if (rom_fmt == .compressed_dump) {
+            var w = af.file.writer();
+            try rom_decompress.dump(rom_data, w.any());
+        } else {
+            try af.file.writeAll(rom_data);
+        }
         try af.finish();
     }
 
@@ -273,6 +294,7 @@ const documentation = @import("compile/documentation.zig");
 const iedb = @import("iedb");
 const isa = @import("isa");
 const arch = @import("arch");
+const rom_decompress = @import("rom_decompress");
 const Temp_Allocator = @import("Temp_Allocator");
 const sx = @import("sx");
 const std = @import("std");
