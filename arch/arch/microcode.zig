@@ -331,6 +331,47 @@ pub fn write_srec_rom(comptime Entry: type, result_allocator: std.mem.Allocator,
     return result_allocator.dupe(u8, encoded_data.items);
 }
 
+pub fn write_ihex_rom(comptime Entry: type, result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, microcode: *const [Address.count]?Control_Signals) ![]u8 {
+    var temp = std.ArrayList(u8).init(temp_allocator);
+    defer temp.deinit();
+
+    var encoded_data = std.ArrayList(u8).init(temp_allocator);
+    defer encoded_data.deinit();
+
+    var writer = ihex.writer(u32, encoded_data.writer(), .{
+        .pretty = true,
+    });
+
+    var start: u32 = undefined;
+    for (microcode, 0..) |optional_cs, addr| {
+        if (optional_cs) |cs| {
+            var entry: Entry = undefined;
+            inline for (@typeInfo(Entry).Struct.fields) |field_info| {
+                if (field_info.name[0] == '_') continue;
+                @field(entry, field_info.name) = @field(cs, field_info.name);
+            }
+
+            if (temp.items.len == 0) {
+                start = @intCast(addr * @sizeOf(Entry));
+            }
+
+            const bytes = std.mem.toBytes(entry.raw());
+            try temp.appendSlice(&bytes);
+        } else if (temp.items.len > 0) {
+            try writer.write(start, temp.items);
+            temp.clearRetainingCapacity();
+        }
+    }
+
+    if (temp.items.len > 0) {
+        try writer.write(start, temp.items);
+    }
+
+    try writer.finish(0);
+
+    return result_allocator.dupe(u8, encoded_data.items);
+}
+
 pub fn write_csv(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, microcode: *const [Address.count]?Control_Signals, fn_names: ?*const [Slot.count][]const u8) ![]u8 {
     var out = std.ArrayList(u8).init(temp_allocator);
     defer out.deinit();
@@ -425,4 +466,5 @@ const arch = @import("../arch.zig");
 const rom_compress = @import("rom_compress");
 const rom_decompress = @import("rom_decompress");
 const srec = @import("srec");
+const ihex = @import("ihex");
 const std = @import("std");

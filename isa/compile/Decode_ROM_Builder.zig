@@ -112,7 +112,6 @@ const Undefined_Bits_Iterator = struct {
     }
 };
 
-
 const log = std.log.scoped(.compile);
 
 const Decode_ROM_Builder = @This();

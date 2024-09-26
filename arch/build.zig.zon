@@ -10,5 +10,8 @@
         .srec = .{
             .path = "../../zig-srec",
         },
+        .ihex = .{
+            .path = "../../zig-ihex",
+        },
     },
 }

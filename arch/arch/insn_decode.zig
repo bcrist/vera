@@ -95,6 +95,27 @@ pub fn write_srec_rom(result_allocator: std.mem.Allocator, temp_allocator: std.m
     return result_allocator.dupe(u8, encoded_data.items);
 }
 
+pub fn write_ihex_rom(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, rom_data: *const Rom) ![]u8 {
+    var temp = std.ArrayList(u8).init(temp_allocator);
+    defer temp.deinit();
+
+    var encoded_data = std.ArrayList(u8).init(temp_allocator);
+    defer encoded_data.deinit();
+
+    var writer = ihex.writer(u32, encoded_data.writer(), .{
+        .pretty = true,
+    });
+
+    for (rom_data) |result| {
+        const data = std.mem.toBytes(result.raw());
+        try temp.appendSlice(&data);
+    }
+
+    try writer.write(0, temp.items);
+    try writer.finish(0);
+
+    return result_allocator.dupe(u8, encoded_data.items);
+}
 
 pub fn write_csv(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, rom_data: *const Rom) ![]u8 {
     var out = std.ArrayList(u8).init(temp_allocator);
@@ -120,4 +141,5 @@ const microcode = @import("microcode.zig");
 const rom_compress = @import("rom_compress");
 const rom_decompress = @import("rom_decompress");
 const srec = @import("srec");
+const ihex = @import("ihex");
 const std = @import("std");

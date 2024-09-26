@@ -156,7 +156,7 @@ pub fn main() !void {
         const uc_rom_data = switch (rom_fmt) {
             .compressed => try arch.microcode.write_compressed_rom(T, gpa.allocator(), temp.allocator(), uc),
             .srec => try arch.microcode.write_srec_rom(T, gpa.allocator(), temp.allocator(), uc),
-            .ihex => unreachable, // TODO
+            .ihex => try arch.microcode.write_ihex_rom(T, gpa.allocator(), temp.allocator(), uc),
         };
         log.info("Setup Microcode ROM: {} bytes ({s})", .{ uc_rom_data.len, @tagName(rom_fmt) });
 
@@ -175,7 +175,7 @@ pub fn main() !void {
         const uc_rom_data = switch (rom_fmt) {
             .compressed => try arch.microcode.write_compressed_rom(T, gpa.allocator(), temp.allocator(), uc),
             .srec => try arch.microcode.write_srec_rom(T, gpa.allocator(), temp.allocator(), uc),
-            .ihex => unreachable, // TODO
+            .ihex => try arch.microcode.write_ihex_rom(T, gpa.allocator(), temp.allocator(), uc),
         };
         log.info("Compute Microcode ROM: {} bytes ({s})", .{ uc_rom_data.len, @tagName(rom_fmt) });
 
@@ -194,7 +194,7 @@ pub fn main() !void {
         const uc_rom_data = switch (rom_fmt) {
             .compressed => try arch.microcode.write_compressed_rom(T, gpa.allocator(), temp.allocator(), uc),
             .srec => try arch.microcode.write_srec_rom(T, gpa.allocator(), temp.allocator(), uc),
-            .ihex => unreachable, // TODO
+            .ihex => try arch.microcode.write_ihex_rom(T, gpa.allocator(), temp.allocator(), uc),
         };
         log.info("Transact Microcode ROM: {} bytes ({s})", .{ uc_rom_data.len, @tagName(rom_fmt) });
 
@@ -212,7 +212,7 @@ pub fn main() !void {
         const rom_data = switch (rom_fmt) {
             .compressed => try arch.insn_decode.write_compressed_rom(gpa.allocator(), temp.allocator(), decode),
             .srec => try arch.insn_decode.write_srec_rom(gpa.allocator(), temp.allocator(), decode),
-            .ihex => unreachable, // TODO
+            .ihex => try arch.insn_decode.write_ihex_rom(gpa.allocator(), temp.allocator(), decode),
         };
         log.info("Instruction Decode ROM: {} bytes ({s})", .{ rom_data.len, @tagName(rom_fmt) });
 
