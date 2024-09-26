@@ -83,10 +83,14 @@ pub fn main() !void {
         faults.Handler(.instruction_protection_fault),
         faults.Handler(.invalid_instruction_fault),
         faults.Handler(.double_fault),
-        // @import("handlers/interrupt.zig"),
+        @import("handlers/interrupt.zig"),
         @import("handlers/invalid_instruction.zig"),
 
         @import("instructions/nop.zig"),
+        @import("instructions/park.zig"),
+        @import("instructions/ret.zig"),
+        @import("instructions/iret.zig"),
+        @import("instructions/fret.zig"),
     });
 
     processor.microcode.assign_slots();

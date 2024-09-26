@@ -45,7 +45,9 @@ pub fn write_compressed_rom(result_allocator: std.mem.Allocator, temp_allocator:
     var entries = try std.ArrayList(Rom_Entry).initCapacity(temp_allocator, rom_data.len);
     defer entries.deinit();
     for (0.., rom_data) |addr_usize, result_data| {
-        const addr: Address.Raw = @intCast(addr_usize);
+        // Note we're byte swapping the addresses here so that 8 bit opcodes appear as contiguous regions to the compression algorithm.
+        // It requires also byte swapping when decoding to get the correct IR data out.
+        const addr = Address.init(@intCast(addr_usize)).to_byte_swapped();
         const data: Result.Raw = result_data.raw();
         try entries.append(Rom_Entry.init(addr, data));
     }
@@ -64,7 +66,8 @@ pub fn read_compressed_rom(comptime n: u8, compressed_data: []const u8, results:
         }
 
         pub fn address(self: *Self, a: u32) void {
-            const buf = std.mem.asBytes(&self.results[a]);
+            const addr = Address.from_byte_swapped(@intCast(a)).raw();
+            const buf = std.mem.asBytes(&self.results[addr]);
             buf[n] = self.d;
         }
     };

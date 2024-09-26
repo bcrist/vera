@@ -1,93 +1,6 @@
 const region_encoder = Encoder.init(14, @as(u2, 0));
 
 pub const instructions = .{
-    struct { // park
-        pub const spec = "park";
-        pub const encoding = .{
-            @as(u14, 0),
-            region_encoder,
-        };
-        pub fn entry(c: *Cycle, flags: Flags) void {
-            if (!flags.kernel()) return c.illegal_instruction();
-            c.decode_and_exec_dr(.normal);
-        }
-    },
-    struct { // ret
-        pub const spec = "ret";
-        pub const encoding = .{
-            @as(u14, 0x100),
-            region_encoder,
-        };
-        pub fn entry(c: *Cycle) void {
-            c.zero_to_l();
-            c.l_to_sr(.rp);
-            c.branch(.rp, 0);
-        }
-    },
-    struct { // iret
-        pub const spec = "iret";
-        pub const encoding = .{
-            @as(u14, 0x0400),
-            region_encoder,
-        };
-
-        pub fn entry(c: *Cycle, flags: arch.microcode.Flags) void {
-            if (!flags.kernel()) return c.illegal_instruction();
-
-            c.srh_to_ll(.int_rsn_fault_iw_ik_ij);
-            c.ll_to_rsn();
-            c.next(restore_stat);
-        }
-
-        pub fn restore_stat(c: *Cycle) void {
-            c.reload_asn();
-            c.srl_to_ll(.fault_rsn_stat);
-            c.ll_to_stat_zncvka();
-            c.force_normal_execution(branch);
-        }
-
-        pub fn branch(c: *Cycle) void {
-            c.branch(.ip, 0);
-        }
-    },
-    struct { // fret
-        pub const spec = "fret";
-        pub const encoding = .{
-            @as(u14, 0x0500),
-            region_encoder,
-        };
-
-        pub fn entry(c: *Cycle, flags: Flags) void {
-            if (!flags.kernel()) return c.illegal_instruction();
-            c.toggle_rsn();
-            c.next(restore_stat);
-        }
-
-        pub fn restore_stat(c: *Cycle) void {
-            c.reload_asn();
-            c.sr_to_l(.fault_rsn_stat);
-            c.ll_to_stat_zncvka();
-            c.next(restore_iw_ik_ij);
-        }
-
-        pub fn restore_iw_ik_ij(c: *Cycle) void {
-            c.sr_to_l(.int_rsn_fault_iw_ik_ij);
-            c.ll_to_dr(.full);
-            c.decode_dr_to_iw_ik_ij(.alt);
-            c.next(restore_dr_and_retry);
-        }
-
-        pub fn restore_dr_and_retry(c: *Cycle) void {
-            c.sr_to_l(.fault_uc_slot_dr);
-            c.ll_to_dr(.full);
-            // If a page fault occurs during an instruction preceeded by SYNC,
-            // we want to make sure it's still atomic when we retry.
-            // It doesn't hurt to "upgrade" a non-atomic instruction, so we
-            // just assume all faults happen during atomic instructions
-            c.atomic_next_cycle_until_end();
-            c.fault_return();
-        }
-    },
     struct { // ifex
         // Exit interrupt or fault handler without changing registersets or retrying the faulted operation
         pub const spec = "ifex";
@@ -102,18 +15,6 @@ pub const instructions = .{
         }
 
         pub fn load_next_insn(c: *Cycle) void {
-            c.load_and_exec_next_insn();
-        }
-    },
-    struct { // sync
-        pub const spec = "sync";
-        pub const encoding = .{
-            @as(u14, 0x0700),
-            region_encoder,
-        };
-        
-        pub fn entry(c: *Cycle) void {
-            c.atomic_next_cycle_until_end();
             c.load_and_exec_next_insn();
         }
     },

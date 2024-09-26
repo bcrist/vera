@@ -86,14 +86,17 @@ pub fn finish(cycle: *Cycle) void {
         },
     }
 
-    if (cycle.signals.dir == .write_from_dr and cycle.signals.atop != .translate and cycle.signals.lsrc != .d) {
-        cycle.warn("DR value is written to D, but there is no bus transaction happening, and D is not being read to L", .{});
+    if (cycle.signals.dir == .write_from_dr_ir) {
+        cycle.ensure_set(.drw);
+        if (cycle.signals.atop != .translate and cycle.signals.lsrc != .d) {
+            cycle.warn("DR value is written to D, but there is no bus transaction happening, and D is not being read to L", .{});
+        }
     }
 
     if (cycle.signals.drw) {
         switch (cycle.signals.dir) {
-            .write_from_l => {},
-            .none, .write_from_dr => cycle.warn("Expected `dir` to be .read", .{}),
+            .write_from_l, .write_from_dr_ir => {},
+            .none => cycle.warn("Expected `dir` to be set", .{}),
             .read => {
                 cycle.validate_address();
                 if (cycle.signals.atop != .translate) cycle.warn("Expected `atop` to be .translate", .{});
@@ -148,7 +151,7 @@ pub fn finish(cycle: *Cycle) void {
     }
 
     switch (cycle.signals.statop) {
-        .hold, .load_zncv, .load_zncva, .clear_a, .set_a, .zn_from_l => {},
+        .hold, .load_zncv, .load_zncva_ti, .clear_a, .set_a, .zn_from_l => {},
         .compute, .compute_no_set_z => cycle.validate_compute_mode(null),
     }
 
@@ -234,7 +237,7 @@ fn validate_address(cycle: *Cycle) void {
 
 fn validate_bus_read(cycle: *Cycle, width: ?arch.D.Width) void {
     switch (cycle.signals.dir) {
-        .write_from_dr => {},
+        .write_from_dr_ir => {},
         .none, .write_from_l => cycle.warn("Expected `dir` to be .read", .{}),
         .read => {
             cycle.validate_address();
@@ -682,7 +685,19 @@ pub fn saturate_k_to_l(c: *Cycle, what: Bit_Count_Polarity, dir: Bit_Count_Direc
 
 pub fn dr_to_l(c: *Cycle) void {
     c.set_control_signal(.atop, .none);
-    c.set_control_signal(.dir, .write_from_dr);
+    c.set_control_signal(.dir, .write_from_dr_ir);
+    c.set_control_signal(.drw, true);
+    c.set_control_signal(.lsrc, .d);
+}
+
+pub fn dr_to_ir(c: *Cycle) void {
+    c.set_control_signal(.irw, true);
+}
+
+pub fn ir_to_l(c: *Cycle) void {
+    c.set_control_signal(.atop, .none);
+    c.set_control_signal(.dir, .write_from_dr_ir);
+    c.set_control_signal(.drw, false);
     c.set_control_signal(.lsrc, .d);
 }
 
@@ -735,8 +750,8 @@ pub fn sr2_to_sr2(c: *Cycle, src_index: arch.SR2_Index, dest_index: arch.SR2_Ind
 pub fn l_to_stat_zncv(c: *Cycle) void {
     c.set_control_signal(.statop, .load_zncv);
 }
-pub fn l_to_stat_zncva(c: *Cycle) void {
-    c.set_control_signal(.statop, .load_zncva);
+pub fn l_to_ti_and_stat_zncva(c: *Cycle) void {
+    c.set_control_signal(.statop, .load_zncva_ti);
 }
 
 pub fn zn_flags_from_l(c: *Cycle) void {
@@ -859,6 +874,11 @@ pub fn ip_read_to_dr(c: *Cycle, offset: anytype, width: arch.D.Width) void {
     c.read_to_dr(.ip, offset, width, .insn);
 }
 
+pub fn ip_read_24b_to_dr_ir(c: *Cycle, offset: anytype) void {
+    c.ip_read_to_dr(offset, .@"24b");
+    c.dr_to_ir();
+}
+
 pub fn write_from_l(c: *Cycle, base: arch.addr.Virtual.Base_SR_Index, offset: anytype, width: arch.D.Width, space: arch.addr.Space) void {
     c.address(base, offset);
     c.set_control_signal(.atop, .translate);
@@ -872,7 +892,8 @@ pub fn write_from_dr(c: *Cycle, base: arch.addr.Virtual.Base_SR_Index, offset: a
     c.set_control_signal(.atop, .translate);
     c.set_control_signal(.vaspace, space);
     c.set_control_signal(.width, width);
-    c.set_control_signal(.dir, .write_from_dr);
+    c.set_control_signal(.dir, .write_from_dr_ir);
+    c.set_control_signal(.drw, true);
 }
 
 pub fn block_transfer_pull(c: *Cycle, base: arch.addr.Virtual.Base_SR_Index, preincrement: anytype, space: arch.addr.Space) void {
@@ -956,7 +977,7 @@ pub fn call_or_branch(c: *Cycle, base: arch.addr.Virtual.Base_SR_Index, offset: 
 }
 
 pub fn branch(c: *Cycle, base: arch.addr.Virtual.Base_SR_Index, offset: anytype) void {
-    if (base != .ip or @typeInfo(@TypeOf(offset)) != .EnumLiteral and offset != 0) {
+    if (base != .ip or @typeInfo(@TypeOf(offset)) != .EnumLiteral and offset != 0 or !c.is_set(.sr2wi)) {
         c.set_control_signal(.sr2wi, .ip);
         c.set_control_signal(.sr2wsrc, .virtual_addr);
     }

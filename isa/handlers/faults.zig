@@ -13,6 +13,12 @@ pub fn Handler(comptime handler: arch.microcode.Slot) type {
         pub fn store_dr(c: *Cycle) void {
             c.dr_to_l();
             c.l_to_sr(.fault_dr);
+            c.next(store_ir);
+        }
+
+        pub fn store_ir(c: *Cycle) void {
+            c.ir_to_l();
+            c.l_to_sr(.fault_ir);
             c.next(read_last_translation_info);
         }
 

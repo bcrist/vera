@@ -50,13 +50,15 @@ pub fn build(b: *std.Build) void {
     compile.addArg("--db");
     const iedb_sx = compile.addOutputFileArg("iedb.sx");
     compile.addArg("--rom-format");
-    compile.addArg("compressed");
+    compile.addArg("compressed_dump");
     compile.addArg("--setup-uc");
     const setup_uc = compile.addOutputFileArg("setup_uc.crom");
     compile.addArg("--compute-uc");
     const compute_uc = compile.addOutputFileArg("compute_uc.crom");
     compile.addArg("--transact-uc");
     const transact_uc = compile.addOutputFileArg("transact_uc.crom");
+    compile.addArg("--id-rom");
+    const id_rom = compile.addOutputFileArg("insn_decode.crom");
     compile.addArg("--uc-csv");
     const uc_csv = compile.addOutputFileArg("microcode.csv");
     compile.addArg("--id-csv");
@@ -65,11 +67,13 @@ pub fn build(b: *std.Build) void {
     b.getInstallStep().dependOn(&b.addInstallFile(iedb_sx, "iedb.sx").step);
     b.getInstallStep().dependOn(&b.addInstallFile(uc_csv, "microcode.csv").step);
     b.getInstallStep().dependOn(&b.addInstallFile(id_csv, "insn_decode.csv").step);
+    b.getInstallStep().dependOn(&b.addInstallFile(id_rom, "insn_decode.crom").step);
     b.getInstallStep().dependOn(&b.addInstallFile(setup_uc, "setup_uc.crom").step);
     b.getInstallStep().dependOn(&b.addInstallFile(compute_uc, "compute_uc.crom").step);
     b.getInstallStep().dependOn(&b.addInstallFile(transact_uc, "transact_uc.crom").step);
 
     _ = b.addModule("iedb.sx", .{ .root_source_file = iedb_sx });
+    _ = b.addModule("insn_decode.crom", .{ .root_source_file = id_rom });
     _ = b.addModule("setup_uc.crom", .{ .root_source_file = setup_uc });
     _ = b.addModule("compute_uc.crom", .{ .root_source_file = compute_uc });
     _ = b.addModule("transact_uc.crom", .{ .root_source_file = transact_uc });

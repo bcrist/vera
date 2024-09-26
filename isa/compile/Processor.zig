@@ -37,7 +37,7 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
             if (info == .Fn and info.Fn.params.len > 0 and info.Fn.params[0].type.? == *Cycle) {
                 const ptr = &@field(Struct, decl.name);
                 const result = lookup.getOrPut(ptr) catch @panic("OOM");
-                if (!result.found_existing) {
+                if (!result.found_existing or result.value_ptr.is_entry) {
                     result.key_ptr.* = ptr;
                     result.value_ptr.* = Slot_Info.init(@field(Struct, decl.name), @typeName(Struct) ++ "." ++ decl.name);
                 }
@@ -93,6 +93,7 @@ fn process_form(
     const wio_fn = comptime resolve_encoders(locate_decl(search_types, "wio").wio);
     const constraints = comptime resolve_constraints(locate_decl(search_types, "constraints").constraints);
     const Spec_Type = locate_decl(search_types, "spec");
+    const entry = &locate_decl(search_types, "entry").entry;
 
     const cv_mode: arch.insn_decode.CV_Mode = switch (locate_decl(search_types, "Flags").Flags) {
         arch.microcode.Flags => .zero,
@@ -112,13 +113,13 @@ fn process_form(
             const final_encoding = self.finalize_encoding(parsed, constraints, encoders);
             self.encoding_list.append(final_encoding) catch @panic("OOM");
 
-            self.process_instruction(&Outer.entry, final_encoding, constraints, encoders, krio_encoders, wio_encoders, cv_mode, lookup);
+            self.process_instruction(entry, final_encoding, constraints, encoders, krio_encoders, wio_encoders, cv_mode, lookup);
         }
     } else {
         const encoders = encoders_fn(alloc, null, &.{});
         const krio_encoders = krio_fn(alloc, null, &.{});
         const wio_encoders = wio_fn(alloc, null, &.{});
-        self.process_instruction(&Outer.entry, null, constraints, encoders, krio_encoders, wio_encoders, cv_mode, lookup);
+        self.process_instruction(entry, null, constraints, encoders, krio_encoders, wio_encoders, cv_mode, lookup);
     }
 }
 
@@ -620,6 +621,7 @@ pub const Microcode_Processor = struct {
 pub const Slot_Info = struct {
     impl: Impl,
     uses_placeholders: bool,
+    is_entry: bool,
     slot: Slot_Data.Handle, // filled in by build_microcode
 
     pub const Lookup = std.AutoHashMap(*const anyopaque, Slot_Info);
@@ -654,6 +656,7 @@ pub const Slot_Info = struct {
             }
         }
 
+        const is_entry = comptime std.mem.endsWith(u8, name, ".entry");
         const final_name = if (comptime std.mem.startsWith(u8, name, "handlers.")) name["handlers.".len..]
             else if (comptime std.mem.startsWith(u8, name, "instructions.")) name["instructions.".len..]
             else name;
@@ -753,6 +756,7 @@ pub const Slot_Info = struct {
 
         return .{
             .impl = if (has_flags) &temp.conditional else &temp.unconditional,
+            .is_entry = is_entry,
             .uses_placeholders = uses_placeholders,
             .slot = undefined,
         };

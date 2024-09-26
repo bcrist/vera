@@ -4,9 +4,7 @@ pub const forms = .{
             \\nop
             \\nop 1
             ;
-        pub const encoding = .{
-            opcodes.LSB.nop1,
-        };
+        pub const encoding = opcodes.LSB.nop1;
         pub const krio = arch.K.Read_Index_Offset.init(1);
     },
     struct {

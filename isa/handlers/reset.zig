@@ -29,17 +29,21 @@ pub fn init_zero_register(c: *Cycle) void {
     c.zero_to_l();
     c.l_to_sr(.zero);
     c.disable_address_translation();
-    c.next(init_one_register);
+    c.next(init_one_register_and_check_for_pipe_0);
 }
 
-pub fn init_one_register(c: *Cycle, flags: Flags) void {
+pub fn init_one_register_and_check_for_pipe_0(c: *Cycle, flags: Flags) void {
     // Set up the .one SR for RSN 0/1/2/3
-    c.literal_to_l(1);
-    c.l_to_sr(.one);
+    c.address(.zero, 1);
+    c.virtual_address_to_sr(.one);
     if (flags.zero()) {
         c.next(begin_block_transfer);
     } else {
-        c.next(begin_init_other_register_sets);
+        // check for Pipe 1 next cycle
+        c.sr_to_j(.temp_1);
+        c.literal_to_k(1);
+        c.j_minus_k_to_l(.fresh, .flags);
+        c.next(check_for_pipe_1);
     }
 }
 
@@ -144,40 +148,56 @@ pub fn boot(c: *Cycle) void {
     c.branch(.next_ip, 0);
 }
 
+pub fn check_for_pipe_1(c: *Cycle, flags: Flags) void {
+    if (flags.zero()) {
+        // We are pipe 1
+        c.sr_to_j(.one);
+        c.literal_to_k(@bitSizeOf(arch.Register_Set_Number));
+        c.j_shift_k_to_l(.shl, .fresh, .no_flags);
+        c.l_to_sr(.temp_2);
+        c.next(begin_init_other_register_sets);
+    } else {
+        c.force_normal_execution(wait_for_interrupt);
+    }
+}
+
 pub fn begin_init_other_register_sets(c: *Cycle) void {
-    c.literal_to_l(-1);
+    // .temp_2 contains Register_Set_Number.count; subtract 1 to get the max RSN:
+    c.sr_to_j(.temp_2);
+    c.literal_to_k(1);
+    c.j_minus_k_to_l(.fresh, .flags);
+    c.l_to_sr(.rs_reserved); // using rs_reserved to avoid interfering with the block transfer when we get down to RSN 0
     c.l_to_rsn();
-    c.l_to_sr(.temp_2);
-    c.zn_flags_from_l();
     c.address(.zero, 1);
     c.virtual_address_to_sr(.one);
     c.next(init_register_set);
 }
 
 pub fn init_register_set(c: *Cycle, flags: Flags) void {
-    if (!flags.zero()) {
+    if (flags.zero()) {
+        c.sr_to_l(.temp_1); // still has the original pipe index
+        c.l_to_rsn();
+        c.force_normal_execution(wait_for_interrupt);
+    } else {
         c.zero_to_l();
         c.l_to_sr(.zero);
         c.next(next_registerset);
-    } else {
-        c.sr_to_l(.temp_1);
-        c.l_to_rsn();
-        c.force_normal_execution(wait_for_interrupt);
     }
 }
 
 pub fn next_registerset(c: *Cycle) void {
-    c.sr_to_j(.temp_2);
+    c.sr_to_j(.rs_reserved);
     c.literal_to_k(1);
     c.j_minus_k_to_l(.fresh, .flags);
     c.l_to_rsn();
-    c.l_to_sr(.temp_2);
+    c.l_to_sr(.rs_reserved);
     c.address(.zero, 1);
     c.virtual_address_to_sr(.one);
     c.next(init_register_set);
 }
 
 pub fn wait_for_interrupt(c: *Cycle) void {
+    c.zero_to_l();
     c.exec_ir_insn();
 }
 

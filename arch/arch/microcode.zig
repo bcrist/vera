@@ -390,6 +390,15 @@ pub fn write_csv(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Al
     }
     try w.writeByte('\n');
 
+    const Conditional_Info = struct {
+        flags: Flags.Raw,
+        wildcards: Flags.Raw,
+        cs: Control_Signals,
+    };
+
+    var conditional_temp = std.ArrayList(Conditional_Info).init(temp_allocator);
+    defer conditional_temp.deinit();
+
     for (0..Slot.count) |slot| {
         const addr0: Address = .{
             .slot = Slot.init(@intCast(slot)),
@@ -405,7 +414,11 @@ pub fn write_csv(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Al
             const cs = microcode[addr.raw()];
             if (cs0 == null and cs == null) continue;
 
-            if (!(cs0 orelse break false).eql(cs orelse break false)) break false;
+            // The microcode won't work properly if a slot has cycle data for some combinations of flags but not others.
+            // the Processor should always ensure that isn't the case, so we'll rely on it here to simplify the logic:
+            std.debug.assert(cs0 != null and cs != null);
+
+            if (!(cs0.?).eql(cs.?)) break false;
         } else true;
 
         if (unconditional) {
@@ -418,24 +431,66 @@ pub fn write_csv(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Al
                 try write_csv_signals(w, cs);
                 try w.writeByte('\n');
             }
-        } else for (0..Flags.count) |raw_flags| {
-            const addr: Address = .{
-                .slot = Slot.init(@intCast(slot)),
-                .flags = Flags.init(@intCast(raw_flags)),
-            };
-            if (fn_names) |names| {
-                try w.print("{},{},{s},{}", .{ addr, addr.slot, names[slot], addr.flags });
-            } else {
-                try w.print("{},{},{}", .{ addr, addr.slot, addr.flags });
+        } else {
+            conditional_temp.clearRetainingCapacity();
+
+            for (0..Flags.count) |raw_flags| {
+                const addr: Address = .{
+                    .slot = Slot.init(@intCast(slot)),
+                    .flags = Flags.init(@intCast(raw_flags)),
+                };
+                try conditional_temp.append(.{
+                    .flags = @intCast(raw_flags),
+                    .wildcards = 0,
+                    .cs = microcode[addr.raw()].?,
+                });
             }
-            if (microcode[addr.raw()]) |cs| {
-                try write_csv_signals(w, cs);
-            } else {
-                for (std.enums.values(arch.Control_Signal)) |_| {
-                    try w.writeByte(',');
+
+            var check_for_merges = true;
+            while (check_for_merges) {
+                check_for_merges = false;
+                var i = conditional_temp.items.len - 1;
+                while (i > 0) : (i -= 1) {
+                    const q = conditional_temp.items[i];
+                    for (conditional_temp.items[0..i]) |*info| {
+                        if (q.wildcards == info.wildcards and @popCount(info.flags ^ q.flags) == 1 and q.cs.eql(info.cs)) {
+                            info.wildcards |= info.flags ^ q.flags;
+                            info.flags = info.flags & ~info.wildcards;
+                            _ = conditional_temp.swapRemove(i);
+                            check_for_merges = true;
+                            break;
+                        }
+                    }
                 }
             }
-            try w.writeByte('\n');
+
+            for (conditional_temp.items) |info| {
+                var flags_ascii: [@bitSizeOf(Flags)]u8 = undefined;
+                var wildcards_ascii: [@bitSizeOf(Flags)]u8 = undefined;
+                _ = try std.fmt.bufPrint(&flags_ascii, "{}", .{ Flags.init(info.flags) });
+                _ = try std.fmt.bufPrint(&wildcards_ascii, "{}", .{ Flags.init(info.wildcards) });
+                for (&flags_ascii, wildcards_ascii) |*f, wild| {
+                    if (wild != '.') f.* = '*';
+                }
+
+                const addr: Address = .{
+                    .slot = Slot.init(@intCast(slot)),
+                    .flags = Flags.init(info.flags),
+                };
+                if (fn_names) |names| {
+                    try w.print("{},{},{s},{s}", .{ addr, addr.slot, names[slot], &flags_ascii });
+                } else {
+                    try w.print("{},{},{s}", .{ addr, addr.slot, &flags_ascii });
+                }
+                if (microcode[addr.raw()]) |cs| {
+                    try write_csv_signals(w, cs);
+                } else {
+                    for (std.enums.values(arch.Control_Signal)) |_| {
+                        try w.writeByte(',');
+                    }
+                }
+                try w.writeByte('\n');
+            }
         }
     }
 

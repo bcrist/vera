@@ -63,6 +63,9 @@ pub fn deinit(self: *Microcode_Builder) void {
 pub fn intern_cycle(self: *Microcode_Builder, data: Cycle) Cycle_Handle {
     const result = self.cycles_dedup.getOrPutContextAdapted(self.gpa, data, self.cycle_ctx(), self.cycle_handle_ctx()) catch @panic("OOM");
     if (result.found_existing) {
+        if (!std.mem.eql(u8, self.cycles.items[result.key_ptr.raw()].func_name, data.func_name)) {
+            self.cycles.items[result.key_ptr.raw()].func_name = "";
+        }
         return result.key_ptr.*;
     } else {
         const handle: Cycle_Handle = @enumFromInt(self.cycles.items.len);
@@ -182,7 +185,12 @@ pub fn generate_microcode_fn_names(self: *Microcode_Builder, allocator: std.mem.
 
     for (self.slot_data.items, 0..) |slot_data, raw_slot_data_handle| {
         const slot = handle_to_slot[raw_slot_data_handle];
-        fn_names[slot.raw()] = cycles[@intFromEnum(slot_data.cycles[0])].func_name;
+        for (slot_data.cycles) |cycle_handle| {
+            const func_name = cycles[@intFromEnum(cycle_handle)].func_name;
+            if (func_name.len > 0) {
+                fn_names[slot.raw()] = func_name;
+            }
+        }
     }
 
     return fn_names;

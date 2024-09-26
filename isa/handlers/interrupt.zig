@@ -1,44 +1,33 @@
 pub const slot = arch.microcode.Slot.interrupt;
-const vector_register = arch.addr.Physical.interrupt_controller;
 
-pub fn entry(c: *Cycle) void {
-    // N.B. although fault_rsn_stat says it's for fault handlers, we also use it for interrupt handlers.
-    // This is okay because the interrupt handler switches to a different RSN, so it shouldn't be
-    // possible for a fault to happen before IRET is called.
-    c.srh_to_lh(.fault_rsn_stat);
-    c.stat_to_ll();
-    c.l_to_sr(.fault_rsn_stat);
-    c.next_iw(@intCast(vector_register.raw() >> 24));
-    c.next(swap_rsn);
+pub const entry = save_stat;
+
+pub fn save_stat(c: *Cycle) void {
+    c.status_to_l();
+    c.l_to_sr(.int_stat);
+    c.next(change_rsn);
 }
 
-pub fn swap_rsn(c: *Cycle) void {
-    c.rsn_to_sr1h(.int_rsn_fault_iw_ik_ij);
-    c.pipeline_id_to_ll();
-    c.ll_to_rsn();
-    c.next_ij(@truncate(vector_register.raw() >> 16));
-    c.next_ik(@truncate(vector_register.raw() >> 20));
-    c.next(compute_vector_address);
-}
-
-pub fn compute_vector_address(c: *Cycle) void {
-    c.reload_asn();
-    c.srl_to_jl(.one);
-    c.iw_ik_ij_zx_to_k();
-    c.jl_times_k__swap_result_halves_to_l(.zx, .zx, .fresh, .no_flags);
-    c.l_to_sr(.temp_1);
+pub fn change_rsn(c: *Cycle) void {
+    c.sr_to_j(.int_stat);
+    c.literal_to_k(3);
+    c.j_logic_k_to_l(._and, .fresh, .no_flags);
+    c.l_to_rsn();
+    c.sr1_to_sr1(.int_stat, .int_stat);
+    c.disable_address_translation();
     c.next(read_vector);
 }
 
 pub fn read_vector(c: *Cycle) void {
-    c.read_to_d(.temp_1, vector_register.raw() & 0xFFFF, .word, .raw);
-    c.d_to_l(.zx);
-    c.l_to_sr(.next_ip);
+    c.reload_asn();
+    c.read_to_d(.zero, @offsetOf(arch.Vector_Table, "interrupt"), .@"16b", .raw);
+    c.d_to_l();
+    c.l_to_sr(.temp_1);
     c.next(branch);
 }
 
 pub fn branch(c: *Cycle) void {
-    c.branch(.next_ip, 0);
+    c.branch(.temp_1, 0);
 }
 
 const Cycle = @import("../compile/Cycle.zig");

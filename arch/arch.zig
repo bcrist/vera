@@ -206,7 +206,8 @@ pub const SR1_Index = enum (u4) {
     temp_1 = 7,
     int_stat = 8,       // Upon entering an interrupt handler, RSN is set to the current pipe number.  The old RSN is saved here, along with the rest of the status register.
     fault_stat = 9,     // Upon entering a fault handler, before toggling the RSN, the status register is saved here, including WI and UCA.
-    fault_dr = 10,      // Upon entering a fault handler, before toggling the RSN, the current IR is saved here.
+    fault_dr = 10,      // Upon entering a fault handler, before toggling the RSN, the current DR is saved here.
+    fault_ir = 11,      // Upon entering a fault handler, before toggling the RSN, the current IR (and upper half of DR) is saved here.
     _,
 
     pub inline fn init(raw_value: Raw) SR1_Index {
@@ -258,6 +259,7 @@ pub const Any_SR_Index = enum (u5) {
     int_stat = raw_from_sr1(.int_stat),
     fault_stat = raw_from_sr1(.fault_stat),
     fault_dr = raw_from_sr1(.fault_dr),
+    fault_ir = raw_from_sr1(.fault_ir),
     zero = raw_from_sr2(.zero),
     ip = raw_from_sr2(.ip),
     asn = raw_from_sr2(.asn),
@@ -535,7 +537,7 @@ pub const D = enum (u32) {
         none = 0,
         read = 1,
         write_from_l = 2,
-        write_from_dr = 3,
+        write_from_dr_ir = 3, // if DRW is set, full 32b of DR is output.  Otherwise upper half is DR, lower half is IR.
 
         pub inline fn init(raw_value: Direction.Raw) Direction {
             return @enumFromInt(raw_value);
@@ -650,12 +652,6 @@ pub const DR = enum (u32) {
     pub const Raw = std.meta.Tag(DR);
 };
 
-/// N.B. The IR register is not saved when entering a fault handler.
-/// Instead, FRET will reload it from the memory pointed to by IP.
-/// This has several implications:
-///     * Microcode must not change IP, unless IR is guaranteed to be updated accordingly, before a retryable fault could occur.
-///     * Microcode must not change IR, unless IP is guaranteed to be updated accordingly, before a retryable fault could occur.
-///     * Self-modifying code is not allowed, unless you can guarantee the modified instructions can't generate retryable faults.
 pub const IR = enum (u16) {
     _,
 
@@ -665,6 +661,15 @@ pub const IR = enum (u16) {
 
     pub inline fn raw(self: IR) Raw {
         return @intFromEnum(self);
+    }
+
+    pub fn to_byte_swapped(self: IR) Raw {
+        const r: u16 = self.raw();
+        return (r >> 8) | (r << 8);
+    }
+
+    pub fn from_byte_swapped(byte_swapped: Raw) IR {
+        return init((byte_swapped >> 8) | (byte_swapped << 8));
     }
 
     pub const format = fmt.format_raw_hex;
@@ -858,7 +863,7 @@ pub const Status = packed struct (u32) {
         compute = 4,
         compute_no_set_z = 5,
         load_zncv = 6,
-        load_zncva = 7,
+        load_zncva_ti = 7,
 
         pub inline fn init(raw_value: Op.Raw) Op {
             return @enumFromInt(raw_value);
@@ -928,6 +933,7 @@ pub const Vector_Table = extern struct {
     overflow_fault: u16,
     invalid_instruction_fault: u16,
     instruction_protection_fault: u16,
+    interrupt: u16,
 };
 
 const fmt = @import("arch/fmt.zig");

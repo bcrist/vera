@@ -315,11 +315,11 @@ pub fn simulate_compute(self: *Pipeline_State, translations: *const at.Translati
     const any_fault = self.flags.intersectWith(fault_flags).count() > 0;
     self.flags.setPresent(.any_fault, any_fault);
 
-    if (!any_fault) {
+    if (!any_fault and self.cs.atop == .translate) {
         switch (self.cs.dir) {
             .none => {},
             .read => self.flags.insert(.read),
-            .write_from_dr, .write_from_l => self.flags.insert(.write),
+            .write_from_dr_ir, .write_from_l => self.flags.insert(.write),
         }
     }
 
@@ -704,7 +704,13 @@ pub fn simulate_transact(self: *Pipeline_State,
     switch (self.cs.dir) {
         .none, .read => {},
         .write_from_l => self.write_d(l),
-        .write_from_dr => self.write_d(self.dr),
+        .write_from_dr_ir => {
+            if (self.cs.drw) {
+                self.write_d(self.dr);
+            } else {
+                self.write_d(arch.D.init((self.dr.raw() & 0xFFFF0000) | self.ir.raw()));
+            }
+        },
     }
 
     if (self.cs.drw and !any_fault) {
@@ -815,19 +821,20 @@ pub fn simulate_transact(self: *Pipeline_State,
                 self.flags.setPresent(.stat_c, self.compute_result.cout);
                 self.flags.setPresent(.stat_v, self.compute_result.vout);
             },
-            .load_zncv, .load_zncva => {
+            .load_zncv, .load_zncva_ti => {
                 const stat = arch.Status.init(l.raw());
                 self.flags.setPresent(.stat_z, stat.z);
                 self.flags.setPresent(.stat_n, stat.n);
                 self.flags.setPresent(.stat_c, stat.c);
                 self.flags.setPresent(.stat_v, stat.v);
-                if (self.cs.statop == .load_zncva) {
+                if (self.cs.statop == .load_zncva_ti) {
                     self.flags.setPresent(.stat_a, stat.a);
+                    self.ti = stat.top;
                 }
             },
         }
 
-        if (self.tiw) {
+        if (self.cs.statop != .load_zncva_ti and self.tiw) {
             self.ti = self.wi;
         }
     }
