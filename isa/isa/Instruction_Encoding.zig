@@ -433,6 +433,13 @@ pub fn eql(self: Instruction_Encoding, other: Instruction_Encoding) bool {
     return deep_hash_map.deepEql(self, other, .DeepRecursive);
 }
 
+pub fn format(self: Instruction_Encoding, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+    _ = fmt;
+    _ = options;
+    
+    try isa.print.print_encoding(self, writer);
+}
+
 pub const Encoder = @import("Encoder.zig");
 pub const Placeholder_Restrictions_Iterator = @import("Placeholder_Restrictions_Iterator.zig");
 

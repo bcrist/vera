@@ -80,6 +80,25 @@ pub fn print_instruction(insn: Instruction, insn_address: ?u32, writer: anytype)
     }
 }
 
+pub fn print_instruction_signature(signature: Instruction.Signature, writer: anytype) !void {
+    const len = try print_mnemonic_and_suffix(signature.mnemonic, signature.suffix, writer);
+    if (len < 5) {
+        try writer.writeByteNTimes(' ', 5 - len);
+    }
+    var skip_comma = true;
+    for (signature.params) |param_signature| {
+        if (param_signature.base == .arrow) {
+            skip_comma = true;
+        } else if (skip_comma) {
+            skip_comma = false;
+        } else {
+            try writer.writeByte(',');
+        }
+        try writer.writeByte(' ');
+        try print_parameter_signature(param_signature, .{}, writer);
+    }
+}
+
 pub fn print_parameter(param: Parameter, insn_address: ?u32, writer: anytype) !void {
     try print_parameter_signature(param.signature, .{
         .base_register_index = param.base_register_index,

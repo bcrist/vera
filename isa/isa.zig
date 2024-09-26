@@ -7,6 +7,12 @@ pub const Instruction = struct {
         return deep_hash_map.deepEql(a, b, .DeepRecursive);
     }
 
+    pub fn format(self: Instruction, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = fmt;
+        _ = options;
+        try print.print_instruction(self, null, writer);
+    }
+
     pub const Signature = struct {
         mnemonic: Mnemonic,
         suffix: Mnemonic_Suffix,
@@ -19,6 +25,12 @@ pub const Instruction = struct {
             }
             return true;
         }
+
+        pub fn format(self: Signature, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+            _ = fmt;
+            _ = options;
+            try print.print_instruction_signature(self, writer);
+        }
     };
 };
 
@@ -28,10 +40,22 @@ pub const Parameter = struct {
     offset_register_index: arch.Register_Index,
     constant: i64,
 
+    pub fn format(self: Parameter, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = fmt;
+        _ = options;
+        try print.print_parameter(self, null, writer);
+    }
+
     pub const Signature = struct {
         address_space: ?Address_Space,
         base: Kind,
         offset: Kind,
+
+        pub fn format(self: Signature, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+            _ = fmt;
+            _ = options;
+            try print.print_parameter_signature(self, .{}, writer);
+        }
     };
 
     pub const Kind = union (enum) {
@@ -40,6 +64,12 @@ pub const Parameter = struct {
         constant,
         reg: ?Signedness,
         sr: Special_Register,
+
+        pub fn format(self: Signature, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+            _ = fmt;
+            _ = options;
+            try print.print_parameter_kind(self, .{}, writer);
+        }
     };
 
     pub const Index = enum (u4) {
