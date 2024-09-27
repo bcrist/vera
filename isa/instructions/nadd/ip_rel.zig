@@ -15,10 +15,10 @@ pub fn entry(c: *Cycle) void {
     c.ip_read_to_d(.i8_from_dr, .@"32b");
     c.d_to_l();
     c.l_to_sr(.temp_1);
-    c.next(add);
+    c.next(nadd);
 }
 
-pub fn add(c: *Cycle, mnemonic: isa.Mnemonic) void {
+pub fn nadd(c: *Cycle, mnemonic: isa.Mnemonic) void {
     c.reg_to_j();
     c.sr_to_k(.temp_1);
     c.k_minus_j_to_l(switch (mnemonic) {

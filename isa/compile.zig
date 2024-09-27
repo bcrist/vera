@@ -96,13 +96,25 @@ pub fn main() !void {
         @import("instructions/add/reg.zig"),
         @import("instructions/add/imm.zig"),
         @import("instructions/add/ip_rel.zig"),
+        @import("instructions/add/sp_rel.zig"),
+        @import("instructions/add/bp_rel.zig"),
 
         @import("instructions/sub/reg.zig"),
         @import("instructions/sub/ip_rel.zig"),
+        @import("instructions/sub/sp_rel.zig"),
+        @import("instructions/sub/bp_rel.zig"),
 
         @import("instructions/nadd/reg.zig"),
         @import("instructions/nadd/imm.zig"),
         @import("instructions/nadd/ip_rel.zig"),
+        @import("instructions/nadd/sp_rel.zig"),
+        @import("instructions/nadd/bp_rel.zig"),
+
+        @import("instructions/cmp/reg.zig"),
+        @import("instructions/cmp/imm.zig"),
+        @import("instructions/cmp/ip_rel.zig"),
+        @import("instructions/cmp/sp_rel.zig"),
+        @import("instructions/cmp/bp_rel.zig"),
     });
 
     processor.microcode.assign_slots();

@@ -114,7 +114,7 @@ pub const forms = .{
 pub fn add_i16(c: *Cycle, mnemonic: isa.Mnemonic) void {
     c.reg_to_j();
     c.dr_i16_to_k();
-    add_j_plus_k_to_l(c, mnemonic);
+    j_plus_k_to_l(c, mnemonic);
     c.l_to_reg();
     c.load_and_exec_next_insn();
 }
@@ -122,12 +122,12 @@ pub fn add_i16(c: *Cycle, mnemonic: isa.Mnemonic) void {
 pub fn add_krio(c: *Cycle, mnemonic: isa.Mnemonic) void {
     c.reg_to_j();
     c.krio_to_k();
-    add_j_plus_k_to_l(c, mnemonic);
+    j_plus_k_to_l(c, mnemonic);
     c.l_to_reg();
     c.load_and_exec_next_insn();
 }
 
-fn add_j_plus_k_to_l(c: *Cycle, mnemonic: isa.Mnemonic) void {
+fn j_plus_k_to_l(c: *Cycle, mnemonic: isa.Mnemonic) void {
     c.j_plus_k_to_l(switch (mnemonic) {
         .add, .addv,
         .sub, .subv,

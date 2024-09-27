@@ -1,8 +1,6 @@
 pub const spec =
-    \\ sub .i ip + (imm)
-    \\ subc .i ip + (imm)
-    \\ subv .i ip + (imm)
-    \\ subcv .i ip + (imm)
+    \\ cmp .i ip + (imm)
+    \\ cmpc .i ip + (imm)
     ;
 
 pub const encoding = .{
@@ -15,23 +13,17 @@ pub fn entry(c: *Cycle) void {
     c.ip_read_to_d(.i8_from_dr, .@"32b");
     c.d_to_l();
     c.l_to_sr(.temp_1);
-    c.next(sub);
+    c.next(cmp);
 }
 
-pub fn sub(c: *Cycle, mnemonic: isa.Mnemonic) void {
+pub fn cmp(c: *Cycle, mnemonic: isa.Mnemonic) void {
     c.reg_to_j();
     c.sr_to_k(.temp_1);
     c.j_minus_k_to_l(switch (mnemonic) {
-        .sub, .subv => .fresh,
-        .subc, .subcv => .cont,
+        .cmp => .fresh,
+        .cmpc => .cont,
         else => unreachable,
-    }, switch (mnemonic) {
-        .sub, .subc => .flags,
-        .subv, .subcv => .flags__fault_on_overflow,
-        else => unreachable,
-    });
-    c.l_to_reg();
-    c.wi_to_ti();
+    }, .flags);
     c.load_and_exec_next_insn();
 }
 
