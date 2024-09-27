@@ -47,6 +47,18 @@ pub const Misc_16 = enum (u8) {
 };
 
 pub const ALU_16 = enum (u8) {
+    add_ip_rel,
+    addc_ip_rel,
+    addv_ip_rel,
+    addcv_ip_rel,
+    nadd_ip_rel,
+    naddc_ip_rel,
+    naddv_ip_rel,
+    naddcv_ip_rel,
+    sub_ip_rel,
+    subc_ip_rel,
+    subv_ip_rel,
+    subcv_ip_rel,
 };
 
 pub const Add_Reg = enum (u3) {

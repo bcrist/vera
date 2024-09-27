@@ -19,8 +19,8 @@ pub const forms = .{
             ;
 
         pub const encoding = .{
-            opcodes.LSB.sub_reg,
-            opcodes.mnemonic_encoder(opcodes.Sub_Reg, .{ .offset = 8 }),
+            opcodes.LSB.add_reg,
+            opcodes.mnemonic_encoder(opcodes.Add_Reg, .{ .offset = 8 }),
             Encoder.init(11, Reg(.reg)),
         };
 
