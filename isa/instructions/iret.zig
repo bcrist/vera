@@ -1,8 +1,8 @@
 pub const spec = "iret";
 
 pub const encoding = .{
-    opcodes.LSB.misc16,
-    Encoder.init(8, opcodes.Misc16.iret),
+    opcodes.LSB.misc_16,
+    Encoder.init(8, opcodes.Misc_16.iret),
 };
 
 pub const entry = restore_rsn;

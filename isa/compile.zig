@@ -91,6 +91,13 @@ pub fn main() !void {
         @import("instructions/ret.zig"),
         @import("instructions/iret.zig"),
         @import("instructions/fret.zig"),
+        @import("instructions/ifex.zig"),
+
+        @import("instructions/add/reg.zig"),
+        @import("instructions/add/imm.zig"),
+        @import("instructions/sub/reg.zig"),
+        @import("instructions/nadd/reg.zig"),
+        @import("instructions/nadd/imm.zig"),
     });
 
     processor.microcode.assign_slots();

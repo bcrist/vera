@@ -1,3 +1,5 @@
+[compile/assembler] Way to mark instructions that do IP-relative 32b loads - they must be assembled with even alignment
+
 [compile] HTML instruction documentation with "disassembly" of control signals
 [compile] Add Slot_Data flag for slots that may require kernel mode
 [arch/microsim] Fault if a block load/store instruction is executed on an invalid context

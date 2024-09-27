@@ -178,15 +178,23 @@ pub const Write_Index = enum (Register_Index) {
     pub const max = std.math.maxInt(Raw);
 };
 
-pub const Write_Index_Offset = enum (Register_Index) {
+pub const Write_Index_Offset = enum (std.meta.Int(.signed, @bitSizeOf(Register_Index))) {
     _,
 
     pub inline fn init(raw_value: Raw) Write_Index_Offset {
         return @enumFromInt(raw_value);
     }
 
+    pub inline fn init_unsigned(raw_value: Register_Index) Write_Index_Offset {
+        return init(@bitCast(raw_value));
+    }
+
     pub inline fn raw(self: Write_Index_Offset) Raw {
         return @intFromEnum(self);
+    }
+
+    pub inline fn raw_unsigned(self: Write_Index_Offset) Register_Index {
+        return @bitCast(self.raw());
     }
 
     pub const format = fmt.format_enum;
@@ -461,15 +469,23 @@ pub const K = enum (u32) {
         pub const max = std.math.maxInt(Read_Index.Raw);
     };
 
-    pub const Read_Index_Offset = enum (u5) {
+    pub const Read_Index_Offset = enum (std.meta.Int(.signed, @bitSizeOf(Register_Index))) {
         _,
 
         pub inline fn init(raw_value: Read_Index_Offset.Raw) Read_Index_Offset {
             return @enumFromInt(raw_value);
         }
 
+        pub inline fn init_unsigned(raw_value: Register_Index) Read_Index_Offset {
+            return Read_Index_Offset.init(@bitCast(raw_value));
+        }
+
         pub inline fn raw(self: Read_Index_Offset) Read_Index_Offset.Raw {
             return @intFromEnum(self);
+        }
+
+        pub inline fn raw_unsigned(self: Read_Index_Offset) Register_Index {
+            return @bitCast(self.raw());
         }
 
         pub const format = fmt.format_enum;

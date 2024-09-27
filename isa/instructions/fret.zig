@@ -1,8 +1,8 @@
 pub const spec = "fret";
 
 pub const encoding = .{
-    opcodes.LSB.misc16,
-    Encoder.init(8, opcodes.Misc16.fret),
+    opcodes.LSB.misc_16,
+    Encoder.init(8, opcodes.Misc_16.fret),
 };
 
 pub const entry = toggle_rsn;

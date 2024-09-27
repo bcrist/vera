@@ -100,7 +100,9 @@ pub const Virtual = packed struct (u32) {
         four = 4,
         five = 5,
         six = 6,
-        i16_from_ir = std.math.minInt(i6),
+        i16_from_dr = std.math.minInt(i6),
+        i8_from_dr = std.math.minInt(i6) + 1,
+        i8_x4_from_dr = std.math.minInt(i6) + 2,
         _,
 
         pub inline fn init(raw_value: Microcode_Offset.Raw) Microcode_Offset {
@@ -115,7 +117,7 @@ pub const Virtual = packed struct (u32) {
 
         pub const Raw = std.meta.Tag(Microcode_Offset);
         pub const max = std.math.maxInt(i6);
-        pub const min = -max; // don't include .i16_from_ir
+        pub const min = Microcode_Offset.i8_x4_from_dr.raw() + 1;
     };
 };
 

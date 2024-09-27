@@ -492,7 +492,6 @@ pub fn dr_i8_to_k(c: *Cycle, is_8b_opcode: bool) void {
 }
 
 pub fn dr_i16_to_k(c: *Cycle) void {
-    c.set_control_signal(.vao, .one);
     c.set_control_signal(.ksrc, .dr_byte_21_sx);
 }
 
@@ -506,10 +505,10 @@ pub fn literal_to_k(c: *Cycle, literal: i16) void {
         if (c.initial_krio.raw() == literal) {
             c.krio_to_k();
             return;
-        } else if (literal == (@as(u32, 1) << c.initial_krio.raw())) {
+        } else if (literal == (@as(u32, 1) << c.initial_krio.raw_unsigned())) {
             c.krio_bit_to_k();
             return;
-        } else if (literal == ~(@as(u32, 1) << c.initial_krio.raw())) {
+        } else if (literal == ~(@as(u32, 1) << c.initial_krio.raw_unsigned())) {
             c.not_krio_bit_to_k();
             return;
         }
@@ -823,8 +822,12 @@ pub fn address(c: *Cycle, base: arch.addr.Virtual.Base_SR_Index, offset: anytype
             if (offset >= arch.addr.Virtual.Microcode_Offset.min and offset <= arch.addr.Virtual.Microcode_Offset.max) {
                 break :vao arch.addr.Virtual.Microcode_Offset.init(@intCast(offset));
             } else if (c.initial_encoding_word) |dr| {
-                if (dr.byte21_i16() == offset and c.flags.contains(.initial_dr1_valid) and c.flags.contains(.initial_dr2_valid)) {
-                    break :vao .i16_from_ir;
+                if (dr.byte2_i8() == offset and c.flags.contains(.initial_dr2_valid)) {
+                    break :vao .i8_from_dr;
+                } else if (dr.byte2_i8() * 4 == offset and c.flags.contains(.initial_dr2_valid)) {
+                    break :vao .i8_x4_from_dr;
+                } else if (dr.byte21_i16() == offset and c.flags.contains(.initial_dr1_valid) and c.flags.contains(.initial_dr2_valid)) {
+                    break :vao .i16_from_dr;
                 }
             }
             c.warn("Could not encode address offset {}", .{ offset });

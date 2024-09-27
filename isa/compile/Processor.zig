@@ -169,8 +169,8 @@ fn process_instruction(
 
         const slot_handle = maybe_slot_handle orelse handle: {
             const dr = arch.DR.init(@intCast(iter.encode_ignore_errors(encoders)));
-            maybe_krio = arch.K.Read_Index_Offset.init(@intCast(iter.encode(krio_encoders, "KRIO")));
-            maybe_wio = arch.Write_Index_Offset.init(@intCast(iter.encode(wio_encoders, "WIO")));
+            maybe_krio = arch.K.Read_Index_Offset.init_unsigned(@intCast(iter.encode(krio_encoders, "KRIO")));
+            maybe_wio = arch.Write_Index_Offset.init_unsigned(@intCast(iter.encode(wio_encoders, "WIO")));
             const result = Microcode_Processor.process(.{
                 .processor = self,
                 .ptr = entry_fn,
@@ -197,8 +197,8 @@ fn process_instruction(
             break :handle result.slot_handle;
         };
 
-        const krio = maybe_krio orelse arch.K.Read_Index_Offset.init(@intCast(iter.encode(krio_encoders, "KRIO")));
-        const wio = maybe_wio orelse arch.Write_Index_Offset.init(@intCast(iter.encode(wio_encoders, "WIO")));
+        const krio = maybe_krio orelse arch.K.Read_Index_Offset.init_unsigned(@intCast(iter.encode(krio_encoders, "KRIO")));
+        const wio = maybe_wio orelse arch.Write_Index_Offset.init_unsigned(@intCast(iter.encode(wio_encoders, "WIO")));
 
         self.decode_rom.add_entry(addr, @truncate(iter.undefined_bits), .{
             .instruction_encoding = instruction_encoding,
@@ -766,6 +766,7 @@ pub const Slot_Info = struct {
 fn finalize_encoding(self: *Processor, parsed: Instruction_Encoding, constraints: []const Constraint, encoders: []const Encoder) Instruction_Encoding {
     var final_encoders = self.arena.dupe(Encoder, encoders) catch @panic("OOM");
     for (final_encoders) |*encoder| {
+        dupe_inner_values(self.arena, &encoder.value);
         fixup_placeholder_value(&encoder.value, parsed.encoders);
     }
 
@@ -774,6 +775,8 @@ fn finalize_encoding(self: *Processor, parsed: Instruction_Encoding, constraints
     @memcpy(final_constraints[parsed.constraints.len..], constraints);
 
     for (final_constraints) |*constraint| {
+        dupe_inner_values(self.arena, &constraint.left);
+        dupe_inner_values(self.arena, &constraint.right);
         fixup_placeholder_value(&constraint.left, parsed.encoders);
         fixup_placeholder_value(&constraint.right, parsed.encoders);
     }
@@ -859,6 +862,24 @@ fn finalize_instruction_signature(self: *Processor, signature: isa.Instruction.S
         .suffix = signature.suffix,
         .params = final_param_signatures,
     };
+}
+
+fn dupe_inner_values(arena: std.mem.Allocator, value: *Value) void {
+    switch (value.*) {
+        .constant, .placeholder => {},
+        .negate => |inner| {
+            const new_inner = arena.create(Value) catch @panic("OOM");
+            new_inner.* = inner.*;
+            dupe_inner_values(arena, new_inner);
+            value.* = .{ .negate = new_inner };
+        },
+        .offset => |*info| {
+            const new_inner = arena.create(Value) catch @panic("OOM");
+            new_inner.* = info.inner.*;
+            dupe_inner_values(arena, new_inner);
+            info.inner = new_inner;
+        },
+    }
 }
 
 fn fixup_placeholder_value(value: *Value, parsed_encoders: []const Encoder) void {

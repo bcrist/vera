@@ -118,6 +118,7 @@ pub const Mnemonic = enum {
     tb, cb, sb,
     // Bit counting:
     csb, czb, csbl, czbl, csbt, czbt,
+    ssbl, szbl, ssbt, szbt,
     // Extension & Truncation:
     sx, zx, sxv, zxv,
     // Multiply:
@@ -203,6 +204,10 @@ pub const Mnemonic = enum {
             .czbl => "Count Zero Bits (leading)",
             .csbt => "Count Set Bits (trailing)",
             .czbt => "Count Set Bits (trailing)",
+            .ssbl => "Saturate Set Bits (leading)",
+            .szbl => "Saturate Zero Bits (leading)",
+            .ssbt => "Saturate Set Bits (trailing)",
+            .szbt => "Saturate Zero Bits (trailing)",
             .sx => "Sign Extend/Truncate",
             .zx => "Zero Extend/Truncate",
             .sxv => "Sign Extend/Truncate (fault on overflow)",
@@ -384,6 +389,7 @@ pub fn branch_kind(mnemonic: Mnemonic, suffix: Mnemonic_Suffix) Branch_Kind {
         .xor, .@"or", .@"and",
         .tb, .cb, .sb,
         .csb, .czb, .csbl, .czbl, .csbt, .czbt,
+        .ssbt, .szbt, .ssbl, .szbl,
         .sx, .zx, .sxv, .zxv,
         .mul224, .mul444, .mul244, .mul424, .mul448, .mul248, .mul428,
         .val, .set, .drop,

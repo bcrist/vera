@@ -58,16 +58,17 @@ pub fn Reg(comptime name_or_enum_literal: anytype) type {
     return Int(name_or_enum_literal, Register_Index);
 }
 
-pub fn Even_Reg(comptime name_or_enum_literal: anytype) type {
-    return Int_Mult(name_or_enum_literal, std.meta.Int(.unsigned, @bitSizeOf(Register_Index) - 1), 2);
-}
-
-pub fn Odd_Reg(comptime name_or_enum_literal: anytype) type {
-    return Options(name_or_enum_literal, .{ 1, 3, 5, 7, 9, 11, 13, 15 });
-}
-
 pub fn Reg_Bit(comptime name_or_enum_literal: anytype) type {
-    return Options(name_or_enum_literal, .{ 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768 });
+    return Options(name_or_enum_literal, .{
+        0x1, 0x2, 0x4, 0x8,
+        0x10, 0x20, 0x40, 0x80,
+        0x100, 0x200, 0x400, 0x800,
+        0x1000, 0x2000, 0x4000, 0x8000,
+        0x1_0000, 0x2_0000, 0x4_0000, 0x8_0000,
+        0x10_0000, 0x20_0000, 0x40_0000, 0x80_0000,
+        0x100_0000, 0x200_0000, 0x400_0000, 0x800_0000,
+        0x1000_0000, 0x2000_0000, 0x4000_0000, 0x8000_0000,
+    });
 }
 
 pub fn Negate(comptime I: type) type {

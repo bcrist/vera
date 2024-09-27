@@ -262,7 +262,12 @@ pub fn simulate_setup(self: *Pipeline_State, registers: *const arch.Register_Fil
         registers[rsn].rs2[sr2ri.raw()]
     else unreachable;
 
-    const va_offset: u32 = if (vao == .i16_from_dr) @bitCast(self.dr.byte21_i32()) else vao.raw();
+    const va_offset: u32 = switch (vao) {
+        .i16_from_dr => @bitCast(self.dr.byte21_i32()),
+        .i8_from_dr => @bitCast(self.dr.byte2_i32()),
+        .i8_x4_from_dr => @bitCast(self.dr.byte2_i32() * 4),
+        else => vao.raw(),
+    };
 
     self.j = arch.J.init(switch (self.cs.jsrc) {
         .zero => 0,
@@ -272,14 +277,17 @@ pub fn simulate_setup(self: *Pipeline_State, registers: *const arch.Register_Fil
     });
 
     self.k = arch.K.init(switch (self.cs.ksrc) {
+        .zero => 0,
+        .vao => vao,
         .krio => self.krio.raw(),
         .kr => registers[rsn].reg[self.kri],
         .sr1 => sr1d.raw(),
         .sr2 => sr2d.raw(),
         .krio_bit => @as(u32, 1) << self.krio.raw(),
         .krio_bit_inv => ~(@as(u32, 1) << self.krio.raw()),
-        .ir_byte_1_sx => @bitCast(self.dr.byte1_i32()),
-        .ir_byte_2_maybe_byte_1_sx => @bitCast(if (vao == .one) self.dr.byte21_i32() else self.dr.byte2_i32()),
+        .dr_byte_1_sx => @bitCast(self.dr.byte1_i32()),
+        .dr_byte_2_sx => @bitCast(self.dr.byte2_i32()),
+        .dr_byte_21_sx => @bitCast(self.dr.byte21_i32()),
     });
 
     self.sr1d = sr1d;

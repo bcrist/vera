@@ -4,22 +4,22 @@ pub const forms = .{
             \\nop
             \\nop 1
             ;
-        pub const encoding = opcodes.LSB.nop1;
+        pub const encoding = opcodes.LSB.nop_1;
         pub const krio = arch.K.Read_Index_Offset.init(1);
     },
     struct {
         pub const spec = "nop 2";
         pub const encoding = .{
-            opcodes.LSB.misc16,
-            Encoder.init(8, opcodes.Misc16.nop2),
+            opcodes.LSB.misc_16,
+            Encoder.init(8, opcodes.Misc_16.nop_2),
         };
         pub const krio = arch.K.Read_Index_Offset.init(2);
     },
     struct {
         pub const spec = "nop 3";
         pub const encoding = .{
-            opcodes.LSB.misc16,
-            Encoder.init(8, opcodes.Misc16.nop3),
+            opcodes.LSB.misc_16,
+            Encoder.init(8, opcodes.Misc_16.nop_3),
         };
         pub const krio = arch.K.Read_Index_Offset.init(3);
     },

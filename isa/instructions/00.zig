@@ -1,23 +1,6 @@
 const region_encoder = Encoder.init(14, @as(u2, 0));
 
 pub const instructions = .{
-    struct { // ifex
-        // Exit interrupt or fault handler without changing registersets or retrying the faulted operation
-        pub const spec = "ifex";
-        pub const encoding = .{
-            @as(u14, 0x0600),
-            region_encoder,
-        };
-
-        pub fn entry(c: *Cycle, flags: Flags) void {
-            if (!flags.kernel()) return c.illegal_instruction();
-            c.force_normal_execution(load_next_insn);
-        }
-
-        pub fn load_next_insn(c: *Cycle) void {
-            c.load_and_exec_next_insn();
-        }
-    },
     struct { // <eab/dab> .i x0
         pub const spec = 
             \\eab .i x0
