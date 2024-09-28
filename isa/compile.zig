@@ -115,6 +115,9 @@ pub fn main() !void {
         @import("instructions/cmp/ip_rel.zig"),
         @import("instructions/cmp/sp_rel.zig"),
         @import("instructions/cmp/bp_rel.zig"),
+
+        @import("instructions/count.zig"),
+        @import("instructions/saturate.zig"),
     });
 
     processor.microcode.assign_slots();

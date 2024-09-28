@@ -49,6 +49,19 @@ pub const Misc_16 = enum (u8) {
     iret,
     fret,
     ifex,
+
+    csb,
+    czb,
+    csbl,
+    czbl,
+    csbt,
+    czbt,
+
+    ssbl,
+    szbl,
+    ssbt,
+    szbt,
+
     park = 0xFF,
 };
 

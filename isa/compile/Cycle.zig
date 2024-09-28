@@ -134,6 +134,9 @@ pub fn finish(cycle: *Cycle) void {
 
     if (cycle.signals.gprw or cycle.signals.tiw) {
         cycle.validate_wi();
+        if (cycle.signals.tiw and !cycle.flags.contains(.initial_wio_valid)) {
+            cycle.warn("WIO has not been specified, so GPR writes are not allowed!", .{});
+        }
     }
 
     if (cycle.signals.sr1wsrc == .self and !cycle.is_set(.sr1ri)) {
@@ -202,10 +205,16 @@ fn validate_kr(cycle: *Cycle) void {
     if (!cycle.flags.contains(.ir_valid)) {
         cycle.warn("IR is undefined, so KR usage is not allowed!", .{});
     }
+    if (!cycle.flags.contains(.initial_krio_valid)) {
+        cycle.warn("KRIO has not been specified, so KR usage is not allowed!", .{});
+    }
 }
 fn validate_krio(cycle: *Cycle) void {
     if (!cycle.flags.contains(.ir_valid)) {
         cycle.warn("IR is undefined, so KRIO usage is not allowed!", .{});
+    }
+    if (!cycle.flags.contains(.initial_krio_valid)) {
+        cycle.warn("KRIO has not been specified, so KRIO usage is not allowed!", .{});
     }
 }
 fn validate_dr(cycle: *Cycle) void {
@@ -420,11 +429,11 @@ pub fn j_ext_k(c: *Cycle, ext: Zero_Or_Sign_Extension, flags: Flags_Mode) void {
 
 pub fn saturate_k(c: *Cycle, what: Bit_Count_Polarity, dir: Bit_Count_Direction, flags: Flags_Mode) void {
     const mode: arch.Count_Extend_Mode = switch (dir) {
-        .left => switch (what) {
+        .leading => switch (what) {
             .zeroes => arch.Count_Extend_Mode.saturate_zeroes_left,
             .ones => arch.Count_Extend_Mode.saturate_ones_left,
         },
-        .right => switch (what) {
+        .trailing => switch (what) {
             .zeroes => arch.Count_Extend_Mode.saturate_zeroes_right,
             .ones => arch.Count_Extend_Mode.saturate_ones_right,
         },
@@ -667,7 +676,7 @@ pub fn jh_times_kl_shl16_to_l(c: *Cycle, js: arch.Multiply_Mode.Signedness, ks: 
     c.set_control_signal(.lsrc, .mult);
 }
 
-pub fn count_j_and_k_to_l(c: *Cycle, count_what: Bit_Count_Polarity, dir: Bit_Count_Direction, freshness: Freshness, flags: Flags_Mode) void {
+pub fn count_j_to_l(c: *Cycle, count_what: Bit_Count_Polarity, dir: Bit_Count_Direction, freshness: Freshness, flags: Flags_Mode) void {
     c.count_j(count_what, dir, freshness, flags);
     c.set_control_signal(.lsrc, .count);
 }
