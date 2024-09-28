@@ -1,5 +1,6 @@
 pub const LSB = enum (u8) {
     nop_1,
+    misc_12,
     misc_16,
     alu_16,
     add_reg,
@@ -43,6 +44,10 @@ pub const LSB = enum (u8) {
     cmpc_0,
 };
 
+pub const Misc_12 = enum (u4) {
+    set_zncv,
+};
+
 pub const Misc_16 = enum (u8) {
     nop_2,
     nop_3,
@@ -61,6 +66,13 @@ pub const Misc_16 = enum (u8) {
     szbl,
     ssbt,
     szbt,
+
+    swap,
+    swap2,
+    byterev,
+    bitrev,
+    bitrev1,
+    bitrev2,
 
     park = 0xFF,
 };

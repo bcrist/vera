@@ -363,6 +363,19 @@ pub fn j_shift_k(c: *Cycle, op: Shift_Op, freshness: Freshness, flags: Flags_Mod
     c.compute_flags(freshness, flags);
 }
 
+pub fn swap_j(c: *Cycle, op: Swap_Op, flags: Flags_Mode) void {
+    c.set_control_signal(.unit, .shift);
+    c.set_control_signal(.mode, .{ .shift = switch (op) {
+        .swap_bytes => arch.Shift_Mode.swap_bytes,
+        .swap_halves => arch.Shift_Mode.swap_halves,
+        .reverse_bytes => arch.Shift_Mode.reverse_bytes,
+        .reverse_bits => arch.Shift_Mode.reverse_bits,
+        .reverse_bits_in_halves => arch.Shift_Mode.reverse_bits_in_halves,
+        .reverse_bits_in_bytes => arch.Shift_Mode.reverse_bits_in_bytes,
+    }});
+    c.compute_flags(.fresh, flags);
+}
+
 pub fn j_times_k(c: *Cycle,
     jt: arch.Multiply_Mode.Signedness, kt: arch.Multiply_Mode.Signedness,
     jh: arch.Multiply_Mode.Half, kh: arch.Multiply_Mode.Half,
@@ -648,6 +661,11 @@ pub fn j_logic_k_to_l(c: *Cycle, op: Logic_Op, freshness: Freshness, flags: Flag
 
 pub fn j_shift_k_to_l(c: *Cycle, op: Shift_Op, freshness: Freshness, flags: Flags_Mode) void {
     c.j_shift_k(op, freshness, flags);
+    c.set_control_signal(.lsrc, .shift);
+}
+
+pub fn swap_j_to_l(c: *Cycle, op: Swap_Op, flags: Flags_Mode) void {
+    c.swap_j(op, flags);
     c.set_control_signal(.lsrc, .shift);
 }
 
@@ -1081,6 +1099,15 @@ pub const Shift_Op = enum {
     shrc,
     shlc,
     shrs,
+};
+
+pub const Swap_Op = enum {
+    swap_bytes,
+    swap_halves,
+    reverse_bytes,
+    reverse_bits,
+    reverse_bits_in_halves,
+    reverse_bits_in_bytes,
 };
 
 pub const Bit_Count_Polarity = enum {

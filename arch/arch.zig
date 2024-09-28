@@ -792,6 +792,7 @@ pub const Shift_Mode = packed struct (u5) {
     pub const shl: Shift_Mode = .{ .left = true, .left_xor_swap_bytes = true, .left_xor_swap_halves = true, .cin = .zero };
     pub const shlc: Shift_Mode = .{ .left = true, .left_xor_swap_bytes = true, .left_xor_swap_halves = true, .cin = .stat_c };
 
+    // K should be zero for these:
     pub const swap_bytes: Shift_Mode = .{ .left = false, .left_xor_swap_bytes = true, .left_xor_swap_halves = false, .cin = .zero };
     pub const swap_halves: Shift_Mode = .{ .left = false, .left_xor_swap_bytes = false, .left_xor_swap_halves = true, .cin = .zero };
     pub const reverse_bytes: Shift_Mode = .{ .left = false, .left_xor_swap_bytes = true, .left_xor_swap_halves = true, .cin = .zero };
