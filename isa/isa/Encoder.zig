@@ -65,6 +65,13 @@ pub fn init(bit_offset: Encoded_Instruction.Bit_Length_Type, what: anytype) Enco
                 if (comptime std.mem.eql(u8, @tagName(what.op), "negate")) {
                     value = .{ .negate = &inner_encoder.value };
                     domain = inner_encoder.domain;
+                } else if (comptime std.mem.eql(u8, @tagName(what.op), "invert")) {
+                    const bits = what.bits orelse inner_encoder.domain.min_bits();
+                    value = .{ .xor = .{
+                        .inner = &inner_encoder.value,
+                        .mask = @bitCast((@as(u64, 1) << bits) - 1),
+                    } };
+                    domain = inner_encoder.domain;
                 } else if (comptime std.mem.eql(u8, @tagName(what.op), "offset")) {
                     value = .{ .offset = .{
                         .inner = &inner_encoder.value,

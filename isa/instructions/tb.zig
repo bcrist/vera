@@ -1,7 +1,7 @@
 pub const spec = "tb (imm)";
 pub const encoding = .{
-    opcodes.LSB.misc_reg,
-    Encoder.init(8, opcodes.Misc_Reg.tb),
+    opcodes.LSB.bit_op,
+    Encoder.init(8, opcodes.Bit_Op.tb),
     Encoder.init(11, Int(.imm, u5)),
 };
 

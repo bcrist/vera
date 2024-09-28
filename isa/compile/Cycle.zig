@@ -604,7 +604,12 @@ pub fn last_translation_info_to_l(c: *Cycle) void {
     c.set_control_signal(.lsrc, .at_info);
 }
 
-pub fn reg_to_l(c: *Cycle) void {
+pub fn reg_to_j_to_l(c: *Cycle) void {
+    c.reg_to_j();
+    c.j_to_l();
+}
+
+pub fn reg_to_k_to_l(c: *Cycle) void {
     c.reg_to_k();
     c.k_to_l();
 }
@@ -612,6 +617,11 @@ pub fn reg_to_l(c: *Cycle) void {
 pub fn sr_to_l(c: *Cycle, which: arch.Any_SR_Index) void {
     c.sr_to_k(which);   
     c.k_to_l();
+}
+
+pub fn j_to_l(c: *Cycle) void {
+    c.zero_to_k();
+    c.j_plus_k_to_l(.fresh, .no_flags);
 }
 
 pub fn k_to_l(c: *Cycle) void {

@@ -468,8 +468,9 @@ pub const Initial_Word_Encoding_Iterator = struct {
         return switch (val) {
             .constant => |k| k,
             .placeholder => |info| self.value(info.name),
-            .negate => |inner| self.constraint_value(inner.*),
-            .offset => |info| self.constraint_value(info.inner.*),
+            .negate => |inner| self.constraint_value(inner.*), // This doesn't apply its transformation because self.value() already accounts for it.
+            .xor => |info| self.constraint_value(info.inner.*), // This doesn't apply its transformation because self.value() already accounts for it.
+            .offset => |info| self.constraint_value(info.inner.*), // This doesn't apply its transformation because self.value() already accounts for it.
         };
     }
 
@@ -873,6 +874,12 @@ fn dupe_inner_values(arena: std.mem.Allocator, value: *Value) void {
             dupe_inner_values(arena, new_inner);
             value.* = .{ .negate = new_inner };
         },
+        .xor => |*info| {
+            const new_inner = arena.create(Value) catch @panic("OOM");
+            new_inner.* = info.inner.*;
+            dupe_inner_values(arena, new_inner);
+            info.inner = new_inner;
+        },
         .offset => |*info| {
             const new_inner = arena.create(Value) catch @panic("OOM");
             new_inner.* = info.inner.*;
@@ -887,6 +894,7 @@ fn fixup_placeholder_value(value: *Value, parsed_encoders: []const Encoder) void
         .constant => {},
         .placeholder => |*info| fixup_placeholder_info(info, parsed_encoders),
         .negate => |inner| fixup_placeholder_value(@constCast(inner), parsed_encoders), // TODO refactor to avoid @constCast
+        .xor => |info| fixup_placeholder_value(@constCast(info.inner), parsed_encoders), // TODO refactor to avoid @constCast
         .offset => |info| fixup_placeholder_value(@constCast(info.inner), parsed_encoders), // TODO refactor to avoid @constCast
     }
 }
@@ -916,6 +924,7 @@ fn get_placeholder(value: Value) ?[]const u8 {
         .constant => null,
         .placeholder => |info| info.name,
         .negate => |inner| get_placeholder(inner.*),
+        .xor => |info| get_placeholder(info.inner.*),
         .offset => |info| get_placeholder(info.inner.*),
     };
 }
@@ -925,6 +934,7 @@ fn get_placeholder_info(val: Value) ?Instruction_Encoding.Placeholder_Info {
         .constant => null,
         .placeholder => |info| info,
         .negate => |inner| get_placeholder_info(inner.*),
+        .xor => |info| get_placeholder_info(info.inner.*),
         .offset => |info| get_placeholder_info(info.inner.*),
     };
 }
@@ -934,6 +944,7 @@ fn is_placeholder(needle: []const u8, value: Value) bool {
         .constant => false,
         .placeholder => |info| std.mem.eql(u8, info.name, needle),
         .negate => |inner| is_placeholder(needle, inner.*),
+        .xor => |info| is_placeholder(needle, info.inner.*),
         .offset => |info| is_placeholder(needle, info.inner.*),
     };
 }

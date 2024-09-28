@@ -6,6 +6,10 @@ pub const Value = union (enum) {
     constant: i64,
     placeholder: Placeholder_Info,
     negate: *const Value,
+    xor: struct {
+        inner: *const Value,
+        mask: i64,
+    },
     offset: struct {
         inner: *const Value,
         offset: i64,
@@ -16,6 +20,7 @@ pub const Value = union (enum) {
             .constant => null,
             .placeholder => |info| info,
             .negate => |inner| inner.get_placeholder_info(),
+            .xor => |info| info.inner.get_placeholder_info(),
             .offset => |info| info.inner.get_placeholder_info(),
         };
     }
@@ -25,18 +30,19 @@ pub const Value = union (enum) {
             .constant => |v| v,
             .placeholder => |info| info.evaluate(params),
             .negate => |inner| -inner.evaluate(params),
+            .xor => |info| info.inner.evaluate(params) ^ info.mask,
             .offset => |info| info.inner.evaluate(params) - info.offset,
         };
     }
 
     pub fn assign(self: Value, value: i64, out: []Parameter) bool {
-        switch (self) {
-            .constant => |v| return v == value,
-            .placeholder => |info| return info.assign(value, out),
-            .negate => |inner| return inner.assign(-value, out),
-            .offset => |info| return info.inner.assign(value + info.offset, out),
-        }
-        return true;
+        return switch (self) {
+            .constant => |v| v == value,
+            .placeholder => |info| info.assign(value, out),
+            .negate => |inner| inner.assign(-value, out),
+            .xor => |info| info.inner.assign(value ^ info.mask, out),
+            .offset => |info| info.inner.assign(value + info.offset, out),
+        };
     }
 
     /// Convert a "logical" value (as would appear in asm) to a "raw" value that can be encoded by a Domain
@@ -45,6 +51,7 @@ pub const Value = union (enum) {
             .constant => |v| v,
             .placeholder => logical,
             .negate => |inner| inner.raw_from_value(-logical),
+            .xor => |info| info.inner.raw_from_value(logical ^ info.mask),
             .offset => |info| info.inner.raw_from_value(logical + info.offset),
         };
     }
@@ -55,6 +62,7 @@ pub const Value = union (enum) {
             .constant => |v| v,
             .placeholder => raw,
             .negate => |inner| -inner.value_from_raw(raw),
+            .xor => |info| info.inner.value_from_raw(raw) ^ info.mask,
             .offset => |info| info.inner.value_from_raw(raw) - info.offset,
         };
     }
@@ -64,6 +72,7 @@ pub const Value = union (enum) {
             .constant => true,
             .placeholder => false,
             .negate => |inner| inner.is_constant(),
+            .xor => |info| info.inner.is_constant(),
             .offset => |info| info.inner.is_constant(),
         };
     }

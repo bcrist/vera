@@ -118,6 +118,7 @@ pub fn main() !void {
 
         @import("instructions/count.zig"),
         @import("instructions/saturate.zig"),
+        @import("instructions/ext.zig"),
         @import("instructions/swap.zig"),
         @import("instructions/cb.zig"),
         @import("instructions/sb.zig"),
@@ -132,6 +133,10 @@ pub fn main() !void {
         @import("instructions/logic/ip_rel.zig"),
         @import("instructions/logic/sp_rel.zig"),
         @import("instructions/logic/bp_rel.zig"),
+
+        @import("instructions/val/reg.zig"),
+        @import("instructions/val/imm.zig"),
+
     });
 
     processor.microcode.assign_slots();

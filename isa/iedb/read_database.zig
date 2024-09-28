@@ -344,6 +344,15 @@ pub const Parser = struct {
             const array = try self.data.inner_values.intern(&.{ inner }, self.data);
             try self.reader.require_close();
             return .{ .negate = &array[0] };
+        } else if (try self.reader.expression("xor")) {
+            const mask = try self.reader.require_any_int(i64, 0);
+            const inner = try self.parse_value_source();
+            const array = try self.data.inner_values.intern(&.{ inner }, self.data);
+            try self.reader.require_close();
+            return .{ .xor = .{
+                .inner = &array[0],
+                .mask = mask,
+            } };
         } else if (try self.reader.expression("offset")) {
             const offset = try self.reader.require_any_int(i64, 0);
             const inner = try self.parse_value_source();

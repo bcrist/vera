@@ -145,6 +145,12 @@ fn write_value_source(v: Value, w: anytype) !void {
             try write_value_source(inner.*, w);
             _ = try w.close();
         },
+        .xor => |info| {
+            try w.expression("xor");
+            try w.int(info.mask, 10);
+            try write_value_source(info.inner.*, w);
+            _ = try w.close();
+        },
         .offset => |info| {
             try w.expression("offset");
             try w.int(info.offset, 10);

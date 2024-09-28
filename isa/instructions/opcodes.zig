@@ -8,8 +8,11 @@ pub const LSB = enum (u8) {
     sub_reg,
     shift_reg,
     shift_imm,
+    bit_op,
 
     ret,
+
+    val,
 
     @"and",
     @"or",
@@ -173,6 +176,8 @@ pub const Sub_Reg = enum (u3) {
     subcv,
     cmp,
     cmpc,
+    // unused
+    // unused
 };
 
 pub const Shift_Reg = enum (u3) {
@@ -182,6 +187,8 @@ pub const Shift_Reg = enum (u3) {
     shrv,
     shrs,
     shrsv,
+    // unused
+    // unused
 };
 
 pub const Shift_Imm = enum (u3) {
@@ -191,15 +198,30 @@ pub const Shift_Imm = enum (u3) {
     shrv,
     shrs,
     shrsv,
+    // unused
+    // unused
 };
 
 pub const Misc_Reg = enum (u3) {
     @"and",
     @"or",
     xor,
+    val_reg,
+    sx,
+    zx,
+    sxv,
+    zxv,
+};
+
+pub const Bit_Op = enum (u3) {
+    val_bit,
+    val_not_bit,
+    val_bit_minus_one,
+    val_neg_bit,
     cb,
     sb,
     tb,
+    // unused,
 };
 
 const Mnemonic_Encoder_Options = struct {

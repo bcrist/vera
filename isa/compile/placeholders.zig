@@ -80,6 +80,18 @@ pub fn Negate(comptime I: type) type {
         pub const op = .negate;
     };
 }
+
+pub fn Invert(comptime I: type, bit_width: ?u6) type {
+    return struct {
+        value: i64,
+
+        pub const placeholder = I.placeholder;
+        pub const Inner = I;
+        pub const op = .invert;
+        pub const bits = bit_width;
+    };
+}
+
 pub fn Offset(comptime offset_amount: i64, comptime I: type) type {
     return struct {
         value: i64,
