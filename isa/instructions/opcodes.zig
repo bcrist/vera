@@ -197,6 +197,9 @@ pub const Misc_Reg = enum (u3) {
     @"and",
     @"or",
     xor,
+    cb,
+    sb,
+    tb,
 };
 
 const Mnemonic_Encoder_Options = struct {

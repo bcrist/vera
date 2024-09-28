@@ -119,6 +119,9 @@ pub fn main() !void {
         @import("instructions/count.zig"),
         @import("instructions/saturate.zig"),
         @import("instructions/swap.zig"),
+        @import("instructions/cb.zig"),
+        @import("instructions/sb.zig"),
+        @import("instructions/tb.zig"),
 
         @import("instructions/shift/reg.zig"),
         @import("instructions/shift/imm.zig"),
