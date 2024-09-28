@@ -836,9 +836,9 @@ pub const Count_Extend_Mode = packed struct (u5) {
     pub const count_trailing_ones: Count_Extend_Mode = .{ .invert_j = false, .invert_k = true, .saturate = .left, .invert_saturated = true, .sign_extend = false };
     pub const count_trailing_zeroes: Count_Extend_Mode = .{ .invert_j = true, .invert_k = false, .saturate = .left, .invert_saturated = true, .sign_extend = false };
 
-    // To sign/zero extend J to N bits, the low N bits of K should be 0, and the N+1th bit of K should be a 1:
-    pub const zero_extend_or_truncate: Count_Extend_Mode = .{ .invert_j = false, .invert_k = false, .saturate = .left, .invert_saturated = true, .sign_extend = false };
-    pub const sign_extend_or_truncate: Count_Extend_Mode = .{ .invert_j = false, .invert_k = false, .saturate = .left, .invert_saturated = true, .sign_extend = true };
+    // To sign/zero extend J to N bits, the low N-1 bits of K should be 0, and the Nth bit of K should be a 1:
+    pub const zero_extend_or_truncate: Count_Extend_Mode = .{ .invert_j = false, .invert_k = false, .saturate = .right, .invert_saturated = false, .sign_extend = false };
+    pub const sign_extend_or_truncate: Count_Extend_Mode = .{ .invert_j = false, .invert_k = false, .saturate = .right, .invert_saturated = false, .sign_extend = true };
 
     // When doing saturation, J should be 0 and K should be the value to saturate:
     pub const saturate_ones_left: Count_Extend_Mode = .{ .invert_j = false, .invert_k = false, .saturate = .left, .invert_saturated = true, .sign_extend = false };
