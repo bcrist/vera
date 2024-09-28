@@ -3,23 +3,36 @@ pub const LSB = enum (u8) {
     misc_12,
     misc_16,
     alu_16,
+    misc_reg,
     add_reg,
     sub_reg,
+    shift_reg,
+    shift_imm,
+
     ret,
+
+    @"and",
+    @"or",
+    xor,
+
     add,
     addc,
     addv,
     addcv,
+
     nadd,
     naddc,
     naddv,
     naddcv,
+
     sub,
     subc,
     subv,
     subcv,
+
     cmp,
     cmpc,
+
     add_i16,
     addc_i16,
     addv_i16,
@@ -30,6 +43,10 @@ pub const LSB = enum (u8) {
     naddcv_i16,
     cmp_i16,
     cmpc_i16,
+    and_i16,
+    or_i16,
+    xor_i16,
+
     inc,
     incv,
     dec,
@@ -38,6 +55,7 @@ pub const LSB = enum (u8) {
     negc,
     negv,
     negcv,
+
     addc_0,
     addcv_0,
     cmp_0,
@@ -54,6 +72,9 @@ pub const Misc_16 = enum (u8) {
     iret,
     fret,
     ifex,
+
+    shlc,
+    shrc,
 
     csb,
     czb,
@@ -92,6 +113,9 @@ pub const ALU_16 = enum (u8) {
     subcv_ip_rel,
     cmp_ip_rel,
     cmpc_ip_rel,
+    and_ip_rel,
+    or_ip_rel,
+    xor_ip_rel,
 
     add_sp_rel,
     addc_sp_rel,
@@ -107,6 +131,9 @@ pub const ALU_16 = enum (u8) {
     subcv_sp_rel,
     cmp_sp_rel,
     cmpc_sp_rel,
+    and_sp_rel,
+    or_sp_rel,
+    xor_sp_rel,
 
     add_bp_rel,
     addc_bp_rel,
@@ -122,6 +149,10 @@ pub const ALU_16 = enum (u8) {
     subcv_bp_rel,
     cmp_bp_rel,
     cmpc_bp_rel,
+    and_bp_rel,
+    or_bp_rel,
+    xor_bp_rel,
+    
 };
 
 pub const Add_Reg = enum (u3) {
@@ -142,6 +173,30 @@ pub const Sub_Reg = enum (u3) {
     subcv,
     cmp,
     cmpc,
+};
+
+pub const Shift_Reg = enum (u3) {
+    shl,
+    shlv,
+    shr,
+    shrv,
+    shrs,
+    shrsv,
+};
+
+pub const Shift_Imm = enum (u3) {
+    shl,
+    shlv,
+    shr,
+    shrv,
+    shrs,
+    shrsv,
+};
+
+pub const Misc_Reg = enum (u3) {
+    @"and",
+    @"or",
+    xor,
 };
 
 const Mnemonic_Encoder_Options = struct {

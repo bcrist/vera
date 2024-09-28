@@ -84,7 +84,7 @@ pub fn main() !void {
         faults.Handler(.invalid_instruction_fault),
         faults.Handler(.double_fault),
         @import("handlers/interrupt.zig"),
-        @import("handlers/invalid_instruction.zig"),
+        @import("instructions/invalid_instruction.zig"),
 
         @import("instructions/nop.zig"),
         @import("instructions/park.zig"),
@@ -119,6 +119,16 @@ pub fn main() !void {
         @import("instructions/count.zig"),
         @import("instructions/saturate.zig"),
         @import("instructions/swap.zig"),
+
+        @import("instructions/shift/reg.zig"),
+        @import("instructions/shift/imm.zig"),
+        @import("instructions/shift/carry.zig"),
+
+        @import("instructions/logic/reg.zig"),
+        @import("instructions/logic/imm.zig"),
+        @import("instructions/logic/ip_rel.zig"),
+        @import("instructions/logic/sp_rel.zig"),
+        @import("instructions/logic/bp_rel.zig"),
     });
 
     processor.microcode.assign_slots();

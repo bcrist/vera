@@ -378,7 +378,7 @@ fn compute_shift(mode: arch.Shift_Mode, j: arch.J, k: arch.K, stat_c: bool) Comp
         return .{
             .value = arch.L.init(0),
             .cout = if (raw_k == 32) 0 != (j.raw() & 0x8000_0000) else 0 != cin,
-            .vout = true,
+            .vout = if (raw_k == 32) j.raw() != 0 else j.raw() != 0 or cin,
         };
     } else {
         var raw_j = j.raw();
@@ -407,6 +407,7 @@ fn compute_shift(mode: arch.Shift_Mode, j: arch.J, k: arch.K, stat_c: bool) Comp
         value = value >> k5;
 
         const cout: u1 = if (k5 > 0) @truncate(value >> (k5 - 1)) else @intFromBool(stat_c);
+        const shifted_out: u32 = @truncate(value << (32 - k5));
 
         var result: u32 = @truncate(value);
         if (mode.left != (mode.cin == .zero_bitreverse)) {
@@ -416,7 +417,7 @@ fn compute_shift(mode: arch.Shift_Mode, j: arch.J, k: arch.K, stat_c: bool) Comp
         return .{
             .value = arch.L.init(@truncate(value)),
             .cout = cout != 0,
-            .vout = false,
+            .vout = shifted_out != 0,
         };
     }
 }
