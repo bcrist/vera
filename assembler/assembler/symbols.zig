@@ -295,11 +295,12 @@ fn undef_list_contains_symbol(a: *Assembler, s: Source_File.Slices, expr_handle:
     }
 }
 
-const lex = @import("lex.zig");
 const typechecking = @import("typechecking.zig");
 const Assembler = @import("Assembler.zig");
 const Source_File = @import("Source_File.zig");
 const Instruction = @import("Instruction.zig");
 const Expression = @import("Expression.zig");
 const Constant = @import("Constant.zig");
+const lex = isa.lex;
+const isa = @import("isa");
 const std = @import("std");

@@ -1041,8 +1041,6 @@ pub fn check_symbol_ambiguity_in_file(a: *Assembler, s: Source_File.Slices) void
     };
 }
 
-const Token = lex.Token;
-const lex = @import("lex.zig");
 const symbols = @import("symbols.zig");
 const layout = @import("layout.zig");
 const Assembler = @import("Assembler.zig");
@@ -1053,6 +1051,8 @@ const Expression = @import("Expression.zig");
 const Constant = @import("Constant.zig");
 const Section = @import("Section.zig");
 const Error = @import("Error.zig");
+const Token = lex.Token;
+const lex = isa.lex;
 const Address_Space = isa.Address_Space;
 const isa = @import("isa");
 const Register_Index = arch.Register_Index;

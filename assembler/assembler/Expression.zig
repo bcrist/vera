@@ -371,12 +371,12 @@ pub const Type_Builder = struct {
 };
 
 const Expression = @This();
-const lex = @import("lex.zig");
 const Constant = @import("Constant.zig");
 const Instruction = @import("Instruction.zig");
 const Special_Register = isa.Special_Register;
 const Address_Space = isa.Address_Space;
 const Parameter = isa.Parameter;
+const lex = isa.lex;
 const isa = @import("isa");
 const Register_Index = arch.Register_Index;
 const arch = @import("arch");

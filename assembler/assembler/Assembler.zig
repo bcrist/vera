@@ -372,7 +372,6 @@ fn build_instruction_parameter(
 
 const Assembler = @This();
 
-const lex = @import("lex.zig");
 const typechecking = @import("typechecking.zig");
 const dead_code = @import("dead_code.zig");
 const layout = @import("layout.zig");
@@ -387,6 +386,7 @@ const Page_Data = @import("Page_Data.zig");
 const Mnemonic = isa.Mnemonic;
 const Mnemonic_Suffix = isa.Mnemonic_Suffix;
 const iedb = @import("iedb");
+const lex = isa.lex;
 const isa = @import("isa");
 const arch = @import("arch");
 const std = @import("std");

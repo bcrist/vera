@@ -367,7 +367,6 @@ fn backtrack_org_headers(operations: []const Instruction.Operation, handle: Inst
 }
 
 const Source_File = @This();
-const lex = @import("lex.zig");
 const symbols = @import("symbols.zig");
 const Assembler = @import("Assembler.zig");
 const Instruction = @import("Instruction.zig");
@@ -375,6 +374,7 @@ const Expression = @import("Expression.zig");
 const Section = @import("Section.zig");
 const Error = @import("Error.zig");
 const Parser = @import("Parser.zig");
+const lex = isa.lex;
 const Mnemonic = isa.Mnemonic;
 const isa = @import("isa");
 const arch = @import("arch");

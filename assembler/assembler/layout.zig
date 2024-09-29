@@ -1227,7 +1227,6 @@ fn encode_data_expression(expr_constant: *const Constant, granularity_bytes: u8,
     return skip_bytes + buf.len;
 }
 
-const lex = @import("lex.zig");
 const symbols = @import("symbols.zig");
 const Assembler = @import("Assembler.zig");
 const Source_File = @import("Source_File.zig");
@@ -1238,6 +1237,7 @@ const Expression = @import("Expression.zig");
 const Page_Data = @import("Page_Data.zig");
 const Error = @import("Error.zig");
 const Encoded_Instruction = isa.Encoded_Instruction;
+const lex = isa.lex;
 const isa = @import("isa");
 const arch = @import("arch");
 const bits = @import("bits");

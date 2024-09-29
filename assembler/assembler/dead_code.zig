@@ -116,11 +116,12 @@ fn trace_symbol(a: *Assembler, s: Source_File.Slices, token_handle: lex.Token.Ha
 }
 
 const Block = Source_File.Block;
-const lex = @import("lex.zig");
 const symbols = @import("symbols.zig");
 const Assembler = @import("Assembler.zig");
 const Source_File = @import("Source_File.zig");
 const Instruction = @import("Instruction.zig");
 const Expression = @import("Expression.zig");
 const Constant = @import("Constant.zig");
+const lex = isa.lex;
+const isa = @import("isa");
 const std = @import("std");

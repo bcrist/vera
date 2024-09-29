@@ -136,8 +136,8 @@ pub fn token_range(insn_handle: Handle, insn_tokens: []const lex.Token.Handle, t
     };
 }
 
-const lex = @import("lex.zig");
 const Expression = @import("Expression.zig");
 const Constant = @import("Constant.zig");
+const lex = isa.lex;
 const isa = @import("isa");
 const std = @import("std");

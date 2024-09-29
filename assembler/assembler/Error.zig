@@ -117,7 +117,7 @@ fn get_expression_context(expr: Expression.Handle, range: ?lex.Token.Range, toke
 
 const Error = @This();
 const Token = lex.Token;
-const lex = @import("lex.zig");
+const lex = isa.lex;
 const Assembler = @import("Assembler.zig");
 const Source_File = @import("Source_File.zig");
 const Instruction = @import("Instruction.zig");
