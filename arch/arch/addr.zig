@@ -208,8 +208,9 @@ pub const Page = packed struct (u20) {
 };
 
 pub const Frame = enum (u14) {
-    block_transfer_control_frame = 0x3001, // 11 0000 0000 0001
-    _,                                     // 1100 000 000
+    zero = 0,
+    block_transfer_control_frame = 0x3001,
+    _,
 
     pub inline fn init(raw_value: Raw) Frame {
         return @enumFromInt(raw_value);

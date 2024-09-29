@@ -172,6 +172,10 @@ pub const Write_Index = enum (Register_Index) {
         return @intFromEnum(self);
     }
 
+    pub inline fn raw_signed(self: Write_Index) std.meta.Int(.signed, @bitSizeOf(Raw)) {
+        return @bitCast(self.raw());
+    }
+
     pub const format = fmt.format_enum;
 
     pub const Raw = std.meta.Tag(Write_Index);
@@ -870,7 +874,7 @@ pub const Status = packed struct (u32) {
 
     pub const format = fmt.format_raw_hex;
 
-    pub const Raw = u16;
+    pub const Raw = u32;
 
     pub const Op = enum (u3) {
         hold = 0,

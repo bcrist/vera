@@ -67,20 +67,19 @@ pub fn deinit(self: *Assembler, deinit_arena: bool) void {
     if (deinit_arena) {
         var constant_iter = self.constants.keyIterator();
         while (constant_iter.next()) |constant| {
-            constant.deinit(self.arena);
             self.arena.destroy(constant);
         }
 
-        for (self.pages.items(.data)) |buf| {
+        for (self.pages.items(.data)) |*buf| {
             self.arena.free(buf);
         }
     }
 
-    for (self.files.items) |file| {
+    for (self.files.items) |*file| {
         file.deinit(self.gpa, maybe_arena);
     }
 
-    for (self.pages.items(.chunks)) |chunks| {
+    for (self.pages.items(.chunks)) |*chunks| {
         chunks.deinit(self.gpa);
     }
 
@@ -93,7 +92,7 @@ pub fn deinit(self: *Assembler, deinit_arena: bool) void {
     self.files.deinit(self.gpa);
     self.errors.deinit(self.gpa);
     self.overlapping_chunks.deinit(self.gpa);
-    self.symbols.deinit(self.gpa);
+    self.public_labels.deinit(self.gpa);
     self.sections.deinit(self.gpa);
     self.chunks.deinit(self.gpa);
     self.pages.deinit(self.gpa);
@@ -104,8 +103,8 @@ pub fn deinit(self: *Assembler, deinit_arena: bool) void {
 }
 
 pub fn add_source(self: *Assembler, name: []const u8, source: []const u8) Source_File.Handle {
-    const owned_name = self.arena.dupe(name) catch @panic("OOM");
-    const owned_source = self.arena.dupe(source) catch @panic("OOM");
+    const owned_name = self.arena.dupe(u8, name) catch @panic("OOM");
+    const owned_source = self.arena.dupe(u8, source) catch @panic("OOM");
     return self.adopt_source(owned_name, owned_source);
 }
 

@@ -102,19 +102,19 @@ const Compute_Result = struct {
 pub fn simulate_decode(self: *Pipeline_State,
     insn_decode_rom: *const arch.insn_decode.Rom,
     microcode_rom: *const arch.microcode.Rom,
-    pending_interrupts: [arch.Pipeline.count]bool,
+    pending_interrupt: bool,
     reset: bool,
 ) void {
     std.debug.assert(self.next_stage == .decode);
 
-    const base_ri = self.ti.raw();
+    const base_ri = self.ti.raw_signed();
     const flags = self.flags;
     const id_result = insn_decode_rom[self.ir.raw()];
     const seq_result = simulate_sequencer(
         self.cs.seqop,
         self.cs.allowint,
         self.emode,
-        pending_interrupts[self.pipe.raw()],
+        pending_interrupt,
         reset,
         flags.contains(.page_fault),
         flags.contains(.access_fault),
@@ -147,10 +147,10 @@ pub fn simulate_decode(self: *Pipeline_State,
         },
     };
 
-    self.jri = arch.J.Read_Index.init(base_ri);
-    self.kri = arch.K.Read_Index.init(base_ri -% id_result.krio.raw());
+    self.jri = arch.J.Read_Index.init(@bitCast(base_ri));
+    self.kri = arch.K.Read_Index.init(@bitCast(base_ri -% id_result.krio.raw()));
     self.krio = id_result.krio;
-    self.wi = arch.Write_Index.init(base_ri +% id_result.wio.raw());
+    self.wi = arch.Write_Index.init(@bitCast(base_ri +% id_result.wio.raw()));
     self.pucs = prev_uca_slot;
     self.uca = next_uca;
     self.cs = microcode_rom[next_uca.raw()];
@@ -212,7 +212,7 @@ fn simulate_sequencer(
         .slot_src = .continuation,
         .emode = if (emode.is_interrupt()) .interrupt_fault else .fault,
     } else if (emode == .normal and interrupt_pending and allow_int) .{
-        .slot_literal = .interrupt,
+        .slot_literal = slot_literal(.interrupt),
         .slot_src = .seq_literal,
         .emode = .interrupt,
     } else switch (op) {
@@ -259,32 +259,32 @@ pub fn simulate_setup(self: *Pipeline_State, registers: *const arch.Register_Fil
     const vab = if (vari.to_sr1()) |sr1ri|
         registers[rsn].sr1[sr1ri.raw()]
     else if (vari.to_sr2()) |sr2ri|
-        registers[rsn].rs2[sr2ri.raw()]
+        registers[rsn].sr2[sr2ri.raw()]
     else unreachable;
 
     const va_offset: u32 = switch (vao) {
         .i16_from_dr => @bitCast(self.dr.byte21_i32()),
         .i8_from_dr => @bitCast(self.dr.byte2_i32()),
         .i8_x4_from_dr => @bitCast(self.dr.byte2_i32() * 4),
-        else => vao.raw(),
+        else => @bitCast(@as(i32, vao.raw())),
     };
 
     self.j = arch.J.init(switch (self.cs.jsrc) {
         .zero => 0,
-        .jr => registers[rsn].reg[self.jri],
+        .jr => registers[rsn].reg[self.jri.raw()].raw(),
         .sr1 => sr1d.raw(),
         .sr2 => sr2d.raw(),
     });
 
     self.k = arch.K.init(switch (self.cs.ksrc) {
         .zero => 0,
-        .vao => vao,
-        .krio => self.krio.raw(),
-        .kr => registers[rsn].reg[self.kri],
+        .vao => @bitCast(@as(i32, vao.raw())),
+        .krio => @bitCast(@as(i32, self.krio.raw())),
+        .kr => registers[rsn].reg[self.kri.raw()].raw(),
         .sr1 => sr1d.raw(),
         .sr2 => sr2d.raw(),
-        .krio_bit => @as(u32, 1) << self.krio.raw(),
-        .krio_bit_inv => ~(@as(u32, 1) << self.krio.raw()),
+        .krio_bit => @as(u32, 1) << @bitCast(self.krio.raw()),
+        .krio_bit_inv => ~(@as(u32, 1) << @bitCast(self.krio.raw())),
         .dr_byte_1_sx => @bitCast(self.dr.byte1_i32()),
         .dr_byte_2_sx => @bitCast(self.dr.byte2_i32()),
         .dr_byte_21_sx => @bitCast(self.dr.byte21_i32()),
@@ -312,6 +312,7 @@ pub fn simulate_compute(self: *Pipeline_State, translations: *const at.Translati
     };
 
     switch (self.cs.special) {
+        .none, .set_guard, .check_guard, .load_rsn_from_l, .toggle_rsn => {},
         .fault_on_overflow => if (self.compute_result.vout) self.flags.insert(.overflow_fault),
         .trigger_fault => self.flags.insert(.insn_fault),
         .block_transfer => self.flags.insert(.block_transfer),
@@ -346,7 +347,7 @@ fn compute_alu(mode: arch.ALU_Mode, j: arch.J, k: arch.K, stat_c: bool) Compute_
         .not_j_plus_k, .j_plus_not_k, .j_plus_k => value: {
             const raw_j = if (mode.op == .not_j_plus_k) ~j.raw() else j.raw();
             const raw_k = if (mode.op == .j_plus_not_k) ~k.raw() else k.raw();
-            const full: u33 = @as(u33, cin) +% @as(u33, raw_j) +% raw_k;
+            const full: u33 = @as(u33, raw_j) +% raw_k +% @intFromBool(cin);
             cout = 0 != (full & 0x1_0000_0000);
             vout = 0 != ((raw_j ^ full) & (raw_k ^ full) & 0x8000_0000);
             break :value @truncate(full);
@@ -378,7 +379,7 @@ fn compute_shift(mode: arch.Shift_Mode, j: arch.J, k: arch.K, stat_c: bool) Comp
         return .{
             .value = arch.L.init(0),
             .cout = if (raw_k == 32) 0 != (j.raw() & 0x8000_0000) else 0 != cin,
-            .vout = if (raw_k == 32) j.raw() != 0 else j.raw() != 0 or cin,
+            .vout = if (raw_k == 32) j.raw() != 0 else j.raw() != 0 or 0 != cin,
         };
     } else {
         var raw_j = j.raw();
@@ -407,7 +408,7 @@ fn compute_shift(mode: arch.Shift_Mode, j: arch.J, k: arch.K, stat_c: bool) Comp
         value = value >> k5;
 
         const cout: u1 = if (k5 > 0) @truncate(value >> (k5 - 1)) else @intFromBool(stat_c);
-        const shifted_out: u32 = @truncate(value << (32 - k5));
+        const shifted_out: u32 = @truncate(value << (@as(u6, 32) - k5));
 
         var result: u32 = @truncate(value);
         if (mode.left != (mode.cin == .zero_bitreverse)) {
@@ -445,7 +446,7 @@ fn compute_mult(mode: arch.Multiply_Mode, j: arch.J, k: arch.K) Compute_Result {
     };
 
     const product = js * ks;
-    const result: u32 = @bitCast(product);
+    var result: u32 = @bitCast(product);
 
     if (mode.shift_result) {
         result = result << 16;
@@ -563,26 +564,26 @@ fn compute_address_translation(self: *Pipeline_State, translations: *const at.Tr
                 std.debug.assert(!any_match);
                 self.flags.insert(.page_fault);
             }
-            self.frame = arch.addr.Frame.init(va.page.raw());
+            self.frame = arch.addr.Frame.init(@truncate(va.page.raw()));
         }
     } else {
         // address translation disabled
-        self.frame = arch.addr.Frame.init(va.page.raw());
+        self.frame = arch.addr.Frame.init(@truncate(va.page.raw()));
         self.flags.insert(.add_at_k); // translation can only be disabled in kernel mode
     }
 
     switch (width) {
         .@"8b" => {},
-        .@"16b" => if (va.offset == arch.addr.Offset.max) self.flags.insert(.page_align_fault),
-        .@"24b" => if (va.offset >= arch.addr.Offset.max - 1) self.flags.insert(.page_align_fault),
-        .@"32b" => if (va.offset >= arch.addr.Offset.max - 2) self.flags.insert(.page_align_fault),
+        .@"16b" => if (va.offset.raw() == arch.addr.Offset.max.raw()) self.flags.insert(.page_align_fault),
+        .@"24b" => if (va.offset.raw() >= arch.addr.Offset.max.raw() - 1) self.flags.insert(.page_align_fault),
+        .@"32b" => if (va.offset.raw() >= arch.addr.Offset.max.raw() - 2) self.flags.insert(.page_align_fault),
     }
 
     const n1: u1 = @truncate(va.offset.raw() >> 1);
-    self.aa = arch.addr.Word_Offset.init((va.offset.raw() >> 2) +% n1);
-    self.ab = arch.addr.Word_Offset.init(va.offset.raw() >> 2);
+    self.aa = arch.addr.Word_Offset.init(@truncate((va.offset.raw() >> 2) +% n1));
+    self.ab = arch.addr.Word_Offset.init(@intCast(va.offset.raw() >> 2));
 
-    const addr_alignment: u2 = @truncate(va.offest);
+    const addr_alignment: u2 = @truncate(va.offset.raw());
     switch (addr_alignment) {
         0 => switch (width) {
             .@"8b" => {
@@ -704,7 +705,7 @@ pub fn simulate_transact(self: *Pipeline_State,
             .a = self.flags.contains(.stat_a),
             .pipeline = self.pipe,
             .rsn = self.rsn,
-            .top = self.jri,
+            .top = arch.Write_Index.init(self.jri.raw()),
             .pucs = self.pucs,
         }).raw()),
         .d => self.read_d(arch.L),
@@ -730,13 +731,14 @@ pub fn simulate_transact(self: *Pipeline_State,
         self.ir = arch.IR.init(@truncate(self.dr.raw()));
     }
 
-    const set_guard = false;
+    var set_guard = false;
     var rsn = self.rsn;
     switch (self.cs.special) {
+        .none, .fault_on_overflow, .block_transfer, .trigger_fault => {},
         .set_guard => set_guard = !any_fault,
         .check_guard => {
             const guard = arch.Guarded_Memory_Register.from_frame_and_offset(self.frame, self.va.offset);
-            if (guards[self.pipe.raw()] != guard) {
+            if (guards[self.pipe.raw()].raw() != guard.raw()) {
                 self.flags.insert(.guard_mismatch);
             }
         },
@@ -754,7 +756,7 @@ pub fn simulate_transact(self: *Pipeline_State,
         const guard = arch.Guarded_Memory_Register.from_frame_and_offset(self.frame, self.va.offset);
         const cur_pipe = self.pipe.raw();
         for (0.., guards) |p, *gr| {
-            if (p != cur_pipe and gr.* == guard) gr.* = arch.Guarded_Memory_Register.invalid;
+            if (p != cur_pipe and gr.raw() == guard.raw()) gr.* = arch.Guarded_Memory_Register.invalid;
         }
     }
 
@@ -765,7 +767,7 @@ pub fn simulate_transact(self: *Pipeline_State,
 
     if (!any_fault) {
         if (self.cs.seqop == .fault_return and self.emode.is_fault()) {
-            self.uca.slot = @intCast(l.raw() >> 20);
+            self.uca.slot = arch.microcode.Slot.init(@intCast(l.raw() >> 20));
         }
 
         if (self.cs.gprw) registers[rsn.raw()].reg[self.wi.raw()] = arch.Reg.init(l.raw());
@@ -792,7 +794,7 @@ pub fn simulate_transact(self: *Pipeline_State,
             registers[rsn.raw()].sr2[wi.raw()] = value;
 
             if (wi == .asn) {
-                self.asn4 = at.Entry.ASN4.init(@truncate(value));
+                self.asn4 = at.Entry.ASN4.init(@truncate(value.raw()));
             }
         }
 
@@ -843,7 +845,7 @@ pub fn simulate_transact(self: *Pipeline_State,
             },
         }
 
-        if (self.cs.statop != .load_zncva_ti and self.tiw) {
+        if (self.cs.statop != .load_zncva_ti and self.cs.tiw) {
             self.ti = self.wi;
         }
     }
@@ -919,7 +921,7 @@ fn write_d(self: *Pipeline_State, d: anytype) void {
     const n0: u1 = @truncate(self.va.offset.raw());
     const n1: u1 = @truncate(self.va.offset.raw() >> 1);
 
-    const raw_d: arch.D.Raw = d.raw();
+    var raw_d: arch.D.Raw = d.raw();
     if (n0 == 1) {
         raw_d <<= 8;
     }
@@ -934,8 +936,24 @@ fn write_d(self: *Pipeline_State, d: anytype) void {
     });
 }
 
+pub fn get_bus_control(self: *Pipeline_State) Bus_Control {
+    return .{
+        .frame = self.frame,
+        .aa = self.aa,
+        .ab = self.ab,
+        .lba = self.flags.contains(.lba),
+        .uba = self.flags.contains(.uba),
+        .lbb = self.flags.contains(.lbb),
+        .ubb = self.flags.contains(.ubb),
+        .guard_mismatch = self.flags.contains(.guard_mismatch),
+        .block_transfer = self.flags.contains(.block_transfer),
+        .update_frame_state = self.flags.contains(.update_frame_state),
+    };
+}
+
 const Pipeline_State = @This();
 
+const Bus_Control = @import("Bus_Control.zig");
 const at = arch.addr.translation;
 const arch = @import("arch");
 const bits = @import("bits");

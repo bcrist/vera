@@ -1,3 +1,70 @@
+pub fn copy_memory(a: *const Assembler, maybe_section_handle: ?Section.Handle, allocator: std.mem.Allocator) ![]u8 {
+    const page_data = a.pages.items(.data);
+
+    // var temp = std.ArrayListUnmanaged(u8){};
+    // defer temp.deinit(a.gpa);
+
+    var max_addr: u32 = 0;
+
+    for (a.chunks.items) |chunk_and_address| {
+        const chunk = chunk_and_address.chunk;
+        if (maybe_section_handle) |_| {
+            if (!std.meta.eql(maybe_section_handle, chunk.section)) continue;
+        }
+
+        const address_range = chunk.address_range(a);
+        if (address_range.len == 0) {
+            continue;
+        }
+
+        max_addr = @max(max_addr, address_range.last());
+    }
+
+    const memory = try allocator.alloc(u8, max_addr + 1);
+    @memset(memory, 0);
+
+    for (a.chunks.items) |chunk_and_address| {
+        const chunk = chunk_and_address.chunk;
+        if (maybe_section_handle) |_| {
+            if (!std.meta.eql(maybe_section_handle, chunk.section)) continue;
+        }
+
+        const address_range = chunk.address_range(a);
+        if (address_range.len == 0) {
+            continue;
+        }
+
+        var address: usize = address_range.first;
+        const last_address = address_range.last();
+        while (address < last_address) {
+            const page = arch.addr.Page.init(@truncate(address >> @bitSizeOf(arch.addr.Offset)));
+            const page_end = (@as(u64, page.raw()) + 1) << @bitSizeOf(arch.addr.Offset);
+            const end: u32 = @intCast(@min(page_end, last_address + 1));
+
+            if (a.page_lookup.get(page)) |page_data_handle| {
+                const begin_offset = arch.addr.Offset.init(@truncate(address));
+                const end_offset = arch.addr.Offset.init(@truncate(end));
+
+                var data: []const u8 = &page_data[page_data_handle];
+                if (end_offset.raw() == 0) {
+                    data = data[begin_offset.raw()..];
+                } else {
+                    data = data[begin_offset.raw()..end_offset.raw()];
+                }
+
+                const offset_address_i32: i32 = @truncate(@as(i64, @intCast(address)));
+                const offset_address: u32 = @bitCast(offset_address_i32);
+
+                @memcpy(memory[offset_address..].ptr, data);
+            }
+
+            address = end;
+        }
+    }
+
+    return memory;
+}
+
 pub const Hex_Options = struct {
     format: enum {
         motorola,

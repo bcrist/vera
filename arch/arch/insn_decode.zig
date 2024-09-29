@@ -54,7 +54,7 @@ pub fn write_compressed_rom(result_allocator: std.mem.Allocator, temp_allocator:
     return try rom_compress.compress(Rom_Entry, result_allocator, temp_allocator, entries.items);
 }
 
-pub fn read_compressed_rom(comptime n: u8, compressed_data: []const u8, results: *Rom) void {
+pub fn read_compressed_rom(compressed_data: []const u8, results: *Rom) void {
     const Decompress_Context = struct {
         results: *Rom,
         d: Result = undefined,
@@ -67,8 +67,7 @@ pub fn read_compressed_rom(comptime n: u8, compressed_data: []const u8, results:
 
         pub fn address(self: *Self, a: u32) void {
             const addr = Address.from_byte_swapped(@intCast(a)).raw();
-            const buf = std.mem.asBytes(&self.results[addr]);
-            buf[n] = self.d;
+            self.results[addr] = self.d;
         }
     };
     var ctx: Decompress_Context = .{ .results = results };

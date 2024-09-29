@@ -1,4 +1,3 @@
-temp: std.mem.Allocator,
 gpa: std.mem.Allocator,
 handle: Source_File.Handle,
 out: *Source_File,
@@ -9,14 +8,12 @@ token_kinds: []Token_Kind,
 token_offsets: []u32,
 
 pub fn init(
-    temp: std.mem.Allocator,
     gpa: std.mem.Allocator,
     handle: Source_File.Handle,
     out: *Source_File,
     errors: *std.ArrayListUnmanaged(Error),
 ) Parser {
     return .{
-        .temp = temp,
         .gpa = gpa,
         .handle = handle,
         .out = out,
@@ -133,7 +130,7 @@ fn add_instruction(self: *Parser, label: ?Expression.Handle, token: Token.Handle
 fn parse_expr_list(self: *Parser, swap_params: bool) ?Expression.Handle {
     const begin = self.next_token;
     self.skip_linespace();
-    if (!self.try_token(.arrow)) {
+    if (self.try_token(.arrow)) {
         const token = self.next_token - 1;
         const lhs = self.add_typed_terminal_expression(.arrow, token, .arrow);
         if (self.parse_expr_list(false)) |rhs| {

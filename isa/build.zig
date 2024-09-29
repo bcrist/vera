@@ -50,7 +50,7 @@ pub fn build(b: *std.Build) void {
     compile.addArg("--db");
     const iedb_sx = compile.addOutputFileArg("iedb.sx");
     compile.addArg("--rom-format");
-    compile.addArg("compressed_dump");
+    compile.addArg("compressed");
     compile.addArg("--setup-uc");
     const setup_uc = compile.addOutputFileArg("setup_uc.crom");
     compile.addArg("--compute-uc");

@@ -10,6 +10,17 @@ pub fn build(b: *std.Build) void {
     microsim.addImport("isa", isa.module("isa"));
     microsim.addImport("bits", bits);
 
+    const sim_data = b.addModule("Simulator_Data", .{
+        .root_source_file = b.path("Simulator_Data.zig"),
+    });
+    sim_data.addImport("arch", arch);
+    sim_data.addImport("iedb", isa.module("iedb"));
+    sim_data.addImport("iedb.sx", isa.module("iedb.sx"));
+    sim_data.addImport("insn_decode.crom", isa.module("insn_decode.crom"));
+    sim_data.addImport("setup_uc.crom", isa.module("setup_uc.crom"));
+    sim_data.addImport("compute_uc.crom", isa.module("compute_uc.crom"));
+    sim_data.addImport("transact_uc.crom", isa.module("transact_uc.crom"));
+
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 

@@ -28,10 +28,7 @@ pub fn parse(gpa: std.mem.Allocator, handle: Handle, name: []const u8, source: [
         .stacks = .{},
     };
 
-    var temp = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer temp.deinit();
-
-    var p = Parser.init(temp.allocator(), gpa, handle, &file, errors);
+    var p = Parser.init(gpa, handle, &file, errors);
     while (p.parse_instruction()) {}
 
     const operations = file.instructions.items(.operation);
@@ -56,7 +53,7 @@ pub fn parse(gpa: std.mem.Allocator, handle: Handle, name: []const u8, source: [
     return file;
 }
 
-pub fn deinit(self: Source_File, gpa: std.mem.Allocator, maybe_arena: ?std.mem.Allocator) void {
+pub fn deinit(self: *Source_File, gpa: std.mem.Allocator, maybe_arena: ?std.mem.Allocator) void {
     for (self.blocks.items(.labels)) |*map| {
         map.deinit(gpa);
     }

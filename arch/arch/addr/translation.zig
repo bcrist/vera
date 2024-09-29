@@ -94,7 +94,7 @@ pub const Entry = packed struct (u32) {
         pub fn from_space_and_dir(space: addr.Space, dir: arch.D.Direction) Group {
             return switch (space) {
                 .raw, .data => switch (dir) {
-                    .write_from_l, .write_from_ir => .data_write,
+                    .write_from_l, .write_from_dr_ir => .data_write,
                     .none, .read => .data_read,
                 },
                 .stack => .stack,

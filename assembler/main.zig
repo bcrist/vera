@@ -16,7 +16,7 @@ pub fn main() !void {
         .temp = gpa.allocator(),
     };
 
-    const edb = try iedb.read_database.parse_encoding_db(&pd, "");
+    const edb = try iedb.read_database.parse_encoding_db(&pd, @embedFile("iedb.sx"));
 
     var a = Assembler.init(gpa.allocator(), arena.allocator(), edb);
 

@@ -8,7 +8,7 @@ frame_end: arch.addr.Frame,
 data: []u8,
 
 pub fn init(allocator: std.mem.Allocator, first_frame: arch.addr.Frame, num_frames: usize) !Simple_Memory {
-    const data = try allocator.alloc(u8, arch.addr.Frame.num_addresses_per_frame * num_frames);
+    const data = try allocator.alloc(u8, arch.addr.Frame.num_bytes_per_frame * num_frames);
     return .{
         .allocator = allocator,
         .frame_begin = first_frame,
@@ -29,7 +29,7 @@ pub fn read(self: *const Simple_Memory, ctrl: Bus_Control) ?Bus_Data {
     if (ctrl.frame.raw() < self.frame_begin.raw()) return null;
     if (ctrl.frame.raw() >= self.frame_end.raw()) return null;
 
-    const base: usize = (ctrl.frame.raw() - self.frame_begin.raw()) * arch.addr.Frame.num_addresses_per_frame;
+    const base: usize = (ctrl.frame.raw() - self.frame_begin.raw()) * arch.addr.Frame.num_bytes_per_frame;
     const base_a = base + ctrl.aa.raw() * 4;
     const base_b = base + ctrl.ab.raw() * 4;
 
@@ -51,7 +51,7 @@ pub fn write(self: *Simple_Memory, ctrl: Bus_Control, data: Bus_Data) void {
     if (ctrl.guard_mismatch) return;
     if (ctrl.block_transfer) return;
 
-    const base: usize = (ctrl.frame.raw() - self.frame_begin.raw()) * arch.addr.Frame.num_addresses_per_frame;
+    const base: usize = (ctrl.frame.raw() - self.frame_begin.raw()) * arch.addr.Frame.num_bytes_per_frame;
     const base_a = base + ctrl.aa.raw() * 4;
     const base_b = base + ctrl.ab.raw() * 4;
 
