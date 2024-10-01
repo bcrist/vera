@@ -52,6 +52,13 @@ pub fn device(self: *Memory) Device {
 }
 
 pub fn read(self: *Memory, ctrl: Bus_Control) ?Bus_Data {
+    if (ctrl.frame == .block_transfer_control_frame) {
+        return .{
+            .da = arch.DA.init(@truncate(self.block_ptr)),
+            .db = arch.DB.init(@intCast(self.block_ptr >> 16)),
+        };
+    }
+
     if (!ctrl.frame.raw() >= ram_end_frame) return null;
 
     var da: arch.DA = .{ .lo = 0, .hi = 0 };
@@ -95,12 +102,12 @@ pub fn write(self: *Memory, ctrl: Bus_Control, data: Bus_Data) void {
     if (ctrl.guard_mismatch) return;
     
     if (ctrl.frame == .block_transfer_control_frame) {
-        // address offset | mode
-        // ===============|=========================
-        //              2 | FLASH (no auto advance)
-        //              3 | FLASH (auto advance)
-        //              4 | PSRAM (no auto advance)
-        //              5 | PSRAM (auto advance)
+        // address offset | AB | mode
+        // ===============|====|=========================
+        //              8 |  2 | FLASH (no auto advance)
+        //             12 |  3 | FLASH (auto advance)
+        //             16 |  4 | PSRAM (no auto advance)
+        //             20 |  5 | PSRAM (auto advance)
 
         self.block_ptr = @truncate(bits.concat(.{ data.da.raw(), data.db.raw() }));
         self.block_advance = 0 != (ctrl.ab.raw() & 1);

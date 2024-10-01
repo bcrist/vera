@@ -17,6 +17,8 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("lex.zig"),
         });
         tests.root_module.addImport("isa", isa.module("isa"));
+
+        b.installArtifact(tests);
         const run = b.addRunArtifact(tests);
         all_tests.dependOn(&run.step);
     }
@@ -28,6 +30,8 @@ pub fn build(b: *std.Build) void {
         tests.root_module.addImport("isa", isa.module("isa"));
         tests.root_module.addImport("arch", arch);
         tests.root_module.addImport("assembler", assembler);
+
+        b.installArtifact(tests);
         const run = b.addRunArtifact(tests);
         all_tests.dependOn(&run.step);
     }
@@ -41,6 +45,8 @@ pub fn build(b: *std.Build) void {
         tests.root_module.addImport("iedb.sx", isa.module("iedb.sx"));
         tests.root_module.addImport("arch", arch);
         tests.root_module.addImport("assembler", assembler);
+
+        b.installArtifact(tests);
         const run = b.addRunArtifact(tests);
         all_tests.dependOn(&run.step);
     }
@@ -56,6 +62,8 @@ pub fn build(b: *std.Build) void {
         tests.root_module.addImport("assembler", assembler);
         tests.root_module.addImport("microsim", microsim.module("microsim"));
         tests.root_module.addImport("Simulator_Data", microsim.module("Simulator_Data"));
+        
+        b.installArtifact(tests);
         const run = b.addRunArtifact(tests);
         all_tests.dependOn(&run.step);
     }

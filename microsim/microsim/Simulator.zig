@@ -35,22 +35,22 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
 
         const Self = @This();
 
-        pub fn init(allocator: std.mem.Allocator, insn_decode_rom: *const arch.insn_decode.Rom, microcode_rom: *const arch.microcode.Rom, devices: []const Device) !Self {
+        pub fn init(allocator: std.mem.Allocator, insn_decode_rom: *const arch.insn_decode.Rom, microcode_rom: *const arch.microcode.Rom, devices: []const Device, debug_log: ?*Debug_Log) !Self {
             const state = try allocator.create(State);
             errdefer allocator.destroy(state);
             state.* = .{
                 .reset = true,
                 .interrupts_pending = .{ false } ** num_pipelines,
                 .pipelines = switch (pipeline) {
-                    .p0 => .{ .{ .pipe = .zero, .next_stage = .decode } },
-                    .p1 => .{ .{ .pipe = .one, .next_stage = .decode } },
-                    .p2 => .{ .{ .pipe = .two, .next_stage = .decode } },
-                    .p3 => .{ .{ .pipe = .three, .next_stage = .decode } },
+                    .p0 => .{ .{ .pipe = .zero, .next_stage = .decode, .debug_log = debug_log } },
+                    .p1 => .{ .{ .pipe = .one, .next_stage = .decode, .debug_log = debug_log } },
+                    .p2 => .{ .{ .pipe = .two, .next_stage = .decode, .debug_log = debug_log } },
+                    .p3 => .{ .{ .pipe = .three, .next_stage = .decode, .debug_log = debug_log } },
                     .all => .{
-                        .{ .pipe = .zero, .next_stage = .decode },
-                        .{ .pipe = .one, .next_stage = .transact },
-                        .{ .pipe = .two, .next_stage = .compute },
-                        .{ .pipe = .three, .next_stage = .setup },
+                        .{ .pipe = .zero, .next_stage = .decode, .debug_log = debug_log },
+                        .{ .pipe = .one, .next_stage = .transact, .debug_log = debug_log },
+                        .{ .pipe = .two, .next_stage = .compute, .debug_log = debug_log },
+                        .{ .pipe = .three, .next_stage = .setup, .debug_log = debug_log },
                     },
                 },
                 .registers = .{ .{
@@ -153,9 +153,9 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
 
         pub fn simulate_microcycles(self: *Self, n: u64) void {
             const state = self.state;
-
-            var i: u64 = 0;
-            while (i < n) : (i += 1) {
+            var i: u64 = self.microcycles_simulated;
+            const final_microcycle = i +% n;
+            while (i != final_microcycle) : (i +%= 1) {
                 for (self.updatable_devices) |d| {
                     d.update_fn(d.ctx);
                 }
@@ -171,6 +171,10 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
                 }
 
                 if (maybe_transact_stage) |transact_stage| {
+                    if (state.pipelines[transact_stage].debug_log) |dl| {
+                        dl.current_microcycle = i;
+                    }
+
                     var flags = state.pipelines[transact_stage].flags;
                     if (flags.contains(.read)) {
                         const ctrl = state.pipelines[transact_stage].get_bus_control();
@@ -178,7 +182,7 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
                         var contention: Read_Contention_State = .no_read;
 
                         for (self.global_devices) |*d| {
-                            maybe_read_device(d, ctrl, &data, &contention, self.microcycles_simulated + i);
+                            maybe_read_device(d, ctrl, &data, &contention, i);
                         }
 
                         const pa: arch.addr.Physical = .{
@@ -188,7 +192,7 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
 
                         if (pa.device_slot()) |slot| {
                             if (self.device_slots[slot]) |d| {
-                                maybe_read_device(d, ctrl, &data, &contention, self.microcycles_simulated + i);
+                                maybe_read_device(d, ctrl, &data, &contention, i);
                             }
                         }
                         state.pipelines[transact_stage].da = data.da;
@@ -222,7 +226,7 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
                     }
                 }
             }
-            self.microcycles_simulated += n;
+            self.microcycles_simulated = final_microcycle;
         }
 
         const Read_Contention_State = union (enum) {
@@ -245,10 +249,190 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
                 data.* = result;
             }
         }
+
+        const Dump_State_Options = struct {
+            uca: bool = false,
+            cs: bool = false,
+            sr: bool = false,
+            reg: usize = 0,
+        };
+        pub fn dump_state(self: *Self, writer: anytype, options: Dump_State_Options) !void {
+            try writer.print("Microcycle: {}\n", .{ self.microcycles_simulated });
+            try writer.print("Reset: {}\n", .{ self.state.reset });
+
+            try writer.writeAll("Interrupts:");
+            for (self.state.interrupts_pending) |v| {
+                try writer.print(" {}", .{ v });
+            }
+            try writer.writeAll("\n");
+
+            try writer.writeAll("Guards:");
+            for (self.state.guards) |g| {
+                try writer.print(" {}", .{ g });
+            }
+            try writer.writeAll("\n");
+
+            for (self.state.pipelines) |pipe| {
+                try writer.print("Pipeline {}:\n", .{ pipe.pipe });
+                try writer.print("   Next Stage:    {}\n", .{ pipe.next_stage });
+                try writer.print("   Exec Mode:     {}\n", .{ pipe.emode });
+                if (options.uca) {
+                    try writer.print("   UCA PUCS:      {} {}\n", .{ pipe.uca, pipe.pucs });
+                }
+                try writer.print("   DR IR:         {} {}\n", .{ pipe.dr, pipe.ir });
+                try writer.print("   RSN:           {}\n", .{ pipe.rsn });
+                try writer.print("   SR Data:       {} {}\n", .{ pipe.sr1d, pipe.sr2d });
+                try writer.print("   TI WI JRI KRI: {} {} {} {} (KRIO={})\n", .{ pipe.ti, pipe.wi, pipe.jri, pipe.kri, pipe.krio });
+                try writer.print("   J K:           {} {}\n", .{ pipe.j, pipe.k });
+                try writer.print("   ASN4 VA:       {} {}\n", .{ pipe.asn4, pipe.va });
+                try writer.print("   Last AT Info:  {}\n", .{ pipe.last_at_info });
+                try writer.print("   AT Entry Addr: {}\n", .{ pipe.at_entry_addr });
+                try writer.print("   AT Entries:    {} {}\n", .{ pipe.matching_entry, pipe.other_entry });
+                try writer.print("   FRAME AA AB:   {} {} {}\n", .{ pipe.frame, pipe.aa, pipe.ab });
+                try writer.print("   Compute Res:   {} c={} v={} count={}\n", .{ pipe.compute_result.value, pipe.compute_result.cout, pipe.compute_result.vout, pipe.count_result });
+                try writer.print("   DA DB:         {} {}\n", .{ pipe.da, pipe.db });
+
+                if (pipe.next_stage == .transact) {
+                    try writer.print("   L:             {}\n", .{ pipe.get_l() });
+                }
+
+                try writer.writeAll("   Flags:        ");
+                var iter = pipe.flags.iterator();
+                while (iter.next()) |flag| {
+                    try writer.print(" {s}", .{ @tagName(flag) });
+                }
+                try writer.writeAll("\n");
+
+                if (options.cs) {
+                    try writer.writeAll("   Control Signals:\n");
+
+                    const want_compute = switch (pipe.cs.statop) {
+                        .compute, .compute_no_set_z => true,
+                        .hold, .zn_from_l, .clear_a, .set_a, .load_zncv, .load_zncva_ti => false,
+                    } or switch (pipe.cs.lsrc) {
+                        .alu, .shift, .mult, .count, .ext => true,
+                        .at_info, .status, .d => false,
+                    };
+
+                    if (want_compute) {
+                        switch (pipe.cs.jsrc) {
+                            .zero => try writer.print("      JSRC={}", .{ pipe.cs.jsrc }),
+                            .jr => try writer.print("      JSRC=JR[{}]", .{ pipe.jri }),
+                            .sr1 => try writer.print("      JSRC=SR1[{}]", .{ pipe.cs.sr1ri }),
+                            .sr2 => try writer.print("      JSRC=SR2[{}]", .{ pipe.cs.sr2ri }),
+                        }
+                        switch (pipe.cs.ksrc) {
+                            .zero, .krio, .krio_bit, .krio_bit_inv, .dr_byte_1_sx, .dr_byte_2_sx, .dr_byte_21_sx,
+                            => try writer.print("  KSRC={}\n", .{ pipe.cs.ksrc }),
+
+                            .vao => try writer.print("  KSRC={} ({})\n", .{ pipe.cs.ksrc, pipe.cs.vao }),
+                            .kr => try writer.print("  KSRC=KR[{}]\n", .{ pipe.kri }),
+                            .sr1 => try writer.print("  KSRC=SR1[{}]\n", .{ pipe.cs.sr1ri }),
+                            .sr2 => try writer.print("  KSRC=SR2[{}]\n", .{ pipe.cs.sr2ri }),
+                        }
+
+                        try writer.print("      UNIT={}  MODE={}\n", .{ pipe.cs.unit, pipe.cs.mode });
+                    }
+
+                    try writer.print("      LSRC={}\n", .{ pipe.cs.lsrc });
+
+                    if (pipe.cs.dir != .none or pipe.cs.atop != .none) {
+                        try writer.print("      VARI={}  VAO={}\n", .{ pipe.cs.vari, pipe.cs.vao });
+                        try writer.print("      DIR={}  WIDTH={}  VASPACE={}  ATOP={}\n", .{ pipe.cs.dir, pipe.cs.width, pipe.cs.vaspace, pipe.cs.atop });
+                    }
+
+                    if (pipe.cs.sr1wsrc != .no_write) {
+                        if (pipe.cs.sr1wsrc == .self) {
+                            try writer.print("      write SR1[{}] -> SR1[{}]\n", .{ pipe.cs.sr1ri, pipe.cs.sr1wi });
+                        } else {
+                            try writer.print("      write {} -> SR1[{}]\n", .{ pipe.cs.sr1wsrc, pipe.cs.sr1wi });
+                        }
+                    }
+                    if (pipe.cs.sr2wsrc != .no_write) {
+                        if (pipe.cs.sr2wsrc == .self) {
+                            try writer.print("      write SR2[{}] -> SR2[{}]\n", .{ pipe.cs.sr2ri, pipe.cs.sr2wi });
+                        } else {
+                            try writer.print("      write {} -> SR2[{}]\n", .{ pipe.cs.sr2wsrc, pipe.cs.sr2wi });
+                        }
+                    }
+
+                    if (pipe.cs.gprw) {
+                        try writer.print("      write .l -> reg[{}]", .{ pipe.wi });
+                        if (pipe.cs.tiw) {
+                            try writer.writeAll("  TIW=true");
+                        }
+                        try writer.writeAll("\n");
+                    } else if (pipe.cs.tiw) {
+                        try writer.writeAll("      TIW=true\n");
+                    }
+
+                    if (pipe.cs.drw) {
+                        try writer.print("      write .d -> DR\n", .{});
+                    }
+                    if (pipe.cs.irw) {
+                        try writer.print("      write DR -> IR\n", .{});
+                    }
+
+                    if (pipe.cs.statop != .hold) {
+                        try writer.print("      STATOP={}\n", .{ pipe.cs.statop });
+                    }
+
+                    if (pipe.cs.special != .none) {
+                        try writer.print("      SPECIAL={}\n", .{ pipe.cs.special });
+                    }
+
+                    if (options.uca) {
+                        try writer.print("      SEQOP={}  NEXT={}  ALLOWINT={}  POWER={}\n", .{ pipe.cs.seqop, pipe.cs.next, pipe.cs.allowint, pipe.cs.power });
+                    } else {
+                        try writer.print("      SEQOP={}  ALLOWINT={}  POWER={}\n", .{ pipe.cs.seqop, pipe.cs.allowint, pipe.cs.power });
+                    }
+                }
+
+                if (options.sr) {
+                    try writer.writeAll("   Special Registers:\n");
+
+                    for (0..@max(arch.SR1_Index.count, arch.SR2_Index.count)) |i| {
+                        var buf: [16]u8 = undefined;
+
+                        if (i < arch.SR1_Index.count) {
+                            const index_name = try std.fmt.bufPrint(&buf, "{}", .{ arch.SR1_Index.init(@intCast(i)) });
+                            try writer.writeByteNTimes(' ', 20 - index_name.len);
+                            try writer.writeAll(index_name);
+                            try writer.print("={}", .{ self.state.registers[pipe.rsn.raw()].sr1[i] });
+                        } else {
+                            try writer.writeByteNTimes(' ', 20);
+                        }
+
+                        if (i < arch.SR2_Index.count) {
+                            const index_name = try std.fmt.bufPrint(&buf, "{}", .{ arch.SR2_Index.init(@intCast(i)) });
+                            try writer.writeByteNTimes(' ', 16 - index_name.len);
+                            try writer.writeAll(index_name);
+                            try writer.print("={}", .{ self.state.registers[pipe.rsn.raw()].sr2[i] });
+                        }
+                        try writer.writeAll("\n");
+                    }
+                }
+
+                if (options.reg > 0) {
+                    try writer.writeAll("   Registers:\n");
+
+                    for (0..options.reg) |i| {
+                        const ri: arch.Register_Index = @truncate(pipe.ti.raw() -% i);
+                        try writer.print("      r{:<2} ({X:0>2}): {}", .{ i, ri, self.state.registers[pipe.rsn.raw()].reg[ri] });
+                        if (pipe.wi.raw() == ri and pipe.cs.gprw) {
+                            try writer.writeAll(" WI");
+                        }
+                        try writer.writeAll("\n");
+                    }
+                }
+            }
+        }
     };
 }
 
 const log = std.log.scoped(.sim);
+
+const Debug_Log = @import("Debug_Log.zig");
 const Pipeline_State = @import("Pipeline_State.zig");
 const Bus_Data = @import("Bus_Data.zig");
 const Bus_Control = @import("Bus_Control.zig");

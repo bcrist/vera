@@ -3,6 +3,7 @@ const sim = @import("microsim/simulator.zig");
 pub const Simulator = sim.Simulator;
 pub const Pipeline = sim.Pipeline;
 
+pub const Debug_Log = @import("microsim/Debug_Log.zig");
 pub const Bus_Control = @import("microsim/Bus_Control.zig");
 pub const Bus_Data = @import("microsim/Bus_Data.zig");
 pub const Device = @import("microsim/Device.zig");

@@ -34,6 +34,7 @@ count_result: u6 = 0,
 da: arch.DA = arch.DA.init(0),
 db: arch.DB = arch.DB.init(0),
 flags: std.EnumSet(Flag) = std.EnumSet(Flag).initEmpty(),
+debug_log: ?*Debug_Log,
 
 pub const Flag = enum {
     stat_c,
@@ -373,17 +374,16 @@ fn compute_shift(mode: arch.Shift_Mode, j: arch.J, k: arch.K, stat_c: bool) Comp
         .stat_c => if (stat_c) 0xFFFF_FFFF_0000_0000 else 0,
     };
 
+    var raw_j = j.raw();
     const raw_k = k.raw();
     const k5: u5 = @truncate(raw_k);
     if (raw_k != k5) {
         return .{
             .value = arch.L.init(0),
-            .cout = if (raw_k == 32) 0 != (j.raw() & 0x8000_0000) else 0 != cin,
-            .vout = if (raw_k == 32) j.raw() != 0 else j.raw() != 0 or 0 != cin,
+            .cout = if (raw_k == 32) 0 != (raw_j & 0x8000_0000) else 0 != cin,
+            .vout = if (raw_k == 32) raw_j != 0 else raw_j != 0 or 0 != cin,
         };
     } else {
-        var raw_j = j.raw();
-
         if (mode.left) {
             raw_j = @bitReverse(raw_j);
 
@@ -404,7 +404,7 @@ fn compute_shift(mode: arch.Shift_Mode, j: arch.J, k: arch.K, stat_c: bool) Comp
             }
         }
 
-        var value: u64 = j.raw() | cin;
+        var value: u64 = raw_j | cin;
         value = value >> k5;
 
         const cout: u1 = if (k5 > 0) @truncate(value >> (k5 - 1)) else @intFromBool(stat_c);
@@ -416,7 +416,7 @@ fn compute_shift(mode: arch.Shift_Mode, j: arch.J, k: arch.K, stat_c: bool) Comp
         }
         
         return .{
-            .value = arch.L.init(@truncate(value)),
+            .value = arch.L.init(@truncate(result)),
             .cout = cout != 0,
             .vout = shifted_out != 0,
         };
@@ -572,109 +572,102 @@ fn compute_address_translation(self: *Pipeline_State, translations: *const at.Tr
         self.flags.insert(.add_at_k); // translation can only be disabled in kernel mode
     }
 
-    switch (width) {
-        .@"8b" => {},
-        .@"16b" => if (va.offset.raw() == arch.addr.Offset.max.raw()) self.flags.insert(.page_align_fault),
-        .@"24b" => if (va.offset.raw() >= arch.addr.Offset.max.raw() - 1) self.flags.insert(.page_align_fault),
-        .@"32b" => if (va.offset.raw() >= arch.addr.Offset.max.raw() - 2) self.flags.insert(.page_align_fault),
-    }
-
     const n1: u1 = @truncate(va.offset.raw() >> 1);
     self.aa = arch.addr.Word_Offset.init(@truncate((va.offset.raw() >> 2) +% n1));
     self.ab = arch.addr.Word_Offset.init(@intCast(va.offset.raw() >> 2));
 
-    const addr_alignment: u2 = @truncate(va.offset.raw());
-    switch (addr_alignment) {
-        0 => switch (width) {
-            .@"8b" => {
-                self.flags.insert(.lba);
+    if (op == .translate) {
+        switch (width) {
+            .@"8b" => {},
+            .@"16b" => if (va.offset.raw() == arch.addr.Offset.max.raw()) self.flags.insert(.page_align_fault),
+            .@"24b" => if (va.offset.raw() >= arch.addr.Offset.max.raw() - 1) self.flags.insert(.page_align_fault),
+            .@"32b" => if (va.offset.raw() >= arch.addr.Offset.max.raw() - 2) self.flags.insert(.page_align_fault),
+        }
+
+        const addr_alignment: u2 = @truncate(va.offset.raw());
+        switch (addr_alignment) {
+            0 => switch (width) {
+                .@"8b" => {
+                    self.flags.insert(.lba);
+                },
+                .@"16b" => {
+                    self.flags.insert(.lba);
+                    self.flags.insert(.uba);
+                },
+                .@"24b" => {
+                    self.flags.insert(.lba);
+                    self.flags.insert(.uba);
+                    self.flags.insert(.lbb);
+                },
+                .@"32b" => {
+                    self.flags.insert(.lba);
+                    self.flags.insert(.uba);
+                    self.flags.insert(.lbb);
+                    self.flags.insert(.ubb);
+                },
             },
-            .@"16b" => {
-                self.flags.insert(.lba);
-                self.flags.insert(.uba);
+            1 => switch (width) {
+                .@"8b" => {
+                    self.flags.insert(.uba);
+                },
+                .@"16b" => {
+                    self.flags.insert(.uba);
+                    self.flags.insert(.lbb);
+                },
+                .@"24b" => {
+                    self.flags.insert(.uba);
+                    self.flags.insert(.lbb);
+                    self.flags.insert(.ubb);
+                },
+                .@"32b" => {
+                    self.flags.insert(.align_fault);
+                },
             },
-            .@"24b" => {
-                self.flags.insert(.lba);
-                self.flags.insert(.uba);
-                self.flags.insert(.lbb);
+            2 => switch (width) {
+                .@"8b" => {
+                    self.flags.insert(.lbb);
+                },
+                .@"16b" => {
+                    self.flags.insert(.lbb);
+                    self.flags.insert(.ubb);
+                },
+                .@"24b" => {
+                    self.flags.insert(.lbb);
+                    self.flags.insert(.ubb);
+                    self.flags.insert(.lba);
+                },
+                .@"32b" => {
+                    self.flags.insert(.lbb);
+                    self.flags.insert(.ubb);
+                    self.flags.insert(.lba);
+                    self.flags.insert(.uba);
+                },
             },
-            .@"32b" => {
-                self.flags.insert(.lba);
-                self.flags.insert(.uba);
-                self.flags.insert(.lbb);
-                self.flags.insert(.ubb);
+            3 => switch (width) {
+                .@"8b" => {
+                    self.flags.insert(.ubb);
+                },
+                .@"16b" => {
+                    self.flags.insert(.ubb);
+                    self.flags.insert(.lba);
+                },
+                .@"24b" => {
+                    self.flags.insert(.ubb);
+                    self.flags.insert(.lba);
+                    self.flags.insert(.uba);
+                },
+                .@"32b" => {
+                    self.flags.insert(.align_fault);
+                },
             },
-        },
-        1 => switch (width) {
-            .@"8b" => {
-                self.flags.insert(.uba);
-            },
-            .@"16b" => {
-                self.flags.insert(.uba);
-                self.flags.insert(.lbb);
-            },
-            .@"24b" => {
-                self.flags.insert(.uba);
-                self.flags.insert(.lbb);
-                self.flags.insert(.ubb);
-            },
-            .@"32b" => {
-                self.flags.insert(.align_fault);
-            },
-        },
-        2 => switch (width) {
-            .@"8b" => {
-                self.flags.insert(.lbb);
-            },
-            .@"16b" => {
-                self.flags.insert(.lbb);
-                self.flags.insert(.ubb);
-            },
-            .@"24b" => {
-                self.flags.insert(.lbb);
-                self.flags.insert(.ubb);
-                self.flags.insert(.lba);
-            },
-            .@"32b" => {
-                self.flags.insert(.lbb);
-                self.flags.insert(.ubb);
-                self.flags.insert(.lba);
-                self.flags.insert(.uba);
-            },
-        },
-        3 => switch (width) {
-            .@"8b" => {
-                self.flags.insert(.ubb);
-            },
-            .@"16b" => {
-                self.flags.insert(.ubb);
-                self.flags.insert(.lba);
-            },
-            .@"24b" => {
-                self.flags.insert(.ubb);
-                self.flags.insert(.lba);
-                self.flags.insert(.uba);
-            },
-            .@"32b" => {
-                self.flags.insert(.align_fault);
-            },
-        },
+        }
     }
 }
 
-/// If self.flags.contains(.read), you must set self.da and self.db with the data read from system RAM or a device
-/// If self.flags.contains(.write) and !self.flags.contains(.guard_mismatch), you must move self.da and self.db
-/// into the appropriate memory/device location after simulate_transact() returns.
-pub fn simulate_transact(self: *Pipeline_State,
-    registers: *arch.Register_File,
-    translations: *at.Translation_File,
-    guards: *arch.Guarded_Memory_File,
-) void {
+pub fn get_l(self: Pipeline_State) arch.L {
     std.debug.assert(self.next_stage == .transact);
 
-    const any_fault = self.flags.contains(.any_fault);
-
-    const l: arch.L = switch (self.cs.lsrc) {
+    return switch (self.cs.lsrc) {
         .alu => l: {
             std.debug.assert(self.cs.unit == .alu);
             break :l self.compute_result.value;
@@ -710,6 +703,21 @@ pub fn simulate_transact(self: *Pipeline_State,
         }).raw()),
         .d => self.read_d(arch.L),
     };
+}
+
+/// If self.flags.contains(.read), you must set self.da and self.db with the data read from system RAM or a device
+/// If self.flags.contains(.write) and !self.flags.contains(.guard_mismatch), you must move self.da and self.db
+/// into the appropriate memory/device location after simulate_transact() returns.
+pub fn simulate_transact(self: *Pipeline_State,
+    registers: *arch.Register_File,
+    translations: *at.Translation_File,
+    guards: *arch.Guarded_Memory_File,
+) void {
+    std.debug.assert(self.next_stage == .transact);
+
+    const any_fault = self.flags.contains(.any_fault);
+
+    const l: arch.L = self.get_l();
 
     switch (self.cs.dir) {
         .none, .read => {},
@@ -745,18 +753,42 @@ pub fn simulate_transact(self: *Pipeline_State,
         .load_rsn_from_l => if (!any_fault) {
             // Note we use the new RSN for any register writes
             rsn = arch.Register_Set_Number.init(@truncate(l.raw()));
+            if (self.debug_log) |dl| {
+                dl.report(self.pipe, .{ .rsn = rsn });
+            }
         },
         .toggle_rsn => if (!any_fault) {
             // Note we use the new RSN for any register writes
             rsn = arch.Register_Set_Number.init(rsn.raw() ^ arch.Register_Set_Number.msb.raw());
+            if (self.debug_log) |dl| {
+                dl.report(self.pipe, .{ .rsn = rsn });
+            }
         },
     }
+
+    self.rsn = rsn;
 
     if (self.flags.contains(.write)) {
         const guard = arch.Guarded_Memory_Register.from_frame_and_offset(self.frame, self.va.offset);
         const cur_pipe = self.pipe.raw();
         for (0.., guards) |p, *gr| {
             if (p != cur_pipe and gr.raw() == guard.raw()) gr.* = arch.Guarded_Memory_Register.invalid;
+        }
+    }
+
+    if (self.debug_log) |dl| {
+        if (self.flags.contains(.write)) {
+            dl.report(self.pipe, .{ .write = .{
+                .ctrl = self.get_bus_control(),
+                .data = .{ .da = self.da, .db = self.db },
+            }});
+        }
+
+        if (self.flags.contains(.read)) {
+            dl.report(self.pipe, .{ .read = .{
+                .ctrl = self.get_bus_control(),
+                .data = .{ .da = self.da, .db = self.db },
+            }});
         }
     }
 
@@ -770,16 +802,36 @@ pub fn simulate_transact(self: *Pipeline_State,
             self.uca.slot = arch.microcode.Slot.init(@intCast(l.raw() >> 20));
         }
 
-        if (self.cs.gprw) registers[rsn.raw()].reg[self.wi.raw()] = arch.Reg.init(l.raw());
+        if (self.cs.gprw) {
+            if (self.debug_log) |dl| {
+                dl.report(self.pipe, .{ .reg = .{
+                    .wi = self.wi,
+                    .old_data = registers[rsn.raw()].reg[self.wi.raw()],
+                    .new_data = arch.Reg.init(l.raw()),
+                }});
+            }
+            registers[rsn.raw()].reg[self.wi.raw()] = arch.Reg.init(l.raw());
+        }
 
         const sr1wsrc = self.cs.sr1wsrc;
         if (sr1wsrc != .no_write) {
-            registers[rsn.raw()].sr1[self.cs.sr1wi.raw()] = arch.Reg.init(switch (sr1wsrc) {
+            const wi = self.cs.sr1wi;
+            const value = arch.Reg.init(switch (sr1wsrc) {
                 .no_write => unreachable,
                 .self => self.sr1d.raw(),
                 .l => l.raw(),
                 .virtual_addr => self.va.raw(),
             });
+
+            if (self.debug_log) |dl| {
+                dl.report(self.pipe, .{ .sr = .{
+                    .index = arch.Any_SR_Index.from_sr1(wi),
+                    .old_data = registers[rsn.raw()].sr1[wi.raw()],
+                    .new_data = value,
+                }});
+            }
+
+            registers[rsn.raw()].sr1[wi.raw()] = value;
         }
 
         const sr2wsrc = self.cs.sr2wsrc;
@@ -791,6 +843,15 @@ pub fn simulate_transact(self: *Pipeline_State,
                 .l => l.raw(),
                 .virtual_addr => self.va.raw(),
             });
+
+            if (self.debug_log) |dl| {
+                dl.report(self.pipe, .{ .sr = .{
+                    .index = arch.Any_SR_Index.from_sr2(wi),
+                    .old_data = registers[rsn.raw()].sr2[wi.raw()],
+                    .new_data = value,
+                }});
+            }
+
             registers[rsn.raw()].sr2[wi.raw()] = value;
 
             if (wi == .asn) {
@@ -848,6 +909,20 @@ pub fn simulate_transact(self: *Pipeline_State,
         if (self.cs.statop != .load_zncva_ti and self.cs.tiw) {
             self.ti = self.wi;
         }
+    } else if (self.debug_log) |dl| {
+        if (self.flags.contains(.page_fault)) {
+            dl.report(self.pipe, .{ .fault = .page_fault });
+        } else if (self.flags.contains(.access_fault)) {
+            dl.report(self.pipe, .{ .fault = .access_fault });
+        } else if (self.flags.contains(.page_align_fault)) {
+            dl.report(self.pipe, .{ .fault = .page_align_fault });
+        } else if (self.flags.contains(.align_fault)) {
+            dl.report(self.pipe, .{ .fault = .align_fault });
+        } else if (self.flags.contains(.overflow_fault)) {
+            dl.report(self.pipe, .{ .fault = .overflow_fault });
+        } else if (self.flags.contains(.insn_fault)) {
+            dl.report(self.pipe, .{ .fault = self.cs.next });
+        } else unreachable;
     }
 
     const atop = self.cs.atop;
@@ -896,7 +971,7 @@ pub fn simulate_transact(self: *Pipeline_State,
     self.next_stage = .decode;
 }
 
-fn read_d(self: *Pipeline_State, comptime T: type) T {
+fn read_d(self: Pipeline_State, comptime T: type) T {
     const n0: u1 = @truncate(self.va.offset.raw());
     const n1: u1 = @truncate(self.va.offset.raw() >> 1);
 
@@ -953,6 +1028,7 @@ pub fn get_bus_control(self: *Pipeline_State) Bus_Control {
 
 const Pipeline_State = @This();
 
+const Debug_Log = @import("Debug_Log.zig");
 const Bus_Control = @import("Bus_Control.zig");
 const at = arch.addr.translation;
 const arch = @import("arch");

@@ -72,6 +72,7 @@ pub const Misc_12 = enum (u4) {
 pub const Misc_16 = enum (u8) {
     nop_2,
     nop_3,
+    park,
     iret,
     fret,
     ifex,
@@ -98,7 +99,6 @@ pub const Misc_16 = enum (u8) {
     bitrev1,
     bitrev2,
 
-    park = 0xFF,
 };
 
 pub const ALU_16 = enum (u8) {

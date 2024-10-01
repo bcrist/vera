@@ -225,7 +225,7 @@ pub const Frame = enum (u14) {
         return @intCast((self.raw() - device_0.raw()) / num_frames_per_device);
     }
 
-    pub const format = fmt.format_enum;
+    pub const format = fmt.format_enum_hex;
 
     pub const Raw = std.meta.Tag(Frame);
     pub const count = std.math.maxInt(Raw) + 1;
@@ -255,7 +255,7 @@ pub const Offset = enum (u12) {
         return @intFromEnum(self);
     }
 
-    pub const format = fmt.format_enum;
+    pub const format = fmt.format_enum_hex;
 
     pub const Raw = std.meta.Tag(Offset);
     pub const zero = init(0);
@@ -274,7 +274,7 @@ pub const Word_Offset = enum (u10) {
         return @intFromEnum(self);
     }
 
-    pub const format = fmt.format_enum;
+    pub const format = fmt.format_enum_hex;
 
     pub const Raw = std.meta.Tag(Word_Offset);
     pub const zero = init(0);

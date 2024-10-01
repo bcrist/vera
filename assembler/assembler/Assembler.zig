@@ -67,11 +67,7 @@ pub fn deinit(self: *Assembler, deinit_arena: bool) void {
     if (deinit_arena) {
         var constant_iter = self.constants.keyIterator();
         while (constant_iter.next()) |constant| {
-            self.arena.destroy(constant);
-        }
-
-        for (self.pages.items(.data)) |*buf| {
-            self.arena.free(buf);
+            self.arena.destroy(constant.*);
         }
     }
 

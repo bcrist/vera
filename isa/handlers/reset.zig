@@ -105,14 +105,35 @@ pub fn shift_block_transfer_control_data_2(c: *Cycle) void {
 }
 pub fn write_block_transfer_control(c: *Cycle) void {
     c.sr_to_l(.temp_2);
-    c.write_from_l(.temp_1, 3, .@"32b", .raw); // block transfer from FLASH, with auto advance
+    c.write_from_l(.temp_1, 12, .@"32b", .raw); // block transfer from FLASH, with auto advance
+    c.next(readback_block_transfer_address);
+}
+pub fn readback_block_transfer_address(c: *Cycle) void {
+    c.read_to_d(.temp_1, 12, .@"32b", .raw);
+    c.d_to_l();
+    c.l_to_sr(.bp);
+    c.next(check_block_transfer_address);
+}
+pub fn check_block_transfer_address(c: *Cycle) void {
+    c.sr_to_j(.temp_2);
+    c.sr_to_k(.bp);
+    c.j_logic_k(.xor, .fresh, .flags);
     c.next(setup_write_pointer);
 }
-pub fn setup_write_pointer(c: *Cycle) void {
-    // .temp_1 will be incremented by 8 before each write, so we start at -8.
-    c.literal_to_l(-8);
-    c.l_to_sr(.temp_1);
-    c.next(setup_transfer_counter);
+pub fn setup_write_pointer(c: *Cycle, flags: Flags) void {
+    if (flags.zero()) {
+        // .temp_1 will be incremented by 8 before each write, so we start at -8.
+        c.literal_to_l(-8);
+        c.l_to_sr(.temp_1);
+        c.next(setup_transfer_counter);
+    } else {
+        // Block transfer address wasn't retained; assume we don't have block transfer functionality
+        // and that RAM already contains our vector table and boot program:
+        c.read_to_d(.zero, @offsetOf(arch.Vector_Table, "reset"), .@"16b", .raw);
+        c.d_to_l();
+        c.l_to_sr(.next_ip);
+        c.next(boot);
+    }
 }
 pub fn setup_transfer_counter(c: *Cycle) void {
     // We will be copying 0x2000 blocks, tracked in .temp_2
@@ -157,7 +178,7 @@ pub fn check_for_pipe_1(c: *Cycle, flags: Flags) void {
         c.l_to_sr(.temp_2);
         c.next(begin_init_other_register_sets);
     } else {
-        c.force_normal_execution(wait_for_interrupt);
+        c.force_normal_execution(begin_wait_for_interrupt);
     }
 }
 
@@ -175,9 +196,9 @@ pub fn begin_init_other_register_sets(c: *Cycle) void {
 
 pub fn init_register_set(c: *Cycle, flags: Flags) void {
     if (flags.zero()) {
-        c.sr_to_l(.temp_1); // still has the original pipe index
+        c.literal_to_l(1); // Only Pipe 1 initializes the register sets
         c.l_to_rsn();
-        c.force_normal_execution(wait_for_interrupt);
+        c.force_normal_execution(begin_wait_for_interrupt);
     } else {
         c.zero_to_l();
         c.l_to_sr(.zero);
@@ -196,11 +217,31 @@ pub fn next_registerset(c: *Cycle) void {
     c.next(init_register_set);
 }
 
+pub fn begin_wait_for_interrupt(c: *Cycle) void {
+    c.literal_to_l(@intFromEnum(opcodes.Misc_16.park));
+    c.l_to_sr(.temp_1);
+    c.next(move_park_to_upper_bits);
+}
+pub fn move_park_to_upper_bits(c: *Cycle) void {
+    c.sr_to_j(.temp_1);
+    c.literal_to_k(8);
+    c.j_shift_k_to_l(.shl, .fresh, .no_flags);
+    c.l_to_sr(.temp_1);
+    c.next(wait_for_interrupt);
+}
 pub fn wait_for_interrupt(c: *Cycle) void {
-    c.zero_to_l();
+    const lsb: arch.addr.Virtual.Microcode_Offset.Raw = @intFromEnum(opcodes.LSB.misc_16);
+    std.debug.assert(lsb >= 0);
+    c.sr_to_j(.temp_1);
+    c.literal_to_k(lsb);
+    c.j_logic_k_to_l(._or, .fresh, .no_flags);
+    c.l_to_dr();
+    c.dr_to_ir();
     c.exec_ir_insn();
 }
 
+
+const opcodes = @import("../instructions/opcodes.zig");
 const Cycle = @import("../compile/Cycle.zig");
 const Encoder = isa.Instruction_Encoding.Encoder;
 const Int = placeholders.Int;

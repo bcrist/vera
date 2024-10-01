@@ -1,4 +1,5 @@
 test {
+    _ = @import("instructions/reset.zig");
     _ = @import("instructions/add.zig");
 }
 
@@ -23,7 +24,7 @@ const assembly_prefix =
     \\
     ;
 
-pub fn init_simulator(assembly: []const u8, comptime pipe: microsim.Pipeline) !Simulator(pipe) {
+pub fn init_simulator(assembly: []const u8, comptime pipe: microsim.Pipeline, debug_log: ?*Debug_Log) !Simulator(pipe) {
     const data = try Simulator_Data.get();
 
     var a = assembler.Assembler.init(std.testing.allocator, std.testing.allocator, data.edb);
@@ -33,7 +34,7 @@ pub fn init_simulator(assembly: []const u8, comptime pipe: microsim.Pipeline) !S
     defer std.testing.allocator.free(final_assembly);
 
     _ = a.add_source("main", final_assembly);
-    //a.assemble();
+    a.assemble();
 
     const mem = try assembler.output.copy_memory(&a, null, std.testing.allocator);
     defer std.testing.allocator.free(mem);
@@ -45,7 +46,7 @@ pub fn init_simulator(assembly: []const u8, comptime pipe: microsim.Pipeline) !S
 
     return try Simulator(pipe).init(std.testing.allocator, data.insn_decode, data.microcode, &.{
         mem_dev.device(),
-    });
+    }, debug_log);
 }
 
 pub fn deinit_simulator(comptime pipe: microsim.Pipeline, simulator: *Simulator(pipe)) void {
@@ -70,31 +71,7 @@ pub fn deinit_simulator(comptime pipe: microsim.Pipeline, simulator: *Simulator(
 //     });
 //     defer deinitSimulator(&s);
 
-//     s.cycle(2);
-//     try expectEqual(@as(u32, 0xFFFFFF80), s.register_file.readGPR32(0, 1));
-//     try expect(s.t.reg.stat.n);
-//     try expect(!s.t.reg.stat.c);
-//     try expect(!s.t.reg.stat.v);
-//     try expect(!s.t.reg.stat.z);
 
-//     s.resetAndInit();
-//     s.register_file.writeGPR32(0, 12, 123456);
-//     s.cycle(2);
-//     try expectEqual(@as(u32, 123328), s.register_file.readGPR32(0, 1));
-//     try expect(!s.t.reg.stat.n);
-//     try expect(s.t.reg.stat.c);
-//     try expect(!s.t.reg.stat.v);
-//     try expect(!s.t.reg.stat.z);
-
-//     s.resetAndInit();
-//     s.register_file.writeGPR32(0, 12, 128);
-//     //try s.debugCycle(2, .one);
-//     s.cycle(2);
-//     try expectEqual(@as(u32, 0), s.register_file.readGPR32(0, 1));
-//     try expect(!s.t.reg.stat.n);
-//     try expect(s.t.reg.stat.c);
-//     try expect(!s.t.reg.stat.v);
-//     try expect(s.t.reg.stat.z);
 // }
 
 // test "ADD X0, R4U -> X0" {
@@ -181,6 +158,7 @@ pub fn deinit_simulator(comptime pipe: microsim.Pipeline, simulator: *Simulator(
 // }
 
 const Simulator_Data = @import("Simulator_Data");
+const Debug_Log = microsim.Debug_Log;
 const Simulator = microsim.Simulator;
 const microsim = @import("microsim");
 const assembler = @import("assembler");

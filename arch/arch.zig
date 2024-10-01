@@ -350,7 +350,7 @@ pub const Reg = enum (u32) {
         return @intFromEnum(self);
     }
 
-    pub const format = fmt.format_enum;
+    pub const format = fmt.format_enum_hex;
 
     pub const Raw = std.meta.Tag(Reg);
 };
