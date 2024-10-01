@@ -1,7 +1,7 @@
 test "pipe 0 (no block transfer)" {
     var debug_log = microsim.Debug_Log.init(std.testing.allocator);
     defer debug_log.deinit();
-    errdefer debug_log.dump(std.io.getStdErr().writer()) catch {};
+    errdefer debug_log.dump(std.io.getStdErr().writer(), .{ .insn_stuff = true }) catch {};
 
     var sim = try instructions.init_simulator("park", .p0, &debug_log);
     defer instructions.deinit_simulator(.p0, &sim);
@@ -9,7 +9,7 @@ test "pipe 0 (no block transfer)" {
     sim.simulate_reset_and_init();
     sim.simulate_cycles(20);
 
-    try debug_log.expect(
+    try debug_log.expect(.{ .insn_stuff = true },
         \\     3 .zero: rsn = .interrupt_pipe_0
         \\     3 .zero: sr .temp_1 = 0x00000000
         \\     7 .zero: rsn = .interrupt_pipe_0
@@ -26,18 +26,21 @@ test "pipe 0 (no block transfer)" {
         \\    43 .zero: sr .temp_2 = 0x00000070
         \\    47 .zero: sr .temp_2 = 0x0000007E
         \\    51 .zero: sr .temp_2 = 0x0007E000
-        \\    55 .zero: write DB:0x0007 DA:0xE000 F:.block_transfer_control_frame AB:0x003 AA:0x003 BbAa
-        \\    59 .zero: read  DB:0x0000 DA:0x0000 F:.block_transfer_control_frame AB:0x003 AA:0x003 BbAa
+        \\    55 .zero: write .raw DB:0x0007 DA:0xE000 F:.block_transfer_control_frame AB:0x003 AA:0x003 BbAa   
+        \\    59 .zero: read  .raw DB:0x0000 DA:0x0000 F:.block_transfer_control_frame AB:0x003 AA:0x003 BbAa   
         \\    59 .zero: sr .bp = 0x00000000
-        \\    67 .zero: read  DB:0xAA00 DA:0xAA00 F:.zero AB:0x000 AA:0x000 ..Aa
-        \\    67 .zero: sr .next_ip = 0xAA00AA00
+        \\    67 .zero: read  .raw DB:0x0014 DA:0x0016 F:.zero AB:0x000 AA:0x000 ..Aa   
+        \\    67 .zero: sr .next_ip = 0x00000016
+        \\    71 .zero: read  .insn DB:0x0202 DA:0xFFFF F:.zero AB:0x005 AA:0x006 Bb.a   
+        \\    71 .zero: sr .ip = 0x00000016
+        \\
     );
 }
 
 test "pipe 1" {
     var debug_log = microsim.Debug_Log.init(std.testing.allocator);
     defer debug_log.deinit();
-    errdefer debug_log.dump(std.io.getStdErr().writer()) catch {};
+    errdefer debug_log.dump(std.io.getStdErr().writer(), .{ .insn_stuff = true }) catch {};
 
     var sim = try instructions.init_simulator("park", .p1, &debug_log);
     defer instructions.deinit_simulator(.p1, &sim);
@@ -45,7 +48,7 @@ test "pipe 1" {
     sim.simulate_reset_and_init();
     sim.simulate_cycles(20);
 
-    try debug_log.expect(
+    try debug_log.expect(.{ .insn_stuff = true },
         \\     3 .one: rsn = .interrupt_pipe_1
         \\     3 .one: sr .temp_1 = 0x00000001
         \\     7 .one: rsn = .interrupt_pipe_1
@@ -576,7 +579,7 @@ test "pipe 1" {
 test "pipe 2" {
     var debug_log = microsim.Debug_Log.init(std.testing.allocator);
     defer debug_log.deinit();
-    errdefer debug_log.dump(std.io.getStdErr().writer()) catch {};
+    errdefer debug_log.dump(std.io.getStdErr().writer(), .{ .insn_stuff = true }) catch {};
 
     var sim = try instructions.init_simulator("park", .p2, &debug_log);
     defer instructions.deinit_simulator(.p2, &sim);
@@ -584,7 +587,7 @@ test "pipe 2" {
     sim.simulate_reset_and_init();
     sim.simulate_cycles(20);
 
-    try debug_log.expect(
+    try debug_log.expect(.{ .insn_stuff = true },
         \\     3 .two: rsn = .interrupt_pipe_2
         \\     3 .two: sr .temp_1 = 0x00000002
         \\     7 .two: rsn = .interrupt_pipe_2
@@ -602,7 +605,7 @@ test "pipe 2" {
 test "pipe 3" {
     var debug_log = microsim.Debug_Log.init(std.testing.allocator);
     defer debug_log.deinit();
-    errdefer debug_log.dump(std.io.getStdErr().writer()) catch {};
+    errdefer debug_log.dump(std.io.getStdErr().writer(), .{ .insn_stuff = true }) catch {};
 
     var sim = try instructions.init_simulator("park", .p3, &debug_log);
     defer instructions.deinit_simulator(.p3, &sim);
@@ -610,7 +613,7 @@ test "pipe 3" {
     sim.simulate_reset_and_init();
     sim.simulate_cycles(20);
 
-    try debug_log.expect(
+    try debug_log.expect(.{ .insn_stuff = true },
         \\     3 .three: rsn = .interrupt_pipe_3
         \\     3 .three: sr .temp_1 = 0x00000003
         \\     7 .three: rsn = .interrupt_pipe_3

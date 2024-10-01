@@ -779,6 +779,7 @@ pub fn simulate_transact(self: *Pipeline_State,
     if (self.debug_log) |dl| {
         if (self.flags.contains(.write)) {
             dl.report(self.pipe, .{ .write = .{
+                .space = self.cs.vaspace,
                 .ctrl = self.get_bus_control(),
                 .data = .{ .da = self.da, .db = self.db },
             }});
@@ -786,6 +787,7 @@ pub fn simulate_transact(self: *Pipeline_State,
 
         if (self.flags.contains(.read)) {
             dl.report(self.pipe, .{ .read = .{
+                .space = self.cs.vaspace,
                 .ctrl = self.get_bus_control(),
                 .data = .{ .da = self.da, .db = self.db },
             }});
@@ -987,6 +989,13 @@ fn read_d(self: Pipeline_State, comptime T: type) T {
     var raw_d: arch.D.Raw = bits.concat(.{ lo, hi });
     if (n0 == 1) {
         raw_d >>= 8;
+    }
+
+    switch (self.cs.width) {
+        .@"32b" => {},
+        .@"24b" => raw_d &= 0xFFFFFF,
+        .@"16b" => raw_d &= 0xFFFF,
+        .@"8b" => raw_d &= 0xFF,
     }
 
     return T.init(raw_d);

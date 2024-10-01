@@ -1,42 +1,75 @@
 test "add 123" {
-    var sim = try instructions.init_simulator("add 123", .p1, null);
-    defer instructions.deinit_simulator(.p1, &sim);
+    var debug_log = microsim.Debug_Log.init(std.testing.allocator);
+    defer debug_log.deinit();
+    errdefer debug_log.dump(std.io.getStdErr().writer(), .{ .insn_stuff = true }) catch {};
 
-    // sim.simulate_reset_and_init();
+    var sim = try instructions.init_simulator(
+        \\ add 123
+        \\ add 1
+        \\ val 0x222
+        \\ add
+        \\
+        , .p0, &debug_log);
+    defer instructions.deinit_simulator(.p0, &sim);
 
-    // try expectEqual(arch.Write_Index.init(0), sim.state.pipelines[0].wi);
-    // try expectEqual(arch.Register_Set_Number.init(1), sim.state.pipelines[0].rsn);
+    const p = &sim.state.pipelines[0];
 
-    sim.simulate_cycles(2);
-    //try expectEqual(arch.Reg.init(123), sim.state.registers[1].reg[0]);
-    // try expect(s.t.reg.stat.n);
-    // try expect(!s.t.reg.stat.c);
-    // try expect(!s.t.reg.stat.v);
-    // try expect(!s.t.reg.stat.z);
+    sim.simulate_reset_and_init();
+    sim.simulate_cycles(1);
+    try expectEqual(arch.Write_Index.init(0), p.ti);
+    try expectEqual(arch.Register_Set_Number.init(0), p.rsn);
+    try expectEqual(arch.Reg.init(0), sim.state.registers[0].reg[0]);
+    debug_log.clear();
 
-    // s.resetAndInit();
-    // s.register_file.writeGPR32(0, 12, 123456);
-    // s.cycle(2);
-    // try expectEqual(@as(u32, 123328), s.register_file.readGPR32(0, 1));
-    // try expect(!s.t.reg.stat.n);
-    // try expect(s.t.reg.stat.c);
-    // try expect(!s.t.reg.stat.v);
-    // try expect(!s.t.reg.stat.z);
+    sim.simulate_cycles(1); // add 123
+    try expectEqual(arch.Write_Index.init(0), p.ti);
+    try expectEqual(arch.Reg.init(123), sim.state.registers[0].reg[0]);
+    try expect(!p.flags.contains(.stat_n));
+    try expect(!p.flags.contains(.stat_c));
+    try expect(!p.flags.contains(.stat_v));
+    try expect(!p.flags.contains(.stat_z));
 
-    // s.resetAndInit();
-    // s.register_file.writeGPR32(0, 12, 128);
-    // //try s.debugCycle(2, .one);
-    // s.cycle(2);
-    // try expectEqual(@as(u32, 0), s.register_file.readGPR32(0, 1));
-    // try expect(!s.t.reg.stat.n);
-    // try expect(s.t.reg.stat.c);
-    // try expect(!s.t.reg.stat.v);
-    // try expect(s.t.reg.stat.z);
+    sim.simulate_cycles(1); // add 1
+    try expectEqual(arch.Write_Index.init(0), p.ti);
+    try expectEqual(arch.Reg.init(124), sim.state.registers[0].reg[0]);
+    try expect(!p.flags.contains(.stat_n));
+    try expect(!p.flags.contains(.stat_c));
+    try expect(!p.flags.contains(.stat_v));
+    try expect(!p.flags.contains(.stat_z));
+
+    sim.simulate_cycles(1); // val 0x222
+    try expectEqual(arch.Write_Index.init(1), p.ti);
+    try expectEqual(arch.Reg.init(0x222), sim.state.registers[0].reg[1]);
+    try expectEqual(arch.Reg.init(124), sim.state.registers[0].reg[0]);
+    try expect(!p.flags.contains(.stat_n));
+    try expect(!p.flags.contains(.stat_c));
+    try expect(!p.flags.contains(.stat_v));
+    try expect(!p.flags.contains(.stat_z));
+
+    sim.simulate_cycles(1); // add
+    try expectEqual(arch.Write_Index.init(0), p.ti);
+    try expectEqual(arch.Reg.init(670), sim.state.registers[0].reg[0]);
+    try expect(!p.flags.contains(.stat_n));
+    try expect(!p.flags.contains(.stat_c));
+    try expect(!p.flags.contains(.stat_v));
+    try expect(!p.flags.contains(.stat_z));
+
+    // TODO test carry/overflow flags more
+
+    try debug_log.expect(.{},
+        \\    75 .zero: reg 0 = 0x0000007B
+        \\    79 .zero: reg 0 = 0x0000007C
+        \\    83 .zero: reg 1 = 0x00000222
+        \\    87 .zero: reg 0 = 0x0000029E
+        \\
+    );
+
 }
 
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 
 const instructions = @import("../instructions.zig");
+const microsim = @import("microsim");
 const arch = @import("arch");
 const std = @import("std");

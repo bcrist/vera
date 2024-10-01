@@ -27,8 +27,11 @@ const assembly_prefix =
 pub fn init_simulator(assembly: []const u8, comptime pipe: microsim.Pipeline, debug_log: ?*Debug_Log) !Simulator(pipe) {
     const data = try Simulator_Data.get();
 
-    var a = assembler.Assembler.init(std.testing.allocator, std.testing.allocator, data.edb);
-    defer a.deinit(true);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    var a = assembler.Assembler.init(std.testing.allocator, arena.allocator(), data.edb);
+    defer a.deinit(false);
 
     const final_assembly = try std.mem.concat(std.testing.allocator, u8, &.{ assembly_prefix, assembly });
     defer std.testing.allocator.free(final_assembly);
@@ -42,6 +45,7 @@ pub fn init_simulator(assembly: []const u8, comptime pipe: microsim.Pipeline, de
     const num_frames = (mem.len + arch.addr.Frame.count - 1) / arch.addr.Frame.count;
     const mem_dev = try std.testing.allocator.create(microsim.devices.Simple_Memory);
     mem_dev.* = try microsim.devices.Simple_Memory.init(std.testing.allocator, .zero, num_frames);
+    @memset(mem_dev.data, 0xFF);
     @memcpy(mem_dev.data.ptr, mem);
 
     return try Simulator(pipe).init(std.testing.allocator, data.insn_decode, data.microcode, &.{

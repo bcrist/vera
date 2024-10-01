@@ -7,6 +7,8 @@ pub const encoding = .{
 
 pub fn entry(c: *Cycle, flags: Flags) void {
     if (!flags.kernel()) return c.illegal_instruction();
+
+    c.power_mode(.sleep);
     c.exec_ir_insn();
 }
 

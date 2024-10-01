@@ -307,19 +307,22 @@ pub fn record_insn_encoding_error(self: *Assembler, file_handle: Source_File.Han
 
 pub fn build_instruction(self: *Assembler, s: Source_File.Slices, ip: u32, mnemonic: Mnemonic, suffix: Mnemonic_Suffix, params: ?Expression.Handle, record_errors: bool) ?isa.Instruction {
     self.params_temp.clearRetainingCapacity();
-    if (params) |base_expr_handle| {
+    if (params != null) {
         const expr_infos = s.expr.items(.info);
         const expr_resolved_types = s.expr.items(.resolved_type);
 
-        var expr_handle = base_expr_handle;
-        while (true) {
+        var maybe_expr_handle = params;
+        while (maybe_expr_handle) |expr_handle| {
             const info = expr_infos[expr_handle];
             const param_expr_handle = switch (info) {
                 .list => |bin| h: {
-                    expr_handle = bin.right;
+                    maybe_expr_handle = bin.right;
                     break :h bin.left;
                 },
-                else => expr_handle,
+                else => h: {
+                    maybe_expr_handle = null;
+                    break :h expr_handle;
+                },
             };
             const expr_type = expr_resolved_types[param_expr_handle];
             if (!self.build_instruction_parameter(s, ip, param_expr_handle, expr_type, record_errors)) {

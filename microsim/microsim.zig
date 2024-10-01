@@ -2,6 +2,7 @@ pub const Pipeline_State = @import("microsim/Pipeline_State.zig");
 const sim = @import("microsim/simulator.zig");
 pub const Simulator = sim.Simulator;
 pub const Pipeline = sim.Pipeline;
+pub const Dump_State_Options = sim.Dump_State_Options;
 
 pub const Debug_Log = @import("microsim/Debug_Log.zig");
 pub const Bus_Control = @import("microsim/Bus_Control.zig");

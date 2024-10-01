@@ -641,14 +641,17 @@ pub fn dr_i16_to_l(c: *Cycle) void {
 
 pub fn krio_to_l(c: *Cycle) void {
     c.krio_to_k();
+    c.k_to_l();
 }
 
 pub fn krio_bit_to_l(c: *Cycle) void {
     c.krio_bit_to_k();
+    c.k_to_l();
 }
 
 pub fn not_krio_bit_to_l(c: *Cycle) void {
     c.not_krio_bit_to_k();
+    c.k_to_l();
 }
 
 pub fn j_plus_k_to_l(c: *Cycle, freshness: Freshness, flags: Flags_Mode) void {
@@ -1078,6 +1081,10 @@ pub fn set_guard(c: *Cycle) void {
 
 pub fn check_guard(c: *Cycle) void {
     c.set_control_signal(.special, .check_guard);
+}
+
+pub fn power_mode(c: *Cycle, pm: arch.Power_Mode) void {
+    c.set_control_signal(.power, pm);
 }
 
 pub const Flags_Mode = enum {

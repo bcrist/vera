@@ -27,6 +27,7 @@ pub fn build(b: *std.Build) void {
     });
     exe.root_module.addImport("isa", isa.module("isa"));
     exe.root_module.addImport("iedb", isa.module("iedb"));
+    exe.root_module.addImport("iedb.sx", isa.module("iedb.sx"));
     exe.root_module.addImport("assembler", module);
     exe.root_module.addImport("arch", arch);
     exe.root_module.addImport("console", console);

@@ -31,7 +31,7 @@ pub fn read(self: *const Simple_Memory, ctrl: Bus_Control) ?Bus_Data {
 
     const base: usize = (ctrl.frame.raw() - self.frame_begin.raw()) * arch.addr.Frame.num_bytes_per_frame;
     const base_a = base + ctrl.aa.raw() * 4;
-    const base_b = base + ctrl.ab.raw() * 4;
+    const base_b = base + ctrl.ab.raw() * 4 + 2;
 
     return .{
         .da = .{

@@ -5,6 +5,21 @@ pub const Pipeline = enum {
     p2,
     p3,
 };
+
+pub const Dump_State_Options = struct {
+    uca: bool = false,
+    cs: bool = false,
+    sr: bool = false,
+    reg: usize = 0,
+
+    pub const all: Dump_State_Options = .{
+        .uca = true,
+        .cs = true,
+        .sr = true,
+        .reg = 32,
+    };
+};
+
 pub fn Simulator(comptime pipeline: Pipeline) type {
     const num_pipelines = switch (pipeline) {
         .all => arch.Pipeline.count,
@@ -250,12 +265,6 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
             }
         }
 
-        const Dump_State_Options = struct {
-            uca: bool = false,
-            cs: bool = false,
-            sr: bool = false,
-            reg: usize = 0,
-        };
         pub fn dump_state(self: *Self, writer: anytype, options: Dump_State_Options) !void {
             try writer.print("Microcycle: {}\n", .{ self.microcycles_simulated });
             try writer.print("Reset: {}\n", .{ self.state.reset });
