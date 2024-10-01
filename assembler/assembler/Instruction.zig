@@ -20,8 +20,8 @@ pub const Operation = union (enum) {
 
     // Data directives:
     db, zb,
+    dh, zh,
     dw, zw,
-    dd, zd,
 
     // Stack control directives:
     // payload is the size of the stack frame (align 2)
@@ -110,8 +110,8 @@ pub fn is_org_header(op: Operation_Type) bool {
         .insn,
         .bound_insn,
         .db, .zb,
+        .dh, .zh,
         .dw, .zw,
-        .dd, .zd,
         .push,
         .pop,
         => false,

@@ -531,7 +531,7 @@ fn compute_address_translation(self: *Pipeline_State, translations: *const at.Tr
             }
 
             const is_insn_load = switch(self.cs.sr2wi) {
-                .ip, .next_ip => op == .translate and self.cs.sr2wsrc == .virtual_addr,
+                .ip, .next_ip => self.cs.sr2wsrc == .virtual_addr,
                 else => false,
             };
 
@@ -698,7 +698,7 @@ pub fn get_l(self: Pipeline_State) arch.L {
             .a = self.flags.contains(.stat_a),
             .pipeline = self.pipe,
             .rsn = self.rsn,
-            .top = arch.Write_Index.init(self.jri.raw()),
+            .ti = arch.Write_Index.init(self.ti.raw()),
             .pucs = self.pucs,
         }).raw()),
         .d => self.read_d(arch.L),
@@ -903,7 +903,7 @@ pub fn simulate_transact(self: *Pipeline_State,
                 self.flags.setPresent(.stat_v, stat.v);
                 if (self.cs.statop == .load_zncva_ti) {
                     self.flags.setPresent(.stat_a, stat.a);
-                    self.ti = stat.top;
+                    self.ti = stat.ti;
                 }
             },
         }

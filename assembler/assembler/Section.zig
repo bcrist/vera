@@ -25,7 +25,7 @@ pub const Kind = enum {
 
             .stack, .none, .nil, .insn, .bound_insn, .org,
             .keep, .def, .undef, .local, .@"align",
-            .db, .dw, .dd, .zb, .zw, .zd, .push, .pop, .range,
+            .db, .dh, .dw, .zb, .zh, .zw, .push, .pop, .range,
             => unreachable,
         };
     }

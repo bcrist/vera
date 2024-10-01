@@ -43,7 +43,7 @@ pub fn parse(gpa: std.mem.Allocator, handle: Handle, name: []const u8, source: [
         },
         .none, .nil, .org, .@"align", .keep,
         .local, .insn, .bound_insn,
-        .db, .dw, .dd, .zb, .zw, .zd,
+        .db, .dh, .dw, .zb, .zh, .zw,
         .push, .pop, .range, .def, .undef,
         => {},
     };
@@ -250,7 +250,7 @@ pub fn collect_chunks(
                 .push, .pop => {
                     state.check_chunk_type(.code, insn_handle);
                 },
-                .db, .dw, .dd, .zb, .zw, .zd => {
+                .db, .dh, .dw, .zb, .zh, .zw => {
                     state.check_chunk_type(.data, insn_handle);
                 },
 

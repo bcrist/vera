@@ -193,12 +193,21 @@ fn get_alignment_for_chunk(a: *Assembler, chunk: Source_File.Chunk) Assembler.Al
                 alignment = resolved_align;
             },
             .db, .zb, .push, .pop, .insn, .bound_insn => break,
-            .dw, .dd, .zw, .zd, => {
+            .dh, .zh => {
                 if ((alignment.modulo & 1) != 0) {
                     alignment.modulo *= 2;
                 }
                 if ((alignment.offset & 1) != 0) {
                     alignment.offset = (alignment.offset + 1) % alignment.modulo;
+                }
+                break;
+            },
+            .dw, .zw => {
+                if ((alignment.modulo & 3) != 0) {
+                    alignment.modulo *= 4;
+                }
+                if ((alignment.offset & 3) != 0) {
+                    alignment.offset = (alignment.offset - (alignment.offset & 3) + 4) % alignment.modulo;
                 }
                 break;
             },
@@ -248,8 +257,13 @@ fn do_chunk_layout(a: *Assembler, chunk: Source_File.Chunk, initial_address: u32
                             }
                         },
 
-                        .dw, .dd, .zw, .zd => {
+                        .dh, .zh => {
                             address = apply_alignment(address, 2, 0);
+                            break;
+                        },
+
+                        .dw, .zw => {
+                            address = apply_alignment(address, 4, 0);
                             break;
                         },
 
@@ -295,22 +309,22 @@ fn do_chunk_layout(a: *Assembler, chunk: Source_File.Chunk, initial_address: u32
                 address += resolve_zeroed_data_directive_length(a, s, address, insn_handle, 1);
                 check_for_alignment_holes = true;
             },
-            .dw => {
+            .dh => {
                 address = check_and_apply_alignment(a, s, address, 2, 0, check_for_alignment_holes, insn_handle, chunk.section);
                 address += resolve_data_directive_length(a, s, address, insn_handle, 2);
                 check_for_alignment_holes = true;
             },
-            .zw => {
+            .zh => {
                 address = check_and_apply_alignment(a, s, address, 2, 0, check_for_alignment_holes, insn_handle, chunk.section);
                 address += resolve_zeroed_data_directive_length(a, s, address, insn_handle, 2);
                 check_for_alignment_holes = true;
             },
-            .dd => {
+            .dw => {
                 address = check_and_apply_alignment(a, s, address, 2, 0, check_for_alignment_holes, insn_handle, chunk.section);
                 address += resolve_data_directive_length(a, s, address, insn_handle, 4);
                 check_for_alignment_holes = true;
             },
-            .zd => {
+            .zw => {
                 address = check_and_apply_alignment(a, s, address, 2, 0, check_for_alignment_holes, insn_handle, chunk.section);
                 address += resolve_zeroed_data_directive_length(a, s, address, insn_handle, 4);
                 check_for_alignment_holes = true;
@@ -1072,11 +1086,11 @@ pub fn encode_page_data(a: *Assembler, file: *Source_File) void {
                 encode_instruction(a, s, insn_handle, address, insn_lengths[insn_handle], insn, encoding, page_datas);
             },
 
-            .db, .dw, .dd => {
+            .db, .dh, .dw => {
                 const granularity_bytes: u8 = switch (op) {
                     .db => 1,
-                    .dw => 2,
-                    .dd => 4,
+                    .dh => 2,
+                    .dw => 4,
                     else => unreachable,
                 };
                 const address = insn_addresses[insn_handle];
@@ -1097,7 +1111,7 @@ pub fn encode_page_data(a: *Assembler, file: *Source_File) void {
                 }
                 encode_data_directive(s, params, granularity_bytes, written, buffer);
             },
-            .zb, .zw, .zd => {
+            .zb, .zh, .zw => {
                 const address = insn_addresses[insn_handle];
                 var remaining: usize = insn_lengths[insn_handle];
                 var page = arch.addr.Page.init(@truncate(address >> @bitSizeOf(arch.addr.Offset)));

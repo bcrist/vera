@@ -861,7 +861,7 @@ pub const Status = packed struct (u32) {
     k: bool,
     a: bool,
     rsn: Register_Set_Number,
-    top: Write_Index,
+    ti: Write_Index,
     pucs: microcode.Slot,
 
     pub inline fn init(raw_value: Raw) Status {

@@ -59,7 +59,7 @@ pub fn process_labels_and_sections(a: *Assembler, file: *Source_File) void {
                         result.value_ptr.* = .{ .expression = bin.right };
                     }
                 },
-                .none, .nil, .org, .@"align", .keep, .insn, .bound_insn, .db, .dw, .dd, .zb, .zw, .zd, .range => {},
+                .none, .nil, .org, .@"align", .keep, .insn, .bound_insn, .db, .dh, .dw, .zb, .zh, .zw, .range => {},
             }
         }
 
@@ -299,7 +299,7 @@ pub fn try_resolve_expr_type(a: *Assembler, s: Source_File.Slices, expr_handle: 
             if (s.block.items(.block_type)[block_handle]) |op| {
                 expr_resolved_types[expr_handle] = switch (op) {
                     .none, .nil, .insn, .bound_insn, .org, .@"align", .keep, .range,
-                    .def, .undef, .local, .db, .dw, .dd, .zb, .zw, .zd, .push, .pop,
+                    .def, .undef, .local, .db, .dh, .dw, .zb, .zh, .zw, .push, .pop,
                     => unreachable,
 
                     .section => Expression.Type.absolute_address(.data),
@@ -567,7 +567,7 @@ fn try_resolve_symbol_type(a: *Assembler, s: Source_File.Slices, expr_handle: Ex
             if (sym_file.blocks.items(.block_type)[block_handle]) |op| {
                 expr_resolved_types[expr_handle] = switch (op) {
                     .none, .nil, .insn, .bound_insn, .org, .@"align", .keep, .range,
-                    .def, .undef, .local, .db, .dw, .dd, .zb, .zw, .zd, .push, .pop,
+                    .def, .undef, .local, .db, .dh, .dw, .zb, .zh, .zw, .push, .pop,
                     => unreachable,
 
                     .section => Expression.Type.absolute_address(.data),
@@ -650,7 +650,7 @@ pub fn check_instructions_and_directives_in_file(a: *Assembler, s: Source_File.S
                     check_instruction_depends_on_layout(s, insn_handle, maybe_params);
                 },
 
-                .db, .dw, .dd => {
+                .db, .dh, .dw => {
                     if (!allow_data) {
                         a.record_insn_error(s.file.handle, insn_handle, "Data directives are not allowed in .entry/.kentry/.code/.kcode sections", .{});
                     }
@@ -662,7 +662,7 @@ pub fn check_instructions_and_directives_in_file(a: *Assembler, s: Source_File.S
                     check_instruction_depends_on_layout(s, insn_handle, maybe_params);
                 },
 
-                .zb, .zw, .zd => {
+                .zb, .zh, .zw => {
                     if (!allow_data) {
                         a.record_insn_error(s.file.handle, insn_handle, "Data directives are not allowed in .entry/.kentry/.code/.kcode sections", .{});
                     }

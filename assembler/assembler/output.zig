@@ -565,8 +565,8 @@ fn add_listing_for_chunk(a: *Assembler, listing: *Listing, chunk: Source_File.Ch
             },
 
             .db, .zb => listing.add_data_line(addresses[i], lengths[i], .data8, line_numbers[i], line_source, options.clone_source_strings),
-            .dw, .zw => listing.add_data_line(addresses[i], lengths[i], .data16, line_numbers[i], line_source, options.clone_source_strings),
-            .dd, .zd => listing.add_data_line(addresses[i], lengths[i], .data32, line_numbers[i], line_source, options.clone_source_strings),
+            .dh, .zh => listing.add_data_line(addresses[i], lengths[i], .data16, line_numbers[i], line_source, options.clone_source_strings),
+            .dw, .zw => listing.add_data_line(addresses[i], lengths[i], .data32, line_numbers[i], line_source, options.clone_source_strings),
         }
     }
 }

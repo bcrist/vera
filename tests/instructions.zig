@@ -6,16 +6,16 @@ test {
 const assembly_prefix =
     \\    .boot
     \\    .org 0
-    \\_reset:                         .dw (.raw @reset)'16
-    \\_double_fault:                  .dw (.raw @halt)'16
-    \\_page_fault:                    .dw (.raw @halt)'16
-    \\_access_fault:                  .dw (.raw @halt)'16
-    \\_page_align_fault:              .dw (.raw @halt)'16
-    \\_align_fault:                   .dw (.raw @halt)'16
-    \\_overflow_fault:                .dw (.raw @halt)'16
-    \\_invalid_instruction_fault:     .dw (.raw @halt)'16
-    \\_instruction_protection_fault:  .dw (.raw @halt)'16
-    \\_interrupt:                     .dw (.raw @halt)'16
+    \\_reset:                         .dh (.raw @reset)'16
+    \\_double_fault:                  .dh (.raw @halt)'16
+    \\_page_fault:                    .dh (.raw @halt)'16
+    \\_access_fault:                  .dh (.raw @halt)'16
+    \\_page_align_fault:              .dh (.raw @halt)'16
+    \\_align_fault:                   .dh (.raw @halt)'16
+    \\_overflow_fault:                .dh (.raw @halt)'16
+    \\_invalid_instruction_fault:     .dh (.raw @halt)'16
+    \\_instruction_protection_fault:  .dh (.raw @halt)'16
+    \\_interrupt:                     .dh (.raw @halt)'16
     \\
     \\halt:
     \\    park
