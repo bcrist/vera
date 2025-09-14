@@ -75,6 +75,7 @@ pub const Misc_16 = enum (u8) {
     park,
     iret,
     fret,
+    freto,
     ifex,
 
     shlc,
@@ -218,9 +219,9 @@ pub const Bit_Op = enum (u3) {
     val_not_bit,
     val_bit_minus_one,
     val_neg_bit,
-    cb,
-    sb,
-    tb,
+    clrbit,
+    setbit,
+    bit,
     // unused,
 };
 

@@ -1,12 +1,12 @@
 pub const Rom = [Address.count]Result;
 
-pub const Address = arch.IR;
+pub const Address = reg.IR;
 
 pub const Result = packed struct (u24) {
     entry: microcode.Slot,
     cv: CV_Mode,
-    wio: arch.Write_Index_Offset,
-    krio: arch.K.Read_Index_Offset,
+    wio: reg.gpr.Write_Index_Offset,
+    krio: bus.K.Read_Index_Offset,
 
     pub inline fn init(raw_value: Raw) Result {
         return @bitCast(raw_value);
@@ -35,23 +35,23 @@ pub const CV_Mode = enum(u2) {
         return @intFromEnum(self);
     }
 
-    pub const format = fmt.format_enum;
+    pub const format = fmt.format_enum_dec;
 
-    pub const Raw = std.meta.Tag(CV_Mode);
+    pub const Raw = meta.Backing(CV_Mode);
 };
 
-pub fn write_compressed_rom(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, rom_data: *const Rom) ![]const u8 {
+pub fn write_compressed_rom(temp_allocator: std.mem.Allocator, w: *std.io.Writer, rom_data: *const Rom) !void {
     const Rom_Entry = rom_compress.Entry(Address.Raw, Result.Raw);
     var entries = try std.ArrayList(Rom_Entry).initCapacity(temp_allocator, rom_data.len);
-    defer entries.deinit();
+    defer entries.deinit(temp_allocator);
     for (0.., rom_data) |addr_usize, result_data| {
         // Note we're byte swapping the addresses here so that 8 bit opcodes appear as contiguous regions to the compression algorithm.
         // It requires also byte swapping when decoding to get the correct IR data out.
         const addr = Address.init(@intCast(addr_usize)).to_byte_swapped();
         const data: Result.Raw = result_data.raw();
-        try entries.append(Rom_Entry.init(addr, data));
+        entries.appendAssumeCapacity(Rom_Entry.init(addr, data));
     }
-    return try rom_compress.compress(Rom_Entry, result_allocator, temp_allocator, entries.items);
+    return try rom_compress.compress(Rom_Entry, temp_allocator, w, entries.items);
 }
 
 pub fn read_compressed_rom(compressed_data: []const u8, results: *Rom) void {
@@ -74,74 +74,59 @@ pub fn read_compressed_rom(compressed_data: []const u8, results: *Rom) void {
     rom_decompress.decompress(compressed_data, &ctx);
 }
 
-pub fn write_srec_rom(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, rom_data: *const Rom) ![]u8 {
-    var temp = std.ArrayList(u8).init(temp_allocator);
-    defer temp.deinit();
+pub fn write_srec_rom(temp_allocator: std.mem.Allocator, w: *std.io.Writer, rom_data: *const Rom) !void {
+    var temp: std.ArrayList(u8) = .empty;
+    defer temp.deinit(temp_allocator);
 
-    var encoded_data = std.ArrayList(u8).init(temp_allocator);
-    defer encoded_data.deinit();
-
-    var writer = try srec.writer(u24, encoded_data.writer(), .{
+    var writer = try srec.writer(u24, w, .{
         .header_data = "Vera Instruction Decode ROM",
         .pretty = true,
     });
 
     for (rom_data) |result| {
         const data = std.mem.toBytes(result.raw());
-        try temp.appendSlice(&data);
+        try temp.appendSlice(temp_allocator, &data);
     }
 
     try writer.write(0, temp.items);
     try writer.finish(0);
-
-    return result_allocator.dupe(u8, encoded_data.items);
 }
 
-pub fn write_ihex_rom(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, rom_data: *const Rom) ![]u8 {
-    var temp = std.ArrayList(u8).init(temp_allocator);
-    defer temp.deinit();
+pub fn write_ihex_rom(temp_allocator: std.mem.Allocator, w: *std.io.Writer, rom_data: *const Rom) !void {
+    var temp: std.ArrayList(u8) = .empty;
+    defer temp.deinit(temp_allocator);
 
-    var encoded_data = std.ArrayList(u8).init(temp_allocator);
-    defer encoded_data.deinit();
-
-    var writer = ihex.writer(u32, encoded_data.writer(), .{
+    var writer = ihex.writer(u32, w, .{
         .pretty = true,
     });
 
     for (rom_data) |result| {
         const data = std.mem.toBytes(result.raw());
-        try temp.appendSlice(&data);
+        try temp.appendSlice(temp_allocator, &data);
     }
 
     try writer.write(0, temp.items);
     try writer.finish(0);
-
-    return result_allocator.dupe(u8, encoded_data.items);
 }
 
-pub fn write_csv(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, rom_data: *const Rom) ![]u8 {
-    var out = std.ArrayList(u8).init(temp_allocator);
-    defer out.deinit();
-
-    var w = out.writer();
-
+pub fn write_csv(w: *std.io.Writer, rom_data: *const Rom) !void {
     try w.writeAll("IR,entry,cv,wio,krio\n");
 
     for (0.., rom_data) |raw_addr, data| {
         if (data.entry != .invalid_instruction) {
             const addr = Address.init(@intCast(raw_addr));
-            try w.print("{},{},{},{},{}\n", .{ addr, data.entry, data.cv, data.wio, data.krio });
+            try w.print("{f},{f},{f},{f},{f}\n", .{ addr, data.entry, data.cv, data.wio, data.krio });
         }
     }
-
-    return result_allocator.dupe(u8, out.items);
 }
 
-const arch = @import("../arch.zig");
+const bus = @import("bus.zig");
+const reg = @import("reg.zig");
 const fmt = @import("fmt.zig");
 const microcode = @import("microcode.zig");
 const rom_compress = @import("rom_compress");
 const rom_decompress = @import("rom_decompress");
 const srec = @import("srec");
 const ihex = @import("ihex");
+const meta = @import("meta");
 const std = @import("std");

@@ -26,10 +26,10 @@ test "pipe 0 (no block transfer)" {
         \\    43 .zero: sr .temp_2 = 0x00000070
         \\    47 .zero: sr .temp_2 = 0x0000007E
         \\    51 .zero: sr .temp_2 = 0x0007E000
-        \\    55 .zero: write .raw DB:0x0007 DA:0xE000 F:.block_transfer_control_frame AB:0x003 AA:0x003 BbAa   
-        \\    59 .zero: read  .raw DB:0x0000 DA:0x0000 F:.block_transfer_control_frame AB:0x003 AA:0x003 BbAa   
+        \\    55 .zero: write .physical DB:0x0007 DA:0xE000 F:.block_transfer_control_frame AB:0x003 AA:0x003 BbAa   
+        \\    59 .zero: read  .physical DB:0x0000 DA:0x0000 F:.block_transfer_control_frame AB:0x003 AA:0x003 BbAa   
         \\    59 .zero: sr .bp = 0x00000000
-        \\    67 .zero: read  .raw DB:0x0014 DA:0x0016 F:.zero AB:0x000 AA:0x000 ..Aa   
+        \\    67 .zero: read  .physical DB:0x0014 DA:0x0016 F:.zero AB:0x000 AA:0x000 ..Aa   
         \\    67 .zero: sr .next_ip = 0x00000016
         \\    71 .zero: read  .insn DB:0x0202 DA:0xFFFF F:.zero AB:0x005 AA:0x006 Bb.a   
         \\    71 .zero: sr .ip = 0x00000016

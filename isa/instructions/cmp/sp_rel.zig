@@ -9,6 +9,8 @@ pub const encoding = .{
     Encoder.init(16, Int_Mult(.imm, i8, 4)),
 };
 
+pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = -1;
+
 pub fn entry(c: *Cycle) void {
     c.read_to_d(.sp, .i8_x4_from_dr, .@"32b", .stack);
     c.d_to_l();

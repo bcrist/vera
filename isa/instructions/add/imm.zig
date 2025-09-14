@@ -12,6 +12,8 @@ pub const forms = .{
             Encoder.init(8, Int(.imm, i16)),
         };
 
+        pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = 0;
+
         pub const entry = add_i16;
     },
     struct {
@@ -26,6 +28,8 @@ pub const forms = .{
             mnemonic_encoder,
             Encoder.init(8, Negate(Int(.imm, i16))),
         };
+
+        pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = 0;
 
         fn mnemonic_encoder(mnemonic: isa.Mnemonic) opcodes.LSB {
             return switch (mnemonic) {
@@ -47,19 +51,21 @@ pub const forms = .{
             ;
         
         pub const encoding = opcodes.LSB.inc;
-        pub const krio: arch.K.Read_Index_Offset.Raw = 1;
+        pub const krio: arch.bus.K.Read_Index_Offset.Raw_Signed = 1;
+        pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = 0;
 
         pub const entry = add_krio;
     },
     struct {
         pub const spec =
             \\ addv 1
-            \\ subv 1
+            \\ subv -1
             \\ incv
             ;
         
         pub const encoding = opcodes.LSB.incv;
-        pub const krio: arch.K.Read_Index_Offset.Raw = 1;
+        pub const krio: arch.bus.K.Read_Index_Offset.Raw_Signed = 1;
+        pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = 0;
 
         pub const entry = add_krio;
     },
@@ -71,7 +77,8 @@ pub const forms = .{
             ;
         
         pub const encoding = opcodes.LSB.dec;
-        pub const krio: arch.K.Read_Index_Offset.Raw = -1;
+        pub const krio: arch.bus.K.Read_Index_Offset.Raw_Signed = -1;
+        pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = 0;
 
         pub const entry = add_krio;
     },
@@ -83,7 +90,8 @@ pub const forms = .{
             ;
         
         pub const encoding = opcodes.LSB.decv;
-        pub const krio: arch.K.Read_Index_Offset.Raw = -1;
+        pub const krio: arch.bus.K.Read_Index_Offset.Raw_Signed = -1;
+        pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = 0;
 
         pub const entry = add_krio;
     },
@@ -94,7 +102,8 @@ pub const forms = .{
             ;
         
         pub const encoding = opcodes.LSB.addc_0;
-        pub const krio: arch.K.Read_Index_Offset.Raw = 0;
+        pub const krio: arch.bus.K.Read_Index_Offset.Raw_Signed = 0;
+        pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = 0;
 
         pub const entry = add_krio;
     },
@@ -105,7 +114,8 @@ pub const forms = .{
             ;
         
         pub const encoding = opcodes.LSB.addcv_0;
-        pub const krio: arch.K.Read_Index_Offset.Raw = 0;
+        pub const krio: arch.bus.K.Read_Index_Offset.Raw_Signed = 0;
+        pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = 0;
 
         pub const entry = add_krio;
     },
@@ -115,15 +125,15 @@ pub fn add_i16(c: *Cycle, mnemonic: isa.Mnemonic) void {
     c.reg_to_j();
     c.dr_i16_to_k();
     j_plus_k_to_l(c, mnemonic);
-    c.l_to_reg();
+    c.l_to_reg(true);
     c.load_and_exec_next_insn();
 }
 
 pub fn add_krio(c: *Cycle, mnemonic: isa.Mnemonic) void {
     c.reg_to_j();
-    c.krio_to_k();
+    c.krio_to_k(.sx);
     j_plus_k_to_l(c, mnemonic);
-    c.l_to_reg();
+    c.l_to_reg(true);
     c.load_and_exec_next_insn();
 }
 

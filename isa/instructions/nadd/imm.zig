@@ -11,6 +11,7 @@ pub const forms = .{
             opcodes.mnemonic_encoder(opcodes.LSB , .{ .suffix = "_i16" }),
             Encoder.init(8, Int(.imm, i16)),
         };
+        pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = 0;
 
         pub const entry = nadd_i16;
     },
@@ -35,7 +36,8 @@ pub const forms = .{
                 else => unreachable,
             };
         }
-        pub const krio: arch.K.Read_Index_Offset.Raw = 1;
+        pub const krio: arch.bus.K.Read_Index_Offset.Raw_Signed = 1;
+        pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = 0;
 
         pub const entry = nadd_krio;
     },
@@ -45,15 +47,15 @@ pub fn nadd_i16(c: *Cycle, mnemonic: isa.Mnemonic) void {
     c.reg_to_j();
     c.dr_i16_to_k();
     k_minus_j_to_l(c, mnemonic);
-    c.l_to_reg();
+    c.l_to_reg(true);
     c.load_and_exec_next_insn();
 }
 
 pub fn nadd_krio(c: *Cycle, mnemonic: isa.Mnemonic) void {
     c.reg_to_j();
-    c.krio_to_k();
+    c.krio_to_k(.sx);
     k_minus_j_to_l(c, mnemonic);
-    c.l_to_reg();
+    c.l_to_reg(true);
     c.load_and_exec_next_insn();
 }
 

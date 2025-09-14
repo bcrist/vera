@@ -13,6 +13,7 @@ pub const encoding = .{
     Encoder.init(11, Reg(.reg)),
 };
 pub const krio = Reg(.reg);
+pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = 0;
 
 pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
     c.reg_to_j();
@@ -27,7 +28,7 @@ pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
         .shlv, .shrv, .shrsv => .flags__fault_on_overflow,
         else => unreachable,
     });
-    c.l_to_reg();
+    c.l_to_reg(true);
     c.load_and_exec_next_insn();
 }
 

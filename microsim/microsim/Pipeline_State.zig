@@ -5,15 +5,15 @@ uca: arch.microcode.Address = arch.microcode.Address.init(0),
 pucs: arch.microcode.Slot = arch.microcode.Slot.init(0),
 cs: arch.Control_Signals = arch.Control_Signals.zeroes,
 rsn: arch.Register_Set_Number = arch.Register_Set_Number.init(0),
-dr: arch.DR = arch.DR.init(0),
-ir: arch.IR = arch.IR.init(0),
+dr: arch.DR = arch.reg.DR.init(0),
+ir: arch.IR = arch.reg.IR.init(0),
 ti: arch.Write_Index = arch.Write_Index.init(0),
 wi: arch.Write_Index = arch.Write_Index.init(0),
-jri: arch.J.Read_Index = arch.J.Read_Index.init(0),
-j: arch.J = arch.J.init(0),
-krio: arch.K.Read_Index_Offset = arch.K.Read_Index_Offset.init(0),
-kri: arch.K.Read_Index = arch.K.Read_Index.init(0),
-k: arch.K = arch.K.init(0),
+jri: arch.bus.J.Read_Index = arch.bus.J.Read_Index.init(0),
+j: arch.J = arch.bus.J.init(0),
+krio: arch.bus.K.Read_Index_Offset = arch.bus.K.Read_Index_Offset.init(0),
+kri: arch.bus.K.Read_Index = arch.bus.K.Read_Index.init(0),
+k: arch.K = arch.bus.K.init(0),
 sr1d: arch.Reg = arch.Reg.init(0),
 sr2d: arch.Reg = arch.Reg.init(0),
 asn4: at.Entry.ASN4 = at.Entry.ASN4.init(0),
@@ -49,6 +49,11 @@ pub const Flag = enum {
     add_at_k,
     remove_at_k,
 
+    // potential faults
+    kriu,
+    wiu,
+    wiv,
+
     // faults
     page_fault,
     access_fault,
@@ -56,6 +61,9 @@ pub const Flag = enum {
     align_fault,
     overflow_fault,
     insn_fault,
+    reg_stack_underflow_fault,
+    reg_stack_overflow_fault,
+
     any_fault,
 
     // bus signals
@@ -65,7 +73,6 @@ pub const Flag = enum {
     ubb,
     read,
     write,
-    block_transfer,
     guard_mismatch,
     update_frame_state,
 };
@@ -77,12 +84,13 @@ const fault_flags = std.EnumSet(Flag).initMany(&.{
     .align_fault,
     .overflow_fault,
     .insn_fault,
+    .reg_stack_underflow_fault,
+    .reg_stack_overflow_fault,
 });
 
 const transient_flags = std.EnumSet(Flag).initMany(&.{
     .add_at_k,
     .remove_at_k,
-    .block_transfer,
     .guard_mismatch,
     .update_frame_state,
     .any_fault,
@@ -92,6 +100,9 @@ const transient_flags = std.EnumSet(Flag).initMany(&.{
     .ubb,
     .read,
     .write,
+    .kriu,
+    .wiu,
+    .wiv,
 }).unionWith(fault_flags);
 
 const Compute_Result = struct {
@@ -111,19 +122,14 @@ pub fn simulate_decode(self: *Pipeline_State,
     const base_ri = self.ti.raw_signed();
     const flags = self.flags;
     const id_result = insn_decode_rom[self.ir.raw()];
+
     const seq_result = simulate_sequencer(
         self.cs.seqop,
         self.cs.allowint,
         self.emode,
         pending_interrupt,
         reset,
-        flags.contains(.page_fault),
-        flags.contains(.access_fault),
-        flags.contains(.page_align_fault),
-        flags.contains(.align_fault),
-        flags.contains(.overflow_fault),
-        flags.contains(.insn_fault),
-        flags.contains(.any_fault),
+        flags,
     );
 
     const prev_uca_slot = self.uca.slot;
@@ -148,14 +154,22 @@ pub fn simulate_decode(self: *Pipeline_State,
         },
     };
 
-    self.jri = arch.J.Read_Index.init(@bitCast(base_ri));
-    self.kri = arch.K.Read_Index.init(@bitCast(base_ri -% id_result.krio.raw()));
+    const kri, const kriovf = @subWithOverflow(base_ri, id_result.krio.raw());
+    const wi, const wiovf = @addWithOverflow(base_ri, id_result.wio.raw());
+    
+    self.flags = self.flags.differenceWith(transient_flags);
+    if (kriovf) self.flags.insert(.kriu);
+    if (wiovf) {
+        self.flags.insert(if (id_result.wio.raw() < 0) .wiu else .wiv);
+    }
+
+    self.jri = arch.bus.J.Read_Index.init(@bitCast(base_ri));
+    self.kri = arch.bus.K.Read_Index.init(@bitCast(kri));
     self.krio = id_result.krio;
-    self.wi = arch.Write_Index.init(@bitCast(base_ri +% id_result.wio.raw()));
+    self.wi = arch.Write_Index.init(@bitCast(wi));
     self.pucs = prev_uca_slot;
     self.uca = next_uca;
     self.cs = microcode_rom[next_uca.raw()];
-    self.flags = self.flags.differenceWith(transient_flags);
     self.emode = seq_result.emode;
     self.next_stage = .setup;
 }
@@ -172,46 +186,50 @@ fn simulate_sequencer(
     emode: arch.Execution_Mode,
     interrupt_pending: bool,
     reset: bool,
-    page_fault: bool,
-    access_fault: bool,
-    page_align_fault: bool,
-    align_fault: bool,
-    overflow_fault: bool,
-    insn_fault: bool,
-    any_fault: bool,
+    flags: std.EnumSet(Flag),
 ) Sequencer_Result {
     return if (reset) .{
         .slot_literal = slot_literal(.reset),
         .slot_src = .seq_literal,
         .emode = .interrupt_fault,
-    } else if (emode.is_fault() and any_fault) .{
-        .slot_literal = slot_literal(.double_fault),
-        .slot_src = .seq_literal,
-        .emode = .fault,
-    } else if (page_fault) .{
-        .slot_literal = slot_literal(.page_fault),
-        .slot_src = .seq_literal,
-        .emode = if (emode.is_interrupt()) .interrupt_fault else .fault,
-    } else if (access_fault) .{
-        .slot_literal = slot_literal(.access_fault),
-        .slot_src = .seq_literal,
-        .emode = if (emode.is_interrupt()) .interrupt_fault else .fault,
-    } else if (page_align_fault) .{
-        .slot_literal = slot_literal(.page_align_fault),
-        .slot_src = .seq_literal,
-        .emode = if (emode.is_interrupt()) .interrupt_fault else .fault,
-    } else if (align_fault) .{
-        .slot_literal = slot_literal(.align_fault),
-        .slot_src = .seq_literal,
-        .emode = if (emode.is_interrupt()) .interrupt_fault else .fault,
-    } else if (overflow_fault) .{
-        .slot_literal = slot_literal(.overflow_fault),
-        .slot_src = .seq_literal,
-        .emode = if (emode.is_interrupt()) .interrupt_fault else .fault,
-    } else if (insn_fault) .{
-        .slot_literal = slot_literal(.reset),
-        .slot_src = .continuation,
-        .emode = if (emode.is_interrupt()) .interrupt_fault else .fault,
+    } else if (flags.contains(.any_fault)) result: {
+        break :result if (emode.is_fault()) .{
+            .slot_literal = slot_literal(.double_fault),
+            .slot_src = .seq_literal,
+            .emode = .fault,
+        } else if (flags.contains(.page_fault)) .{
+            .slot_literal = slot_literal(.page_fault),
+            .slot_src = .seq_literal,
+            .emode = if (emode.is_interrupt()) .interrupt_fault else .fault,
+        } else if (flags.contains(.access_fault)) .{
+            .slot_literal = slot_literal(.access_fault),
+            .slot_src = .seq_literal,
+            .emode = if (emode.is_interrupt()) .interrupt_fault else .fault,
+        } else if (flags.contains(.page_align_fault)) .{
+            .slot_literal = slot_literal(.page_align_fault),
+            .slot_src = .seq_literal,
+            .emode = if (emode.is_interrupt()) .interrupt_fault else .fault,
+        } else if (flags.contains(.align_fault)) .{
+            .slot_literal = slot_literal(.align_fault),
+            .slot_src = .seq_literal,
+            .emode = if (emode.is_interrupt()) .interrupt_fault else .fault,
+        } else if (flags.contains(.overflow_fault)) .{
+            .slot_literal = slot_literal(.overflow_fault),
+            .slot_src = .seq_literal,
+            .emode = if (emode.is_interrupt()) .interrupt_fault else .fault,
+        } else if (flags.contains(.reg_stack_underflow_fault)) .{
+            .slot_literal = slot_literal(.register_stack_underflow_fault),
+            .slot_src = .seq_literal,
+            .emode = if (emode.is_interrupt()) .interrupt_fault else .fault,
+        } else if (flags.contains(.reg_stack_overflow_fault)) .{
+            .slot_literal = slot_literal(.register_stack_overflow_fault),
+            .slot_src = .seq_literal,
+            .emode = if (emode.is_interrupt()) .interrupt_fault else .fault,
+        } else if (flags.contains(.insn_fault)) .{
+            .slot_literal = slot_literal(.reset),
+            .slot_src = .continuation,
+            .emode = if (emode.is_interrupt()) .interrupt_fault else .fault,
+        } else unreachable;
     } else if (emode == .normal and interrupt_pending and allow_int) .{
         .slot_literal = slot_literal(.interrupt),
         .slot_src = .seq_literal,
@@ -251,16 +269,27 @@ fn slot_literal(slot: arch.microcode.Slot) u4 {
 pub fn simulate_setup(self: *Pipeline_State, registers: *const arch.Register_File) void {
     std.debug.assert(self.next_stage == .setup);
 
-    const rsn = self.rsn.raw();
+    const read_rsn: arch.Register_Set_Number.Raw = switch (self.cs.special) {
+        .read_from_other_rsn => switch (self.emode) {
+            .normal, .interrupt, .fault => self.rsn.raw(),
+            .interrupt_fault => arch.Register_Set_Number.interrupt_pipe_0.raw() + self.pipe.raw(),
+        },
+        else => switch (self.emode) {
+            .normal => self.rsn.raw(),
+            .interrupt => arch.Register_Set_Number.interrupt_pipe_0.raw() + self.pipe.raw(),
+            .fault => arch.Register_Set_Number.fault_pipe_0.raw() + self.pipe.raw(),
+            .interrupt_fault => arch.Register_Set_Number.interrupt_fault_pipe_0.raw() + self.pipe.raw(),
+        },
+    };
     const vari = self.cs.vari;
     const vao = self.cs.vao;
 
-    const sr1d = registers[rsn].sr1[self.cs.sr1ri.raw()];
-    const sr2d = registers[rsn].sr2[self.cs.sr2ri.raw()];
+    const sr1d = registers[read_rsn].sr1[self.cs.sr1ri.raw()];
+    const sr2d = registers[read_rsn].sr2[self.cs.sr2ri.raw()];
     const vab = if (vari.to_sr1()) |sr1ri|
-        registers[rsn].sr1[sr1ri.raw()]
+        registers[read_rsn].sr1[sr1ri.raw()]
     else if (vari.to_sr2()) |sr2ri|
-        registers[rsn].sr2[sr2ri.raw()]
+        registers[read_rsn].sr2[sr2ri.raw()]
     else unreachable;
 
     const va_offset: u32 = switch (vao) {
@@ -270,18 +299,18 @@ pub fn simulate_setup(self: *Pipeline_State, registers: *const arch.Register_Fil
         else => @bitCast(@as(i32, vao.raw())),
     };
 
-    self.j = arch.J.init(switch (self.cs.jsrc) {
+    self.j = arch.bus.J.init(switch (self.cs.jsrc) {
         .zero => 0,
-        .jr => registers[rsn].reg[self.jri.raw()].raw(),
+        .jr => registers[read_rsn].reg[self.jri.raw()].raw(),
         .sr1 => sr1d.raw(),
         .sr2 => sr2d.raw(),
     });
 
-    self.k = arch.K.init(switch (self.cs.ksrc) {
+    self.k = arch.bus.K.init(switch (self.cs.ksrc) {
         .zero => 0,
         .vao => @bitCast(@as(i32, vao.raw())),
         .krio => @bitCast(@as(i32, self.krio.raw())),
-        .kr => registers[rsn].reg[self.kri.raw()].raw(),
+        .kr => registers[read_rsn].reg[self.kri.raw()].raw(),
         .sr1 => sr1d.raw(),
         .sr2 => sr2d.raw(),
         .krio_bit => @as(u32, 1) << @bitCast(self.krio.raw()),
@@ -290,6 +319,10 @@ pub fn simulate_setup(self: *Pipeline_State, registers: *const arch.Register_Fil
         .dr_byte_2_sx => @bitCast(self.dr.byte2_i32()),
         .dr_byte_21_sx => @bitCast(self.dr.byte21_i32()),
     });
+
+    if (self.cs.ksrc == .kr and self.flags.contains(.kriu)) {
+        self.flags.insert(.reg_stack_underflow_fault);
+    }
 
     self.sr1d = sr1d;
     self.sr2d = sr2d;
@@ -313,13 +346,17 @@ pub fn simulate_compute(self: *Pipeline_State, translations: *const at.Translati
     };
 
     switch (self.cs.special) {
-        .none, .set_guard, .check_guard, .load_rsn_from_l, .toggle_rsn => {},
+        .none, .set_guard, .check_guard, .load_rsn_from_l, .read_from_other_rsn, .write_to_other_rsn => {},
         .fault_on_overflow => if (self.compute_result.vout) self.flags.insert(.overflow_fault),
         .trigger_fault => self.flags.insert(.insn_fault),
-        .block_transfer => self.flags.insert(.block_transfer),
     }
 
     self.compute_address_translation(translations);
+
+    if (self.cs.tiw or self.cs.gprw) {
+        if (self.flags.contains(.wiu)) self.flags.insert(.reg_stack_underflow_fault);
+        if (self.flags.contains(.wiv)) self.flags.insert(.reg_stack_overflow_fault);
+    }
 
     // N.B. All faults flags must be computed before this point!
     const any_fault = self.flags.intersectWith(fault_flags).count() > 0;
@@ -521,7 +558,7 @@ fn compute_address_translation(self: *Pipeline_State, translations: *const at.Tr
     self.matching_entry = matching;
     self.other_entry = other;
 
-    if (self.flags.contains(.stat_a) and space != .raw) {
+    if (self.flags.contains(.stat_a) and space != .physical) {
         // address translation enabled
         if (op == .translate and any_match) {
             self.frame = matching.frame;
@@ -705,7 +742,7 @@ pub fn get_l(self: Pipeline_State) arch.L {
     };
 }
 
-/// If self.flags.contains(.read), you must set self.da and self.db with the data read from system RAM or a device
+/// If self.flags.contains(.read), you must set self.da and self.db with the data read from system RAM or a device before calling simulate_transact
 /// If self.flags.contains(.write) and !self.flags.contains(.guard_mismatch), you must move self.da and self.db
 /// into the appropriate memory/device location after simulate_transact() returns.
 pub fn simulate_transact(self: *Pipeline_State,
@@ -726,7 +763,7 @@ pub fn simulate_transact(self: *Pipeline_State,
             if (self.cs.drw) {
                 self.write_d(self.dr);
             } else {
-                self.write_d(arch.D.init((self.dr.raw() & 0xFFFF0000) | self.ir.raw()));
+                self.write_d(arch.D.init(self.ir.raw());
             }
         },
     }
@@ -736,37 +773,40 @@ pub fn simulate_transact(self: *Pipeline_State,
     }
 
     if (self.cs.irw and !any_fault) {
-        self.ir = arch.IR.init(@truncate(self.dr.raw()));
+        self.ir = arch.reg.IR.init(@truncate(self.dr.raw()));
     }
 
-    var set_guard = false;
-    var rsn = self.rsn;
-    switch (self.cs.special) {
-        .none, .fault_on_overflow, .block_transfer, .trigger_fault => {},
-        .set_guard => set_guard = !any_fault,
-        .check_guard => {
+    const write_rsn = switch (self.cs.special) {
+        .write_to_other_rsn => switch (self.emode) {
+            .normal, .interrupt, .fault => self.rsn,
+            .interrupt_fault => .init(arch.Register_Set_Number.interrupt_pipe_0.raw() + self.pipe.raw()),
+        },
+        else => switch (self.emode) {
+            .normal => self.rsn.raw(),
+            .interrupt => .init(arch.Register_Set_Number.interrupt_pipe_0.raw() + self.pipe.raw()),
+            .fault => .init(arch.Register_Set_Number.fault_pipe_0.raw() + self.pipe.raw()),
+            .interrupt_fault => .init(arch.Register_Set_Number.interrupt_fault_pipe_0.raw() + self.pipe.raw()),
+        },
+    };
+
+    const set_guard = switch (self.cs.special) {
+        .none, .fault_on_overflow, .trigger_fault, .load_rsn_from_l => false,
+        .set_guard => !any_fault,
+        .check_guard => set_guard: {
             const guard = arch.Guarded_Memory_Register.from_frame_and_offset(self.frame, self.va.offset);
             if (guards[self.pipe.raw()].raw() != guard.raw()) {
                 self.flags.insert(.guard_mismatch);
             }
+            break :set_guard false;
         },
-        .load_rsn_from_l => if (!any_fault) {
-            // Note we use the new RSN for any register writes
-            rsn = arch.Register_Set_Number.init(@truncate(l.raw()));
-            if (self.debug_log) |dl| {
-                dl.report(self.pipe, .{ .rsn = rsn });
-            }
-        },
-        .toggle_rsn => if (!any_fault) {
-            // Note we use the new RSN for any register writes
-            rsn = arch.Register_Set_Number.init(rsn.raw() ^ arch.Register_Set_Number.msb.raw());
-            if (self.debug_log) |dl| {
-                dl.report(self.pipe, .{ .rsn = rsn });
-            }
-        },
-    }
+    };
 
-    self.rsn = rsn;
+    if (!any_fault and self.cs.special == .load_rsn_from_l) {
+        self.rsn = .init(@truncate(l.raw()));
+        if (self.debug_log) |dl| {
+            dl.report(self.pipe, .{ .rsn = self.rsn });
+        }
+    }
 
     if (self.flags.contains(.write)) {
         const guard = arch.Guarded_Memory_Register.from_frame_and_offset(self.frame, self.va.offset);
@@ -807,12 +847,13 @@ pub fn simulate_transact(self: *Pipeline_State,
         if (self.cs.gprw) {
             if (self.debug_log) |dl| {
                 dl.report(self.pipe, .{ .reg = .{
+                    .rsn = write_rsn,
                     .wi = self.wi,
-                    .old_data = registers[rsn.raw()].reg[self.wi.raw()],
+                    .old_data = registers[write_rsn.raw()].reg[self.wi.raw()],
                     .new_data = arch.Reg.init(l.raw()),
                 }});
             }
-            registers[rsn.raw()].reg[self.wi.raw()] = arch.Reg.init(l.raw());
+            registers[write_rsn.raw()].reg[self.wi.raw()] = arch.Reg.init(l.raw());
         }
 
         const sr1wsrc = self.cs.sr1wsrc;
@@ -827,13 +868,14 @@ pub fn simulate_transact(self: *Pipeline_State,
 
             if (self.debug_log) |dl| {
                 dl.report(self.pipe, .{ .sr = .{
-                    .index = arch.Any_SR_Index.from_sr1(wi),
-                    .old_data = registers[rsn.raw()].sr1[wi.raw()],
+                    .rsn = write_rsn,
+                    .index = arch.reg.sr.Any_Index.from_sr1(wi),
+                    .old_data = registers[write_rsn.raw()].sr1[wi.raw()],
                     .new_data = value,
                 }});
             }
 
-            registers[rsn.raw()].sr1[wi.raw()] = value;
+            registers[write_rsn.raw()].sr1[wi.raw()] = value;
         }
 
         const sr2wsrc = self.cs.sr2wsrc;
@@ -848,15 +890,16 @@ pub fn simulate_transact(self: *Pipeline_State,
 
             if (self.debug_log) |dl| {
                 dl.report(self.pipe, .{ .sr = .{
-                    .index = arch.Any_SR_Index.from_sr2(wi),
-                    .old_data = registers[rsn.raw()].sr2[wi.raw()],
+                    .rsn = write_rsn,
+                    .index = arch.reg.sr.Any_Index.from_sr2(wi),
+                    .old_data = registers[write_rsn.raw()].sr2[wi.raw()],
                     .new_data = value,
                 }});
             }
 
-            registers[rsn.raw()].sr2[wi.raw()] = value;
+            registers[write_rsn.raw()].sr2[wi.raw()] = value;
 
-            if (wi == .asn) {
+            if (wi == .asn and self.cs.special != .write_) {
                 self.asn4 = at.Entry.ASN4.init(@truncate(value.raw()));
             }
         }
@@ -1030,7 +1073,6 @@ pub fn get_bus_control(self: *Pipeline_State) Bus_Control {
         .lbb = self.flags.contains(.lbb),
         .ubb = self.flags.contains(.ubb),
         .guard_mismatch = self.flags.contains(.guard_mismatch),
-        .block_transfer = self.flags.contains(.block_transfer),
         .update_frame_state = self.flags.contains(.update_frame_state),
     };
 }

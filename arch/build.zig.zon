@@ -1,9 +1,13 @@
 .{
-    .name = "arch",
+    .name = .vera_arch,
+    .fingerprint = 0x26f1b89f9d2da397,
     .version = "0.0.0",
-    .minimum_zig_version = "0.13.0",
+    .minimum_zig_version = "0.15.1",
     .paths = .{""},
     .dependencies = .{
+        .meta = .{
+            .path = "../../zig-meta",
+        },
         .rom_compress = .{
             .path = "../../zig-rom-compress",
         },

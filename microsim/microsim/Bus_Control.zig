@@ -7,7 +7,6 @@ uba: bool,
 lbb: bool,
 ubb: bool,
 guard_mismatch: bool, // disregard write when this is true
-block_transfer: bool,
 update_frame_state: bool,
 
 const arch = @import("arch");

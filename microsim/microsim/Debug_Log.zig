@@ -17,13 +17,15 @@ pub const Action = union (enum) {
 };
 
 pub const Reg_Info = struct {
+    rsn: arch.Register_Set_Number,
     wi: arch.Write_Index,
     old_data: arch.Reg,
     new_data: arch.Reg,
 };
 
 pub const SR_Info = struct {
-    index: arch.Any_SR_Index,
+    rsn: arch.Register_Set_Number,
+    index: arch.reg.sr.Any_Index,
     old_data: arch.Reg,
     new_data: arch.Reg,
 };
@@ -98,7 +100,6 @@ pub fn dump(self: *Debug_Log, writer: anytype, options: Dump_Options) !void {
                         if (info.ctrl.lba) "a" else ".",
                         if (info.ctrl.update_frame_state) "U" else " ",
                         if (info.ctrl.guard_mismatch) "!" else " ",
-                        if (info.ctrl.block_transfer) " block_transfer" else "",
                     });
                 }
             },

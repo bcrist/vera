@@ -8,6 +8,7 @@ pub const encoding = .{
     opcodes.mnemonic_encoder(opcodes.LSB, .{ .suffix = "_i16" }),
     Encoder.init(8, Int(.imm, i16)),
 };
+pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = 0;
 
 pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
     c.reg_to_j();
@@ -18,7 +19,7 @@ pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
         .xor => .xor,
         else => unreachable,
     }, .fresh, .flags);
-    c.l_to_reg();
+    c.l_to_reg(true);
     c.load_and_exec_next_insn();
 }
 

@@ -5,12 +5,11 @@ pub const encoding = .{
     Encoder.init(11, Reg(.reg)),
 };
 pub const krio = Reg(.reg);
-pub const wio: arch.Write_Index_Offset.Raw = 1;
+pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = 1;
 
 pub fn entry(c: *Cycle) void {
     c.reg_to_k_to_l();
-    c.l_to_reg();
-    c.wi_to_ti();
+    c.l_to_reg(true);
     c.load_and_exec_next_insn();
 }
 

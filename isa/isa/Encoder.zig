@@ -59,7 +59,7 @@ pub fn init(bit_offset: Encoded_Instruction.Bit_Length_Type, what: anytype) Enco
     var domain: Domain = undefined;
     const T = @TypeOf(what);
     switch (@typeInfo(T)) {
-        .Type => {
+        .@"type" => {
             if (@hasDecl(what, "Inner")) {
                 const inner_encoder = comptime Encoder.init(0, what.Inner);
                 if (comptime std.mem.eql(u8, @tagName(what.op), "negate")) {
@@ -88,16 +88,16 @@ pub fn init(bit_offset: Encoded_Instruction.Bit_Length_Type, what: anytype) Enco
                 domain = what.domain;
             }
         },
-        .Enum => {
+        .@"enum" => {
             const Tag = std.meta.Tag(T);
             value = .{ .constant = @intFromEnum(what) };
             domain = .{ .int = .{
-                .signedness = @typeInfo(Tag).Int.signedness,
+                .signedness = @typeInfo(Tag).int.signedness,
                 .bits = @bitSizeOf(Tag),
                 .multiple = 1,
             }};
         },
-        .Int => |info| {
+        .int => |info| {
             value = .{ .constant = what };
             domain = .{ .int = .{
                 .signedness = info.signedness,

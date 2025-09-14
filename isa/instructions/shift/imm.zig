@@ -13,10 +13,11 @@ pub const encoding = .{
     Encoder.init(11, Int(.imm, u5)),
 };
 pub const krio = Int(.imm, u5);
+pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = 0;
 
 pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
     c.reg_to_j();
-    c.krio_to_k();
+    c.krio_to_k(.zx);
     c.j_shift_k_to_l(switch (mnemonic) {
         .shl, .shlv => .shl,
         .shr, .shrv => .shr,
@@ -27,7 +28,7 @@ pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
         .shlv, .shrv, .shrsv => .flags__fault_on_overflow,
         else => unreachable,
     });
-    c.l_to_reg();
+    c.l_to_reg(true);
     c.load_and_exec_next_insn();
 }
 

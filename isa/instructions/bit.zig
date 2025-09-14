@@ -1,22 +1,23 @@
-pub const spec = "tb (imm)";
+pub const spec = "bit (imm)";
 pub const encoding = .{
     opcodes.LSB.bit_op,
-    Encoder.init(8, opcodes.Bit_Op.tb),
+    Encoder.init(8, opcodes.Bit_Op.bit),
     Encoder.init(11, Int(.imm, u5)),
 };
 
 pub const krio = Int(.imm, u5);
+pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = -1;
 
 pub fn entry(c: *Cycle) void {
     c.reg_to_j();
     c.krio_bit_to_k();
     c.j_logic_k_to_l(.xor, .fresh, .no_flags);
-    c.l_to_reg();
+    c.l_to_reg(true);
     c.load_and_exec_next_insn();
 }
 
 const opcodes = @import("opcodes.zig");
-const Reg_Bit = placeholders.Reg_Bit;
+const Bit = placeholders.Bit;
 const Int = placeholders.Int;
 const Reg = placeholders.Reg;
 const placeholders = @import("../compile/placeholders.zig");

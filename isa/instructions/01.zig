@@ -1050,7 +1050,7 @@ pub const instructions = .{
         pub const load_temp_2_2                  = load_sr_pt2(.temp_2, load_temp_1);
         pub const load_temp_1_2                  = load_sr_pt2(.temp_1, restore_rsn);
 
-        fn load_sr_pt1(comptime sr: arch.Any_SR_Index) fn(c: *Cycle)void {
+        fn load_sr_pt1(comptime sr: arch.reg.sr.Any_Index) fn(c: *Cycle)void {
             const offset = @offsetOf(arch.Context_State, @tagName(sr)) - (arch.register_count * @sizeOf(arch.Reg));
             return struct {
                 pub fn func(c: *Cycle) void {
@@ -1061,7 +1061,7 @@ pub const instructions = .{
                 }
             }.func;
         }
-        fn load_sr_pt2(comptime sr: arch.Any_SR_Index, comptime next: *const anyopaque) fn(c: *Cycle)void {
+        fn load_sr_pt2(comptime sr: arch.reg.sr.Any_Index, comptime next: *const anyopaque) fn(c: *Cycle)void {
             const offset = @offsetOf(arch.Context_State, @tagName(sr)) - (arch.register_count * @sizeOf(arch.Reg));
             return struct {
                 pub fn func(c: *Cycle) void {
@@ -1187,7 +1187,7 @@ pub const instructions = .{
         pub const store_temp_2_2                  = store_sr_pt2(.temp_2, store_temp_1);
         pub const store_temp_1_2                  = store_sr_pt2(.temp_1, restore_rsn);
 
-        fn store_sr_pt1(comptime sr: arch.Any_SR_Index) fn(c: *Cycle)void {
+        fn store_sr_pt1(comptime sr: arch.reg.sr.Any_Index) fn(c: *Cycle)void {
             const offset = @offsetOf(arch.Context_State, @tagName(sr)) - (arch.register_count * @sizeOf(arch.Reg));
             return struct {
                 pub fn func(c: *Cycle) void {
@@ -1197,7 +1197,7 @@ pub const instructions = .{
                 }
             }.func;
         }
-        fn store_sr_pt2(comptime sr: arch.Any_SR_Index, comptime next: *const anyopaque) fn(c: *Cycle)void {
+        fn store_sr_pt2(comptime sr: arch.reg.sr.Any_Index, comptime next: *const anyopaque) fn(c: *Cycle)void {
             const offset = @offsetOf(arch.Context_State, @tagName(sr)) - (arch.register_count * @sizeOf(arch.Reg));
             return struct {
                 pub fn func(c: *Cycle) void {
@@ -1439,7 +1439,7 @@ const Range = placeholders.Range;
 const Int = placeholders.Int;
 const Int_Mult = placeholders.Int_Mult;
 const Reg = placeholders.Reg;
-const Reg_Bit = placeholders.Reg_Bit;
+const Bit = placeholders.Bit;
 const Even_Reg = placeholders.Even_Reg;
 const Odd_Reg = placeholders.Odd_Reg;
 const Param = placeholders.Param;

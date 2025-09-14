@@ -2,6 +2,7 @@ pub fn build(b: *std.Build) void {
     const arch = b.dependency("arch", .{}).module("arch");
     const bits = b.dependency("bit_helper", .{}).module("bits");
     const sx = b.dependency("sx", .{}).module("sx");
+    const meta = b.dependency("meta", .{}).module("meta");
     const rom_compress = b.dependency("rom_compress", .{});
     const deep_hash_map = b.dependency("deep_hash_map", .{}).module("deep_hash_map");
     const temp_alloc = b.dependency("Temp_Allocator", .{}).module("Temp_Allocator");
@@ -9,36 +10,45 @@ pub fn build(b: *std.Build) void {
 
     const isa = b.addModule("isa", .{
         .root_source_file = b.path("isa.zig"),
+        .imports = &.{
+            .{ .name = "arch", .module = arch },
+            .{ .name = "bits", .module = bits },
+            .{ .name = "deep_hash_map", .module = deep_hash_map },
+            .{ .name = "meta", .module = meta },
+        },
     });
-    isa.addImport("arch", arch);
-    isa.addImport("bits", bits);
-    isa.addImport("deep_hash_map", deep_hash_map);
 
     const iedb = b.addModule("iedb", .{
         .root_source_file = b.path("iedb.zig"),
+        .imports = &.{
+            .{ .name = "arch", .module = arch },
+            .{ .name = "isa", .module = isa },
+            .{ .name = "bits", .module = bits },
+            .{ .name = "sx", .module = sx },
+            .{ .name = "deep_hash_map", .module = deep_hash_map },
+        },
     });
-    iedb.addImport("arch", arch);
-    iedb.addImport("isa", isa);
-    iedb.addImport("bits", bits);
-    iedb.addImport("sx",  sx);
-    iedb.addImport("deep_hash_map", deep_hash_map);
 
     const compile_exe = b.addExecutable(.{
         .name = "compile",
-        .root_source_file = b.path("compile.zig"),
-        .target = b.host,
-        .optimize = .Debug,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("compile.zig"),
+            .target = b.graph.host,
+            .optimize = .Debug,
+            .imports = &.{
+                .{ .name = "arch", .module = arch },
+                .{ .name = "isa", .module = isa },
+                .{ .name = "iedb", .module = iedb },
+                .{ .name = "bits", .module = bits },
+                .{ .name = "sx", .module = sx },
+                .{ .name = "rom_decompress", .module = rom_compress.module("rom_decompress") },
+                .{ .name = "Temp_Allocator", .module = temp_alloc },
+                .{ .name = "deep_hash_map", .module = deep_hash_map },
+                .{ .name = "console", .module = console },
+                .{ .name = "meta", .module = meta },
+            },
+        }),
     });
-    compile_exe.root_module.addImport("arch", arch);
-    compile_exe.root_module.addImport("isa", isa);
-    compile_exe.root_module.addImport("iedb", iedb);
-    compile_exe.root_module.addImport("bits", bits);
-    compile_exe.root_module.addImport("sx", sx);
-    compile_exe.root_module.addImport("rom_decompress", rom_compress.module("rom_decompress"));
-    compile_exe.root_module.addImport("Temp_Allocator", temp_alloc);
-    compile_exe.root_module.addImport("deep_hash_map", deep_hash_map);
-    compile_exe.root_module.addImport("console", console);
-
     b.installArtifact(compile_exe);
 
     const run = b.addRunArtifact(compile_exe);

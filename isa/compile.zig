@@ -3,6 +3,12 @@
 //  - Mappings between assembly syntax and machine code and vice-versa; used by the assembler and disassembler
 //  - HTML instruction set documentation
 
+pub const Cycle = @import("compile/Cycle.zig");
+pub const Processor = @import("compile/Processor.zig");
+pub const Microcode_Builder = @import("compile/Microcode_Builder.zig");
+pub const Decode_ROM_Builder = @import("compile/Decode_ROM_Builder.zig");
+pub const placeholders = @import("compile/placeholders.zig");
+
 const CLI_Option = enum {
     db_path,
     compact_db,
@@ -35,7 +41,6 @@ const ROM_Format = enum {
 };
 
 pub fn main() !void {
-    var gpa: std.heap.GeneralPurposeAllocator(.{}) = .{};
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     var temp = try Temp_Allocator.init(0x1000_0000);
 
@@ -65,14 +70,17 @@ pub fn main() !void {
                 .id_csv_path => id_csv_path = try arena.allocator().dupe(u8, arg_iter.next() orelse expected_output_path("--id-csv")),
             }
         } else {
-            try std.io.getStdErr().writer().print("Unrecognized option: {s}\n", .{ arg });
+            var buf: [64]u8 = undefined;
+            var writer = std.fs.File.stderr().writer(&buf);
+            try writer.interface.print("Unrecognized option: {s}\n", .{ arg });
+            try writer.interface.flush();
             std.process.exit(1);
         }
     }
 
     temp.reset(.{});
 
-    var processor = Processor.init(gpa.allocator(), arena.allocator(), &temp);
+    var processor = Processor.init(gpa, arena.allocator(), &temp);
     processor.process(.{
         @import("handlers/reset.zig"),
         faults.Handler(.page_fault),
@@ -80,6 +88,8 @@ pub fn main() !void {
         faults.Handler(.page_align_fault),
         faults.Handler(.align_fault),
         faults.Handler(.overflow_fault),
+        faults.Handler(.register_stack_underflow_fault),
+        faults.Handler(.register_stack_overflow_fault),
         faults.Handler(.instruction_protection_fault),
         faults.Handler(.invalid_instruction_fault),
         faults.Handler(.double_fault),
@@ -120,9 +130,9 @@ pub fn main() !void {
         @import("instructions/saturate.zig"),
         @import("instructions/ext.zig"),
         @import("instructions/swap.zig"),
-        @import("instructions/cb.zig"),
-        @import("instructions/sb.zig"),
-        @import("instructions/tb.zig"),
+        @import("instructions/clrbit.zig"),
+        @import("instructions/setbit.zig"),
+        @import("instructions/bit.zig"),
 
         @import("instructions/shift/reg.zig"),
         @import("instructions/shift/imm.zig"),
@@ -141,8 +151,8 @@ pub fn main() !void {
 
     processor.microcode.assign_slots();
 
-    const uc = processor.microcode.generate_microcode(gpa.allocator());
-    const uc_fn_names = processor.microcode.generate_microcode_fn_names(gpa.allocator());
+    const uc = processor.microcode.generate_microcode(gpa);
+    const uc_fn_names = processor.microcode.generate_microcode_fn_names(gpa);
 
     var microcode_address_usage: usize = 0;
     for (uc, 0..) |maybe_cs, addr| {
@@ -153,7 +163,7 @@ pub fn main() !void {
         }
     }
 
-    const decode = processor.decode_rom.generate_rom_data(gpa.allocator(), &processor.microcode);
+    const decode = processor.decode_rom.generate_rom_data(gpa, &processor.microcode);
 
     var insn_decode_usage: usize = 0;
     for (decode) |result| {
@@ -169,129 +179,124 @@ pub fn main() !void {
         var f = try std.fs.cwd().createFile(path, .{});
         defer f.close();
 
-        var writer = f.writer();
-        var sxw = sx.writer(gpa.allocator(), writer.any());
+        var buf: [4096]u8 = undefined;
+        var writer = f.writer(&buf);
+        var sxw = sx.writer(gpa, &writer.interface);
         defer sxw.deinit();
 
         try iedb.write_database.write(&sxw, compact_db, processor.encoding_list.items);
+        try writer.interface.flush();
     }
 
     if (uc_csv_path) |path| {
-        const uc_data = try arch.microcode.write_csv(gpa.allocator(), temp.allocator(), uc, uc_fn_names);
-
-        if (std.fs.path.dirname(path)) |dir| {
-            try std.fs.cwd().makePath(dir);
-        }
-
-        var af = try std.fs.cwd().atomicFile(path, .{});
+        var buf: [4096]u8 = undefined;
+        var af = try std.fs.cwd().atomicFile(path, .{
+            .write_buffer = &buf,
+            .make_path = true,
+        });
         defer af.deinit();
-        try af.file.writeAll(uc_data);
+        try arch.microcode.write_csv(temp.allocator(), &af.file_writer.interface, uc, uc_fn_names);
         try af.finish();
     }
 
     if (id_csv_path) |path| {
-        const uc_data = try arch.insn_decode.write_csv(gpa.allocator(), temp.allocator(), decode);
-
-        if (std.fs.path.dirname(path)) |dir| {
-            try std.fs.cwd().makePath(dir);
-        }
-
-        var af = try std.fs.cwd().atomicFile(path, .{});
+        var buf: [4096]u8 = undefined;
+        var af = try std.fs.cwd().atomicFile(path, .{
+            .write_buffer = &buf,
+            .make_path = true,
+        });
         defer af.deinit();
-        try af.file.writeAll(uc_data);
+        try arch.insn_decode.write_csv(&af.file_writer.interface, decode);
         try af.finish();
     }
 
     if (setup_uc_path) |path| {
-        const T = arch.microcode.Setup_Microcode_Entry;
-        const rom_data = switch (rom_fmt) {
-            .compressed, .compressed_dump => try arch.microcode.write_compressed_rom(T, gpa.allocator(), temp.allocator(), uc),
-            .srec => try arch.microcode.write_srec_rom(T, gpa.allocator(), temp.allocator(), uc),
-            .ihex => try arch.microcode.write_ihex_rom(T, gpa.allocator(), temp.allocator(), uc),
-        };
-        log.info("Setup Microcode ROM: {} bytes ({s})", .{ rom_data.len, @tagName(rom_fmt) });
-
-        if (std.fs.path.dirname(path)) |dir| {
-            try std.fs.cwd().makePath(dir);
-        }
-
-        var af = try std.fs.cwd().atomicFile(path, .{});
+        const Entry = arch.microcode.Setup_Microcode_Entry;
+        var buf: [4096]u8 = undefined;
+        var af = try std.fs.cwd().atomicFile(path, .{
+            .write_buffer = &buf,
+            .make_path = true,
+        });
         defer af.deinit();
-        if (rom_fmt == .compressed_dump) {
-            var w = af.file.writer();
-            try rom_decompress.dump(rom_data, w.any());
-        } else {
-            try af.file.writeAll(rom_data);
+        const w = &af.file_writer.interface;
+        switch (rom_fmt) {
+            .srec => try arch.microcode.write_srec_rom(Entry, gpa, w, uc),
+            .ihex => try arch.microcode.write_ihex_rom(Entry, gpa, w, uc),
+            .compressed => try arch.microcode.write_compressed_rom(Entry, gpa, w, uc),
+            .compressed_dump => {
+                var compressed = std.io.Writer.Allocating.init(gpa);
+                defer compressed.deinit();
+                try arch.microcode.write_compressed_rom(Entry, gpa, &compressed.writer, uc);
+                try rom_decompress.dump(compressed.written(), w);
+            },
         }
         try af.finish();
     }
 
     if (compute_uc_path) |path| {
-        const T = arch.microcode.Compute_Microcode_Entry;
-        const rom_data = switch (rom_fmt) {
-            .compressed, .compressed_dump => try arch.microcode.write_compressed_rom(T, gpa.allocator(), temp.allocator(), uc),
-            .srec => try arch.microcode.write_srec_rom(T, gpa.allocator(), temp.allocator(), uc),
-            .ihex => try arch.microcode.write_ihex_rom(T, gpa.allocator(), temp.allocator(), uc),
-        };
-        log.info("Compute Microcode ROM: {} bytes ({s})", .{ rom_data.len, @tagName(rom_fmt) });
-
-        if (std.fs.path.dirname(path)) |dir| {
-            try std.fs.cwd().makePath(dir);
-        }
-
-        var af = try std.fs.cwd().atomicFile(path, .{});
+        const Entry = arch.microcode.Compute_Microcode_Entry;
+        var buf: [4096]u8 = undefined;
+        var af = try std.fs.cwd().atomicFile(path, .{
+            .write_buffer = &buf,
+            .make_path = true,
+        });
         defer af.deinit();
-        if (rom_fmt == .compressed_dump) {
-            var w = af.file.writer();
-            try rom_decompress.dump(rom_data, w.any());
-        } else {
-            try af.file.writeAll(rom_data);
+        const w = &af.file_writer.interface;
+        switch (rom_fmt) {
+            .srec => try arch.microcode.write_srec_rom(Entry, gpa, w, uc),
+            .ihex => try arch.microcode.write_ihex_rom(Entry, gpa, w, uc),
+            .compressed => try arch.microcode.write_compressed_rom(Entry, gpa, w, uc),
+            .compressed_dump => {
+                var compressed = std.io.Writer.Allocating.init(gpa);
+                defer compressed.deinit();
+                try arch.microcode.write_compressed_rom(Entry, gpa, &compressed.writer, uc);
+                try rom_decompress.dump(compressed.written(), w);
+            },
         }
         try af.finish();
     }
 
     if (transact_uc_path) |path| {
-        const T = arch.microcode.Transact_Microcode_Entry;
-        const rom_data = switch (rom_fmt) {
-            .compressed, .compressed_dump => try arch.microcode.write_compressed_rom(T, gpa.allocator(), temp.allocator(), uc),
-            .srec => try arch.microcode.write_srec_rom(T, gpa.allocator(), temp.allocator(), uc),
-            .ihex => try arch.microcode.write_ihex_rom(T, gpa.allocator(), temp.allocator(), uc),
-        };
-        log.info("Transact Microcode ROM: {} bytes ({s})", .{ rom_data.len, @tagName(rom_fmt) });
-
-        if (std.fs.path.dirname(path)) |dir| {
-            try std.fs.cwd().makePath(dir);
-        }
-
-        var af = try std.fs.cwd().atomicFile(path, .{});
+        const Entry = arch.microcode.Transact_Microcode_Entry;
+        var buf: [4096]u8 = undefined;
+        var af = try std.fs.cwd().atomicFile(path, .{
+            .write_buffer = &buf,
+            .make_path = true,
+        });
         defer af.deinit();
-        if (rom_fmt == .compressed_dump) {
-            var w = af.file.writer();
-            try rom_decompress.dump(rom_data, w.any());
-        } else {
-            try af.file.writeAll(rom_data);
+        const w = &af.file_writer.interface;
+        switch (rom_fmt) {
+            .srec => try arch.microcode.write_srec_rom(Entry, gpa, w, uc),
+            .ihex => try arch.microcode.write_ihex_rom(Entry, gpa, w, uc),
+            .compressed => try arch.microcode.write_compressed_rom(Entry, gpa, w, uc),
+            .compressed_dump => {
+                var compressed = std.io.Writer.Allocating.init(gpa);
+                defer compressed.deinit();
+                try arch.microcode.write_compressed_rom(Entry, gpa, &compressed.writer, uc);
+                try rom_decompress.dump(compressed.written(), w);
+            },
         }
         try af.finish();
     }
 
     if (id_rom_path) |path| {
-        const rom_data = switch (rom_fmt) {
-            .compressed, .compressed_dump => try arch.insn_decode.write_compressed_rom(gpa.allocator(), temp.allocator(), decode),
-            .srec => try arch.insn_decode.write_srec_rom(gpa.allocator(), temp.allocator(), decode),
-            .ihex => try arch.insn_decode.write_ihex_rom(gpa.allocator(), temp.allocator(), decode),
-        };
-        log.info("Instruction Decode ROM: {} bytes ({s})", .{ rom_data.len, @tagName(rom_fmt) });
-
-        if (std.fs.path.dirname(path)) |dir| {
-            try std.fs.cwd().makePath(dir);
-        }
-        var af = try std.fs.cwd().atomicFile(path, .{});
+        var buf: [4096]u8 = undefined;
+        var af = try std.fs.cwd().atomicFile(path, .{
+            .write_buffer = &buf,
+            .make_path = true,
+        });
         defer af.deinit();
-        if (rom_fmt == .compressed_dump) {
-            var w = af.file.writer();
-            try rom_decompress.dump(rom_data, w.any());
-        } else {
-            try af.file.writeAll(rom_data);
+        const w = &af.file_writer.interface;
+        switch (rom_fmt) {
+            .srec => try arch.insn_decode.write_srec_rom(gpa, w, decode),
+            .ihex => try arch.insn_decode.write_ihex_rom(gpa, w, decode),
+            .compressed => try arch.insn_decode.write_compressed_rom(gpa, w, decode),
+            .compressed_dump => {
+                var compressed = std.io.Writer.Allocating.init(gpa);
+                defer compressed.deinit();
+                try arch.insn_decode.write_compressed_rom(gpa, &compressed.writer, decode);
+                try rom_decompress.dump(compressed.written(), w);
+            },
         }
         try af.finish();
     }
@@ -301,34 +306,36 @@ pub fn main() !void {
 }
 
 fn expected_output_path(option: []const u8) noreturn {
-    var w = std.io.getStdErr().writer();
-    w.print("Expected output path after {s} option.\n", .{ option }) catch {};
+    var buf: [64]u8 = undefined;
+    var writer = std.fs.File.stderr().writer(&buf);
+    writer.interface.print("Expected output path after {s} option.\n", .{ option }) catch {};
+    writer.interface.flush() catch {};
     std.process.exit(1);
 }
 
 fn expected_rom_format() noreturn {
-    var w = std.io.getStdErr().writer();
-    w.writeAll("Expected ROM format after --rom-format option.  Available formats are:\n") catch {};
+    var buf: [64]u8 = undefined;
+    var writer = std.fs.File.stderr().writer(&buf);
+    writer.interface.writeAll("Expected ROM format after --rom-format option.  Available formats are:\n") catch {};
     for (std.enums.values(ROM_Format)) |fmt| {
-        w.print("    {s}\n", .{ @tagName(fmt) }) catch {};
+        writer.interface.print("    {s}\n", .{ @tagName(fmt) }) catch {};
     }
+    writer.interface.flush() catch {};
     std.process.exit(1);
 }
 
 fn invalid_rom_format(arg: []const u8) noreturn {
-    var w = std.io.getStdErr().writer();
-    w.print("'{s}' is not a valid ROM format.  Available formats are:\n", .{ arg }) catch {};
+    var buf: [64]u8 = undefined;
+    var writer = std.fs.File.stderr().writer(&buf);
+    writer.interface.print("'{s}' is not a valid ROM format.  Available formats are:\n", .{ arg }) catch {};
     for (std.enums.values(ROM_Format)) |fmt| {
-        w.print("    {s}\n", .{ @tagName(fmt) }) catch {};
+        writer.interface.print("    {s}\n", .{ @tagName(fmt) }) catch {};
     }
+    writer.interface.flush() catch {};
     std.process.exit(1);
 }
 
-pub const Cycle = @import("compile/Cycle.zig");
-pub const Processor = @import("compile/Processor.zig");
-pub const Microcode_Builder = @import("compile/Microcode_Builder.zig");
-pub const Decode_ROM_Builder = @import("compile/Decode_ROM_Builder.zig");
-pub const placeholders = @import("compile/placeholders.zig");
+const gpa = std.heap.smp_allocator;
 
 pub const std_options: std.Options = .{
     .log_scope_levels = &.{

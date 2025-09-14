@@ -36,8 +36,8 @@ pub const Instruction = struct {
 
 pub const Parameter = struct {
     signature: Signature,
-    base_register_index: arch.Register_Index,
-    offset_register_index: arch.Register_Index,
+    base_register_index: arch.reg.gpr.Index,
+    offset_register_index: arch.reg.gpr.Index,
     constant: i64,
 
     pub fn format(self: Parameter, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
@@ -81,7 +81,7 @@ pub const Parameter = struct {
         pub fn raw(self: Index) u4 {
             return @intFromEnum(self);
         }
-        pub const Raw = std.meta.Tag(Index);
+        pub const Raw = meta.Backing(Index);
         pub const count = std.math.maxInt(Raw) + 1;
     };
 };
@@ -117,7 +117,7 @@ pub const Mnemonic = enum {
     // Logical:
     xor, @"or", @"and",
     // Single bit:
-    tb, cb, sb,
+    bit, clrbit, setbit,
     // Bit counting:
     csb, czb, csbl, czbl, csbt, czbt,
     ssbl, szbl, ssbt, szbt,
@@ -152,7 +152,7 @@ pub const Mnemonic = enum {
     eab, dab, 
     ret,
     // Faults, interrupts, and context switching:
-    fret, iret, ifex, ldrs, strs, srs, park,
+    fret, freto, iret, ifex, ldrs, strs, srs, park,
     // MMU:
     sat, rat,
     // Misc:
@@ -200,9 +200,9 @@ pub const Mnemonic = enum {
             .xor => "Bitwise Exclusive OR",
             .@"or" => "Bitwise OR",
             .@"and" => "Bitwise AND",
-            .tb => "Test Bit",
-            .cb => "Clear Bit",
-            .sb => "Set Bit",
+            .bit => "Test Bit",
+            .clrbit => "Clear Bit",
+            .setbit => "Set Bit",
             .csb => "Count Set Bits",
             .czb => "Count Zero Bits",
             .csbl => "Count Set Bits (leading)",
@@ -292,6 +292,7 @@ pub const Mnemonic = enum {
             .dab => "Disable Address Translation and Branch", 
             .ret => "Return from Call",
             .fret => "Return from Fault",
+            .freto => "Return from Fault with Override",
             .iret => "Return from Interrupt",
             .ifex => "Exit from Fault/Interrupt",
             .ldrs => "Load Registerset",
@@ -439,4 +440,5 @@ pub const parse_helpers = @import("isa/parse_helpers.zig");
 const arch = @import("arch");
 const deep_hash_map = @import("deep_hash_map");
 const Signedness = std.builtin.Signedness;
+const meta = @import("meta");
 const std = @import("std");

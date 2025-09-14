@@ -4,8 +4,8 @@ entries: []Entry,
 pub const Entry = struct {
     instruction_encoding: ?Instruction_Encoding = null,
     slot_handle: ?Slot_Data.Handle = null,
-    wio: arch.Write_Index_Offset = arch.Write_Index_Offset.init(0),
-    krio: arch.K.Read_Index_Offset = arch.K.Read_Index_Offset.init(0),
+    wio: arch.reg.gpr.Write_Index_Offset = .init(0),
+    krio: arch.bus.K.Read_Index_Offset = .init(0),
     cv: arch.insn_decode.CV_Mode = .zero,
 };
 
@@ -23,7 +23,7 @@ pub fn deinit(self: *Decode_ROM_Builder) void {
 
 pub fn add_entry(self: *Decode_ROM_Builder, addr: arch.insn_decode.Address, undefined_bits: arch.insn_decode.Address.Raw, entry: Entry) void {
     std.debug.assert(entry.slot_handle != null);
-    var iter: Undefined_Bits_Iterator = .{ .mask = undefined_bits };
+    var iter = bits.undefined_bits_iterator(undefined_bits, 0);
     while (iter.next()) |extra_bits| {
         const addr_raw = addr.raw() | extra_bits;
         const existing = self.entries[addr_raw];
@@ -47,7 +47,7 @@ pub fn add_entry(self: *Decode_ROM_Builder, addr: arch.insn_decode.Address, unde
                     writer.print("KRIO:   {d: >30} != {d}\n", .{ existing.krio.raw(), entry.krio.raw() }) catch @panic("IO Error");
                 }
                 if (existing.cv != entry.cv) {
-                    writer.print("CV:     {s: >30} != {d}\n", .{ @tagName(existing.cv), @tagName(entry.cv) }) catch @panic("IO Error");
+                    writer.print("CV:     {s: >30} != {s}\n", .{ @tagName(existing.cv), @tagName(entry.cv) }) catch @panic("IO Error");
                 }
 
                 // inline for (std.enums.values(hw.Control_Signal)) |field| {
@@ -81,8 +81,8 @@ pub fn generate_rom_data(self: *Decode_ROM_Builder, allocator: std.mem.Allocator
         } else {
             data[addr] = .{
                 .entry = .invalid_instruction,
-                .wio = arch.Write_Index_Offset.init(0),
-                .krio = arch.K.Read_Index_Offset.init(0),
+                .wio = arch.reg.gpr.Write_Index_Offset.init(0),
+                .krio = arch.bus.K.Read_Index_Offset.init(0),
                 .cv = arch.insn_decode.CV_Mode.init(0),
             };
         }
@@ -90,27 +90,6 @@ pub fn generate_rom_data(self: *Decode_ROM_Builder, allocator: std.mem.Allocator
 
     return data;
 }
-
-const Undefined_Bits_Iterator = struct {
-    mask: arch.insn_decode.Address.Raw,
-    last: ?arch.insn_decode.Address.Raw = null,
-
-    pub fn next(self: *Undefined_Bits_Iterator) ?arch.insn_decode.Address.Raw {
-        if (self.last) |last| {                                                                                     // e.g. 01001100
-            const mask = self.mask;                                                                                 // e.g. 11011100
-            const remaining_bits = mask ^ last;                                                                     // e.g. 10010000
-            if (remaining_bits == 0) return null;
-            const bits_to_clear = remaining_bits ^ (remaining_bits - 1);                                            // e.g. 00011111
-            const bit_to_set = remaining_bits & bits_to_clear;                                                      // e.g. 00010000
-            const value = last & ~bits_to_clear | bit_to_set;                                                       // e.g. 01010000
-            self.last = value;
-            return value;
-        } else {
-            self.last = 0;
-            return 0;
-        }
-    }
-};
 
 const log = std.log.scoped(.compile);
 
@@ -120,4 +99,5 @@ const Microcode_Builder = @import("Microcode_Builder.zig");
 const Instruction_Encoding = isa.Instruction_Encoding;
 const isa = @import("isa");
 const arch = @import("arch");
+const bits = @import("bits");
 const std = @import("std");

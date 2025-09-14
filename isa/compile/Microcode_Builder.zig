@@ -17,7 +17,7 @@ pub const Cycle_Handle = enum(u16) {
     pub fn raw(self: Cycle_Handle) Raw {
         return @intFromEnum(self);
     }
-    pub const Raw = std.meta.Tag(Cycle_Handle);
+    pub const Raw = meta.Backing(Cycle_Handle);
 };
 pub const Slot_Data = struct {
     cycles: [arch.microcode.Address.count_per_slot]Cycle_Handle,
@@ -32,7 +32,7 @@ pub const Slot_Data = struct {
         pub fn raw(self: Handle) Raw {
             return @intFromEnum(self);
         }
-        pub const Raw = std.meta.Tag(Handle);
+        pub const Raw = meta.Backing(Handle);
     };
 };
 
@@ -135,7 +135,7 @@ pub fn assign_slots(self: *Microcode_Builder) void {
             const new_cycles = slot_data[raw_handle].cycles;
             const old_cycle = self.cycles.items[old_cycles[0].raw()];
             const new_cycle = self.cycles.items[new_cycles[0].raw()];
-            std.debug.panic("Collision on microcode slot {}\nold cycle fn:  {s}\nnew cycle fn: {s}", .{ slot, old_cycle.func_name, new_cycle.func_name });
+            std.debug.panic("Collision on microcode slot {f}\nold cycle fn:  {s}\nnew cycle fn: {s}", .{ slot, old_cycle.func_name, new_cycle.func_name });
         }
 
         self.slot_to_handle[slot.raw()] = handle;
@@ -305,4 +305,5 @@ const Control_Signals = arch.Control_Signals;
 const Control_Signal = arch.Control_Signal;
 const arch = @import("arch");
 const bits = @import("bits");
+const meta = @import("meta");
 const std = @import("std");

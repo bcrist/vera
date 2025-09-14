@@ -96,7 +96,7 @@ pub fn init_string_bits(value: []const u8, num_bits: u63, sign: Signedness) !Con
 // This ensures that clone_with_signedness won't change the value
 pub fn init_int(value: anytype) Constant {
     const T = @TypeOf(value);
-    const sign = @typeInfo(T).Int.signedness;
+    const sign = @typeInfo(T).int.signedness;
     const T8 = std.meta.Int(sign, @sizeOf(T) * 8);
     const ext_value = @as(T8, value);
     const num_bits = @bitSizeOf(T) + @as(u63, 1) - if (value < 0) @clz(~value) else @clz(value);
@@ -107,7 +107,7 @@ pub fn init_int(value: anytype) Constant {
 // Returns error.Overflow if truncation of value to the requested bits changes it's numeric value, given the signedness requested.
 pub fn init_int_bits(value: anytype, num_bits: u63) !Constant {
     const T = @TypeOf(value);
-    const int_info = @typeInfo(T).Int;
+    const int_info = @typeInfo(T).int;
     const U = std.meta.Int(.unsigned, @bitSizeOf(T));
     const B = std.math.Log2Int(T);
 
@@ -214,7 +214,7 @@ pub fn init_string_literal(allocator: std.mem.Allocator, storage: *std.ArrayList
             .paren => switch (ch) {
                 ')' => {
                     const paren_text = location[paren_escape_begin..i];
-                    var iter = std.mem.tokenize(u8, paren_text, " ");
+                    var iter = std.mem.tokenizeScalar(u8, paren_text, ' ');
                     while (iter.next()) |token| switch (token[0]) {
                         '=' => {
                             var decoder = std.base64.standard_no_pad.Decoder;
@@ -605,7 +605,7 @@ pub fn as_int(self: Constant, comptime T: type) !T {
     const buf = self.as_string();
     if (buf.len == 0) return 0;
 
-    const int_info = @typeInfo(T).Int;
+    const int_info = @typeInfo(T).int;
     const T8 = std.meta.Int(int_info.signedness, @sizeOf(T) * 8);
 
     var value: T8 = undefined;

@@ -1,4 +1,4 @@
-test {
+comptime {
     _ = @import("instructions/reset.zig");
     _ = @import("instructions/add.zig");
 }

@@ -9,28 +9,34 @@ pub fn build(b: *std.Build) void {
 
     const module = b.addModule("assembler", .{
         .root_source_file = b.path("assembler.zig"),
+        .imports = &.{
+            .{ .name = "arch", .module = arch },
+            .{ .name = "isa", .module = isa.module("isa") },
+            .{ .name = "iedb", .module = isa.module("iedb") },
+            .{ .name = "console", .module = console },
+            .{ .name = "bits", .module = bits },
+            .{ .name = "sx", .module = sx },
+            .{ .name = "ihex", .module = ihex },
+            .{ .name = "srec", .module = srec },
+        },
     });
-    module.addImport("arch", arch);
-    module.addImport("isa", isa.module("isa"));
-    module.addImport("iedb", isa.module("iedb"));
-    module.addImport("console", console);
-    module.addImport("bits", bits);
-    module.addImport("sx", sx);
-    module.addImport("ihex", ihex);
-    module.addImport("srec", srec);
 
     const exe = b.addExecutable(.{
         .name = "assemble",
-        .root_source_file = b.path("main.zig"),
-        .target = b.standardTargetOptions(.{}),
-        .optimize = b.standardOptimizeOption(.{}),
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("main.zig"),
+            .target = b.standardTargetOptions(.{}),
+            .optimize = b.standardOptimizeOption(.{}),
+            .imports = &.{
+                .{ .name = "isa", .module = isa.module("isa") },
+                .{ .name = "iedb", .module = isa.module("iedb") },
+                .{ .name = "iedb.sx", .module = isa.module("iedb.sx") },
+                .{ .name = "assembler", .module = module },
+                .{ .name = "arch", .module = arch },
+                .{ .name = "console", .module = console },
+            },
+        }),
     });
-    exe.root_module.addImport("isa", isa.module("isa"));
-    exe.root_module.addImport("iedb", isa.module("iedb"));
-    exe.root_module.addImport("iedb.sx", isa.module("iedb.sx"));
-    exe.root_module.addImport("assembler", module);
-    exe.root_module.addImport("arch", arch);
-    exe.root_module.addImport("console", console);
 
     b.installArtifact(exe);
     

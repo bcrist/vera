@@ -148,19 +148,19 @@ pub const instructions = .{
     },
     struct { // <tb/cb/sb> r(reg), (imm)
         pub const spec = 
-            \\tb r(reg), (imm)
-            \\sb r(reg), (imm)
-            \\cb r(reg), (imm)
+            \\bit r(reg), (imm)
+            \\setbit r(reg), (imm)
+            \\clrbit r(reg), (imm)
             ;
         pub const encoding = .{
-            Reg_Bit(.imm),
+            Bit(.imm),
             Encoder.init(4, Even_Reg(.reg)),
             mnemonic_encoder,
             Encoder.init(9, @as(u5, 7)),
             region_encoder,
         };
         pub const ij = Reg(.reg);
-        pub const ik = Reg_Bit(.imm);
+        pub const ik = Bit(.imm);
         pub const iw = Reg(.reg);
 
         fn mnemonic_encoder(mnemonic: isa.Mnemonic) Encoder {
@@ -952,84 +952,6 @@ pub const instructions = .{
 
         pub const load_and_exec_next_insn = Cycle.load_and_exec_next_insn;
     },
-    struct { // bld x(bytes) .signed -> .d bp
-        pub const spec = "bld x(bytes) .signed -> .d bp";
-        //Load block(s) from FLASH or PSRAM to RAM
-        // x(bytes) indicates the number of bytes remaining to be copied (should be a multiple of 8 and > 0)
-        // x(bytes) will be decremented by 8 each cycle; operation ends when zero or negative
-        // BP points to just before the first byte of RAM to write to (will be incremented by 8 before each cycle).
-        // Block source must be configured beforehand by writing to the configuration port.
-        // Only one pipes 1 and 3 may perform block transfers.
-        pub const encoding = .{
-            Even_Reg(.bytes),
-            Encoder.init(3, @as(u11, 0x110)),
-            region_encoder,
-        };
-        pub const ij = Reg(.bytes);
-        pub const iw = Reg(.bytes);
-
-        pub fn entry(c: *Cycle, flags: Flags) void {
-            if (!flags.kernel()) return c.illegal_instruction();
-            c.reg32_to_j();
-            c.literal_to_k(8);
-            c.j_minus_k_to_l(.zx, .fresh, .flags);
-            c.l_to_reg32();
-            c.load_next_insn();
-            c.next(transfer);
-        }
-
-        pub fn transfer(c: *Cycle, flags: Flags) void {
-            c.block_transfer_to_ram(.bp, 8, .data);
-            if (flags.positive()) {
-                c.reg32_to_j();
-                c.literal_to_k(8);
-                c.j_minus_k_to_l(.zx, .fresh, .flags);
-                c.l_to_reg32();
-                c.next(transfer);
-            } else {
-                c.exec_next_insn();
-            }
-        }
-    },
-    struct { // bst x(bytes) .signed, .d bp
-        pub const spec = "bst x(bytes) .signed, .d bp";
-        //Store block(s) from RAM into FLASH or PSRAM
-        // x(bytes) indicates the number of bytes remaining to be copied (should be a multiple of 8 and > 0)
-        // x(bytes) will be decremented by 8 each cycle; operation ends when zero or negative
-        // BP points to just before the first byte of RAM to read (will be incremented by 8 before each cycle).
-        // Block destination must be configured beforehand by writing to the configuration port.
-        // Only one pipes 1 and 3 may perform block transfers.
-        pub const encoding = .{
-            Even_Reg(.bytes),
-            Encoder.init(3, @as(u11, 0x111)),
-            region_encoder,
-        };
-        pub const ij = Reg(.bytes);
-        pub const iw = Reg(.bytes);
-
-        pub fn entry(c: *Cycle, flags: Flags) void {
-            if (!flags.kernel()) return c.illegal_instruction();
-            c.reg32_to_j();
-            c.literal_to_k(8);
-            c.j_minus_k_to_l(.zx, .fresh, .flags);
-            c.l_to_reg32();
-            c.load_next_insn();
-            c.next(transfer);
-        }
-
-        pub fn transfer(c: *Cycle, flags: Flags) void {
-            c.block_transfer_from_ram(.bp, 8, .data);
-            if (flags.positive()) {
-                c.reg32_to_j();
-                c.literal_to_k(8);
-                c.j_minus_k_to_l(.zx, .fresh, .flags);
-                c.l_to_reg32();
-                c.next(transfer);
-            } else {
-                c.exec_next_insn();
-            }
-        }
-    },
 };
 
 const Cycle = @import("../compile/Cycle.zig");
@@ -1040,7 +962,7 @@ const Range = placeholders.Range;
 const Int = placeholders.Int;
 const Int_Mult = placeholders.Int_Mult;
 const Reg = placeholders.Reg;
-const Reg_Bit = placeholders.Reg_Bit;
+const Bit = placeholders.Bit;
 const Even_Reg = placeholders.Even_Reg;
 const Odd_Reg = placeholders.Odd_Reg;
 const Param = placeholders.Param;

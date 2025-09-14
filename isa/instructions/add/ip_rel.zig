@@ -11,6 +11,8 @@ pub const encoding = .{
     Encoder.init(16, Int(.imm, i8)),
 };
 
+pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = 0;
+
 pub fn entry(c: *Cycle) void {
     c.ip_read_to_d(.i8_from_dr, .@"32b");
     c.d_to_l();
@@ -30,7 +32,7 @@ pub fn add(c: *Cycle, mnemonic: isa.Mnemonic) void {
         .addv, .addcv => .flags__fault_on_overflow,
         else => unreachable,
     });
-    c.l_to_reg();
+    c.l_to_reg(true);
     c.load_and_exec_next_insn();
 }
 

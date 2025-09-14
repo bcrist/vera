@@ -4,7 +4,7 @@ pub fn Int(comptime name_or_enum_literal: anytype, comptime T: type) type {
 
         pub const placeholder = parse_name(name_or_enum_literal);
         pub const domain: Domain = .{ .int = .{
-            .signedness = @typeInfo(T).Int.signedness,
+            .signedness = @typeInfo(T).int.signedness,
             .bits = @bitSizeOf(T),
             .multiple = 1,
         }};
@@ -17,7 +17,7 @@ pub fn Int_Mult(comptime name_or_enum_literal: anytype, comptime T: type, compti
 
         pub const placeholder = parse_name(name_or_enum_literal);
         pub const domain: Domain = .{ .int = .{
-            .signedness = @typeInfo(T).Int.signedness,
+            .signedness = @typeInfo(T).int.signedness,
             .bits = @bitSizeOf(T),
             .multiple = multiple,
         }};
@@ -55,10 +55,10 @@ pub fn Any(comptime name_or_enum_literal: anytype) type {
 }
 
 pub fn Reg(comptime name_or_enum_literal: anytype) type {
-    return Int(name_or_enum_literal, Register_Index);
+    return Int(name_or_enum_literal, arch.bus.K.Read_Index_Offset.Raw);
 }
 
-pub fn Reg_Bit(comptime name_or_enum_literal: anytype) type {
+pub fn Bit(comptime name_or_enum_literal: anytype) type {
     return Options(name_or_enum_literal, .{
         0x1, 0x2, 0x4, 0x8,
         0x10, 0x20, 0x40, 0x80,
@@ -105,15 +105,15 @@ pub fn Offset(comptime offset_amount: i64, comptime I: type) type {
 
 fn parse_name(comptime name_or_enum_literal: anytype) []const u8 {
     return switch (@typeInfo(@TypeOf(name_or_enum_literal))) {
-        .EnumLiteral => @tagName(name_or_enum_literal),
-        .Pointer => name_or_enum_literal,
+        .enum_literal => @tagName(name_or_enum_literal),
+        .pointer => name_or_enum_literal,
         else => @compileError("Expected enum literal or []const u8"),
     };
 }
 
 pub fn Param(comptime index_name_or_enum_literal: anytype) type {
     return switch (@typeInfo(@TypeOf(index_name_or_enum_literal))) {
-        .Int, .ComptimeInt => struct {
+        .int, .comptime_int => struct {
             signature: Parameter.Signature,
             pub const index = Parameter.Index.init(index_name_or_enum_literal);
         },
@@ -128,6 +128,5 @@ pub fn Param(comptime index_name_or_enum_literal: anytype) type {
 const Parameter = isa.Parameter;
 const Domain = isa.Instruction_Encoding.Domain;
 const isa = @import("isa");
-const Register_Index = arch.Register_Index;
 const arch = @import("arch");
 const std = @import("std");

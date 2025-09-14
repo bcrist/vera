@@ -1,6 +1,6 @@
 pub const Space = enum (u2) {
-    raw = 0,
-    data = 1,
+    physical = 0, // data_write group when ATOP is .update or .invalidate
+    data = 1, // data_read group when ATOP is .update or .invalidate and DSRC is not .system.  data_write group when DSRC is .system
     stack = 2,
     insn = 3,
 
@@ -12,13 +12,13 @@ pub const Space = enum (u2) {
         return @intFromEnum(self);
     }
 
-    pub const format = fmt.format_enum;
+    pub const format = fmt.format_enum_dec;
 
-    pub const Raw = std.meta.Tag(Space);
+    pub const Raw = meta.Backing(Space);
 };
 
 pub const Virtual = packed struct (u32) {
-    offset: Offset,
+    page_offset: Page.Offset,
     page: Page,
 
     pub inline fn init(raw_value: Raw) Virtual {
@@ -31,9 +31,9 @@ pub const Virtual = packed struct (u32) {
 
     pub const format = fmt.format_raw_hex;
 
-    pub const Raw = u32;
+    pub const Raw = meta.Backing(Virtual);
 
-    pub const Base_SR_Index = enum (u4) {
+    pub const Base = enum (u4) {
         one = raw_from_sr1(.one),
         rp = raw_from_sr1(.rp),
         sp = raw_from_sr1(.sp),
@@ -48,51 +48,51 @@ pub const Virtual = packed struct (u32) {
         temp_2 = raw_from_sr2(.temp_2),
         _,
 
-        pub inline fn init(raw_value: Base_SR_Index.Raw) Base_SR_Index {
+        pub inline fn init(raw_value: Base.Raw) Base {
             return @enumFromInt(raw_value);
         }
 
-        pub inline fn raw(self: Base_SR_Index) Base_SR_Index.Raw {
+        pub inline fn raw(self: Base) Base.Raw {
             return @intFromEnum(self);
         }
 
-        fn raw_from_sr1(sr1: arch.SR1_Index) u4 {
+        fn raw_from_sr1(sr1: reg.sr1.Index) u4 {
             std.debug.assert(sr1.raw() < 8);
             return sr1.raw();
         }
-        pub fn from_sr1(sr1: arch.SR1_Index) ?Base_SR_Index {
+        pub fn from_sr1(sr1: reg.sr1.Index) ?Base {
             return if (sr1.raw() < 8) @enumFromInt(sr1.raw()) else null;
         }
 
-        fn raw_from_sr2(sr2: arch.SR2_Index) u4 {
+        fn raw_from_sr2(sr2: reg.sr2.Index) u4 {
             std.debug.assert(sr2.raw() < 8);
             return sr2.raw() + 8;
         }
-        pub fn from_sr2(sr2: arch.SR2_Index) ?Base_SR_Index {
+        pub fn from_sr2(sr2: reg.sr2.Index) ?Base {
             return if (sr2.raw() < 8) @enumFromInt(sr2.raw() + 8) else null;
         }
 
-        pub fn to_sr1(self: Base_SR_Index) ?arch.SR1_Index {
+        pub fn to_sr1(self: Base) ?reg.sr1.Index {
             const ord = @intFromEnum(self);
             return if (ord < 8) @enumFromInt(ord) else null;
         }
 
-        pub fn to_sr2(self: Base_SR_Index) ?arch.SR2_Index {
+        pub fn to_sr2(self: Base) ?reg.sr2.Index {
             const ord = @intFromEnum(self);
             return if (ord >= 8) @enumFromInt(ord - 8) else null;
         }
 
-        pub fn to_any(self: Base_SR_Index) arch.Any_SR_Index {
-            return if (self.to_sr1()) |sr1| arch.Any_SR_Index.from_sr1(sr1) else arch.Any_SR_Index.from_sr2(self.to_sr2().?);
+        pub fn to_any(self: Base) reg.sr.Any_Index {
+            return if (self.to_sr1()) |sr1| reg.sr.Any_Index.from_sr1(sr1) else reg.sr.Any_Index.from_sr2(self.to_sr2().?);
         }
 
-        pub const format = fmt.format_enum;
+        pub const format = fmt.format_enum_dec;
 
-        pub const Raw = std.meta.Tag(Base_SR_Index);
-        pub const count = std.math.maxInt(Base_SR_Index.Raw) + 1;
+        pub const Raw = meta.Backing(Base);
+        pub const count = std.math.maxInt(Base.Raw) + 1;
     };
 
-    pub const Microcode_Offset = enum (i6) {
+    pub const Offset = enum (i6) {
         zero = 0,
         one = 1,
         two = 2,
@@ -105,24 +105,33 @@ pub const Virtual = packed struct (u32) {
         i8_x4_from_dr = std.math.minInt(i6) + 2,
         _,
 
-        pub inline fn init(raw_value: Microcode_Offset.Raw) Microcode_Offset {
+        pub inline fn init(raw_value: Offset.Raw) Offset {
             return @enumFromInt(raw_value);
         }
 
-        pub inline fn raw(self: Microcode_Offset) Microcode_Offset.Raw {
+        pub inline fn init_unsigned(raw_value: Offset.Raw_Unsigned) Offset {
+            return .init(@bitCast(raw_value));
+        }
+
+        pub inline fn raw(self: Offset) Offset.Raw {
             return @intFromEnum(self);
         }
 
-        pub const format = fmt.format_enum;
+        pub inline fn raw_unsigned(self: Offset) Offset.Raw_Unsigned {
+            return @bitCast(self.raw());
+        }
 
-        pub const Raw = std.meta.Tag(Microcode_Offset);
+        pub const format = fmt.format_enum_dec;
+
+        pub const Raw = meta.Backing(Offset);
+        pub const Raw_Unsigned = std.meta.Int(.unsigned, @bitSizeOf(Offset.Raw));
         pub const max = std.math.maxInt(i6);
-        pub const min = Microcode_Offset.i8_x4_from_dr.raw() + 1;
+        pub const min = Offset.i8_x4_from_dr.raw() + 1;
     };
 };
 
 pub const Physical = packed struct (u26) {
-    offset: Offset,
+    frame_offset: Frame.Offset,
     frame: Frame,
 
     pub inline fn init(raw_value: Raw) Physical {
@@ -139,16 +148,16 @@ pub const Physical = packed struct (u26) {
 
     pub const format = fmt.format_raw_hex;
 
-    pub const Raw = u26;
+    pub const Raw = meta.Backing(Physical);
 
-    pub const device_0 = .{ .offset = Offset.zero, .frame = Frame.device_0 };
-    pub const device_1 = .{ .offset = Offset.zero, .frame = Frame.device_1 };
-    pub const device_2 = .{ .offset = Offset.zero, .frame = Frame.device_2 };
-    pub const device_3 = .{ .offset = Offset.zero, .frame = Frame.device_3 };
-    pub const device_4 = .{ .offset = Offset.zero, .frame = Frame.device_4 };
-    pub const device_5 = .{ .offset = Offset.zero, .frame = Frame.device_5 };
-    pub const device_6 = .{ .offset = Offset.zero, .frame = Frame.device_6 };
-    pub const device_7 = .{ .offset = Offset.zero, .frame = Frame.device_7 };
+    pub const device_0: Physical = .{ .offset = .zero, .frame = .device_0 };
+    pub const device_1: Physical = .{ .offset = .zero, .frame = .device_1 };
+    pub const device_2: Physical = .{ .offset = .zero, .frame = .device_2 };
+    pub const device_3: Physical = .{ .offset = .zero, .frame = .device_3 };
+    pub const device_4: Physical = .{ .offset = .zero, .frame = .device_4 };
+    pub const device_5: Physical = .{ .offset = .zero, .frame = .device_5 };
+    pub const device_6: Physical = .{ .offset = .zero, .frame = .device_6 };
+    pub const device_7: Physical = .{ .offset = .zero, .frame = .device_7 };
 
     pub const num_frames_per_device = Frame.num_frames_per_device;
     pub const num_bytes_per_device = Frame.num_bytes_per_device;
@@ -168,13 +177,13 @@ pub const Page = packed struct (u20) {
 
     pub const format = fmt.format_raw_hex;
 
-    pub const Raw = u20; // why doesn't std.meta.Tag work on packed structs?
+    pub const Raw = meta.Backing(Page); // why doesn't std.meta.Tag work on packed structs?
     pub const zero = init(0);
     pub const max = init(std.math.maxInt(Raw));
     pub const count = std.math.maxInt(Raw) + 1;
     pub const num_bytes_per_page = Offset.count;
 
-    pub const Slot = enum (u6) {
+    pub const Slot = enum (u8) {
         _,
 
         pub inline fn init(raw_value: Slot.Raw) Slot {
@@ -185,12 +194,12 @@ pub const Page = packed struct (u20) {
             return @intFromEnum(self);
         }
 
-        pub const format = fmt.format_enum;
+        pub const format = fmt.format_enum_dec;
 
-        pub const Raw = std.meta.Tag(Slot);
+        pub const Raw = meta.Backing(Slot);
     };
 
-    pub const Tag = enum (u14) {
+    pub const Tag = enum (u12) {
         _,
 
         pub inline fn init(raw_value: Tag.Raw) Tag {
@@ -201,15 +210,52 @@ pub const Page = packed struct (u20) {
             return @intFromEnum(self);
         }
 
-        pub const format = fmt.format_enum;
+        pub const format = fmt.format_enum_dec;
 
-        pub const Raw = std.meta.Tag(Tag);
+        pub const Raw = meta.Backing(Tag);
+    };
+
+    pub const Offset = enum (u12) {
+        _,
+
+        pub inline fn init(raw_value: Offset.Raw) Offset {
+            return @enumFromInt(raw_value);
+        }
+
+        pub inline fn raw(self: Offset) Offset.Raw {
+            return @intFromEnum(self);
+        }
+
+        pub const format = fmt.format_enum_hex;
+
+        pub const Raw = meta.Backing(Offset);
+        pub const zero = Offset.init(0);
+        pub const max = Offset.init(std.math.maxInt(Offset.Raw));
+        pub const count = std.math.maxInt(Offset.Raw) + 1;
+    };
+
+    pub const Word_Offset = enum (u10) {
+        _,
+
+        pub inline fn init(raw_value: Word_Offset.Raw) Word_Offset {
+            return @enumFromInt(raw_value);
+        }
+
+        pub inline fn raw(self: Word_Offset) Word_Offset.Raw {
+            return @intFromEnum(self);
+        }
+
+        pub const format = fmt.format_enum_hex;
+
+        pub const Raw = meta.Backing(Word_Offset);
+        pub const zero = Word_Offset.init(0);
+        pub const max = Word_Offset.init(std.math.maxInt(Word_Offset.Raw));
+        pub const count = std.math.maxInt(Word_Offset.Raw) + 1;
     };
 };
 
 pub const Frame = enum (u14) {
     zero = 0,
-    block_transfer_control_frame = 0x3001,
     _,
 
     pub inline fn init(raw_value: Raw) Frame {
@@ -227,8 +273,11 @@ pub const Frame = enum (u14) {
 
     pub const format = fmt.format_enum_hex;
 
-    pub const Raw = std.meta.Tag(Frame);
+    pub const Raw = meta.Backing(Frame);
     pub const count = std.math.maxInt(Raw) + 1;
+
+    pub const Offset = Page.Offset;
+    pub const Word_Offset = Page.Word_Offset;
 
     pub const device_0 = init(0x3000);
     pub const device_1 = init(0x3200);
@@ -244,46 +293,9 @@ pub const Frame = enum (u14) {
     pub const num_bytes_per_device = num_bytes_per_frame * num_frames_per_device;
 };
 
-pub const Offset = enum (u12) {
-    _,
-
-    pub inline fn init(raw_value: Raw) Offset {
-        return @enumFromInt(raw_value);
-    }
-
-    pub inline fn raw(self: Offset) Raw {
-        return @intFromEnum(self);
-    }
-
-    pub const format = fmt.format_enum_hex;
-
-    pub const Raw = std.meta.Tag(Offset);
-    pub const zero = init(0);
-    pub const max = init(std.math.maxInt(Raw));
-    pub const count = std.math.maxInt(Raw) + 1;
-};
-
-pub const Word_Offset = enum (u10) {
-    _,
-
-    pub inline fn init(raw_value: Raw) Word_Offset {
-        return @enumFromInt(raw_value);
-    }
-
-    pub inline fn raw(self: Word_Offset) Raw {
-        return @intFromEnum(self);
-    }
-
-    pub const format = fmt.format_enum_hex;
-
-    pub const Raw = std.meta.Tag(Word_Offset);
-    pub const zero = init(0);
-    pub const max = init(std.math.maxInt(Raw));
-    pub const count = std.math.maxInt(Raw) + 1;
-};
-
 pub const translation = @import("addr/translation.zig");
 
+const reg = @import("reg.zig");
 const fmt = @import("fmt.zig");
-const arch = @import("../arch.zig");
+const meta = @import("meta");
 const std = @import("std");

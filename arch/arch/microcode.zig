@@ -14,22 +14,24 @@ pub const Address = packed struct (u16) {
 
     pub const format = fmt.format_raw_hex;
 
-    pub const Raw = u16;
+    pub const Raw = meta.Backing(Address);
     pub const count = std.math.maxInt(Raw) + 1;
     pub const count_per_slot = std.math.maxInt(Flags.Raw) + 1;
 };
 
 pub const Slot = enum (u12) {
     reset = 0,
-    page_fault = 1,
-    access_fault = 2,
-    page_align_fault = 3,
-    align_fault = 4,
-    overflow_fault = 5,
-    instruction_protection_fault = 6,
-    invalid_instruction_fault = 7,
-    double_fault = 8,
-    interrupt = 9,
+    interrupt = 1,
+    double_fault = 2,
+    page_fault = 3,
+    access_fault = 4,
+    page_align_fault = 5,
+    align_fault = 6,
+    overflow_fault = 7,
+    register_stack_underflow_fault = 8,
+    register_stack_overflow_fault = 9,
+    invalid_instruction_fault = 10,
+    instruction_protection_fault = 11,
     invalid_instruction = 0xFFF,
     _,
     pub inline fn init(raw_value: Raw) Slot {
@@ -41,7 +43,7 @@ pub const Slot = enum (u12) {
 
     pub const format = fmt.format_enum_hex;
 
-    pub const Raw = std.meta.Tag(Slot); 
+    pub const Raw = meta.Backing(Slot); 
     pub const first = init(Slot.interrupt.raw() + 1);
     pub const last = init(Slot.invalid_instruction.raw() - 1);
     pub const count = std.math.maxInt(Raw) + 1;
@@ -60,9 +62,9 @@ pub const Slot = enum (u12) {
             return @intFromEnum(self);
         }
 
-        pub const format = fmt.format_enum;
+        pub const format = fmt.format_enum_dec;
 
-        pub const Raw = std.meta.Tag(Source);
+        pub const Raw = meta.Backing(Source);
     };
 };
 
@@ -80,10 +82,7 @@ pub const Flags = packed struct (u4) {
         return @bitCast(self);
     }
 
-    pub fn format(self: Flags, comptime f: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = f;
-        _ = options;
-
+    pub fn format(self: Flags, writer: *std.io.Writer) !void {
         try writer.writeByte(if (self.k) 'K' else '.');
         try writer.writeByte(if (self.z) 'Z' else '.');
         try writer.writeByte(if (self.n) 'N' else '.');
@@ -95,7 +94,7 @@ pub const Flags = packed struct (u4) {
     pub inline fn positive(self: Flags) bool { return !self.z and !self.n; }
     pub inline fn kernel(self: Flags) bool { return self.k; }
 
-    pub const Raw = u4;
+    pub const Raw = meta.Backing(Flags);
     pub const count = std.math.maxInt(Raw) + 1;
 };
 
@@ -131,7 +130,7 @@ pub const Flags_With_Carry = packed struct (u4) {
     pub inline fn unsigned_less_than(self: Flags_With_Carry) bool { return !self.c and !self.z; } // checking z here isn't actually necessary, but makes the intention clear
     pub inline fn unsigned_greater_than(self: Flags_With_Carry) bool { return self.c and !self.z; }
 
-    pub const Raw = u4;
+    pub const Raw = meta.Backing(Flags_With_Carry);
 };
 
 pub const Flags_With_Overflow = packed struct (u4) {
@@ -166,16 +165,16 @@ pub const Flags_With_Overflow = packed struct (u4) {
     pub inline fn signed_less_than(self: Flags_With_Carry) bool { return !self.z and self.n != self.v; }
     pub inline fn signed_greater_than(self: Flags_With_Carry) bool { return !self.z and self.n == self.v; }
 
-    pub const Raw = u4;
+    pub const Raw = meta.Backing(Flags_With_Overflow);
 };
 
 pub const Setup_Microcode_Entry = packed struct (u24) {
-    vao: arch.addr.Virtual.Microcode_Offset,
-    vari: arch.addr.Virtual.Base_SR_Index,
-    sr1ri: arch.SR1_Index,
-    sr2ri: arch.SR2_Index,
-    jsrc: arch.J.Source,
-    ksrc: arch.K.Source,
+    vao: addr.Virtual.Offset,
+    vari: addr.Virtual.Base,
+    sr1ri: reg.sr1.Index,
+    sr2ri: reg.sr2.Index,
+    jsrc: bus.J.Source,
+    ksrc: bus.K.Source,
 
     pub inline fn init(raw_value: Raw) Setup_Microcode_Entry {
         return @bitCast(raw_value);
@@ -187,19 +186,20 @@ pub const Setup_Microcode_Entry = packed struct (u24) {
 
     pub const format = fmt.format_raw_hex;
 
-    pub const Raw = u24;
+    pub const Raw = meta.Backing(Setup_Microcode_Entry);
 };
 
-pub const Compute_Microcode_Entry = packed struct (u24) {
-    mode: arch.Compute_Mode,
-    unit: arch.Compute_Unit,
-    width: arch.D.Width,
-    dir: arch.D.Direction,
-    vaspace: arch.addr.Space,
-    atop: arch.addr.translation.Op,
-    sr2wsrc: arch.SR_Write_Source,
-    sr2wi: arch.SR2_Index,
-    special: arch.Special_Op,
+pub const Compute_Microcode_Entry = packed struct (u32) {
+    mode: compute.Mode,
+    unit: compute.Unit,
+    width: bus.D.Width,
+    dsrc: bus.D.Source,
+    vaspace: addr.Space,
+    atop: addr.translation.Op,
+    sr2wsrc: reg.sr.Write_Source,
+    sr2wi: reg.sr2.Index,
+    special: misc.Special_Op,
+    _unused: u5 = 0,
 
     pub inline fn init(raw_value: Raw) Compute_Microcode_Entry {
         return @bitCast(raw_value);
@@ -211,22 +211,22 @@ pub const Compute_Microcode_Entry = packed struct (u24) {
 
     pub const format = fmt.format_raw_hex;
 
-    pub const Raw = u24;
+    pub const Raw = meta.Backing(Compute_Microcode_Entry);
 };
 
 pub const Transact_Microcode_Entry = packed struct (u32) {
     next: Slot,
-    sr1wi: arch.SR1_Index,
-    sr1wsrc: arch.SR_Write_Source,
-    seqop: arch.Sequencer_Op,
-    statop: arch.Status.Op,
-    tiw: bool,
-    gprw: bool,
-    drw: bool,
-    irw: bool,
-    lsrc: arch.L.Source,
-    allowint: bool,
-    power: arch.Power_Mode,
+    sr1wi: reg.sr1.Index,
+    sr1wsrc: reg.sr.Write_Source,
+    seqop: misc.Sequencer_Op,
+    flagop: reg.Flags.Op,
+    tiw: misc.Generic_Write_Enable,
+    gprw: misc.Generic_Write_Enable,
+    drw: misc.Generic_Write_Enable,
+    irw: misc.Generic_Write_Enable,
+    lsrc: bus.L.Source,
+    allowint: misc.Interrupt_Enable,
+    power: misc.Power_Mode,
 
     pub inline fn init(raw_value: Raw) Transact_Microcode_Entry {
         return @bitCast(raw_value);
@@ -238,25 +238,25 @@ pub const Transact_Microcode_Entry = packed struct (u32) {
 
     pub const format = fmt.format_raw_hex;
 
-    pub const Raw = u32;
+    pub const Raw = meta.Backing(Transact_Microcode_Entry);
 };
 
-pub fn write_compressed_rom(comptime Entry: type, result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, microcode: *const [Address.count]?Control_Signals) ![]const u8 {
+pub fn write_compressed_rom(comptime Entry: type, temp_allocator: std.mem.Allocator, w: *std.io.Writer, microcode: *const [Address.count]?Control_Signals) !void {
     const Rom_Entry = rom_compress.Entry(Address.Raw, Entry.Raw);
     var entries = try std.ArrayList(Rom_Entry).initCapacity(temp_allocator, microcode.len);
-    defer entries.deinit();
+    defer entries.deinit(temp_allocator);
     for (microcode, 0..) |optional_cs, ua| {
         if (optional_cs) |cs| {
-            const addr: Address.Raw = @intCast(ua);
+            const address: Address.Raw = @intCast(ua);
             var entry: Entry = undefined;
-            inline for (@typeInfo(Entry).Struct.fields) |field_info| {
+            inline for (@typeInfo(Entry).@"struct".fields) |field_info| {
                 if (field_info.name[0] == '_') continue;
                 @field(entry, field_info.name) = @field(cs, field_info.name);
             }
-            try entries.append(Rom_Entry.init(addr, entry.raw()));
+            entries.appendAssumeCapacity(Rom_Entry.init(address, entry.raw()));
         }
     }
-    return try rom_compress.compress(Rom_Entry, result_allocator, temp_allocator, entries.items);
+    return try rom_compress.compress(Rom_Entry, temp_allocator, w, entries.items);
 }
 
 pub fn read_compressed_rom(comptime Entry: type, compressed_data: []const u8, microcode: *Rom) void {
@@ -271,7 +271,7 @@ pub fn read_compressed_rom(comptime Entry: type, compressed_data: []const u8, mi
         }
 
         pub fn address(self: *Self, a: u32) void {
-            inline for (@typeInfo(Entry).Struct.fields) |field_info| {
+            inline for (@typeInfo(Entry).@"struct".fields) |field_info| {
                 if (field_info.name[0] == '_') continue;
                 @field(self.microcode[a], field_info.name) = @field(self.d, field_info.name);
             }
@@ -281,12 +281,9 @@ pub fn read_compressed_rom(comptime Entry: type, compressed_data: []const u8, mi
     rom_decompress.decompress(compressed_data, &ctx);
 }
 
-pub fn write_srec_rom(comptime Entry: type, result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, microcode: *const [Address.count]?Control_Signals) ![]u8 {
-    var temp = std.ArrayList(u8).init(temp_allocator);
-    defer temp.deinit();
-
-    var encoded_data = std.ArrayList(u8).init(temp_allocator);
-    defer encoded_data.deinit();
+pub fn  write_srec_rom(comptime Entry: type, temp_allocator: std.mem.Allocator, w: *std.io.Writer, microcode: *const [Address.count]?Control_Signals) !void {
+    var temp: std.ArrayList(u8) = .empty;
+    defer temp.deinit(temp_allocator);
 
     const rom_name = comptime name: {
         var rom_name: []const u8 = @typeName(Entry);
@@ -296,26 +293,26 @@ pub fn write_srec_rom(comptime Entry: type, result_allocator: std.mem.Allocator,
         break :name rom_name;
     };
 
-    var writer = try srec.writer(u24, encoded_data.writer(), .{
+    var writer = try srec.writer(u24, w, .{
         .header_data = "Vera Microcode ROM: " ++ rom_name,
         .pretty = true,
     });
 
     var start: u24 = undefined;
-    for (microcode, 0..) |optional_cs, addr| {
+    for (microcode, 0..) |optional_cs, address| {
         if (optional_cs) |cs| {
             var entry: Entry = undefined;
-            inline for (@typeInfo(Entry).Struct.fields) |field_info| {
+            inline for (@typeInfo(Entry).@"struct".fields) |field_info| {
                 if (field_info.name[0] == '_') continue;
                 @field(entry, field_info.name) = @field(cs, field_info.name);
             }
 
             if (temp.items.len == 0) {
-                start = @intCast(addr * @sizeOf(Entry));
+                start = @intCast(address * @sizeOf(Entry));
             }
 
             const bytes = std.mem.toBytes(entry.raw());
-            try temp.appendSlice(&bytes);
+            try temp.appendSlice(temp_allocator, &bytes);
         } else if (temp.items.len > 0) {
             try writer.write(start, temp.items);
             temp.clearRetainingCapacity();
@@ -327,36 +324,31 @@ pub fn write_srec_rom(comptime Entry: type, result_allocator: std.mem.Allocator,
     }
 
     try writer.finish(0);
-
-    return result_allocator.dupe(u8, encoded_data.items);
 }
 
-pub fn write_ihex_rom(comptime Entry: type, result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, microcode: *const [Address.count]?Control_Signals) ![]u8 {
-    var temp = std.ArrayList(u8).init(temp_allocator);
-    defer temp.deinit();
+pub fn write_ihex_rom(comptime Entry: type, temp_allocator: std.mem.Allocator, w: *std.io.Writer, microcode: *const [Address.count]?Control_Signals) !void {
+    var temp: std.ArrayList(u8) = .empty;
+    defer temp.deinit(temp_allocator);
 
-    var encoded_data = std.ArrayList(u8).init(temp_allocator);
-    defer encoded_data.deinit();
-
-    var writer = ihex.writer(u32, encoded_data.writer(), .{
+    var writer = ihex.writer(u32, w, .{
         .pretty = true,
     });
 
     var start: u32 = undefined;
-    for (microcode, 0..) |optional_cs, addr| {
+    for (microcode, 0..) |optional_cs, address| {
         if (optional_cs) |cs| {
             var entry: Entry = undefined;
-            inline for (@typeInfo(Entry).Struct.fields) |field_info| {
+            inline for (@typeInfo(Entry).@"struct".fields) |field_info| {
                 if (field_info.name[0] == '_') continue;
                 @field(entry, field_info.name) = @field(cs, field_info.name);
             }
 
             if (temp.items.len == 0) {
-                start = @intCast(addr * @sizeOf(Entry));
+                start = @intCast(address * @sizeOf(Entry));
             }
 
             const bytes = std.mem.toBytes(entry.raw());
-            try temp.appendSlice(&bytes);
+            try temp.appendSlice(temp_allocator, &bytes);
         } else if (temp.items.len > 0) {
             try writer.write(start, temp.items);
             temp.clearRetainingCapacity();
@@ -368,23 +360,16 @@ pub fn write_ihex_rom(comptime Entry: type, result_allocator: std.mem.Allocator,
     }
 
     try writer.finish(0);
-
-    return result_allocator.dupe(u8, encoded_data.items);
 }
 
-pub fn write_csv(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Allocator, microcode: *const [Address.count]?Control_Signals, fn_names: ?*const [Slot.count][]const u8) ![]u8 {
-    var out = std.ArrayList(u8).init(temp_allocator);
-    defer out.deinit();
-
-    var w = out.writer();
-
+pub fn write_csv(temp_allocator: std.mem.Allocator, w: *std.io.Writer, microcode: *const [Address.count]?Control_Signals, fn_names: ?*const [Slot.count][]const u8) !void {
     if (fn_names) |_| {
         try w.writeAll("UCA,Slot,fn,Flags");
     } else {
         try w.writeAll("UCA,Slot,Flags");
     }
 
-    for (std.enums.values(arch.Control_Signal)) |signal| {
+    for (std.enums.values(Control_Signal)) |signal| {
         try w.writeByte(',');
         try w.writeAll(@tagName(signal));
     }
@@ -396,8 +381,8 @@ pub fn write_csv(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Al
         cs: Control_Signals,
     };
 
-    var conditional_temp = std.ArrayList(Conditional_Info).init(temp_allocator);
-    defer conditional_temp.deinit();
+    var conditional_temp: std.ArrayList(Conditional_Info) = .empty;
+    defer conditional_temp.deinit(temp_allocator);
 
     for (0..Slot.count) |slot| {
         const addr0: Address = .{
@@ -406,12 +391,12 @@ pub fn write_csv(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Al
         };
 
         const unconditional = for (1..Flags.count) |raw_flags| {
-            const addr: Address = .{
+            const addr1: Address = .{
                 .slot = Slot.init(@intCast(slot)),
                 .flags = Flags.init(@intCast(raw_flags)),
             };
             const cs0 = microcode[addr0.raw()];
-            const cs = microcode[addr.raw()];
+            const cs = microcode[addr1.raw()];
             if (cs0 == null and cs == null) continue;
 
             // The microcode won't work properly if a slot has cycle data for some combinations of flags but not others.
@@ -424,9 +409,9 @@ pub fn write_csv(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Al
         if (unconditional) {
             if (microcode[addr0.raw()]) |cs| {
                 if (fn_names) |names| {
-                    try w.print("{},{},{s},****", .{ addr0, addr0.slot, names[slot] });
+                    try w.print("{f},{f},{s},****", .{ addr0, addr0.slot, names[slot] });
                 } else {
-                    try w.print("{},{},****", .{ addr0, addr0.slot });
+                    try w.print("{f},{f},****", .{ addr0, addr0.slot });
                 }
                 try write_csv_signals(w, cs);
                 try w.writeByte('\n');
@@ -435,14 +420,14 @@ pub fn write_csv(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Al
             conditional_temp.clearRetainingCapacity();
 
             for (0..Flags.count) |raw_flags| {
-                const addr: Address = .{
+                const address: Address = .{
                     .slot = Slot.init(@intCast(slot)),
                     .flags = Flags.init(@intCast(raw_flags)),
                 };
-                try conditional_temp.append(.{
+                try conditional_temp.append(temp_allocator, .{
                     .flags = @intCast(raw_flags),
                     .wildcards = 0,
-                    .cs = microcode[addr.raw()].?,
+                    .cs = microcode[address.raw()].?,
                 });
             }
 
@@ -467,25 +452,25 @@ pub fn write_csv(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Al
             for (conditional_temp.items) |info| {
                 var flags_ascii: [@bitSizeOf(Flags)]u8 = undefined;
                 var wildcards_ascii: [@bitSizeOf(Flags)]u8 = undefined;
-                _ = try std.fmt.bufPrint(&flags_ascii, "{}", .{ Flags.init(info.flags) });
-                _ = try std.fmt.bufPrint(&wildcards_ascii, "{}", .{ Flags.init(info.wildcards) });
+                _ = try std.fmt.bufPrint(&flags_ascii, "{f}", .{ Flags.init(info.flags) });
+                _ = try std.fmt.bufPrint(&wildcards_ascii, "{f}", .{ Flags.init(info.wildcards) });
                 for (&flags_ascii, wildcards_ascii) |*f, wild| {
                     if (wild != '.') f.* = '*';
                 }
 
-                const addr: Address = .{
+                const address: Address = .{
                     .slot = Slot.init(@intCast(slot)),
                     .flags = Flags.init(info.flags),
                 };
                 if (fn_names) |names| {
-                    try w.print("{},{},{s},{s}", .{ addr, addr.slot, names[slot], &flags_ascii });
+                    try w.print("{f},{f},{s},{s}", .{ address, address.slot, names[slot], &flags_ascii });
                 } else {
-                    try w.print("{},{},{s}", .{ addr, addr.slot, &flags_ascii });
+                    try w.print("{f},{f},{s}", .{ address, address.slot, &flags_ascii });
                 }
-                if (microcode[addr.raw()]) |cs| {
+                if (microcode[address.raw()]) |cs| {
                     try write_csv_signals(w, cs);
                 } else {
-                    for (std.enums.values(arch.Control_Signal)) |_| {
+                    for (std.enums.values(Control_Signal)) |_| {
                         try w.writeByte(',');
                     }
                 }
@@ -493,33 +478,38 @@ pub fn write_csv(result_allocator: std.mem.Allocator, temp_allocator: std.mem.Al
             }
         }
     }
-
-    return result_allocator.dupe(u8, out.items);
 }
 
-fn write_csv_signals(w: anytype, cs: Control_Signals) !void {
-    inline for (comptime std.enums.values(arch.Control_Signal)) |signal| {
+fn write_csv_signals(w: *std.io.Writer, cs: Control_Signals) !void {
+    inline for (comptime std.enums.values(Control_Signal)) |signal| {
         const value = @field(cs, @tagName(signal));
         switch (signal) {
-            .gprw => try w.writeAll(if (value) ",GPRW" else ","),
-            .irw => try w.writeAll(if (value) ",IRW" else ","),
-            .drw => try w.writeAll(if (value) ",DRW" else ","),
-            .tiw => try w.writeAll(if (value) ",TIW" else ","),
-            .allowint => try w.writeAll(if (value) ",ALLOWINT" else ","),
+            .gprw => try w.writeAll(if (value == .write) ",GPRW" else ","),
+            .irw => try w.writeAll(if (value == .write) ",IRW" else ","),
+            .drw => try w.writeAll(if (value == .write) ",DRW" else ","),
+            .tiw => try w.writeAll(if (value == .write) ",TIW" else ","),
+            .allowint => try w.writeAll(if (value == .allow) ",ALLOWINT" else ","),
             .power => try w.writeAll(switch (value) {
                 .run => ",",
                 .sleep => ",SLEEP",
             }),
-            else => try w.print(",{}", .{ value }),
+            else => try w.print(",{f}", .{ value }),
         }
     }
 }
 
+const Control_Signal = std.meta.FieldEnum(Control_Signals);
+
 const Control_Signals = @import("Control_Signals.zig");
+const compute = @import("compute.zig");
+const bus = @import("bus.zig");
+const reg = @import("reg.zig");
+const misc = @import("misc.zig");
+const addr = @import("addr.zig");
 const fmt = @import("fmt.zig");
-const arch = @import("../arch.zig");
 const rom_compress = @import("rom_compress");
 const rom_decompress = @import("rom_decompress");
 const srec = @import("srec");
 const ihex = @import("ihex");
+const meta = @import("meta");
 const std = @import("std");

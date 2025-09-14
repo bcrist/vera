@@ -9,6 +9,7 @@ pub const encoding = .{
     opcodes.mnemonic_encoder(opcodes.ALU_16, .{ .suffix = "_ip_rel", .offset = 8 }),
     Encoder.init(16, Int(.imm, i8)),
 };
+pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = 0;
 
 pub fn entry(c: *Cycle) void {
     c.ip_read_to_d(.i8_from_dr, .@"32b");
@@ -26,7 +27,7 @@ pub fn logic(c: *Cycle, mnemonic: isa.Mnemonic) void {
         .xor => .xor,
         else => unreachable,
     }, .fresh, .flags);
-    c.l_to_reg();
+    c.l_to_reg(true);
     c.load_and_exec_next_insn();
 }
 

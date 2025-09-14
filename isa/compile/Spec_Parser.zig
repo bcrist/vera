@@ -135,7 +135,7 @@ fn add_constant(self: *Spec_Parser, index: Parameter.Index, constant: i64) void 
     }) catch @panic("OOM");
 }
 
-fn add_base_register(self: *Spec_Parser, index: Parameter.Index, reg: Register_Index) void {
+fn add_base_register(self: *Spec_Parser, index: Parameter.Index, reg: arch.reg.gpr.Index) void {
     self.temp_constraints.append(self.allocator, .{
         .kind = .equal,
         .left = .{ .placeholder = .{
@@ -147,7 +147,7 @@ fn add_base_register(self: *Spec_Parser, index: Parameter.Index, reg: Register_I
     }) catch @panic("OOM");
 }
 
-fn add_offset_register(self: *Spec_Parser, index: Parameter.Index, reg: Register_Index) void {
+fn add_offset_register(self: *Spec_Parser, index: Parameter.Index, reg: arch.reg.gpr.Index) void {
     self.temp_constraints.append(self.allocator, .{
         .kind = .equal,
         .left = .{ .placeholder = .{
@@ -392,11 +392,11 @@ fn parse_sr(self: *Spec_Parser) ?isa.Special_Register {
     return null;
 }
 
-fn parse_literal_reg(self: *Spec_Parser) ?Register_Index {
+fn parse_literal_reg(self: *Spec_Parser) ?arch.reg.gpr.Index {
     if (self.token_kinds[self.next_token] == .id) {
         const id = self.token_location(self.next_token);
         if (id.len >= 1 and std.ascii.toLower(id[0]) == 'r') {
-            const index = std.fmt.parseUnsigned(Register_Index, id[1..], 10) catch return null;
+            const index = std.fmt.parseUnsigned(arch.reg.gpr.Index, id[1..], 10) catch return null;
             self.next_token += 1;
             return index;
         }
@@ -438,16 +438,17 @@ pub fn record_error_rel(self: *Spec_Parser, desc: []const u8, token_offset: i8) 
 pub fn record_error_abs(self: *Spec_Parser, desc: []const u8, token_handle: Token.Handle) noreturn {
     const token = self.tokens.get(token_handle);
     const location = token.location(self.source);
-    const writer = std.io.getStdErr().writer();
-    writer.writeByte('\n') catch @panic("IO Error");
+    var buf: [64]u8 = undefined;
+    var writer = std.fs.File.stderr().writer(&buf);
+    writer.interface.writeByte('\n') catch @panic("IO Error");
     console.print_context(self.source, &.{
         .{
             .offset = token.offset,
             .len = location.len,
             .note = desc,
         },
-    }, writer, 160, .{}) catch @panic("IO Error");
-
+    }, &writer.interface, 160, .{}) catch @panic("IO Error");
+    writer.interface.flush() catch @panic("IO Error");
     @panic("Error parsing spec");
 }
 
@@ -468,7 +469,6 @@ const Parameter = isa.Parameter;
 const Mnemonic = isa.Mnemonic;
 const Mnemonic_Suffix = isa.Mnemonic_Suffix;
 const isa = @import("isa");
-const Register_Index = arch.Register_Index;
 const arch = @import("arch");
 const Signedness = std.builtin.Signedness;
 const console = @import("console");

@@ -1,36 +1,69 @@
-pub const spec = "fret";
+pub const forms = .{
+    struct {
+        pub const spec = "fret";
 
-pub const encoding = .{
-    opcodes.LSB.misc_16,
-    Encoder.init(8, opcodes.Misc_16.fret),
+        pub const encoding = .{
+            opcodes.LSB.misc_16,
+            Encoder.init(8, opcodes.Misc_16.fret),
+        };
+
+        pub const entry = restore_ir;
+    },
+    struct {
+        pub const spec = "freto";
+
+        pub const encoding = .{
+            opcodes.LSB.misc_16,
+            Encoder.init(8, opcodes.Misc_16.freto),
+        };
+        pub const krio: arch.bus.K.Read_Index_Offset.Raw = @bitOffsetOf(arch.reg.Flags, "read_override");
+
+        pub const entry = load_atr;
+    },
 };
 
-pub const entry = toggle_rsn;
-
-pub fn toggle_rsn(c: *Cycle, flags: Flags) void {
+pub fn load_atr(c: *Cycle, flags: Flags) void {
     if (!flags.kernel()) return c.illegal_instruction();
+    c.reg_to_j_to_l();
+    c.l_to_atr();
+    c.next(restore_flags_set_read_override);
+}
 
-    c.toggle_rsn();
+pub fn restore_flags_set_read_override(c: *Cycle) void {
+    c.sr_alt_to_j(.fault_flags);
+    c.literal_to_k((arch.reg.Flags.Writable { .read_override = true }).raw());
+    c.j_logic_k_to_l(._or, .fresh, .no_flags);
+    c.l_to_flags();
+    c.next(restore_ir);
+}
+
+pub fn restore_flags(c: *Cycle, flags: Flags) void {
+    if (!flags.kernel()) return c.illegal_instruction();
+    c.sr_alt_to_l(.fault_flags);
+    c.l_to_flags();
     c.next(restore_ir);
 }
 
 pub fn restore_ir(c: *Cycle) void {
-    c.reload_asn();
-    c.sr_to_l(.fault_ir);
+    c.sr_alt_to_l(.fault_ir);    
     c.l_to_dr();
     c.dr_to_ir();
     c.next(restore_dr);
 }
 
 pub fn restore_dr(c: *Cycle) void {
-    c.sr_to_l(.fault_dr);
+    c.sr_alt_to_l(.fault_dr);
     c.l_to_dr();
-    c.next(restore_stat_uca_and_retry);
+    c.next(restore_asn6);
 }
 
-pub fn restore_stat_uca_and_retry(c: *Cycle) void {
-    c.sr_to_l(.fault_stat);
-    c.l_to_ti_and_stat_zncva();
+pub fn restore_asn6(c: *Cycle) void {
+    c.reload_asn_alt();
+    c.next(restore_uca_and_retry);
+}
+
+pub fn restore_uca_and_retry(c: *Cycle) void {
+    c.sr_alt_to_l(.fault_status);
     c.fault_return();
 }
 

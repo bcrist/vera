@@ -655,7 +655,7 @@ pub const instructions = .{
         pub const ij = Reg(.src);
 
         pub fn entry(c: *Cycle, flags: Flags, dest: Param(2)) void {
-            const sr: arch.Any_SR_Index = switch (dest.signature.base.sr) {
+            const sr: arch.reg.sr.Any_Index = switch (dest.signature.base.sr) {
                 .rp => .rp,
                 .uxp => .uxp,
                 .kxp => .kxp,
@@ -933,11 +933,11 @@ pub const instructions = .{
         };
         pub const encoding = .{
             Even_Reg(.even),
-            Encoder.init(3, Reg_Bit(.bit)),
+            Encoder.init(3, Bit(.bit)),
             Encoder.init(7, @as(u7, 0x3E)),
             region_encoder,
         };
-        pub const ik = Reg_Bit(.bit);
+        pub const ik = Bit(.bit);
         pub const iw = Reg(.even);
 
         pub fn entry(c: *Cycle) void {
@@ -1289,7 +1289,7 @@ const Int = placeholders.Int;
 const Int_Mult = placeholders.Int_Mult;
 const Reg = placeholders.Reg;
 const Param = placeholders.Param;
-const Reg_Bit = placeholders.Reg_Bit;
+const Bit = placeholders.Bit;
 const Even_Reg = placeholders.Even_Reg;
 const Odd_Reg = placeholders.Odd_Reg;
 const conditions = @import("../compile/conditions.zig");

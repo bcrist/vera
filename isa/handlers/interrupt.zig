@@ -1,32 +1,25 @@
 pub const slot = arch.microcode.Slot.interrupt;
 
-pub const entry = save_stat;
+pub const entry = save_flags;
 
-pub fn save_stat(c: *Cycle) void {
-    c.status_to_l();
-    c.l_to_sr(.int_stat);
-    c.next(change_rsn);
-}
-
-pub fn change_rsn(c: *Cycle) void {
-    c.sr_to_j(.int_stat);
-    c.literal_to_k(3);
-    c.j_logic_k_to_l(._and, .fresh, .no_flags);
-    c.l_to_rsn();
-    c.sr1_to_sr1(.int_stat, .int_stat);
-    c.disable_address_translation();
+pub fn save_flags(c: *Cycle) void {
+    c.flags_to_l();
+    c.l_to_sr_alt(.int_flags);
+    c.disable_flags(.{ .ate = true, .read_override = true });
     c.next(read_vector);
 }
 
 pub fn read_vector(c: *Cycle) void {
     c.reload_asn();
-    c.read_to_d(.zero, @offsetOf(arch.Vector_Table, "interrupt"), .@"16b", .raw);
+    c.read_to_d(.zero, @offsetOf(arch.data_structures.Vector_Table, "interrupt"), .@"16b", .physical);
     c.d_to_l();
     c.l_to_sr(.temp_1);
     c.next(branch);
 }
 
 pub fn branch(c: *Cycle) void {
+    c.zero_to_l();
+    c.l_to_flags(); // set TI to 0
     c.branch(.temp_1, 0);
 }
 

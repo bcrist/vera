@@ -37,7 +37,6 @@ pub fn read(self: *const Frame_Tracker, ctrl: Bus_Control) ?Bus_Data {
 
 pub fn write(self: *Frame_Tracker, ctrl: Bus_Control, data: Bus_Data) void {
     if (ctrl.guard_mismatch) return;
-    if (ctrl.block_transfer) return;
 
     if (ctrl.frame == frame_tracker_frame) {
         const a = ctrl.aa.raw();

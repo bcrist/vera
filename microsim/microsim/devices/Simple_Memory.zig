@@ -49,7 +49,6 @@ pub fn write(self: *Simple_Memory, ctrl: Bus_Control, data: Bus_Data) void {
     if (ctrl.frame.raw() < self.frame_begin.raw()) return;
     if (ctrl.frame.raw() >= self.frame_end.raw()) return;
     if (ctrl.guard_mismatch) return;
-    if (ctrl.block_transfer) return;
 
     const base: usize = (ctrl.frame.raw() - self.frame_begin.raw()) * arch.addr.Frame.num_bytes_per_frame;
     const base_a = base + ctrl.aa.raw() * 4;

@@ -1,0 +1,16 @@
+.{
+    .name = .vera,
+    .version = "0.0.1",
+    .minimum_zig_version = "0.15.1",
+    .paths = .{""},
+    .fingerprint = 0x5f0c521b7f8e9d50,
+    .dependencies = .{
+        .arch = .{ .path = "arch" },
+        .assembler = .{ .path = "assembler" },
+        .block_diagram = .{ .path = "block_diagram" },
+        .boards = .{ .path = "boards" },
+        .isa = .{ .path = "isa" },
+        .microsim = .{ .path = "microsim" },
+        .tests = .{ .path = "tests" },
+    },
+}

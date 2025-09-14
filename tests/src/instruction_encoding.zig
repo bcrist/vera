@@ -14,7 +14,7 @@ test "Instruction encoding" {
     const buf = try std.testing.allocator.alloc(u8, 0x10000);
     defer std.testing.allocator.free(buf);
 
-    var prng = std.rand.Xoshiro256.init(0x89fbd77dbe9f9135);
+    var prng = std.Random.Xoshiro256.init(0x89fbd77dbe9f9135);
     prng.fill(buf);
 
     var decoder = ddb.decoder(null, buf);

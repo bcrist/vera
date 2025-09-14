@@ -2,14 +2,18 @@ pub fn build(b: *std.Build) void {
     const rom_compress = b.dependency("rom_compress", .{});
     const srec = b.dependency("srec", .{}).module("srec");
     const ihex = b.dependency("ihex", .{}).module("ihex");
+    const meta = b.dependency("meta", .{}).module("meta");
 
-    const arch = b.addModule("arch", .{
+    _ = b.addModule("arch", .{
         .root_source_file = b.path("arch.zig"),
+        .imports = &.{
+            .{ .name = "rom_compress", .module = rom_compress.module("rom_compress") },
+            .{ .name = "rom_decompress", .module = rom_compress.module("rom_decompress") },
+            .{ .name = "srec", .module = srec },
+            .{ .name = "ihex", .module = ihex },
+            .{ .name = "meta", .module = meta },
+        },
     });
-    arch.addImport("rom_compress", rom_compress.module("rom_compress"));
-    arch.addImport("rom_decompress", rom_compress.module("rom_decompress"));
-    arch.addImport("srec", srec);
-    arch.addImport("ihex", ihex);
 }
 
 const std = @import("std");

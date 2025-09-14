@@ -1,9 +1,9 @@
 pub const spec = "val (imm)";
-pub const wio: arch.Write_Index_Offset.Raw = 1;
+pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = 1;
 
 pub const forms = .{
     struct {
-        const Value = Reg_Bit(.imm);
+        const Value = Bit(.imm);
         pub const encoding = .{
             opcodes.LSB.bit_op,
             Encoder.init(8, opcodes.Bit_Op.val_bit),
@@ -25,7 +25,7 @@ pub const forms = .{
     },
 
     struct {
-        const Value = Invert(Reg_Bit(.imm), 32);
+        const Value = Invert(Bit(.imm), 32);
         pub const encoding = .{
             opcodes.LSB.bit_op,
             Encoder.init(8, opcodes.Bit_Op.val_not_bit),
@@ -35,7 +35,7 @@ pub const forms = .{
         pub const entry = not_reg_bit;
     },
     struct {
-        const Value = Offset(-1, Negate(Reg_Bit(.imm)));
+        const Value = Offset(-1, Negate(Bit(.imm)));
         pub const constraints = .{
             .{ .imm, .not_equal, -2147483649 },
         };
@@ -49,7 +49,7 @@ pub const forms = .{
     },
 
     struct {
-        const Value = Offset(-1, Reg_Bit(.imm));
+        const Value = Offset(-1, Bit(.imm));
         pub const encoding = .{
             opcodes.LSB.bit_op,
             Encoder.init(8, opcodes.Bit_Op.val_bit_minus_one),
@@ -60,7 +60,7 @@ pub const forms = .{
     },
 
     struct {
-        const Value = Negate(Reg_Bit(.imm));
+        const Value = Negate(Bit(.imm));
         pub const encoding = .{
             opcodes.LSB.bit_op,
             Encoder.init(8, opcodes.Bit_Op.val_neg_bit),
@@ -81,15 +81,13 @@ pub const forms = .{
 
 pub fn reg_bit(c: *Cycle) void {
     c.krio_bit_to_l();
-    c.l_to_reg();
-    c.wi_to_ti();
+    c.l_to_reg(true);
     c.load_and_exec_next_insn();
 }
 
 pub fn not_reg_bit(c: *Cycle) void {
     c.not_krio_bit_to_l();
-    c.l_to_reg();
-    c.wi_to_ti();
+    c.l_to_reg(true);
     c.load_and_exec_next_insn();
 }
 
@@ -97,8 +95,7 @@ pub fn reg_bit_minus_one(c: *Cycle) void {
     c.krio_bit_to_k();
     c.sr_to_j(.one);
     c.k_minus_j_to_l(.fresh, .no_flags);
-    c.l_to_reg();
-    c.wi_to_ti();
+    c.l_to_reg(true);
     c.load_and_exec_next_insn();
 }
 
@@ -106,15 +103,13 @@ pub fn neg_reg_bit(c: *Cycle) void {
     c.krio_bit_to_k();
     c.zero_to_j();
     c.j_minus_k_to_l(.fresh, .no_flags);
-    c.l_to_reg();
-    c.wi_to_ti();
+    c.l_to_reg(true);
     c.load_and_exec_next_insn();
 }
 
 pub fn dr_i16(c: *Cycle) void {
     c.dr_i16_to_l();
-    c.l_to_reg();
-    c.wi_to_ti();
+    c.l_to_reg(true);
     c.load_and_exec_next_insn();
 }
 
@@ -122,7 +117,7 @@ const opcodes = @import("../opcodes.zig");
 const Invert = placeholders.Invert;
 const Offset = placeholders.Offset;
 const Negate = placeholders.Negate;
-const Reg_Bit = placeholders.Reg_Bit;
+const Bit = placeholders.Bit;
 const Int = placeholders.Int;
 const placeholders = @import("../../compile/placeholders.zig");
 const Cycle = @import("../../compile/Cycle.zig");

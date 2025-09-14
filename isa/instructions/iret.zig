@@ -5,26 +5,19 @@ pub const encoding = .{
     Encoder.init(8, opcodes.Misc_16.iret),
 };
 
-pub const entry = restore_rsn;
-
-pub fn restore_rsn(c: *Cycle, flags: Flags) void {
+pub fn entry(c: *Cycle, flags: Flags) void {
     if (!flags.kernel()) return c.illegal_instruction();
-
-    c.sr_to_j(.int_stat);
-    c.literal_to_k(@offsetOf(arch.Status, "rsn"));
-    c.j_shift_k_to_l(.shr, .fresh, .no_flags);
-    c.l_to_rsn();
-    c.next(restore_stat);
+    c.force_normal_execution(reload_asn);
 }
 
-pub fn restore_stat(c: *Cycle) void {
+pub fn reload_asn(c: *Cycle) void {
     c.reload_asn();
-    c.sr_to_l(.int_stat);
-    c.l_to_ti_and_stat_zncva();
-    c.force_normal_execution(branch);
+    c.next(branch);
 }
 
 pub fn branch(c: *Cycle) void {
+    c.sr_to_l(.int_flags);
+    c.l_to_flags();
     c.branch(.ip, 0);
 }
 

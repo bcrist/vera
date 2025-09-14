@@ -1,7 +1,8 @@
 .{
-    .name = "microsim",
+    .name = .vera_microsim,
     .version = "0.0.0",
-    .minimum_zig_version = "0.13.0",
+    .minimum_zig_version = "0.15.1",
+    .fingerprint = 0x7a687a4849bdf690,
     .paths = .{""},
     .dependencies = .{
         .arch = .{
@@ -13,5 +14,18 @@
         .bit_helper = .{
             .path = "../../zig-bithelper",
         },
+        .sx = .{
+            .path = "../../zig-sx",
+        },
+        // .dear_zig_bindings = .{
+        //     .path = "../../dear_zig_bindings",
+        // },
+        // .dear_zig_bindings_sokol = .{
+        //     .path = "../../dear_zig_bindings_sokol",
+        // },
+        // .sokol = .{
+        //     .url = "git+https://github.com/floooh/sokol-zig#580b2ac40621a886c0d440140b6f9704466be20e",
+        //     .hash = "1220247e48f0feb8ef490bca108c5abbcf418d502f25b719bfd5a70393f67cab4888",
+        // },
     },
 }

@@ -70,8 +70,8 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
                 },
                 .registers = .{ .{
                     .reg = .{ arch.Reg.init(0) } ** arch.register_count,
-                    .sr1 = .{ arch.Reg.init(0) } ** arch.SR1_Index.count,
-                    .sr2 = .{ arch.Reg.init(0) } ** arch.SR2_Index.count,
+                    .sr1 = .{ arch.Reg.init(0) } ** arch.reg.sr1.Index.count,
+                    .sr2 = .{ arch.Reg.init(0) } ** arch.reg.sr2.Index.count,
                 }} ** arch.Register_Set_Number.count,
                 .guards = .{ arch.Guarded_Memory_Register.init(0) } ** arch.Pipeline.count,
                 .translations = .{ .{ 
@@ -400,11 +400,11 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
                 if (options.sr) {
                     try writer.writeAll("   Special Registers:\n");
 
-                    for (0..@max(arch.SR1_Index.count, arch.SR2_Index.count)) |i| {
+                    for (0..@max(arch.reg.sr1.Index.count, arch.reg.sr2.Index.count)) |i| {
                         var buf: [16]u8 = undefined;
 
-                        if (i < arch.SR1_Index.count) {
-                            const index_name = try std.fmt.bufPrint(&buf, "{}", .{ arch.SR1_Index.init(@intCast(i)) });
+                        if (i < arch.reg.sr1.Index.count) {
+                            const index_name = try std.fmt.bufPrint(&buf, "{}", .{ arch.reg.sr1.Index.init(@intCast(i)) });
                             try writer.writeByteNTimes(' ', 20 - index_name.len);
                             try writer.writeAll(index_name);
                             try writer.print("={}", .{ self.state.registers[pipe.rsn.raw()].sr1[i] });
@@ -412,8 +412,8 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
                             try writer.writeByteNTimes(' ', 20);
                         }
 
-                        if (i < arch.SR2_Index.count) {
-                            const index_name = try std.fmt.bufPrint(&buf, "{}", .{ arch.SR2_Index.init(@intCast(i)) });
+                        if (i < arch.reg.sr2.Index.count) {
+                            const index_name = try std.fmt.bufPrint(&buf, "{}", .{ arch.reg.sr2.Index.init(@intCast(i)) });
                             try writer.writeByteNTimes(' ', 16 - index_name.len);
                             try writer.writeAll(index_name);
                             try writer.print("={}", .{ self.state.registers[pipe.rsn.raw()].sr2[i] });

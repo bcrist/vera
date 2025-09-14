@@ -1,65 +1,9 @@
-This directory is a zig package, used by adding a `.path = "relative/path/to/here"` dependency in `build.zig.zon`.
-This package exports the `arch` module, which contains a variety of types and helpers for representing the registers, buses, etc. that exist at the hardware level.
-
-
-# Microarchitecture Overview
-
-## Buses
-Name | Width | Description
---- | --- | ---
-`J` | 32b | Left-hand operand for computation
-`K` | 32b | Right-hand operand for computation
-`L` | 32b | Result of computation and source for (most) register writes
-`D` | 32b | Data from/to memory or devices
-`DA`| 16b | Data bus for "even" 16b half-words (LSB half of `D` when accessing an align-4 address)
-`DB`| 16b | Data bus for "odd" 16b half-words (MSB half of `D` when accessing an align-4 address)
-`VA`| 32b | Virtual Address
-`P` | 20b | Page Number; upper bits of `VA`
-`N` | 12b | Page/Frame Offset in bytes; lower bits of `VA`
-`F` | 14b | Physical frame number; high bits of `DA`, `DB` bus address
-`AA`| 10b | Low bits of address for the `DA` bus
-`AB`| 10b | Low bits of address for the `DB` bus
-
-## Registers
-Name | Width | Description
--- | --- | ---
-`R0` - `R31` | 32b | General purpose registers
-`STAT` | 32b | Status flags (some read-only)
-`RSN` | 7b | Register set number
-`ASN` | 4b/32b | Virtual address space number
-`SP` | 32b | Stack pointer
-`BP` | 32b | Stack base/frame pointer
-`IP` | 32b | Instruction pointer
-`RP` | 32b | Return pointer
-`UXP` | 32b | User context pointer
-`KXP` | 32b | Kernel context pointer
-`DR` | 32b | Data register[^1]
-`IR` | 16b | Instruction register[^1]
-`TI` | 5b | Register stack pointer[^1]
-
-[^1]: These registers are implementation details from the perspective of the assembly language user.
-
-## CPU Status Flags
-Name | Width | Description
--- | --- | ---
-`PIPE` | 2b | Current pipe number (0-2)
-`Z`  | 1b | Zero flag
-`N` | 1b | Negative flag
-`C` | 1b | Carry/borrow flag
-`V` | 1b | Overflow flag
-`K` | 1b | Kernel mode
-`A` | 1b | Address translation enable
-`RSN` | 7b | Register set number
-`TI` | 5b | Register stack pointer
-`PUCS` | 12b | Microcode slot of the previous cycle (used for fault recovery)
+# Microarchitecture Notes
 
 ## Clock
 All activity in the CPU is coordinated using a single clock signal. A new clock cycle begins on the rising edge of the clock. This is the point where edge-triggered registers will load a new value. Asynchronous writes (i.e. to register files or RAM) begin when the clock goes low and end at the rising edge. Therefore the addressing signals for these chips must settle in less than half a clock cycle to avoid corruption of other locations.
 
 In order to avoid bus collisions, all buses that are sourced from one of multiple separate line drivers (e.g. J, K, L, D) should only drive the bus during the second half of the cycle, when CLK is low.
-
-### Sleep Mode
-When there is no work for a pipeline to do, it should execute the `PARK` instruction.  This allows certain parts of the pipeline to enter low-power mode for the cycle, and if all pipelines are parked simultaneously, the CPU clock can be stopped entirely, until an interrupt is ready to be serviced.
 
 ## Microcode & Pipelining
 Each instruction is executed with one or more "microcode cycles".  A microcode cycle has four pipeline stages.  The microcode address is determined during the first stage and remains constant throughout the following 3 stages.  Conceptually, you can imagine all the control signals being decoded in that first stage, though in hardware, some signals are actually decoded in later stages to reduce the number of pipeline registers needed.
@@ -71,39 +15,6 @@ The downside of a "threaded pipeline" approach is of course that for single-thre
 You might also note that this kind of design needs to have separate state for each "thread."  I will often refer to a particular set of pipeline thread state as simply a _Pipeline_ or _pipe_.  Most of this happens automatically as data is clocked into the next pipeline stage at the end of a clock cycle, but since we're using SRAM for the main register files, we need separate "slots" for each pipe.
 
 The inspiration for this scheme came from [Dieter Mueller's notes on register files for his TREX CPU](http://www.6502.org/users/dieter/tarch/tarch_3.htm). Apart from the [Innovasic FIDO](https://www.analog.com/media/en/technical-documentation/data-sheets/fido1100.pdf) chip mentioned there, I'm not aware of any other extant CPUs that use this technique, though I'm sure there must be at least a few others.  If you're aware of or have built one, let me know!
-
-### Pipeline Stages
-
-- Decode
-    - `IR` is decoded
-    - Register file read and write indices are computed
-    - The microcode slot to execute is selected
-    - Control signals needed in the Setup stage are decoded
-- Setup
-    - Data is looked up in the register file
-    - Data is driven to the `J` and `K` buses
-	- A virtual address is calculated (if needed)
-	- Control signals needed in the Compute stage are decoded
-- Compute
-	- Compute units operate on `J` and `K` buses
-	- Address translation is performed, generating `F` for the next stage
-	- `AA`, `AB`, and other bus-control signals are computed for the next stage
-	- Any faults must be detected by the end of the stage
-- Transact
-	- Data is driven to the `L` and `D`/`DA`/`DB` buses
-    - Information about the most recent address translation is stored in a dedicated register
-        - Note this happens even if there was a fault, because it's used to determine the context of page faults
-    - If there is not a fault:
-        - System bus writes are performed
-        - `DR` and `IR` are loaded from `D` if necessary
-        - General-purpose and special-register files are written if necessary
-        - Status flags are updated
-        - Guard registers are updated
-        - Address translation entries are updated if necessary
-        - When returning from a fault handler, the previous microcode slot to return to is prepared
-
-Note that unlike a typical RISC pipeline, there is no dedicated instruction fetch stage.  Each instruction is responsible for updating the `IP` register for the next instruction, as well as loading the instruction data into `DR` and `IR`.  The updates to `IR` and `IP` must happen in the Transact stage of the last cycle of the previous instruction, and indeed most instructions that don't reference memory can load the next instruction in parallel with the actual computational work.  Instructions that take multiple microcode cycles can load `DR` for the next instruction during any cycle, as long as the old data isn't needed anymore.  For instance, a load or store instruction with a register + offset addressing mode needs to compute the final address in the first cycle, then do the actual load/store during the second cycle.  The memory bus is free during the first cycle to load the next instruction, instead of having to add a third cycle to load the next instruction.
-
 
 ## Compute Units
 

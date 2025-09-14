@@ -2,43 +2,50 @@ pub fn Handler(comptime handler: arch.microcode.Slot) type {
     return struct {
         pub const slot = handler;
 
-        pub const entry = store_stat;
+        pub const entry = store_status;
 
-        pub fn store_stat(c: *Cycle) void {
+        pub fn store_status(c: *Cycle) void {
             c.status_to_l();
-            c.l_to_sr(.fault_stat);
+            c.l_to_sr_alt(.fault_status);
+            c.next(store_flags);
+        }
+
+        pub fn store_flags(c: *Cycle) void {
+            c.flags_to_l();
+            c.l_to_sr_alt(.fault_flags);
             c.next(store_dr);
         }
 
         pub fn store_dr(c: *Cycle) void {
             c.dr_to_l();
-            c.l_to_sr(.fault_dr);
+            c.l_to_sr_alt(.fault_dr);
             c.next(store_ir);
         }
 
         pub fn store_ir(c: *Cycle) void {
             c.ir_to_l();
-            c.l_to_sr(.fault_ir);
-            c.next(read_last_translation_info);
+            c.l_to_sr_alt(.fault_ir);
+            c.next(read_atr);
         }
 
-        pub fn read_last_translation_info(c: *Cycle) void {
-            c.toggle_rsn();
-            c.last_translation_info_to_l();
-            c.disable_address_translation();
+        pub fn read_atr(c: *Cycle) void {
+            c.atr_to_l();
+            c.disable_flags(.{ .ate = true, .read_override = true });
             c.l_to_sr(.bp);
+            c.reload_asn();
             c.next(load_vector);
         }
 
         pub fn load_vector(c: *Cycle) void {
-            c.reload_asn();
-            c.read_to_d(.zero, @offsetOf(arch.Vector_Table, @tagName(handler)), .@"16b", .raw);
+            c.read_to_d(.zero, @offsetOf(arch.data_structures.Vector_Table, @tagName(handler)), .@"16b", .physical);
             c.d_to_l();
             c.l_to_sr(.temp_1);
             c.next(branch);
         }
 
         pub fn branch(c: *Cycle) void {
+            c.zero_to_l();
+            c.l_to_flags(); // set TI to 0
             c.branch(.temp_1, 0);
         }
     };

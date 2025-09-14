@@ -1,4 +1,4 @@
-pub fn print_mnemonic_and_suffix(mnemonic: Mnemonic, suffix: Mnemonic_Suffix, writer: anytype) !usize {
+pub fn print_mnemonic_and_suffix(mnemonic: Mnemonic, suffix: Mnemonic_Suffix, writer: *std.io.Writer) !usize {
     const mnemonic_str = @tagName(mnemonic);
     var len = mnemonic_str.len;
     try writer.writeAll(mnemonic_str);
@@ -13,10 +13,10 @@ pub fn print_mnemonic_and_suffix(mnemonic: Mnemonic, suffix: Mnemonic_Suffix, wr
     return len;
 }
 
-pub fn print_encoding(encoding: Instruction_Encoding, writer: anytype) !void {
+pub fn print_encoding(encoding: Instruction_Encoding, writer: *std.io.Writer) !void {
     const len = try print_mnemonic_and_suffix(encoding.signature.mnemonic, encoding.signature.suffix, writer);
     if (len < 5) {
-        try writer.writeByteNTimes(' ', 5 - len);
+        try writer.splatByteAll(' ', 5 - len);
     }
     var skip_comma = true;
     for (encoding.signature.params, 0..) |param, raw_index| {
@@ -31,8 +31,8 @@ pub fn print_encoding(encoding: Instruction_Encoding, writer: anytype) !void {
 
         const index = Parameter.Index.init(@intCast(raw_index));
 
-        var base_register_index: ?Register_Index = null;
-        var offset_register_index: ?Register_Index = null;
+        var base_register_index: ?arch.reg.gpr.Index = null;
+        var offset_register_index: ?arch.reg.gpr.Index = null;
         var constant: ?i64 = null;
 
         for (encoding.constraints) |constraint| {
@@ -61,10 +61,10 @@ pub fn print_encoding(encoding: Instruction_Encoding, writer: anytype) !void {
     }
 }
 
-pub fn print_instruction(insn: Instruction, insn_address: ?u32, writer: anytype) !void {
+pub fn print_instruction(insn: Instruction, insn_address: ?u32, writer: *std.io.Writer) !void {
     const len = try print_mnemonic_and_suffix(insn.mnemonic, insn.suffix, writer);
     if (len < 5) {
-        try writer.writeByteNTimes(' ', 5 - len);
+        try writer.splatByteAll(' ', 5 - len);
     }
     var skip_comma = true;
     for (insn.params) |param| {
@@ -80,10 +80,10 @@ pub fn print_instruction(insn: Instruction, insn_address: ?u32, writer: anytype)
     }
 }
 
-pub fn print_instruction_signature(signature: Instruction.Signature, writer: anytype) !void {
+pub fn print_instruction_signature(signature: Instruction.Signature, writer: *std.io.Writer) !void {
     const len = try print_mnemonic_and_suffix(signature.mnemonic, signature.suffix, writer);
     if (len < 5) {
-        try writer.writeByteNTimes(' ', 5 - len);
+        try writer.splatByteAll(' ', 5 - len);
     }
     var skip_comma = true;
     for (signature.params) |param_signature| {
@@ -99,7 +99,7 @@ pub fn print_instruction_signature(signature: Instruction.Signature, writer: any
     }
 }
 
-pub fn print_parameter(param: Parameter, insn_address: ?u32, writer: anytype) !void {
+pub fn print_parameter(param: Parameter, insn_address: ?u32, writer: *std.io.Writer) !void {
     try print_parameter_signature(param.signature, .{
         .base_register_index = param.base_register_index,
         .offset_register_index = param.offset_register_index,
@@ -112,12 +112,12 @@ pub const Print_Parameter_Signature_Extra = struct {
     index: ?Parameter.Index = null,
     encoders: []const Encoder = &.{},
     constraints: []const Constraint = &.{},
-    base_register_index: ?Register_Index = null,
-    offset_register_index: ?Register_Index = null,
+    base_register_index: ?arch.reg.gpr.Index = null,
+    offset_register_index: ?arch.reg.gpr.Index = null,
     constant: ?i64 = null,
     insn_address: ?u32 = null,
 };
-pub fn print_parameter_signature(signature: Parameter.Signature, extra: Print_Parameter_Signature_Extra, writer: anytype) !void {
+pub fn print_parameter_signature(signature: Parameter.Signature, extra: Print_Parameter_Signature_Extra, writer: *std.io.Writer) !void {
     if (signature.address_space) |as| {
         try writer.writeAll(as.directive_name());
         try writer.writeByte(' ');
@@ -160,10 +160,10 @@ pub const Print_Parameter_Kind_Extra = struct {
     index: ?Parameter.Index = null,
     encoders: []const Encoder = &.{},
     constraints: []const Constraint = &.{},
-    register_index: ?Register_Index = null,
+    register_index: ?arch.reg.gpr.Index = null,
     constant: ?i64 = null,
 };
-pub fn print_parameter_kind(kind: Parameter.Kind, register_kind: Instruction_Encoding.Placeholder_Kind, extra: Print_Parameter_Kind_Extra, writer: anytype) !void {
+pub fn print_parameter_kind(kind: Parameter.Kind, register_kind: Instruction_Encoding.Placeholder_Kind, extra: Print_Parameter_Kind_Extra, writer: *std.io.Writer) !void {
     switch (kind) {
         .none => {},
         .arrow => try writer.writeAll("->"),
@@ -192,7 +192,7 @@ pub fn print_parameter_kind(kind: Parameter.Kind, register_kind: Instruction_Enc
     }
 }
 
-fn print_placeholder_list(kind: Instruction_Encoding.Placeholder_Kind, maybe_index: ?Parameter.Index, encoders: []const Encoder, constraints: []const Constraint, writer: anytype) !void {
+fn print_placeholder_list(kind: Instruction_Encoding.Placeholder_Kind, maybe_index: ?Parameter.Index, encoders: []const Encoder, constraints: []const Constraint, writer: *std.io.Writer) !void {
     try writer.writeByte('(');
     var found_encoder = false;
     if (maybe_index) |index| {
@@ -223,7 +223,7 @@ fn print_placeholder_list(kind: Instruction_Encoding.Placeholder_Kind, maybe_ind
     try writer.writeByte(')');
 }
 
-pub fn print_constant(constant: i64, writer: anytype) !void {
+pub fn print_constant(constant: i64, writer: *std.io.Writer) !void {
     if (constant < -15) {
         return writer.print("-0x{X}", .{ @abs(constant) });
     } else if (constant > 15) {
@@ -243,7 +243,7 @@ pub fn buf_print_constant(buf: []u8, constant: i64) ![]const u8 {
     }
 }
 
-pub fn print_offset(offset: i64, writer: anytype) !void {
+pub fn print_offset(offset: i64, writer: *std.io.Writer) !void {
     if (offset < -15) {
         return writer.print("- 0x{X}", .{ @abs(offset) });
     } else if (offset > 15) {
@@ -275,7 +275,6 @@ const Parameter = isa.Parameter;
 const Mnemonic = isa.Mnemonic;
 const Mnemonic_Suffix = isa.Mnemonic_Suffix;
 const isa = @import("../isa.zig");
-const Register_Index = arch.Register_Index;
 const arch = @import("arch");
 const Signedness = std.builtin.Signedness;
 const std = @import("std");

@@ -9,6 +9,8 @@ pub const encoding = .{
     Encoder.init(16, Int(.imm, i8)),
 };
 
+pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = -1;
+
 pub fn entry(c: *Cycle) void {
     c.ip_read_to_d(.i8_from_dr, .@"32b");
     c.d_to_l();
@@ -24,6 +26,7 @@ pub fn cmp(c: *Cycle, mnemonic: isa.Mnemonic) void {
         .cmpc => .cont,
         else => unreachable,
     }, .flags);
+    c.wi_to_ti();
     c.load_and_exec_next_insn();
 }
 

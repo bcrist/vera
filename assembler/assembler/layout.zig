@@ -661,10 +661,10 @@ pub fn resolve_expression_constant_or_default(a: *Assembler, s: Source_File.Slic
     if (resolved) |constant| return constant.*;
 
     return switch (@typeInfo(@TypeOf(default))) {
-        .Int => Constant.init_int(default),
-        .ComptimeInt => Constant.init_int(@as(i64, default)),
-        .Pointer => |ptr_info| if(ptr_info.size == .Slice) Constant.init_string(default) else default.*,
-        .Struct => default,
+        .int => Constant.init_int(default),
+        .comptime_int => Constant.init_int(@as(i64, default)),
+        .pointer => |ptr_info| if(ptr_info.size == .Slice) Constant.init_string(default) else default.*,
+        .@"struct" => default,
         else => @compileError("Unsupported default value"),
     };
 }

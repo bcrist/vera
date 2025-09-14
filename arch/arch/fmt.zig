@@ -1,8 +1,5 @@
-pub fn format_enum_hex(value_or_ptr: anytype, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-    _ = fmt;
-    _ = options;
-
-    const value = if (@typeInfo(@TypeOf(value_or_ptr)) == .Pointer) value_or_ptr.* else value_or_ptr;
+pub fn format_enum_hex(value_or_ptr: anytype, writer: *std.io.Writer) !void {
+    const value = if (@typeInfo(@TypeOf(value_or_ptr)) == .pointer) value_or_ptr.* else value_or_ptr;
     const T = @TypeOf(value);
 
     if (std.enums.tagName(T, value)) |tag| {
@@ -14,29 +11,23 @@ pub fn format_enum_hex(value_or_ptr: anytype, comptime fmt: []const u8, options:
     }
 }
 
-pub fn format_enum(value_or_ptr: anytype, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-    _ = options;
-
-    const value = if (@typeInfo(@TypeOf(value_or_ptr)) == .Pointer) value_or_ptr.* else value_or_ptr;
+pub fn format_enum_dec(value_or_ptr: anytype, writer: *std.io.Writer) !void {
+    const value = if (@typeInfo(@TypeOf(value_or_ptr)) == .pointer) value_or_ptr.* else value_or_ptr;
     const T = @TypeOf(value);
 
     if (std.enums.tagName(T, value)) |tag| {
         try writer.writeByte('.');
         try writer.writeAll(tag);
     } else {
-        try writer.print("{" ++ fmt ++ "}", .{ @intFromEnum(value) });
+        try writer.print("{d}", .{ @intFromEnum(value) });
     }
 }
 
-pub fn format_raw(value_or_ptr: anytype, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-    _ = options;
-    try writer.print("{" ++ fmt ++ "}", .{ value_or_ptr.raw() });
+pub fn format_raw_dec(value_or_ptr: anytype, writer: *std.io.Writer) !void {
+    try writer.print("{d}", .{ value_or_ptr.raw() });
 }
 
-pub fn format_raw_hex(value_or_ptr: anytype, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-    _ = fmt;
-    _ = options;
-
+pub fn format_raw_hex(value_or_ptr: anytype, writer: *std.io.Writer) !void {
     const raw = value_or_ptr.raw();
     const T = @TypeOf(raw);
 

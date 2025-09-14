@@ -117,12 +117,12 @@ pub const Type = union (enum) {
         };
     }
 
-    pub fn param_base_register_index(self: Type) Register_Index {
+    pub fn param_base_register_index(self: Type) arch.reg.gpr.Index {
         const bot = self.base_offset_type() orelse return 0;
         return bot.base.register_index() orelse 0;
     }
 
-    pub fn param_offset_register_index(self: Type) Register_Index {
+    pub fn param_offset_register_index(self: Type) arch.reg.gpr.Index {
         const bot = self.base_offset_type() orelse return 0;
         return bot.offset.register_index() orelse 0;
     }
@@ -158,7 +158,7 @@ pub const Type = union (enum) {
         }};
     }
 
-    pub fn reg(index: Register_Index, signedness: ?Signedness) Type {
+    pub fn reg(index: arch.reg.gpr.Index, signedness: ?Signedness) Type {
         return .{ .raw = .{
             .base = .{ .reg = .{
                 .index = index,
@@ -231,7 +231,7 @@ pub const Term_Type = union (enum) {
         };
     }
 
-    pub fn register_index(self: Term_Type) ?Register_Index {
+    pub fn register_index(self: Term_Type) ?arch.reg.gpr.Index {
         return switch (self) {
             .none, .constant, .sr => null,
             .reg => |reg| reg.index,
@@ -241,7 +241,7 @@ pub const Term_Type = union (enum) {
 
 pub const Indexed_Register_Type = struct {
     signedness: ?Signedness,
-    index: Register_Index,
+    index: arch.reg.gpr.Index,
 };
 
 pub const Type_Builder = struct {
@@ -378,7 +378,6 @@ const Address_Space = isa.Address_Space;
 const Parameter = isa.Parameter;
 const lex = isa.lex;
 const isa = @import("isa");
-const Register_Index = arch.Register_Index;
 const arch = @import("arch");
 const Signedness = std.builtin.Signedness;
 const std = @import("std");

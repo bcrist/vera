@@ -1,8 +1,9 @@
-pub const Op = enum (u2) {
+pub const Op = enum (u3) {
     none = 0,
     translate = 1,
     update = 2,
     invalidate = 3,
+    write_atr = 4,
 
     pub inline fn init(raw_value: Raw) Op {
         return @enumFromInt(raw_value);
@@ -12,9 +13,9 @@ pub const Op = enum (u2) {
         return @intFromEnum(self);
     }
 
-    pub const format = fmt.format_enum;
+    pub const format = fmt.format_enum_dec;
 
-    pub const Raw = std.meta.Tag(Op);
+    pub const Raw = meta.Backing(Op);
 };
 
 pub const Access_Policy = enum (u2) {
@@ -31,9 +32,29 @@ pub const Access_Policy = enum (u2) {
         return @intFromEnum(self);
     }
 
-    pub const format = fmt.format_enum;
+    pub const format = fmt.format_enum_dec;
 
-    pub const Raw = std.meta.Tag(Access_Policy);
+    pub const Raw = meta.Backing(Access_Policy);
+};
+
+pub const Pipeline_Policy = enum (u3) {
+    any = 0,
+    pipe_0_only = 4,
+    pipe_1_only = 5,
+    pipe_2_only = 6,
+    pipe_3_only = 7,
+
+    pub inline fn init(raw_value: Raw) Pipeline_Policy {
+        return @enumFromInt(raw_value);
+    }
+
+    pub inline fn raw(self: Pipeline_Policy) Raw {
+        return @intFromEnum(self);
+    }
+
+    pub const format = fmt.format_enum_dec;
+
+    pub const Raw = meta.Backing(Pipeline_Policy);
 };
 
 pub const Translation_File = [Entry.Address.count]Entry_Pair;
@@ -45,9 +66,9 @@ pub const Entry_Pair = struct {
 
 pub const Entry = packed struct (u32) {
     frame: addr.Frame,
-    update_frame_state: bool,
-    present: bool,
     access: Access_Policy,
+    pipe: Pipeline_Policy,
+    present: bool,
     tag: addr.Page.Tag,
 
     pub inline fn init(raw_value: Raw) Entry {
@@ -60,12 +81,12 @@ pub const Entry = packed struct (u32) {
 
     pub const format = fmt.format_raw_hex;
 
-    pub const Raw = u32;
+    pub const Raw = meta.Backing(Entry);
 
-    pub const Address = packed struct (u12) {
+    pub const Address = packed struct (u16) {
         slot: addr.Page.Slot,
         group: Group,
-        asn4: ASN4,
+        asn6: ASN6,
 
         pub inline fn init(raw_value: Address.Raw) Address {
             return @bitCast(raw_value);
@@ -77,7 +98,7 @@ pub const Entry = packed struct (u32) {
 
         pub const format = fmt.format_raw_hex;
 
-        pub const Raw = u12;
+        pub const Raw = meta.Backing(Address);
         pub const count = std.math.maxInt(Address.Raw) + 1;
     };
 
@@ -91,9 +112,9 @@ pub const Entry = packed struct (u32) {
             return @enumFromInt(raw_value);
         }
 
-        pub fn from_space_and_dir(space: addr.Space, dir: arch.D.Direction) Group {
+        pub fn from_space_and_dir(space: addr.Space, dir: arch.bus.D.Direction) Group {
             return switch (space) {
-                .raw, .data => switch (dir) {
+                .physical, .data => switch (dir) {
                     .write_from_l, .write_from_dr_ir => .data_write,
                     .none, .read => .data_read,
                 },
@@ -106,37 +127,38 @@ pub const Entry = packed struct (u32) {
             return @intFromEnum(self);
         }
 
-        pub const format = fmt.format_enum;
+        pub const format = fmt.format_enum_dec;
 
-        pub const Raw = std.meta.Tag(Group);
+        pub const Raw = meta.Backing(Group);
     };
 
-    pub const ASN4 = enum (u4) {
+    pub const ASN6 = enum (u6) {
         _,
 
-        pub inline fn init(raw_value: ASN4.Raw) ASN4 {
+        pub inline fn init(raw_value: ASN6.Raw) ASN6 {
             return @enumFromInt(raw_value);
         }
 
-        pub inline fn from_asn(asn: arch.Reg) ASN4 {
-            return ASN4.init(@truncate(asn.raw()));
+        pub inline fn from_asn(asn: arch.Reg) ASN6 {
+            return ASN6.init(@truncate(asn.raw()));
         }
 
-        pub inline fn raw(self: ASN4) ASN4.Raw {
+        pub inline fn raw(self: ASN6) ASN6.Raw {
             return @intFromEnum(self);
         }
 
-        pub const format = fmt.format_enum;
+        pub const format = fmt.format_enum_dec;
 
-        pub const Raw = std.meta.Tag(ASN4);
+        pub const Raw = meta.Backing(ASN6);
     };
 };
 
-// Information saved when handling a fault;
-// useful for determining what page needs to be loaded for a page fault.
+// Address Translation Register:
+// saved when handling a fault; useful for determining what page needs to be loaded for a page fault.
 // N.B. Upper 20 bits are identical to virtual address
-pub const Info = packed struct(u32) {
-    emode: arch.Execution_Mode,
+// This register is also used when a fault handler wants to override the result of a faulted read.
+pub const ATR = packed struct(u32) {
+    mode: arch.Execution_Mode,
     bus_dir: arch.D.Direction,
     bus_width: arch.D.Width,
     op: Op,
@@ -144,20 +166,21 @@ pub const Info = packed struct(u32) {
     _padding: u2 = 0,
     page: addr.Page,
 
-    pub inline fn init(raw_value: Raw) Info {
+    pub inline fn init(raw_value: Raw) ATR {
         return @bitCast(raw_value);
     }
 
-    pub inline fn raw(self: Info) Raw {
+    pub inline fn raw(self: ATR) Raw {
         return @bitCast(self);
     }
 
     pub const format = fmt.format_raw_hex;
 
-    pub const Raw = u32;
+    pub const Raw = meta.Backing(ATR);
 };
 
 const fmt = @import("../fmt.zig");
 const addr = @import("../addr.zig");
 const arch = @import("../../arch.zig");
+const meta = @import("meta");
 const std = @import("std");

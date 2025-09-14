@@ -9,6 +9,7 @@ pub const encoding = .{
     opcodes.mnemonic_encoder(opcodes.ALU_16, .{ .suffix = "_sp_rel", .offset = 8 }),
     Encoder.init(16, Int_Mult(.imm, i8, 4)),
 };
+pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = 0;
 
 pub fn entry(c: *Cycle) void {
     c.read_to_d(.sp, .i8_x4_from_dr, .@"32b", .stack);

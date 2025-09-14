@@ -10,7 +10,8 @@ pub const encoding = .{
     opcodes.mnemonic_encoder(opcodes.Misc_16, .{ .offset = 8 }),
 };
 
-pub const krio: arch.K.Read_Index_Offset.Raw = 0;
+pub const krio: arch.bus.K.Read_Index_Offset.Raw = 0;
+pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = 0;
 
 pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
     c.zero_to_j();
@@ -24,7 +25,7 @@ pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
         .ssbt, .szbt => .trailing,
         else => unreachable,
     }, .flags);
-    c.l_to_reg();
+    c.l_to_reg(true);
     c.load_and_exec_next_insn();
 }
 

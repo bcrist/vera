@@ -1,7 +1,8 @@
 .{
-    .name = "isa",
+    .name = .vera_isa,
+    .fingerprint = 0xdee442ab7be398a0,
     .version = "0.0.0",
-    .minimum_zig_version = "0.13.0",
+    .minimum_zig_version = "0.15.1",
     .paths = .{""},
     .dependencies = .{
         .arch = .{
@@ -24,6 +25,9 @@
         },
         .Temp_Allocator = .{
             .path = "../../zig-tempallocator",
+        },
+        .meta = .{
+            .path = "../../zig-meta",
         },
     },
 }

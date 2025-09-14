@@ -1,72 +1,82 @@
+var all_tests: *std.Build.Step = undefined;
+
 pub fn build(b: *std.Build) void {
     const isa = b.dependency("isa", .{});
     const arch = b.dependency("arch", .{}).module("arch");
-    const assembler = b.dependency("assembler", .{}).module("assembler");
-    const microsim = b.dependency("microsim", .{});
-    // const console = b.dependency("console_helper", .{}).module("console");
-    // const bits = b.dependency("bit_helper", .{}).module("bits");
-    // const sx = b.dependency("sx", .{}).module("sx");
-    // const ihex = b.dependency("ihex", .{}).module("ihex");
-    // const srec = b.dependency("srec", .{}).module("srec");
+    //const assembler = b.dependency("assembler", .{}).module("assembler");
+    //const microsim = b.dependency("microsim", .{});
 
-    const all_tests = b.step("test", "run all tests");
+    all_tests = b.step("test", "run all tests");
 
-    {
-        const tests = b.addTest(.{
-            .name = "lexer",
-            .root_source_file = b.path("lex.zig"),
-        });
-        tests.root_module.addImport("isa", isa.module("isa"));
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
 
-        b.installArtifact(tests);
-        const run = b.addRunArtifact(tests);
-        all_tests.dependOn(&run.step);
-    }
-    {
-        const tests = b.addTest(.{
-            .name = "assembler constants",
-            .root_source_file = b.path("assembler/constant.zig"),
-        });
-        tests.root_module.addImport("isa", isa.module("isa"));
-        tests.root_module.addImport("arch", arch);
-        tests.root_module.addImport("assembler", assembler);
+    add_test(b, "arch", b.createModule(.{
+        .root_source_file = b.path("src/arch.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "arch", .module = arch },
+        },
+    }));
 
-        b.installArtifact(tests);
-        const run = b.addRunArtifact(tests);
-        all_tests.dependOn(&run.step);
-    }
-    {
-        const tests = b.addTest(.{
-            .name = "instruction encoding",
-            .root_source_file = b.path("instruction_encoding.zig"),
-        });
-        tests.root_module.addImport("isa", isa.module("isa"));
-        tests.root_module.addImport("iedb", isa.module("iedb"));
-        tests.root_module.addImport("iedb.sx", isa.module("iedb.sx"));
-        tests.root_module.addImport("arch", arch);
-        tests.root_module.addImport("assembler", assembler);
+    add_test(b, "isa", b.createModule(.{
+        .root_source_file = b.path("src/isa.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "isa", .module = isa.module("isa") },
+        },
+    }));
 
-        b.installArtifact(tests);
-        const run = b.addRunArtifact(tests);
-        all_tests.dependOn(&run.step);
-    }
-    {
-        const tests = b.addTest(.{
-            .name = "instruction behavior",
-            .root_source_file = b.path("instructions.zig"),
-            
-        });
-        tests.root_module.addImport("arch", arch);
-        tests.root_module.addImport("isa", isa.module("isa"));
-        tests.root_module.addImport("iedb", isa.module("iedb"));
-        tests.root_module.addImport("assembler", assembler);
-        tests.root_module.addImport("microsim", microsim.module("microsim"));
-        tests.root_module.addImport("Simulator_Data", microsim.module("Simulator_Data"));
-        
-        b.installArtifact(tests);
-        const run = b.addRunArtifact(tests);
-        all_tests.dependOn(&run.step);
-    }
+    // add_test(b, "assembler", b.createModule(.{
+    //     .root_source_file = b.path("src/assembler.zig"),
+    //     .target = target,
+    //     .optimize = optimize,
+    //     .imports = &.{
+    //         .{ .name = "isa", .module = isa.module("isa") },
+    //         .{ .name = "arch", .module = arch },
+    //         .{ .name = "assembler", .module = assembler },
+    //     },
+    // }));
+
+    add_test(b, "instruction_encoding", b.createModule(.{
+        .root_source_file = b.path("src/instruction_encoding.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "isa", .module = isa.module("isa") },
+            .{ .name = "iedb", .module = isa.module("iedb") },
+            .{ .name = "iedb.sx", .module = isa.module("iedb.sx") },
+            .{ .name = "arch", .module = arch },
+        },
+    }));
+
+    // add_test(b, "instruction_behavior", b.createModule(.{
+    //     .root_source_file = b.path("instructions.zig"),
+    //     .target = target,
+    //     .optimize = optimize,
+    //     .imports = &.{
+    //         .{ .name = "arch", .module = arch },
+    //         .{ .name = "isa", .module = isa.module("isa") },
+    //         .{ .name = "iedb", .module = isa.module("iedb") },
+    //         .{ .name = "assembler", .module = assembler },
+    //         .{ .name = "microsim", .module = microsim.module("microsim") },
+    //         .{ .name = "Simulator_Data", .module = microsim.module("Simulator_Data") },
+    //     },
+    // }));
+}
+
+fn add_test(b: *std.Build, comptime name: []const u8, root_module: *std.Build.Module) void {
+    root_module.addImport("meta", b.dependency("meta", .{}).module("meta"));
+    const tests = b.addTest(.{
+        .name = name,
+        .root_module = root_module,
+    });
+    b.installArtifact(tests);
+    const run = b.addRunArtifact(tests);
+    all_tests.dependOn(&run.step);
+    b.step("test_" ++ name, "test " ++ name).dependOn(&run.step);
 }
 
 const std = @import("std");

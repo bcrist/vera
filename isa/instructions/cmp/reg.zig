@@ -6,7 +6,8 @@ pub const forms = .{
             ;
 
         pub const encoding = opcodes.mnemonic_encoder(opcodes.LSB, .{});
-        pub const krio: arch.K.Read_Index_Offset.Raw = 1;
+        pub const krio: arch.bus.K.Read_Index_Offset.Raw = 1;
+        pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = -2;
     },
     struct {
         pub const spec = 
@@ -21,6 +22,7 @@ pub const forms = .{
         };
 
         pub const krio = Reg(.reg);
+        pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = -1;
     },
 };
 
@@ -32,6 +34,7 @@ pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
         .cmpc => .cont,
         else => unreachable,
     }, .flags);
+    c.wi_to_ti();
     c.load_and_exec_next_insn();
 }
 

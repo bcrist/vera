@@ -1,18 +1,20 @@
+gpa: std.mem.Allocator,
 arena: std.mem.Allocator,
 temp: *Temp_Allocator,
 microcode: Microcode_Builder,
 decode_rom: Decode_ROM_Builder,
 encoding_list: std.ArrayList(isa.Instruction_Encoding),
-encoding_slots: std.AutoHashMap(usize, std.ArrayList(arch.insn_decode.Address)), // key is index into encoding_list
+encoding_slots: std.AutoHashMapUnmanaged(usize, std.ArrayList(arch.insn_decode.Address)), // key is index into encoding_list
 
 pub fn init(gpa: std.mem.Allocator, arena: std.mem.Allocator, temp: *Temp_Allocator) Processor {
     return .{
+        .gpa = gpa,
         .arena = arena,
         .temp = temp,
-        .microcode = Microcode_Builder.init(gpa),
-        .decode_rom = Decode_ROM_Builder.init(gpa),
-        .encoding_list = std.ArrayList(isa.Instruction_Encoding).init(gpa),
-        .encoding_slots = std.AutoHashMap(usize, std.ArrayList(arch.insn_decode.Address)).init(gpa),
+        .microcode = .init(gpa),
+        .decode_rom = .init(gpa),
+        .encoding_list = .empty,
+        .encoding_slots = .empty,
     };
 }
 
@@ -31,10 +33,10 @@ pub fn process(self: *Processor, comptime instruction_structs: anytype) void {
 
         // Microcode function enumeration
         var lookup = Slot_Info.Lookup.init(alloc);
-        inline for (@typeInfo(Struct).Struct.decls) |decl| {
+        inline for (@typeInfo(Struct).@"struct".decls) |decl| {
             const T = @TypeOf(@field(Struct, decl.name));
             const info = @typeInfo(T);
-            if (info == .Fn and info.Fn.params.len > 0 and info.Fn.params[0].type.? == *Cycle) {
+            if (info == .@"fn" and info.@"fn".params.len > 0 and info.@"fn".params[0].type.? == *Cycle) {
                 const ptr = &@field(Struct, decl.name);
                 const result = lookup.getOrPut(ptr) catch @panic("OOM");
                 if (!result.found_existing or result.value_ptr.is_entry) {
@@ -111,7 +113,7 @@ fn process_form(
             const wio_encoders = wio_fn(alloc, parsed.signature, parsed.encoders);
 
             const final_encoding = self.finalize_encoding(parsed, constraints, encoders);
-            self.encoding_list.append(final_encoding) catch @panic("OOM");
+            self.encoding_list.append(self.gpa, final_encoding) catch @panic("OOM");
 
             self.process_instruction(entry, final_encoding, constraints, encoders, krio_encoders, wio_encoders, cv_mode, lookup);
         }
@@ -153,7 +155,7 @@ fn process_instruction(
 
     var iter = Initial_Word_Encoding_Iterator.init(self.temp.allocator(), constraints, encoders);
 
-    const undefined_ir_bits: arch.IR.Raw = @truncate(iter.undefined_bits);
+    const undefined_ir_bits: arch.reg.IR.Raw = @truncate(iter.undefined_bits);
     if (undefined_ir_bits != 0 and undefined_ir_bits != 0xFF00) {
         std.debug.panic("Bits {x} of the initial instruction word are undefined!", .{ undefined_ir_bits });
     }
@@ -164,13 +166,13 @@ fn process_instruction(
 
     var maybe_slot_handle: ?Slot_Data.Handle = null;
     while (iter.next()) |addr| {
-        var maybe_krio: ?arch.K.Read_Index_Offset = null;
-        var maybe_wio: ?arch.Write_Index_Offset = null;
+        var maybe_krio: ?arch.bus.K.Read_Index_Offset = null;
+        var maybe_wio: ?arch.reg.gpr.Write_Index_Offset = null;
 
         const slot_handle = maybe_slot_handle orelse handle: {
-            const dr = arch.DR.init(@intCast(iter.encode_ignore_errors(encoders)));
-            maybe_krio = arch.K.Read_Index_Offset.init_unsigned(@intCast(iter.encode(krio_encoders, "KRIO")));
-            maybe_wio = arch.Write_Index_Offset.init_unsigned(@intCast(iter.encode(wio_encoders, "WIO")));
+            const dr = arch.reg.DR.init(@intCast(iter.encode_ignore_errors(encoders)));
+            maybe_krio = arch.bus.K.Read_Index_Offset.init(@intCast(iter.encode(krio_encoders, "KRIO")));
+            maybe_wio = arch.reg.gpr.Write_Index_Offset.init_unsigned(@intCast(iter.encode(wio_encoders, "WIO")));
             const result = Microcode_Processor.process(.{
                 .processor = self,
                 .ptr = entry_fn,
@@ -197,8 +199,22 @@ fn process_instruction(
             break :handle result.slot_handle;
         };
 
-        const krio = maybe_krio orelse arch.K.Read_Index_Offset.init_unsigned(@intCast(iter.encode(krio_encoders, "KRIO")));
-        const wio = maybe_wio orelse arch.Write_Index_Offset.init_unsigned(@intCast(iter.encode(wio_encoders, "WIO")));
+        const krio = maybe_krio orelse arch.bus.K.Read_Index_Offset.init(
+            std.math.cast(arch.bus.K.Read_Index_Offset.Raw, iter.encode(krio_encoders, "KRIO")) orelse {
+                if (instruction_encoding) |ie| {
+                    std.debug.print("Bad KRIO for instruction encoding: {f}\n", .{ ie });
+                }
+                std.debug.panic("Bad KRIO: Value {} is not valid\n", .{ iter.encode(krio_encoders, "KRIO") });
+            }
+        );
+        const wio = maybe_wio orelse arch.reg.gpr.Write_Index_Offset.init_unsigned(
+            std.math.cast(arch.reg.gpr.Write_Index_Offset.Raw_Unsigned, iter.encode(wio_encoders, "WIO")) orelse {
+                if (instruction_encoding) |ie| {
+                    std.debug.print("Bad WIO for instruction encoding: {f}\n", .{ ie });
+                }
+                std.debug.panic("Bad WIO: Value {} is not valid\n", .{ iter.encode(wio_encoders, "WIO") });
+            }
+        );
 
         self.decode_rom.add_entry(addr, @truncate(iter.undefined_bits), .{
             .instruction_encoding = instruction_encoding,
@@ -209,18 +225,18 @@ fn process_instruction(
         });
 
         const encoding_list_index = self.encoding_list.items.len - 1;
-        const result = self.encoding_slots.getOrPut(encoding_list_index) catch @panic("OOM");
+        const result = self.encoding_slots.getOrPut(self.gpa, encoding_list_index) catch @panic("OOM");
         if (!result.found_existing) {
             result.key_ptr.* = encoding_list_index;
-            result.value_ptr.* = std.ArrayList(arch.insn_decode.Address).init(self.encoding_slots.allocator);
+            result.value_ptr.* = .empty;
         }
-        result.value_ptr.append(addr) catch @panic("OOM");
+        result.value_ptr.append(self.gpa, addr) catch @panic("OOM");
     }
 }
 
 fn resolve_constraints(comptime constraints: anytype) []const Constraint {
     switch (@typeInfo(@TypeOf(constraints))) {
-        .Struct => |info| if (info.is_tuple) {
+        .@"struct" => |info| if (info.is_tuple) {
             comptime var out: [constraints.len]Constraint = undefined;
             inline for (constraints, &out) |in, *constraint| {
                 constraint.* = comptime resolve_single_constraint(in);
@@ -239,7 +255,7 @@ fn resolve_single_constraint(comptime constraint: anytype) Constraint {
     const T = @TypeOf(constraint);
     if (T == Constraint) return constraint;
     switch (@typeInfo(T)) {
-        .Struct => |info| {
+        .@"struct" => |info| {
             std.debug.assert(info.is_tuple);
             std.debug.assert(constraint.len == 3);
 
@@ -287,10 +303,10 @@ fn resolve_constraint_value(comptime value: anytype) Value {
     const T = @TypeOf(value);
     if (T == Value) return value;
     switch (@typeInfo(T)) {
-        .Int, .ComptimeInt => {
+        .int, .comptime_int => {
             return .{ .constant = @intCast(value) };
         },
-        .EnumLiteral => {
+        .enum_literal => {
             return .{ .placeholder = .{
                 .index = .invalid,
                 .kind = .param_constant,
@@ -307,7 +323,7 @@ fn resolve_encoders(comptime encoders: anytype) Encoder_Provider {
     return struct {
         pub fn provider(allocator: std.mem.Allocator, signature: ?isa.Instruction.Signature, parsed_encoders: []const Encoder) []const Encoder {
             switch (@typeInfo(@TypeOf(encoders))) {
-                .Struct => |info| if (info.is_tuple) {
+                .@"struct" => |info| if (info.is_tuple) {
                     const out = allocator.alloc(Encoder, encoders.len) catch @panic("OOM");
                     inline for (encoders, out) |in, *encoder| {
                         encoder.* = resolve_single_encoder(in, signature, parsed_encoders);
@@ -328,7 +344,7 @@ fn resolve_single_encoder(encoder: anytype, signature: ?isa.Instruction.Signatur
     const T = @TypeOf(encoder);
     if (T == Encoder) return encoder;
     switch (@typeInfo(T)) {
-        .Fn => {
+        .@"fn" => {
             var args: std.meta.ArgsTuple(T) = undefined;
             inline for (&args) |*a| {
                 const Arg = @TypeOf(a.*);
@@ -374,14 +390,14 @@ fn encoding_length(encoders: []const Encoder) Encoded_Instruction.Length_Type {
 
 pub const Initial_Word_Encoding_Iterator = struct {
     first: bool = true,
-    undefined_bits: arch.DR.Raw,
-    last_encoded: arch.IR.Raw,
+    undefined_bits: arch.reg.DR.Raw,
+    last_encoded: arch.reg.IR.Raw,
     constraints: []const Constraint,
     value_iters: []Encoder.Value_Iterator,
 
     pub fn init(allocator: std.mem.Allocator, constraints: []const Constraint, encoders: []const Encoder) Initial_Word_Encoding_Iterator {
         const out = allocator.alloc(Encoder.Value_Iterator, encoders.len) catch @panic("OOM");
-        var undefined_bits = ~@as(arch.DR.Raw, 0);
+        var undefined_bits = ~@as(arch.reg.DR.Raw, 0);
         var n: usize = 0;
         for (encoders, 0..) |*encoder, i| {
             const mask = encoder.bit_mask();
@@ -391,14 +407,14 @@ pub const Initial_Word_Encoding_Iterator = struct {
                 }
             }
 
-            var encoder_bits: arch.DR.Raw = @truncate(mask);
+            var encoder_bits: arch.reg.DR.Raw = @truncate(mask);
             log.debug("Encoder #{}'s bit mask: {x}", .{ i, encoder_bits });
             if (!encoder.value.is_constant()) {
-                encoder_bits &= ~@as(arch.IR.Raw, 0);
+                encoder_bits &= ~@as(arch.reg.IR.Raw, 0);
             }
             undefined_bits &= ~encoder_bits;
 
-            if (encoder.bit_offset < @bitSizeOf(arch.IR)) {
+            if (encoder.bit_offset < @bitSizeOf(arch.reg.IR)) {
                 out[n] = encoder.value_iterator();
                 n += 1;
             }
@@ -430,7 +446,7 @@ pub const Initial_Word_Encoding_Iterator = struct {
                 std.debug.assert(value_iter.encoder.encode_value(value_iter.last_value, &encoded));
             }
             self.first = false;
-            const encoded_ir = arch.IR.init(@truncate(encoded));
+            const encoded_ir = arch.reg.IR.init(@truncate(encoded));
             self.last_encoded = encoded_ir.raw();
             return encoded_ir;
         }
@@ -445,7 +461,7 @@ pub const Initial_Word_Encoding_Iterator = struct {
                 for (self.value_iters) |iter| {
                     std.debug.assert(iter.encoder.encode_value(iter.last_value, &encoded));
                 }
-                const encoded_ir = arch.IR.init(@truncate(encoded));
+                const encoded_ir = arch.reg.IR.init(@truncate(encoded));
                 self.last_encoded = encoded_ir.raw();
                 return encoded_ir;
             }
@@ -632,9 +648,9 @@ pub const Slot_Info = struct {
         allocator: std.mem.Allocator,
         cycle_flags: Cycle_Flag_Set,
         initial_encoding: ?*const Initial_Word_Encoding_Iterator,
-        initial_dr: ?arch.DR,
-        initial_krio: ?arch.K.Read_Index_Offset,
-        initial_wio: ?arch.Write_Index_Offset,
+        initial_dr: ?arch.reg.DR,
+        initial_krio: ?arch.bus.K.Read_Index_Offset,
+        initial_wio: ?arch.reg.gpr.Write_Index_Offset,
         signature: ?isa.Instruction.Signature,
         parsed_encoders: []const Encoder,
         encoding_len: ?Encoded_Instruction.Length_Type,
@@ -644,7 +660,7 @@ pub const Slot_Info = struct {
     pub fn init(comptime func: anytype, comptime name: []const u8) Slot_Info {
         const Func = @TypeOf(func);
         const Args = std.meta.ArgsTuple(Func);
-        const params = @typeInfo(Func).Fn.params;
+        const params = @typeInfo(Func).@"fn".params;
 
         comptime var has_flags = false;
         comptime var uses_placeholders = false;
@@ -652,7 +668,7 @@ pub const Slot_Info = struct {
             const Arg = arg.type.?;
             if (Arg == arch.microcode.Flags) {
                 has_flags = true;
-            } else if (@typeInfo(Arg) == .Struct and @hasField(Arg, "value") and @hasDecl(Arg, "placeholder")) {
+            } else if (@typeInfo(Arg) == .@"struct" and @hasField(Arg, "value") and @hasDecl(Arg, "placeholder")) {
                 uses_placeholders = true;
             }
         }
@@ -666,9 +682,9 @@ pub const Slot_Info = struct {
             pub fn unconditional(ctx: Impl_Context) []Cycle {
                 const cycle = ctx.allocator.create(Cycle) catch @panic("OOM");
                 const encoding_len = if (ctx.encoding_len) |len| len else null;
-                const dr = ctx.initial_dr orelse arch.DR.init(0);
-                const krio = ctx.initial_krio orelse arch.K.Read_Index_Offset.init(0);
-                const wio = ctx.initial_wio orelse arch.Write_Index_Offset.init(0);
+                const dr = ctx.initial_dr orelse arch.reg.DR.init(0);
+                const krio = ctx.initial_krio orelse arch.bus.K.Read_Index_Offset.init(0);
+                const wio = ctx.initial_wio orelse arch.reg.gpr.Write_Index_Offset.init(0);
                 cycle.* = Cycle.init(final_name, ctx.signature, dr, krio, wio, encoding_len, ctx.cycle_flags);
                 @call(.auto, func, build_args(cycle, arch.microcode.Flags.init(0), ctx));
                 cycle.finish();
@@ -678,9 +694,9 @@ pub const Slot_Info = struct {
             pub fn conditional(ctx: Impl_Context) []Cycle {
                 const cycles = ctx.allocator.alloc(Cycle, arch.microcode.Address.count_per_slot) catch @panic("OOM");
                 const encoding_len = if (ctx.encoding_len) |len| len else null;
-                const dr = ctx.initial_dr orelse arch.DR.init(0);
-                const krio = ctx.initial_krio orelse arch.K.Read_Index_Offset.init(0);
-                const wio = ctx.initial_wio orelse arch.Write_Index_Offset.init(0);
+                const dr = ctx.initial_dr orelse arch.reg.DR.init(0);
+                const krio = ctx.initial_krio orelse arch.bus.K.Read_Index_Offset.init(0);
+                const wio = ctx.initial_wio orelse arch.reg.gpr.Write_Index_Offset.init(0);
                 for (cycles, 0..) |*cycle, raw_flags| {
                     cycle.* = Cycle.init(final_name, ctx.signature, dr, krio, wio, encoding_len, ctx.cycle_flags);
                     @call(.auto, func, build_args(cycle, arch.microcode.Flags.init(@intCast(raw_flags)), ctx));
@@ -717,7 +733,7 @@ pub const Slot_Info = struct {
                         a.* = ctx.signature.?.suffix;
                     } else if (Arg == []const isa.Parameter.Signature) {
                         a.* = ctx.signature.?.params;
-                    } else if (Arg == arch.K.Read_Index_Offset) {
+                    } else if (Arg == arch.bus.K.Read_Index_Offset) {
                         a.* = ctx.initial_krio.?;
                     } else if (Arg == arch.Write_Index) {
                         a.* = ctx.initial_wio.?;
