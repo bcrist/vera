@@ -7,9 +7,7 @@ pub const Instruction = struct {
         return deep_hash_map.deepEql(a, b, .DeepRecursive);
     }
 
-    pub fn format(self: Instruction, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = fmt;
-        _ = options;
+    pub fn format(self: Instruction, writer: *std.io.Writer) !void {
         try print.print_instruction(self, null, writer);
     }
 
@@ -26,9 +24,7 @@ pub const Instruction = struct {
             return true;
         }
 
-        pub fn format(self: Signature, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-            _ = fmt;
-            _ = options;
+        pub fn format(self: Signature, writer: *std.io.Writer) !void {
             try print.print_instruction_signature(self, writer);
         }
     };
@@ -40,9 +36,7 @@ pub const Parameter = struct {
     offset_register_index: arch.reg.gpr.Index,
     constant: i64,
 
-    pub fn format(self: Parameter, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = fmt;
-        _ = options;
+    pub fn format(self: Parameter, writer: *std.io.Writer) !void {
         try print.print_parameter(self, null, writer);
     }
 
@@ -51,9 +45,7 @@ pub const Parameter = struct {
         base: Kind,
         offset: Kind,
 
-        pub fn format(self: Signature, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-            _ = fmt;
-            _ = options;
+        pub fn format(self: Signature, writer: *std.io.Writer) !void {
             try print.print_parameter_signature(self, .{}, writer);
         }
     };
@@ -65,9 +57,7 @@ pub const Parameter = struct {
         reg: ?Signedness,
         sr: Special_Register,
 
-        pub fn format(self: Signature, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-            _ = fmt;
-            _ = options;
+        pub fn format(self: Signature, writer: *std.io.Writer) !void {
             try print.print_parameter_kind(self, .{}, writer);
         }
     };

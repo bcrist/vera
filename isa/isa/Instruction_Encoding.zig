@@ -99,11 +99,11 @@ pub const Placeholder_Info = struct {
         switch (self.kind) {
             .param_constant => out[index].constant = value,
             .param_base_register => {
-                if (value < 0 or value >= arch.register_count) return false;
+                if (value < 0 or value >= arch.reg.gpr.count) return false;
                 out[index].base_register_index = @intCast(value);
             },
             .param_offset_register => {
-                if (value < 0 or value >= arch.register_count) return false;
+                if (value < 0 or value >= arch.reg.gpr.count) return false;
                 out[index].offset_register_index = @intCast(value);
             },
         }

@@ -59,7 +59,7 @@ pub fn write_encoding(writer: *sx.Writer, compact: bool, encoding: Instruction_E
     _ = try writer.close();
 }
 
-fn write_signature(signature: Instruction.Signature, writer: anytype, compact: bool) !void {
+fn write_signature(signature: Instruction.Signature, writer: *sx.Writer, compact: bool) !void {
     try writer.tag(signature.mnemonic);
     if (signature.suffix != .none) {
         try writer.tag(signature.suffix);
@@ -90,7 +90,7 @@ fn write_signature(signature: Instruction.Signature, writer: anytype, compact: b
     writer.set_compact(compact);
 }
 
-fn write_constraints(constraints: []const Constraint, writer: anytype) !void {
+fn write_constraints(constraints: []const Constraint, writer: *sx.Writer) !void {
     for (constraints) |constraint| {
         try writer.expression("constrain");
         try write_value_source(constraint.left, writer);
@@ -105,7 +105,7 @@ fn write_constraints(constraints: []const Constraint, writer: anytype) !void {
     }
 }
 
-fn write_param_kind(t: Parameter.Kind, w: anytype) !void {
+fn write_param_kind(t: Parameter.Kind, w: *sx.Writer) !void {
     switch (t) {
         .none => try w.string("none"),
         .arrow => try w.string("->"),
@@ -121,7 +121,7 @@ fn write_param_kind(t: Parameter.Kind, w: anytype) !void {
     }
 }
 
-fn write_value_source(v: Value, w: anytype) !void {
+fn write_value_source(v: Value, w: *sx.Writer) !void {
     switch (v) {
         .constant => |k| {
             try w.expression("constant");

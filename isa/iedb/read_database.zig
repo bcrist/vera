@@ -1,36 +1,37 @@
 pub fn parse_decoding_db(data: *Parser_Data, source: []const u8) !Decoding_Database {
-    var stream = std.io.fixedBufferStream(source);
-    var reader = stream.reader();
-    var p = Parser.init(data, reader.any());
+    var r = std.io.Reader.fixed(source);
+    var p = Parser.init(data, &r);
     defer p.deinit();
 
-    var temp_8b = std.AutoHashMap(u8, std.ArrayListUnmanaged(Instruction_Encoding)).init(data.temp);
-    var temp_12b = std.AutoHashMap(u12, std.ArrayListUnmanaged(Instruction_Encoding)).init(data.temp);
-    var temp_16b = std.AutoHashMap(u16, std.ArrayListUnmanaged(Instruction_Encoding)).init(data.temp);
-    var temp_extra = std.ArrayList(Instruction_Encoding).init(data.temp);
+    var temp_8b: std.AutoHashMapUnmanaged(u8, std.ArrayListUnmanaged(Instruction_Encoding)) = .empty;
+    var temp_12b: std.AutoHashMapUnmanaged(u12, std.ArrayListUnmanaged(Instruction_Encoding)) = .empty;
+    var temp_16b: std.AutoHashMapUnmanaged(u16, std.ArrayListUnmanaged(Instruction_Encoding)) = .empty;
+    var temp_extra: std.ArrayList(Instruction_Encoding) = .empty;
     defer {
         var iter = temp_8b.valueIterator();
         while (iter.next()) |ptr| ptr.deinit(data.temp);
-        temp_8b.deinit();
+        temp_8b.deinit(data.temp);
     }
     defer {
         var iter = temp_12b.valueIterator();
         while (iter.next()) |ptr| ptr.deinit(data.temp);
-        temp_12b.deinit();
+        temp_12b.deinit(data.temp);
     }
     defer {
         var iter = temp_16b.valueIterator();
         while (iter.next()) |ptr| ptr.deinit(data.temp);
-        temp_16b.deinit();
+        temp_16b.deinit(data.temp);
     }
-    defer temp_extra.deinit();
+    defer temp_extra.deinit(data.temp);
 
     while (p.next() catch |err| {
         if (err == error.SExpressionSyntaxError) {
-            var stderr = std.io.getStdErr().writer();
+            var buf: [64]u8 = undefined;
+            var w = std.fs.File.stderr().writer(&buf);
             const context = p.reader.token_context() catch return err;
-            stderr.writeAll("Syntax error in instruction encoding data:\n") catch return err;
-            context.print_for_string(source, stderr, 150) catch return err;
+            w.interface.writeAll("Syntax error in instruction encoding data:\n") catch return err;
+            context.print_for_string(source, &w.interface, 150) catch return err;
+            w.interface.flush() catch return err;
         }
         return err;
     }) |encoding| {
@@ -42,7 +43,7 @@ pub fn parse_decoding_db(data: *Parser_Data, source: []const u8) !Decoding_Datab
                 const bits = enc.required_bits();
                 if (bits >= 16) {
                     const prefix: u16 = @truncate(encoded);
-                    const result = try temp_16b.getOrPut(prefix);
+                    const result = try temp_16b.getOrPut(data.temp, prefix);
                     if (!result.found_existing) {
                         result.key_ptr.* = prefix;
                         result.value_ptr.* = .{};
@@ -51,7 +52,7 @@ pub fn parse_decoding_db(data: *Parser_Data, source: []const u8) !Decoding_Datab
                     break;
                 } else if (bits >= 12) {
                     const prefix: u12 = @truncate(encoded);
-                    const result = try temp_12b.getOrPut(prefix);
+                    const result = try temp_12b.getOrPut(data.temp, prefix);
                     if (!result.found_existing) {
                         result.key_ptr.* = prefix;
                         result.value_ptr.* = .{};
@@ -60,7 +61,7 @@ pub fn parse_decoding_db(data: *Parser_Data, source: []const u8) !Decoding_Datab
                     break;
                 } else if (bits >= 8) {
                     const prefix: u8 = @truncate(encoded);
-                    const result = try temp_8b.getOrPut(prefix);
+                    const result = try temp_8b.getOrPut(data.temp, prefix);
                     if (!result.found_existing) {
                         result.key_ptr.* = prefix;
                         result.value_ptr.* = .{};
@@ -70,7 +71,7 @@ pub fn parse_decoding_db(data: *Parser_Data, source: []const u8) !Decoding_Datab
                 }
             }
         } else {
-            try temp_extra.append(encoding);
+            try temp_extra.append(data.temp, encoding);
         }
     }
 
@@ -106,9 +107,8 @@ pub fn parse_decoding_db(data: *Parser_Data, source: []const u8) !Decoding_Datab
 }
 
 pub fn parse_encoding_db(data: *Parser_Data, source: []const u8) !Encoding_Database {
-    var stream = std.io.fixedBufferStream(source);
-    var reader = stream.reader();
-    var p = Parser.init(data, reader.any());
+    var r = std.io.Reader.fixed(source);
+    var p = Parser.init(data, &r);
     defer p.deinit();
 
     var temp_lookup = deep_hash_map.DeepAutoHashMap(Instruction.Signature, std.ArrayListUnmanaged(Instruction_Encoding)).init(data.temp);
@@ -124,10 +124,12 @@ pub fn parse_encoding_db(data: *Parser_Data, source: []const u8) !Encoding_Datab
 
     while (p.next() catch |err| {
         if (err == error.SExpressionSyntaxError) {
-            var stderr = std.io.getStdErr().writer();
+             var buf: [64]u8 = undefined;
+            var w = std.fs.File.stderr().writer(&buf);
             const context = p.reader.token_context() catch return err;
-            stderr.writeAll("Syntax error in instruction encoding data:\n") catch return err;
-            context.print_for_string(source, stderr, 150) catch return err;
+            w.interface.writeAll("Syntax error in instruction encoding data:\n") catch return err;
+            context.print_for_string(source, &w.interface, 150) catch return err;
+            w.interface.flush() catch return err;
         }
         return err;
     }) |encoding| {
@@ -183,7 +185,7 @@ pub const Parser = struct {
     data: *Parser_Data,
     reader: sx.Reader,
 
-    pub fn init(data: *Parser_Data, reader: std.io.AnyReader) Parser {
+    pub fn init(data: *Parser_Data, reader: *std.io.Reader) Parser {
         return .{
             .data = data,
             .reader = sx.reader(data.temp, reader),

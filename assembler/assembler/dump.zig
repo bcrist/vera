@@ -1,4 +1,4 @@
-pub fn dump(a: *Assembler, writer: anytype) !void {
+pub fn dump(a: *Assembler, writer: *std.io.Writer) !void {
     try writer.writeAll("Files:\n");
     for (a.files.items) |file| {
         const block_slice = file.blocks.slice();
@@ -171,14 +171,14 @@ pub fn dump(a: *Assembler, writer: anytype) !void {
     try a.print_errors(writer);
 }
 
-fn print_expression_type(expr_type: Expression.Type, writer: anytype) !void {
+fn print_expression_type(expr_type: Expression.Type, writer: *std.io.Writer) !void {
     try isa.print.print_parameter_signature(expr_type.param_signature(), .{
         .base_register_index = expr_type.param_base_register_index(),
         .offset_register_index = expr_type.param_offset_register_index(),
     }, writer);
 }
 
-fn print_constant(writer: anytype, constant: *const Constant) !void {
+fn print_constant(writer: *std.io.Writer, constant: *const Constant) !void {
     try writer.print("{:>4}b: ", .{ constant.bit_count });
     if (constant.as_int(i64) catch null) |int_value| {
         const uint_value = constant.as_int(u64) catch unreachable;
@@ -187,19 +187,11 @@ fn print_constant(writer: anytype, constant: *const Constant) !void {
     try writer.print("'{s}'", .{ std.fmt.fmtSliceEscapeUpper(constant.as_string()) });
 }
 
-fn fmt_slice_replace_non_ascii(bytes: []const u8) std.fmt.Formatter(format_slice_replace_non_ascii_impl) {
+fn fmt_slice_replace_non_ascii(bytes: []const u8) std.fmt.Alt(format_slice_replace_non_ascii_impl) {
     return .{ .data = bytes };
 }
 
-fn format_slice_replace_non_ascii_impl(
-    bytes: []const u8,
-    comptime fmt: []const u8,
-    options: std.fmt.FormatOptions,
-    writer: anytype,
-) !void {
-    _ = fmt;
-    _ = options;
-
+fn format_slice_replace_non_ascii_impl(bytes: []const u8, writer: *std.io.Writer) !void {
     for (bytes) |c| {
         if (std.ascii.isPrint(c)) {
             try writer.writeByte(c);

@@ -1,62 +1,62 @@
-pipe: arch.Pipeline,
 next_stage: arch.Pipeline.Stage,
-emode: arch.Execution_Mode = .interrupt_fault,
-uca: arch.microcode.Address = arch.microcode.Address.init(0),
-pucs: arch.microcode.Slot = arch.microcode.Slot.init(0),
-cs: arch.Control_Signals = arch.Control_Signals.zeroes,
-rsn: arch.Register_Set_Number = arch.Register_Set_Number.init(0),
-dr: arch.DR = arch.reg.DR.init(0),
-ir: arch.IR = arch.reg.IR.init(0),
-ti: arch.Write_Index = arch.Write_Index.init(0),
-wi: arch.Write_Index = arch.Write_Index.init(0),
-jri: arch.bus.J.Read_Index = arch.bus.J.Read_Index.init(0),
-j: arch.J = arch.bus.J.init(0),
-krio: arch.bus.K.Read_Index_Offset = arch.bus.K.Read_Index_Offset.init(0),
-kri: arch.bus.K.Read_Index = arch.bus.K.Read_Index.init(0),
-k: arch.K = arch.bus.K.init(0),
-sr1d: arch.Reg = arch.Reg.init(0),
-sr2d: arch.Reg = arch.Reg.init(0),
-asn4: at.Entry.ASN4 = at.Entry.ASN4.init(0),
-va: arch.addr.Virtual = arch.addr.Virtual.init(0),
-at_entry_addr: at.Entry.Address = at.Entry.Address.init(0),
-last_at_info: at.Info = at.Info.init(0),
-matching_entry: at.Entry = at.Entry.init(0),
-other_entry: at.Entry = at.Entry.init(0),
-frame: arch.addr.Frame = arch.addr.Frame.init(0),
-aa: arch.addr.Word_Offset = arch.addr.Word_Offset.init(0),
-ab: arch.addr.Word_Offset = arch.addr.Word_Offset.init(0),
-compute_result: Compute_Result = .{
-    .value = arch.L.init(0),
-    .cout = false,
-    .vout = false,
-},
-count_result: u6 = 0,
-da: arch.DA = arch.DA.init(0),
-db: arch.DB = arch.DB.init(0),
+cs: arch.Control_Signals = .zeroes,
 flags: std.EnumSet(Flag) = std.EnumSet(Flag).initEmpty(),
 debug_log: ?*Debug_Log,
 
-pub const Flag = enum {
-    stat_c,
-    stat_v,
-    stat_n,
-    stat_z,
-    stat_k,
-    stat_a,
-    at_k, // note this is non-transient because the next instruction need not be loaded just before it is executed
+// persistent state/registers
+status: arch.reg.Status,
+emode: arch.Execution_Mode = .interrupt,
+dr: arch.reg.DR = .init(0),
+ir: arch.reg.IR = .init(0),
+ti: arch.reg.gpr.Write_Index = .init(0),
+wi: arch.reg.gpr.Write_Index = .init(0),
+jri: arch.bus.J.Read_Index = .init(0),
+krio: arch.bus.K.Read_Index_Offset = .init(0),
+kri: arch.bus.K.Read_Index = .init(0),
+asn6: at.Entry.ASN6 = .init(0),
+atr: arch.addr.Virtual = .init(0),
 
-    // at_k mutators:
-    add_at_k,
-    remove_at_k,
+// non-persistent state
+uca: arch.microcode.Address = .init(0),
+last_d: arch.bus.D = .init(0),
+j: arch.bus.J = arch.bus.J.init(0),
+k: arch.bus.K = arch.bus.K.init(0),
+sr1d: arch.reg.sr1.Value = .init(0),
+sr2d: arch.reg.sr2.Value = .init(0),
+compute_result: Compute_Result = .zeroes,
+va: arch.addr.Virtual = .init(0),
+at_entry_addr: at.Entry.Address = .init(0),
+matching_entry: at.Entry = .init(0),
+other_entry: at.Entry = .init(0),
+frame: arch.addr.Frame = .init(0),
+aa: arch.addr.Frame.Word_Offset = .init(0),
+ab: arch.addr.Frame.Word_Offset = .init(0),
+da: arch.bus.DA = .init(0),
+db: arch.bus.DB = .init(0),
+
+pub const Flag = enum {
+    carry,
+    overflow,
+    negative,
+    zero,
+    super,
+    at_enable,
+    at_super, // note this is non-transient because the next instruction need not be loaded just before it is executed
+    bus_override,
+
+    // at_super mutators:
+    add_at_super,
+    remove_at_super,
 
     // potential faults
-    kriu,
-    wiu,
-    wiv,
+    kri_underflow,
+    wi_underflow,
+    wi_overflow,
 
     // faults
     page_fault,
     access_fault,
+    pipe_fault,
     page_align_fault,
     align_fault,
     overflow_fault,
@@ -74,12 +74,12 @@ pub const Flag = enum {
     read,
     write,
     guard_mismatch,
-    update_frame_state,
 };
 
 const fault_flags = std.EnumSet(Flag).initMany(&.{
     .page_fault,
     .access_fault,
+    .pipe_fault,
     .page_align_fault,
     .align_fault,
     .overflow_fault,
@@ -88,11 +88,25 @@ const fault_flags = std.EnumSet(Flag).initMany(&.{
     .reg_stack_overflow_fault,
 });
 
+fn fault_slot(self: *Pipeline_State, flag: Flag) arch.microcode.Slot {
+    return switch (flag) {
+        .page_fault => .page_fault,
+        .access_fault => .access_fault,
+        .pipe_fault => .pipe_fault,
+        .page_align_fault => .page_align_fault,
+        .align_fault => .align_fault,
+        .overflow_fault => .overflow_fault,
+        .reg_stack_underflow_fault => .register_stack_underflow_fault,
+        .reg_stack_overflow_fault => .register_stack_overflow_fault,
+        .insn_fault => self.cs.next,
+        else => unreachable,
+    };
+}
+
 const transient_flags = std.EnumSet(Flag).initMany(&.{
-    .add_at_k,
-    .remove_at_k,
+    .add_at_super,
+    .remove_at_super,
     .guard_mismatch,
-    .update_frame_state,
     .any_fault,
     .lba,
     .uba,
@@ -100,15 +114,42 @@ const transient_flags = std.EnumSet(Flag).initMany(&.{
     .ubb,
     .read,
     .write,
-    .kriu,
-    .wiu,
-    .wiv,
+    .kri_underflow,
+    .wi_underflow,
+    .wi_overflow,
 }).unionWith(fault_flags);
 
+pub fn init(pipe: arch.Pipeline, initial_stage: arch.Pipeline.Stage, debug_log: ?*Debug_Log) Pipeline_State {
+    return .{
+        .next_stage = initial_stage,
+        .debug_log = debug_log,
+        .status = .{
+            .rsn = .init(0),
+            .pipe = pipe,
+            .fwrite = false,
+            .fwidth = .init(0),
+            .fspace = .init(0),
+            .fucs = .init(0),
+        },
+    };
+}
+
+inline fn report(self: *Pipeline_State, action: Debug_Log.Action) void {
+    if (self.debug_log) |dl| {
+        dl.report(self.status.pipe, self.uca.slot, action);
+    }
+}
+
 const Compute_Result = struct {
-    value: arch.L,
+    value: arch.bus.L,
     cout: bool,
     vout: bool,
+
+    pub const zeroes: Compute_Result = .{
+        .value = .init(0),
+        .cout = false,
+        .vout = false,
+    };
 };
 
 pub fn simulate_decode(self: *Pipeline_State,
@@ -119,7 +160,6 @@ pub fn simulate_decode(self: *Pipeline_State,
 ) void {
     std.debug.assert(self.next_stage == .decode);
 
-    const base_ri = self.ti.raw_signed();
     const flags = self.flags;
     const id_result = insn_decode_rom[self.ir.raw()];
 
@@ -132,42 +172,50 @@ pub fn simulate_decode(self: *Pipeline_State,
         flags,
     );
 
-    const prev_uca_slot = self.uca.slot;
-
     const next_uca: arch.microcode.Address = .{
         .flags = .{
-            .z = flags.contains(.stat_z),
-            .n = flags.contains(.stat_n),
-            .k = flags.contains(.stat_k),
+            .z = flags.contains(.zero),
+            .n = flags.contains(.negative),
+            .k = flags.contains(.super),
             .cv = switch (id_result.cv) {
                 .zero => false,
                 .one => true,
-                .c => flags.contains(.stat_c),
-                .v => flags.contains(.stat_v),
+                .c => flags.contains(.carry),
+                .v => flags.contains(.overflow),
             },
         },
         .slot = switch (seq_result.slot_src) {
-            .hold => prev_uca_slot,
+            .hold => self.uca.slot,
             .continuation =>  self.cs.next,
-            .seq_literal => arch.microcode.Slot.init(seq_result.slot_literal),
+            .seq_literal => .init(seq_result.slot_literal),
             .insn_decoder => id_result.entry,
         },
     };
 
-    const kri, const kriovf = @subWithOverflow(base_ri, id_result.krio.raw());
-    const wi, const wiovf = @addWithOverflow(base_ri, id_result.wio.raw());
+    const ti_raw = self.ti.raw();
+
+    const krio_raw = id_result.krio.raw();
+    const kri_raw = ti_raw -% krio_raw;
+
+    const wio_raw = id_result.wio.raw();
+    const wi_raw = @as(i32, ti_raw) + wio_raw;
     
     self.flags = self.flags.differenceWith(transient_flags);
-    if (kriovf) self.flags.insert(.kriu);
-    if (wiovf) {
-        self.flags.insert(if (id_result.wio.raw() < 0) .wiu else .wiv);
+
+    if (ti_raw < krio_raw) {
+        self.flags.insert(.kri_underflow);
     }
 
-    self.jri = arch.bus.J.Read_Index.init(@bitCast(base_ri));
-    self.kri = arch.bus.K.Read_Index.init(@bitCast(kri));
-    self.krio = id_result.krio;
-    self.wi = arch.Write_Index.init(@bitCast(wi));
-    self.pucs = prev_uca_slot;
+    if (wi_raw > arch.reg.gpr.Write_Index.max) {
+        self.flags.insert(.wi_overflow);
+    } else if (wi_raw < 0) {
+        self.flags.insert(.wi_underflow);
+    }
+
+    self.jri = .init(ti_raw);
+    self.kri = .init(kri_raw);
+    self.krio = .init(krio_raw);
+    self.wi = .init(@truncate(@as(u32, @bitCast(wi_raw))));
     self.uca = next_uca;
     self.cs = microcode_rom[next_uca.raw()];
     self.emode = seq_result.emode;
@@ -182,7 +230,7 @@ const Sequencer_Result = struct {
 
 fn simulate_sequencer(
     op: arch.Sequencer_Op,
-    allow_int: bool,
+    allow_int: arch.Interrupt_Enable,
     emode: arch.Execution_Mode,
     interrupt_pending: bool,
     reset: bool,
@@ -191,7 +239,7 @@ fn simulate_sequencer(
     return if (reset) .{
         .slot_literal = slot_literal(.reset),
         .slot_src = .seq_literal,
-        .emode = .interrupt_fault,
+        .emode = .interrupt,
     } else if (flags.contains(.any_fault)) result: {
         break :result if (emode.is_fault()) .{
             .slot_literal = slot_literal(.double_fault),
@@ -230,7 +278,7 @@ fn simulate_sequencer(
             .slot_src = .continuation,
             .emode = if (emode.is_interrupt()) .interrupt_fault else .fault,
         } else unreachable;
-    } else if (emode == .normal and interrupt_pending and allow_int) .{
+    } else if (emode == .normal and interrupt_pending and allow_int == .allow) .{
         .slot_literal = slot_literal(.interrupt),
         .slot_src = .seq_literal,
         .emode = .interrupt,
@@ -266,38 +314,42 @@ fn slot_literal(slot: arch.microcode.Slot) u4 {
     return @intCast(slot.raw());
 }
 
-pub fn simulate_setup(self: *Pipeline_State, registers: *const arch.Register_File) void {
+pub fn simulate_setup(self: *Pipeline_State, registers: *const arch.reg.File) void {
     std.debug.assert(self.next_stage == .setup);
 
-    const read_rsn: arch.Register_Set_Number.Raw = switch (self.cs.special) {
-        .read_from_other_rsn => switch (self.emode) {
-            .normal, .interrupt, .fault => self.rsn.raw(),
-            .interrupt_fault => arch.Register_Set_Number.interrupt_pipe_0.raw() + self.pipe.raw(),
-        },
-        else => switch (self.emode) {
-            .normal => self.rsn.raw(),
-            .interrupt => arch.Register_Set_Number.interrupt_pipe_0.raw() + self.pipe.raw(),
-            .fault => arch.Register_Set_Number.fault_pipe_0.raw() + self.pipe.raw(),
-            .interrupt_fault => arch.Register_Set_Number.interrupt_fault_pipe_0.raw() + self.pipe.raw(),
-        },
+    const vari_read_rsn: arch.reg.RSN.Raw = switch (self.emode) {
+        .normal => self.status.rsn.raw(),
+        .interrupt => arch.reg.RSN.interrupt_pipe_0.raw() + self.status.pipe.raw(),
+        .fault => arch.reg.RSN.fault_pipe_0.raw() + self.status.pipe.raw(),
+        .interrupt_fault => arch.reg.RSN.interrupt_fault_pipe_0.raw() + self.status.pipe.raw(),
     };
+
     const vari = self.cs.vari;
     const vao = self.cs.vao;
 
-    const sr1d = registers[read_rsn].sr1[self.cs.sr1ri.raw()];
-    const sr2d = registers[read_rsn].sr2[self.cs.sr2ri.raw()];
-    const vab = if (vari.to_sr1()) |sr1ri|
-        registers[read_rsn].sr1[sr1ri.raw()]
+    const va_base = if (vari.to_sr1()) |sr1ri|
+        registers[vari_read_rsn].sr1[sr1ri.raw()].raw()
     else if (vari.to_sr2()) |sr2ri|
-        registers[read_rsn].sr2[sr2ri.raw()]
+        registers[vari_read_rsn].sr2[sr2ri.raw()].raw()
     else unreachable;
 
     const va_offset: u32 = switch (vao) {
-        .i16_from_dr => @bitCast(self.dr.byte21_i32()),
-        .i8_from_dr => @bitCast(self.dr.byte2_i32()),
-        .i8_x4_from_dr => @bitCast(self.dr.byte2_i32() * 4),
+        .i16_from_dr => bits.sx(u32, self.dr.@"signed[23:8]"()),
+        .i8_from_dr => bits.sx(u32, self.dr.@"signed[23:16]"()),
+        .i8_x4_from_dr => bits.sx(u32, self.dr.@"signed[23:16]"() * 4),
         else => @bitCast(@as(i32, vao.raw())),
     };
+
+    const read_rsn: arch.reg.RSN.Raw = switch (self.cs.special) {
+        .read_from_other_rsn, .read_and_write_other_rsn => switch (self.emode) {
+            .normal, .interrupt, .fault => self.status.rsn.raw(),
+            .interrupt_fault => arch.reg.RSN.interrupt_pipe_0.raw() + self.status.pipe.raw(),
+        },
+        else => vari_read_rsn,
+    };
+
+    const sr1d = registers[read_rsn].sr1[self.cs.sr1ri.raw()];
+    const sr2d = registers[read_rsn].sr2[self.cs.sr2ri.raw()];
 
     self.j = arch.bus.J.init(switch (self.cs.jsrc) {
         .zero => 0,
@@ -308,79 +360,89 @@ pub fn simulate_setup(self: *Pipeline_State, registers: *const arch.Register_Fil
 
     self.k = arch.bus.K.init(switch (self.cs.ksrc) {
         .zero => 0,
+        .dr_byte_1_sx => @bitCast(@as(i32, self.dr.@"signed[15:8]"())),
+        .dr_byte_2_sx => @bitCast(@as(i32, self.dr.@"signed[23:16]"())),
+        .dr_byte_21_sx => @bitCast(@as(i32, self.dr.@"signed[23:8]"())),
+        .krio_zx => self.krio.raw(),
+        .krio_sx => @bitCast(@as(i32, self.krio.raw())),
+        .krio_bit => @as(u32, 1) << self.krio.raw(),
+        .krio_bit_inv => ~(@as(u32, 1) << self.krio.raw()),
         .vao => @bitCast(@as(i32, vao.raw())),
-        .krio => @bitCast(@as(i32, self.krio.raw())),
         .kr => registers[read_rsn].reg[self.kri.raw()].raw(),
         .sr1 => sr1d.raw(),
         .sr2 => sr2d.raw(),
-        .krio_bit => @as(u32, 1) << @bitCast(self.krio.raw()),
-        .krio_bit_inv => ~(@as(u32, 1) << @bitCast(self.krio.raw())),
-        .dr_byte_1_sx => @bitCast(self.dr.byte1_i32()),
-        .dr_byte_2_sx => @bitCast(self.dr.byte2_i32()),
-        .dr_byte_21_sx => @bitCast(self.dr.byte21_i32()),
     });
 
-    if (self.cs.ksrc == .kr and self.flags.contains(.kriu)) {
+    if (self.cs.ksrc == .kr and self.flags.contains(.kri_underflow)) {
         self.flags.insert(.reg_stack_underflow_fault);
     }
 
     self.sr1d = sr1d;
     self.sr2d = sr2d;
-    self.va = arch.addr.Virtual.init(vab.raw() +% va_offset);
+    self.va = .init(va_base +% va_offset);
     self.next_stage = .compute;
 }
 
-pub fn simulate_compute(self: *Pipeline_State, translations: *const at.Translation_File) void {
+pub fn simulate_compute(self: *Pipeline_State, translations: *const at.File) void {
     std.debug.assert(self.next_stage == .compute);
 
     const unit = self.cs.unit;
     const j = self.j;
     const k = self.k;
-    const cin = self.flags.contains(.stat_c);
+    const cin = self.flags.contains(.carry);
 
     self.compute_result = switch (unit) {
+        .none => .zeroes,
         .alu => compute_alu(self.cs.mode.alu, j, k, cin),
         .shift => compute_shift(self.cs.mode.shift, j, k, cin),
         .mult => compute_mult(self.cs.mode.mult, j, k),
-        .count_extend => compute_count_extend(self.cs.mode.count_extend, j, k, &self.count_result),
+        .count, .extend => compute_count_extend(unit, self.cs.mode.count_extend, j, k),
     };
 
     switch (self.cs.special) {
-        .none, .set_guard, .check_guard, .load_rsn_from_l, .read_from_other_rsn, .write_to_other_rsn => {},
+        .none => {},
+        .set_guard => {},
+        .check_guard => {},
+        .load_fucs_from_l => {},
+        .load_rsn_from_l => {},
+        .read_from_other_rsn => {},
+        .write_to_other_rsn => {},
+        .read_and_write_other_rsn => {},
+
         .fault_on_overflow => if (self.compute_result.vout) self.flags.insert(.overflow_fault),
+
         .trigger_fault => self.flags.insert(.insn_fault),
     }
 
     self.compute_address_translation(translations);
 
-    if (self.cs.tiw or self.cs.gprw) {
-        if (self.flags.contains(.wiu)) self.flags.insert(.reg_stack_underflow_fault);
-        if (self.flags.contains(.wiv)) self.flags.insert(.reg_stack_overflow_fault);
+    if (self.cs.tiw == .write or self.cs.gprw == .write) {
+        if (self.flags.contains(.wi_underflow)) self.flags.insert(.reg_stack_underflow_fault);
+        if (self.flags.contains(.wi_overflow)) self.flags.insert(.reg_stack_overflow_fault);
     }
 
     // N.B. All faults flags must be computed before this point!
     const any_fault = self.flags.intersectWith(fault_flags).count() > 0;
     self.flags.setPresent(.any_fault, any_fault);
 
-    if (!any_fault and self.cs.atop == .translate) {
-        switch (self.cs.dir) {
-            .none => {},
-            .read => self.flags.insert(.read),
-            .write_from_dr_ir, .write_from_l => self.flags.insert(.write),
+    if (!any_fault and self.cs.atop == .translate and !self.flags.contains(.bus_override)) {
+        switch (self.cs.dsrc) {
+            .system => self.flags.insert(.read),
+            .l, .dr_ir, .atr => self.flags.insert(.write),
         }
     }
 
     self.next_stage = .transact;
 }
 
-fn compute_alu(mode: arch.ALU_Mode, j: arch.J, k: arch.K, stat_c: bool) Compute_Result {
+fn compute_alu(mode: arch.compute.Mode.ALU, j: arch.bus.J, k: arch.bus.K, carry_flag: bool) Compute_Result {
     var cout = false;
     var vout = false;
 
-    const maybe_cin = if (mode.use_stat_c) stat_c else false;
+    const maybe_cin = if (mode.use_carry_flag) carry_flag else false;
     const cin = if (mode.invert_cin) !maybe_cin else maybe_cin;
 
-    const value = arch.L.init(switch (mode.op) {
+    const value = arch.bus.L.init(switch (mode.op) {
         .all_zeroes => 0,
         .not_j_plus_k, .j_plus_not_k, .j_plus_k => value: {
             const raw_j = if (mode.op == .not_j_plus_k) ~j.raw() else j.raw();
@@ -403,12 +465,12 @@ fn compute_alu(mode: arch.ALU_Mode, j: arch.J, k: arch.K, stat_c: bool) Compute_
     };
 }
 
-fn compute_shift(mode: arch.Shift_Mode, j: arch.J, k: arch.K, stat_c: bool) Compute_Result {
+fn compute_shift(mode: arch.compute.Mode.Shift, j: arch.bus.J, k: arch.bus.K, carry_flag: bool) Compute_Result {
     const cin: u64 = switch (mode.cin) {
         .zero => 0,
         .zero_bitreverse => 0,
         .j31 => if (0 != (j.raw() & 0x8000_0000)) 0xFFFF_FFFF_0000_0000 else 0,
-        .stat_c => if (stat_c) 0xFFFF_FFFF_0000_0000 else 0,
+        .carry_flag => if (carry_flag) 0xFFFF_FFFF_0000_0000 else 0,
     };
 
     var raw_j = j.raw();
@@ -416,7 +478,7 @@ fn compute_shift(mode: arch.Shift_Mode, j: arch.J, k: arch.K, stat_c: bool) Comp
     const k5: u5 = @truncate(raw_k);
     if (raw_k != k5) {
         return .{
-            .value = arch.L.init(0),
+            .value = .init(0),
             .cout = if (raw_k == 32) 0 != (raw_j & 0x8000_0000) else 0 != cin,
             .vout = if (raw_k == 32) raw_j != 0 else raw_j != 0 or 0 != cin,
         };
@@ -444,7 +506,7 @@ fn compute_shift(mode: arch.Shift_Mode, j: arch.J, k: arch.K, stat_c: bool) Comp
         var value: u64 = raw_j | cin;
         value = value >> k5;
 
-        const cout: u1 = if (k5 > 0) @truncate(value >> (k5 - 1)) else @intFromBool(stat_c);
+        const cout: u1 = if (k5 > 0) @truncate(value >> (k5 - 1)) else @intFromBool(carry_flag);
         const shifted_out: u32 = @truncate(value << (@as(u6, 32) - k5));
 
         var result: u32 = @truncate(value);
@@ -453,14 +515,14 @@ fn compute_shift(mode: arch.Shift_Mode, j: arch.J, k: arch.K, stat_c: bool) Comp
         }
         
         return .{
-            .value = arch.L.init(@truncate(result)),
+            .value = .init(@truncate(result)),
             .cout = cout != 0,
             .vout = shifted_out != 0,
         };
     }
 }
 
-fn compute_mult(mode: arch.Multiply_Mode, j: arch.J, k: arch.K) Compute_Result {
+fn compute_mult(mode: arch.compute.Mode.Multiply, j: arch.bus.J, k: arch.bus.K) Compute_Result {
 
     const jhalf: u16 = switch (mode.j) {
         .lsb => @truncate(j.raw()),
@@ -490,13 +552,13 @@ fn compute_mult(mode: arch.Multiply_Mode, j: arch.J, k: arch.K) Compute_Result {
     }
 
     return .{
-        .value = arch.L.init(result),
+        .value = .init(result),
         .cout = false,
         .vout = false,
     };
 }
 
-fn compute_count_extend(mode: arch.Count_Extend_Mode, j: arch.J, k: arch.K, count: *u6) Compute_Result {
+fn compute_count_extend(unit: arch.compute.Unit, mode: arch.compute.Mode.Count_Extend, j: arch.bus.J, k: arch.bus.K) Compute_Result {
     const raw_j = if (mode.invert_j) ~j.raw() else j.raw();
     const raw_k = if (mode.invert_k) ~k.raw() else k.raw();
 
@@ -524,26 +586,30 @@ fn compute_count_extend(mode: arch.Count_Extend_Mode, j: arch.J, k: arch.K, coun
     const final_k = if (mode.invert_saturated) ~saturated_k else saturated_k;
     const masked_j = raw_j & final_k;
 
-    count.* = @popCount(masked_j);
-    const value = arch.L.init(if (mode.sign_extend and 0 != (raw_j & raw_k)) masked_j | ~final_k else masked_j);
+    const count = @popCount(masked_j);
+    const ext = if (mode.sign_extend and 0 != (raw_j & raw_k)) masked_j | ~final_k else masked_j;
     return .{
-        .value = value,
+        .value = .init(switch (unit) {
+            .count => count,
+            .extend => ext,
+            else => unreachable,
+        }),
         .cout = false,
-        .vout = value.raw() != raw_j,
+        .vout = ext != raw_j,
     };
 }
 
-fn compute_address_translation(self: *Pipeline_State, translations: *const at.Translation_File) void {
+fn compute_address_translation(self: *Pipeline_State, translations: *const at.File) void {
     const va = self.va;
     const op = self.cs.atop;
     const space = self.cs.vaspace;
-    const dir = self.cs.dir;
+    const dsrc = self.cs.dsrc;
     const width = self.cs.width;
 
     const entry_addr: at.Entry.Address = .{
         .slot = va.page.slot,
-        .group = at.Entry.Group.from_space_and_dir(space, dir),
-        .asn4 = self.asn4,
+        .group = at.Entry.Group.from_space_and_dsrc(space, dsrc),
+        .asn6 = self.asn6,
     };
 
     const entries = translations[entry_addr.raw()];
@@ -552,76 +618,92 @@ fn compute_address_translation(self: *Pipeline_State, translations: *const at.Tr
     const primary_match = entries.primary.present and entries.primary.tag == va.page.tag;
     const secondary_match = entries.secondary.present and entries.secondary.tag == va.page.tag;
     const any_match = primary_match or secondary_match;
-    const swap_entries = op != .none and !primary_match and (secondary_match or op == .update);
+
+    const swap_entries = switch (op) {
+         .none, .write_atr => false,
+         .update => !primary_match,
+         .translate, .invalidate, => !primary_match and secondary_match,
+    };
+
     const matching = if (swap_entries) entries.secondary else entries.primary;
     const other = if (swap_entries) entries.primary else entries.secondary;
     self.matching_entry = matching;
     self.other_entry = other;
 
-    if (self.flags.contains(.stat_a) and space != .physical) {
+    if (self.flags.contains(.at_enable)) {
         // address translation enabled
-        if (op == .translate and any_match) {
-            self.frame = matching.frame;
+        if (op == .translate and space != .physical and !self.flags.contains(.bus_override)) {
+            if (any_match) {
+                self.frame = matching.frame;
 
-            if (matching.update_frame_state) {
-                self.flags.insert(.update_frame_state);
-            }
+                const is_insn_load = switch(self.cs.sr2wi) {
+                    .ip, .next_ip => self.cs.sr2wsrc == .virtual_addr,
+                    else => false,
+                };
 
-            const is_insn_load = switch(self.cs.sr2wi) {
-                .ip, .next_ip => self.cs.sr2wsrc == .virtual_addr,
-                else => false,
-            };
+                switch (matching.access) {
+                    .unprivileged => {
+                        if (is_insn_load) self.flags.insert(.remove_at_super);
+                    },
+                    .kernel_entry_256 => {
+                        if (is_insn_load and (va.page_offset.raw() & 0xFF) == 0) {
+                            self.flags.insert(.add_at_super);
+                        } else if (!self.flags.contains(.super)) {
+                            self.flags.insert(.access_fault);
+                        }
+                    },
+                    .kernel_entry_4096 => {
+                        if (is_insn_load and va.page_offset.raw() == 0) {
+                            self.flags.insert(.add_at_super);
+                        } else if (!self.flags.contains(.super)) {
+                            self.flags.insert(.access_fault);
+                        }
+                    },
+                    .kernel_private => {
+                        if (!self.flags.contains(.super)) {
+                            self.flags.insert(.access_fault);
+                        }
+                    },
+                }
 
-            switch (matching.access) {
-                .unprivileged => {
-                    if (is_insn_load) self.flags.insert(.remove_at_k);
-                },
-                .kernel_entry_256 => {
-                    if (is_insn_load and (va.offset.raw() & 0xFF) == 0) {
-                        self.flags.insert(.add_at_k);
-                    } else if (!self.flags.contains(.stat_k)) {
-                        self.flags.insert(.access_fault);
-                    }
-                },
-                .kernel_entry_4096 => {
-                    if (is_insn_load and va.offset.raw() == 0) {
-                        self.flags.insert(.add_at_k);
-                    } else if (!self.flags.contains(.stat_k)) {
-                        self.flags.insert(.access_fault);
-                    }
-                },
-                .kernel_private => {
-                    if (!self.flags.contains(.stat_k)) {
-                        self.flags.insert(.access_fault);
-                    }
-                },
-            }
-        } else {
-            if (op == .translate) {
-                std.debug.assert(!any_match);
+                switch (matching.pipe) {
+                    .any => {},
+                    .pipe_0_only => if (self.status.pipe != .zero) self.flags.insert(.pipe_fault),
+                    .pipe_1_only => if (self.status.pipe != .one) self.flags.insert(.pipe_fault),
+                    .pipe_2_only => if (self.status.pipe != .two) self.flags.insert(.pipe_fault),
+                    .pipe_3_only => if (self.status.pipe != .three) self.flags.insert(.pipe_fault),
+                }
+            } else {
                 self.flags.insert(.page_fault);
             }
-            self.frame = arch.addr.Frame.init(@truncate(va.page.raw()));
+        } else {
+            // address translation is enabled, but at least one of these conditions applies:
+            //      * not doing a bus operation this cycle
+            //      * the bus operation has been suppressed
+            //      * it's a physically addressed operation
+            // in any of these cases, we don't want to trigger any faults, and we don't want to modify the super flag.
+            self.frame = .init(@truncate(va.page.raw()));
         }
     } else {
         // address translation disabled
-        self.frame = arch.addr.Frame.init(@truncate(va.page.raw()));
-        self.flags.insert(.add_at_k); // translation can only be disabled in kernel mode
+        self.frame = .init(@truncate(va.page.raw()));
+        self.flags.insert(.add_at_super); // translation can only be disabled in kernel mode
     }
 
-    const n1: u1 = @truncate(va.offset.raw() >> 1);
-    self.aa = arch.addr.Word_Offset.init(@truncate((va.offset.raw() >> 2) +% n1));
-    self.ab = arch.addr.Word_Offset.init(@intCast(va.offset.raw() >> 2));
+    const n1: u1 = @truncate(va.page_offset.raw() >> 1);
+    self.aa = arch.addr.Frame.Word_Offset.init(@truncate((va.page_offset.raw() >> 2) +% n1));
+    self.ab = arch.addr.Frame.Word_Offset.init(@intCast(va.page_offset.raw() >> 2));
 
-    if (op == .translate) {
-        switch (width) {
+
+    if (op == .translate and !self.flags.contains(.bus_override)) {
+        if (space != .physical) switch (width) {
             .@"8b" => {},
-            .@"16b" => if (va.offset.raw() == arch.addr.Offset.max.raw()) self.flags.insert(.page_align_fault),
-            .@"24b" => if (va.offset.raw() >= arch.addr.Offset.max.raw() - 1) self.flags.insert(.page_align_fault),
-            .@"32b" => if (va.offset.raw() >= arch.addr.Offset.max.raw() - 2) self.flags.insert(.page_align_fault),
-        }
+            .@"16b" => if (va.page_offset.raw() == arch.addr.Page.Offset.max.raw()) self.flags.insert(.page_align_fault),
+            .@"24b" => if (va.page_offset.raw() >= arch.addr.Page.Offset.max.raw() - 1) self.flags.insert(.page_align_fault),
+            .@"32b" => if (va.page_offset.raw() >= arch.addr.Page.Offset.max.raw() - 2) self.flags.insert(.page_align_fault),
+        };
 
-        const addr_alignment: u2 = @truncate(va.offset.raw());
+        const addr_alignment: u2 = @truncate(va.page_offset.raw());
         switch (addr_alignment) {
             0 => switch (width) {
                 .@"8b" => {
@@ -701,44 +783,27 @@ fn compute_address_translation(self: *Pipeline_State, translations: *const at.Tr
     }
 }
 
-pub fn get_l(self: Pipeline_State) arch.L {
+pub fn get_l(self: Pipeline_State) arch.bus.L {
     std.debug.assert(self.next_stage == .transact);
 
     return switch (self.cs.lsrc) {
-        .alu => l: {
-            std.debug.assert(self.cs.unit == .alu);
-            break :l self.compute_result.value;
+        .compute_or_d => switch (self.cs.unit) {
+            .none => self.read_d(arch.bus.L),
+            .alu, .shift, .mult, .count, .extend, => self.compute_result.value,
         },
-        .shift => l: {
-            std.debug.assert(self.cs.unit == .shift);
-            break :l self.compute_result.value;
-        },
-        .mult => l: {
-            std.debug.assert(self.cs.unit == .mult);
-            break :l self.compute_result.value;
-        },
-        .count => l: {
-            std.debug.assert(self.cs.unit == .count_extend);
-            break :l arch.L.init(self.count_result);
-        },
-        .ext => l: {
-            std.debug.assert(self.cs.unit == .count_extend);
-            break :l self.compute_result.value;
-        },
-        .at_info => arch.L.init(self.last_at_info.raw()),
-        .status => arch.L.init((arch.Status {
-            .z = self.flags.contains(.stat_z),
-            .n = self.flags.contains(.stat_n),
-            .c = self.flags.contains(.stat_c),
-            .v = self.flags.contains(.stat_v),
-            .k = self.flags.contains(.stat_k),
-            .a = self.flags.contains(.stat_a),
-            .pipeline = self.pipe,
-            .rsn = self.rsn,
-            .ti = arch.Write_Index.init(self.ti.raw()),
-            .pucs = self.pucs,
+        .flags => .init((arch.reg.Flags {
+            .z = self.flags.contains(.zero),
+            .n = self.flags.contains(.negative),
+            .c = self.flags.contains(.carry),
+            .v = self.flags.contains(.overflow),
+            .at_enable = self.flags.contains(.at_enable),
+            .bus_override = self.flags.contains(.bus_override),
+            .super = self.flags.contains(.super),
+            .top = self.ti,
+            .mode = self.emode,
         }).raw()),
-        .d => self.read_d(arch.L),
+        .status => .init(self.status.raw()),
+        .last_d => .init(self.last_d.raw()),
     };
 }
 
@@ -746,79 +811,81 @@ pub fn get_l(self: Pipeline_State) arch.L {
 /// If self.flags.contains(.write) and !self.flags.contains(.guard_mismatch), you must move self.da and self.db
 /// into the appropriate memory/device location after simulate_transact() returns.
 pub fn simulate_transact(self: *Pipeline_State,
-    registers: *arch.Register_File,
-    translations: *at.Translation_File,
-    guards: *arch.Guarded_Memory_File,
+    registers: *arch.reg.File,
+    translations: *at.File,
+    guards: *arch.reg.guard.File,
 ) void {
     std.debug.assert(self.next_stage == .transact);
 
     const any_fault = self.flags.contains(.any_fault);
 
-    const l: arch.L = self.get_l();
+    const d: arch.bus.D = switch (self.cs.dsrc) {
+        .system => self.read_d(arch.bus.D),
+        .l => .init(self.get_l().raw()),
+        .atr => .init(self.atr.raw()),
+        .dr_ir => .init(switch (self.cs.drw) {
+            .write => self.dr.raw(),
+            .hold => self.dr.raw() & 0xFFFF0000 | self.ir.raw(),
+        }),
+    };
 
-    switch (self.cs.dir) {
-        .none, .read => {},
-        .write_from_l => self.write_d(l),
-        .write_from_dr_ir => {
-            if (self.cs.drw) {
-                self.write_d(self.dr);
-            } else {
-                self.write_d(arch.D.init(self.ir.raw());
-            }
-        },
+    const l = self.get_l();
+
+    self.last_d = d; // do not use get_l() after modifying this!
+
+    if (self.cs.drw == .write and !any_fault) {
+        self.dr = .init(d.raw());
     }
 
-    if (self.cs.drw and !any_fault) {
-        self.dr = self.read_d(arch.DR);
+    if (self.cs.irw == .write and !any_fault) {
+        self.ir = .init(@truncate(self.dr.raw()));
     }
 
-    if (self.cs.irw and !any_fault) {
-        self.ir = arch.reg.IR.init(@truncate(self.dr.raw()));
-    }
-
-    const write_rsn = switch (self.cs.special) {
-        .write_to_other_rsn => switch (self.emode) {
-            .normal, .interrupt, .fault => self.rsn,
-            .interrupt_fault => .init(arch.Register_Set_Number.interrupt_pipe_0.raw() + self.pipe.raw()),
+    const write_rsn: arch.reg.RSN = switch (self.cs.special) {
+        .write_to_other_rsn, .read_and_write_other_rsn => switch (self.emode) {
+            .normal, .interrupt, .fault => self.status.rsn,
+            .interrupt_fault => .init(arch.reg.RSN.interrupt_pipe_0.raw() + self.status.pipe.raw()),
         },
         else => switch (self.emode) {
-            .normal => self.rsn.raw(),
-            .interrupt => .init(arch.Register_Set_Number.interrupt_pipe_0.raw() + self.pipe.raw()),
-            .fault => .init(arch.Register_Set_Number.fault_pipe_0.raw() + self.pipe.raw()),
-            .interrupt_fault => .init(arch.Register_Set_Number.interrupt_fault_pipe_0.raw() + self.pipe.raw()),
+            .normal => self.status.rsn,
+            .interrupt => .init(arch.reg.RSN.interrupt_pipe_0.raw() + self.status.pipe.raw()),
+            .fault => .init(arch.reg.RSN.fault_pipe_0.raw() + self.status.pipe.raw()),
+            .interrupt_fault => .init(arch.reg.RSN.interrupt_fault_pipe_0.raw() + self.status.pipe.raw()),
         },
     };
 
     const set_guard = switch (self.cs.special) {
-        .none, .fault_on_overflow, .trigger_fault, .load_rsn_from_l => false,
         .set_guard => !any_fault,
         .check_guard => set_guard: {
-            const guard = arch.Guarded_Memory_Register.from_frame_and_offset(self.frame, self.va.offset);
-            if (guards[self.pipe.raw()].raw() != guard.raw()) {
+            const guard = arch.reg.guard.Value.from_frame_and_offset(self.frame, self.va.page_offset);
+            if (guards[self.status.pipe.raw()].raw() != guard.raw()) {
                 self.flags.insert(.guard_mismatch);
             }
             break :set_guard false;
         },
+        else => false,
     };
 
+    if (!any_fault and self.cs.special == .load_fucs_from_l) {
+        self.status.fucs = arch.reg.Status.init(l.raw()).fucs;
+    }
+
     if (!any_fault and self.cs.special == .load_rsn_from_l) {
-        self.rsn = .init(@truncate(l.raw()));
-        if (self.debug_log) |dl| {
-            dl.report(self.pipe, .{ .rsn = self.rsn });
-        }
+        self.status.rsn = arch.reg.Status.init(l.raw()).rsn;
+        self.report(.{ .rsn = self.status.rsn });
     }
 
     if (self.flags.contains(.write)) {
-        const guard = arch.Guarded_Memory_Register.from_frame_and_offset(self.frame, self.va.offset);
-        const cur_pipe = self.pipe.raw();
+        const guard = arch.reg.guard.Value.from_frame_and_offset(self.frame, self.va.page_offset);
+        const cur_pipe = self.status.pipe.raw();
         for (0.., guards) |p, *gr| {
-            if (p != cur_pipe and gr.raw() == guard.raw()) gr.* = arch.Guarded_Memory_Register.invalid;
+            if (p != cur_pipe and gr.raw() == guard.raw()) gr.* = .invalid;
         }
     }
 
-    if (self.debug_log) |dl| {
+    if (self.debug_log) |_| {
         if (self.flags.contains(.write)) {
-            dl.report(self.pipe, .{ .write = .{
+            self.report(.{ .write = .{
                 .space = self.cs.vaspace,
                 .ctrl = self.get_bus_control(),
                 .data = .{ .da = self.da, .db = self.db },
@@ -826,7 +893,7 @@ pub fn simulate_transact(self: *Pipeline_State,
         }
 
         if (self.flags.contains(.read)) {
-            dl.report(self.pipe, .{ .read = .{
+            self.report(.{ .read = .{
                 .space = self.cs.vaspace,
                 .ctrl = self.get_bus_control(),
                 .data = .{ .da = self.da, .db = self.db },
@@ -835,45 +902,41 @@ pub fn simulate_transact(self: *Pipeline_State,
     }
 
     if (set_guard) {
-        const guard = arch.Guarded_Memory_Register.from_frame_and_offset(self.frame, self.va.offset);
-        guards[self.pipe.raw()] = guard;
+        const guard = arch.reg.guard.Value.from_frame_and_offset(self.frame, self.va.page_offset);
+        guards[self.status.pipe.raw()] = guard;
     }
 
     if (!any_fault) {
         if (self.cs.seqop == .fault_return and self.emode.is_fault()) {
-            self.uca.slot = arch.microcode.Slot.init(@intCast(l.raw() >> 20));
+            self.uca.slot = arch.reg.Status.init(l.raw()).fucs;
         }
 
-        if (self.cs.gprw) {
-            if (self.debug_log) |dl| {
-                dl.report(self.pipe, .{ .reg = .{
-                    .rsn = write_rsn,
-                    .wi = self.wi,
-                    .old_data = registers[write_rsn.raw()].reg[self.wi.raw()],
-                    .new_data = arch.Reg.init(l.raw()),
-                }});
-            }
-            registers[write_rsn.raw()].reg[self.wi.raw()] = arch.Reg.init(l.raw());
+        if (self.cs.gprw == .write) {
+            self.report(.{ .reg = .{
+                .rsn = write_rsn,
+                .wi = self.wi,
+                .old_data = registers[write_rsn.raw()].reg[self.wi.raw()],
+                .new_data = .init(l.raw()),
+            }});
+            registers[write_rsn.raw()].reg[self.wi.raw()] = .init(l.raw());
         }
 
         const sr1wsrc = self.cs.sr1wsrc;
         if (sr1wsrc != .no_write) {
             const wi = self.cs.sr1wi;
-            const value = arch.Reg.init(switch (sr1wsrc) {
+            const value = arch.reg.sr1.Value.init(switch (sr1wsrc) {
                 .no_write => unreachable,
                 .self => self.sr1d.raw(),
                 .l => l.raw(),
                 .virtual_addr => self.va.raw(),
             });
 
-            if (self.debug_log) |dl| {
-                dl.report(self.pipe, .{ .sr = .{
-                    .rsn = write_rsn,
-                    .index = arch.reg.sr.Any_Index.from_sr1(wi),
-                    .old_data = registers[write_rsn.raw()].sr1[wi.raw()],
-                    .new_data = value,
-                }});
-            }
+            self.report(.{ .sr1 = .{
+                .rsn = write_rsn,
+                .index = wi,
+                .old_data = registers[write_rsn.raw()].sr1[wi.raw()],
+                .new_data = value,
+            }});
 
             registers[write_rsn.raw()].sr1[wi.raw()] = value;
         }
@@ -881,144 +944,152 @@ pub fn simulate_transact(self: *Pipeline_State,
         const sr2wsrc = self.cs.sr2wsrc;
         if (sr2wsrc != .no_write) {
             const wi = self.cs.sr2wi;
-            const value = arch.Reg.init(switch (sr2wsrc) {
+            const value = arch.reg.sr2.Value.init(switch (sr2wsrc) {
                 .no_write => unreachable,
                 .self => self.sr2d.raw(),
                 .l => l.raw(),
                 .virtual_addr => self.va.raw(),
             });
 
-            if (self.debug_log) |dl| {
-                dl.report(self.pipe, .{ .sr = .{
-                    .rsn = write_rsn,
-                    .index = arch.reg.sr.Any_Index.from_sr2(wi),
-                    .old_data = registers[write_rsn.raw()].sr2[wi.raw()],
-                    .new_data = value,
-                }});
-            }
+            self.report(.{ .sr2 = .{
+                .rsn = write_rsn,
+                .index = wi,
+                .old_data = registers[write_rsn.raw()].sr2[wi.raw()],
+                .new_data = value,
+            }});
 
             registers[write_rsn.raw()].sr2[wi.raw()] = value;
 
-            if (wi == .asn and self.cs.special != .write_) {
-                self.asn4 = at.Entry.ASN4.init(@truncate(value.raw()));
-            }
+            if (wi == .asn) switch (self.cs.special) {
+                .read_from_other_rsn, .write_to_other_rsn => {},
+                .read_and_write_other_rsn => if (self.cs.sr2ri == .asn) {
+                    self.asn6 = .from_asn(value);
+                },
+                else => self.asn6 = .from_asn(value),
+            };
         }
 
-        if (self.flags.contains(.add_at_k)) {
-            self.flags.insert(.at_k);
-        } else if (self.flags.contains(.remove_at_k)) {
-            self.flags.remove(.at_k);
+        if (self.flags.contains(.add_at_super)) {
+            self.flags.insert(.at_super);
+        } else if (self.flags.contains(.remove_at_super)) {
+            self.flags.remove(.at_super);
         }
 
         if (self.cs.seqop == .next_instruction) {
-            self.flags.setPresent(.stat_k, self.flags.contains(.at_k));
+            self.flags.setPresent(.super, self.flags.contains(.at_super));
         }
 
-        switch (self.cs.statop) {
+        switch (self.cs.flagop) {
             .hold => {},
             .zn_from_l => {
-                self.flags.setPresent(.stat_z, 0 == l.raw());
-                self.flags.setPresent(.stat_n, 0 != (l.raw() & 0x8000_000));
-            },
-            .clear_a => {
-                self.flags.remove(.stat_a);
-            },
-            .set_a => {
-                self.flags.insert(.stat_a);
+                self.flags.setPresent(.zero, 0 == l.raw());
+                self.flags.setPresent(.negative, 0 != (l.raw() & 0x8000_0000));
             },
             .compute => {
-                self.flags.setPresent(.stat_z, 0 == l.raw());
-                self.flags.setPresent(.stat_n, 0 != (l.raw() & 0x8000_000));
-                self.flags.setPresent(.stat_c, self.compute_result.cout);
-                self.flags.setPresent(.stat_v, self.compute_result.vout);
+                self.flags.setPresent(.zero, 0 == l.raw());
+                self.flags.setPresent(.negative, 0 != (l.raw() & 0x8000_0000));
+                self.flags.setPresent(.carry, self.compute_result.cout);
+                self.flags.setPresent(.overflow, self.compute_result.vout);
             },
             .compute_no_set_z => {
-                if (l.raw() != 0) self.flags.remove(.stat_z);
-                self.flags.setPresent(.stat_n, 0 != (l.raw() & 0x8000_000));
-                self.flags.setPresent(.stat_c, self.compute_result.cout);
-                self.flags.setPresent(.stat_v, self.compute_result.vout);
+                if (l.raw() != 0) self.flags.remove(.zero);
+                self.flags.setPresent(.negative, 0 != (l.raw() & 0x8000_0000));
+                self.flags.setPresent(.carry, self.compute_result.cout);
+                self.flags.setPresent(.overflow, self.compute_result.vout);
             },
-            .load_zncv, .load_zncva_ti => {
-                const stat = arch.Status.init(l.raw());
-                self.flags.setPresent(.stat_z, stat.z);
-                self.flags.setPresent(.stat_n, stat.n);
-                self.flags.setPresent(.stat_c, stat.c);
-                self.flags.setPresent(.stat_v, stat.v);
-                if (self.cs.statop == .load_zncva_ti) {
-                    self.flags.setPresent(.stat_a, stat.a);
-                    self.ti = stat.ti;
+            .clear_bits => {
+                const w = arch.reg.Flags.Writable.init(bits.zx(u32, self.cs.vao.raw()));
+                if (w.z) self.flags.remove(.zero);
+                if (w.n) self.flags.remove(.negative);
+                if (w.c) self.flags.remove(.carry);
+                if (w.v) self.flags.remove(.overflow);
+                if (w.at_enable) self.flags.remove(.at_enable);
+                if (w.bus_override) self.flags.remove(.bus_override);
+            },
+            .set_bits => {
+                const w = arch.reg.Flags.Writable.init(bits.zx(u32, self.cs.vao.raw()));
+                if (w.z) self.flags.insert(.zero);
+                if (w.n) self.flags.insert(.negative);
+                if (w.c) self.flags.insert(.carry);
+                if (w.v) self.flags.insert(.overflow);
+                if (w.at_enable) self.flags.insert(.at_enable);
+                if (w.bus_override) self.flags.insert(.bus_override);
+            },
+            .load_zncv, .load => {
+                const f = arch.reg.Flags.init(l.raw());
+                self.flags.setPresent(.zero, f.z);
+                self.flags.setPresent(.negative, f.n);
+                self.flags.setPresent(.carry, f.c);
+                self.flags.setPresent(.overflow, f.v);
+                if (self.cs.flagop == .load) {
+                    self.flags.setPresent(.at_enable, f.at_enable);
+                    self.flags.setPresent(.bus_override, f.bus_override);
+                    self.ti = f.top;
                 }
             },
         }
 
-        if (self.cs.statop != .load_zncva_ti and self.cs.tiw) {
+        if (self.cs.flagop != .load and self.cs.tiw == .write) {
             self.ti = self.wi;
         }
-    } else if (self.debug_log) |dl| {
-        if (self.flags.contains(.page_fault)) {
-            dl.report(self.pipe, .{ .fault = .page_fault });
-        } else if (self.flags.contains(.access_fault)) {
-            dl.report(self.pipe, .{ .fault = .access_fault });
-        } else if (self.flags.contains(.page_align_fault)) {
-            dl.report(self.pipe, .{ .fault = .page_align_fault });
-        } else if (self.flags.contains(.align_fault)) {
-            dl.report(self.pipe, .{ .fault = .align_fault });
-        } else if (self.flags.contains(.overflow_fault)) {
-            dl.report(self.pipe, .{ .fault = .overflow_fault });
-        } else if (self.flags.contains(.insn_fault)) {
-            dl.report(self.pipe, .{ .fault = self.cs.next });
-        } else unreachable;
+
+    } else if (self.debug_log) |_| {
+        const faults = self.flags.intersectWith(fault_flags);
+        std.debug.assert(faults.count() > 0);
+        var iter = faults.iterator();
+        while (iter.next()) |fault_flag| {
+            self.report(.{ .fault = self.fault_slot(fault_flag) });
+        }
     }
 
     const atop = self.cs.atop;
-    if (atop != .none) {
-        translations[self.at_entry_addr.raw()] = switch (atop) {
-            .none => unreachable,
-            .translate => .{
-                .primary = self.matching_entry,
-                .secondary = self.other_entry,
-            },
-            .update => .{
-                .primary = at.Entry.init(l.raw()),
-                .secondary = self.other_entry,
-            },
-            .invalidate => entries: {
-                const tag_mask: arch.addr.Page.Tag.Raw = @truncate(l.raw());
-                const vtag = self.va.page.tag.raw() & tag_mask;
+    if (any_fault) {
+        self.atr = self.va;
+        self.status.fucs = self.uca.slot;
+        self.status.fspace = self.cs.vaspace;
+        self.status.fwidth = self.cs.width;
+        self.status.fwrite = self.cs.dsrc != .system;
+    } else switch (atop) {
+        .none => {},
+        .translate => translations[self.at_entry_addr.raw()] = .{
+            .primary = self.matching_entry,
+            .secondary = self.other_entry,
+        },
+        .update => translations[self.at_entry_addr.raw()] = .{
+            .primary = at.Entry.init(l.raw()),
+            .secondary = self.other_entry,
+        },
+        .invalidate => {
+            const tag_mask: arch.addr.Page.Tag.Raw = @truncate(l.raw());
+            const vtag = self.va.page.tag.raw() & tag_mask;
 
-                var matching = self.matching_entry;
-                var other = self.other_entry;
+            var matching = self.matching_entry;
+            var other = self.other_entry;
 
-                if (vtag == (matching.tag.raw() & tag_mask) and matching.present) {
-                    matching.present = false;
-                }
+            if (vtag == (matching.tag.raw() & tag_mask) and matching.present) {
+                matching.present = false;
+            }
 
-                if (vtag == (other.tag.raw() & tag_mask) and other.present) {
-                    other.present = false;
-                }
+            if (vtag == (other.tag.raw() & tag_mask) and other.present) {
+                other.present = false;
+            }
 
-                break :entries .{
-                    .primary = matching,
-                    .secondary = other,
-                };
-            },
-        };
-        self.last_at_info = .{
-            .emode = self.emode,
-            .bus_dir = self.cs.dir,
-            .bus_width = self.cs.width,
-            .op = self.cs.atop,
-            .space = self.cs.vaspace,
-            .page = self.va.page,
-        };
+            translations[self.at_entry_addr.raw()] = .{
+                .primary = matching,
+                .secondary = other,
+            };
+        },
+        .write_atr => {
+            self.atr = .init(d.raw());
+        },
     }
 
     self.next_stage = .decode;
 }
 
 fn read_d(self: Pipeline_State, comptime T: type) T {
-    const n0: u1 = @truncate(self.va.offset.raw());
-    const n1: u1 = @truncate(self.va.offset.raw() >> 1);
+    const n0: u1 = @truncate(self.va.page_offset.raw());
+    const n1: u1 = @truncate(self.va.page_offset.raw() >> 1);
 
     const lo = switch (n1) {
         0 => self.da.raw(),
@@ -1029,7 +1100,7 @@ fn read_d(self: Pipeline_State, comptime T: type) T {
         1 => self.da.raw(),
     };
 
-    var raw_d: arch.D.Raw = bits.concat(.{ lo, hi });
+    var raw_d: arch.bus.D.Raw = bits.concat(.{ lo, hi });
     if (n0 == 1) {
         raw_d >>= 8;
     }
@@ -1045,19 +1116,19 @@ fn read_d(self: Pipeline_State, comptime T: type) T {
 }
 
 fn write_d(self: *Pipeline_State, d: anytype) void {
-    const n0: u1 = @truncate(self.va.offset.raw());
-    const n1: u1 = @truncate(self.va.offset.raw() >> 1);
+    const n0: u1 = @truncate(self.va.page_offset.raw());
+    const n1: u1 = @truncate(self.va.page_offset.raw() >> 1);
 
-    var raw_d: arch.D.Raw = d.raw();
+    var raw_d: arch.bus.D.Raw = d.raw();
     if (n0 == 1) {
         raw_d <<= 8;
     }
 
-    self.da = arch.DA.init(switch (n1) {
+    self.da = .init(switch (n1) {
         0 => @truncate(raw_d),
         1 => @truncate(raw_d >> 16),
     });
-    self.db = arch.DB.init(switch (n1) {
+    self.db = .init(switch (n1) {
         0 => @truncate(raw_d >> 16),
         1 => @truncate(raw_d),
     });
@@ -1073,7 +1144,6 @@ pub fn get_bus_control(self: *Pipeline_State) Bus_Control {
         .lbb = self.flags.contains(.lbb),
         .ubb = self.flags.contains(.ubb),
         .guard_mismatch = self.flags.contains(.guard_mismatch),
-        .update_frame_state = self.flags.contains(.update_frame_state),
     };
 }
 

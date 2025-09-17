@@ -20,6 +20,7 @@ pub fn deinit(self: *Memory, allocator: std.mem.Allocator) void {
 }
 
 pub fn reset(self: *Memory) void {
+    _ = self;
 }
 
 pub fn device(self: *Memory) Device {

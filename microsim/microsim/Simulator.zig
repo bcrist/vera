@@ -43,9 +43,9 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
             reset: bool,
             interrupts_pending: [num_pipelines]bool,
             pipelines: [num_pipelines]Pipeline_State,
-            registers: arch.Register_File,
-            guards: arch.Guarded_Memory_File,
-            translations: at.Translation_File,
+            registers: arch.reg.File,
+            guards: arch.reg.guard.File,
+            translations: at.File,
         };
 
         const Self = @This();
@@ -55,29 +55,29 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
             errdefer allocator.destroy(state);
             state.* = .{
                 .reset = true,
-                .interrupts_pending = .{ false } ** num_pipelines,
+                .interrupts_pending = @splat(false),
                 .pipelines = switch (pipeline) {
-                    .p0 => .{ .{ .pipe = .zero, .next_stage = .decode, .debug_log = debug_log } },
-                    .p1 => .{ .{ .pipe = .one, .next_stage = .decode, .debug_log = debug_log } },
-                    .p2 => .{ .{ .pipe = .two, .next_stage = .decode, .debug_log = debug_log } },
-                    .p3 => .{ .{ .pipe = .three, .next_stage = .decode, .debug_log = debug_log } },
+                    .p0 => .{ .init(.zero, .decode, debug_log) },
+                    .p1 => .{ .init(.one, .decode, debug_log) },
+                    .p2 => .{ .init(.two, .decode, debug_log) },
+                    .p3 => .{ .init(.three, .decode, debug_log) },
                     .all => .{
-                        .{ .pipe = .zero, .next_stage = .decode, .debug_log = debug_log },
-                        .{ .pipe = .one, .next_stage = .transact, .debug_log = debug_log },
-                        .{ .pipe = .two, .next_stage = .compute, .debug_log = debug_log },
-                        .{ .pipe = .three, .next_stage = .setup, .debug_log = debug_log },
+                        .init(.zero, .decode, debug_log),
+                        .init(.one, .transact, debug_log),
+                        .init(.two, .compute, debug_log),
+                        .init(.three, .setup, debug_log),
                     },
                 },
-                .registers = .{ .{
-                    .reg = .{ arch.Reg.init(0) } ** arch.register_count,
-                    .sr1 = .{ arch.Reg.init(0) } ** arch.reg.sr1.Index.count,
-                    .sr2 = .{ arch.Reg.init(0) } ** arch.reg.sr2.Index.count,
-                }} ** arch.Register_Set_Number.count,
-                .guards = .{ arch.Guarded_Memory_Register.init(0) } ** arch.Pipeline.count,
-                .translations = .{ .{ 
-                    .primary = at.Entry.init(0),
-                    .secondary = at.Entry.init(0),
-                }} ** at.Entry.Address.count,
+                .registers = @splat(.{
+                    .reg = @splat(.init(0)),
+                    .sr1 = @splat(.init(0)),
+                    .sr2 = @splat(.init(0)),
+                }),
+                .guards = @splat(.init(0)),
+                .translations = @splat(.{ 
+                    .primary = .init(0),
+                    .secondary = .init(0),
+                }),
             };
 
             var updatable_device_count: usize = 0;
@@ -193,7 +193,7 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
                     var flags = state.pipelines[transact_stage].flags;
                     if (flags.contains(.read)) {
                         const ctrl = state.pipelines[transact_stage].get_bus_control();
-                        var data: Bus_Data = .{ .da = arch.DA.init(0), .db = arch.DB.init(0) };
+                        var data: Bus_Data = .{ .da = .init(0), .db = .init(0) };
                         var contention: Read_Contention_State = .no_read;
 
                         for (self.global_devices) |*d| {
@@ -202,7 +202,7 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
 
                         const pa: arch.addr.Physical = .{
                             .frame = ctrl.frame,
-                            .offset = state.pipelines[transact_stage].va.offset,
+                            .frame_offset = state.pipelines[transact_stage].va.page_offset,
                         };
 
                         if (pa.device_slot()) |slot| {
@@ -230,7 +230,7 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
 
                         const pa: arch.addr.Physical = .{
                             .frame = ctrl.frame,
-                            .offset = state.pipelines[transact_stage].va.offset,
+                            .frame_offset = state.pipelines[transact_stage].va.page_offset,
                         };
 
                         if (pa.device_slot()) |slot| {
@@ -265,7 +265,7 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
             }
         }
 
-        pub fn dump_state(self: *Self, writer: anytype, options: Dump_State_Options) !void {
+        pub fn dump_state(self: *Self, writer: *std.io.Writer, options: Dump_State_Options) !void {
             try writer.print("Microcycle: {}\n", .{ self.microcycles_simulated });
             try writer.print("Reset: {}\n", .{ self.state.reset });
 
@@ -405,16 +405,16 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
 
                         if (i < arch.reg.sr1.Index.count) {
                             const index_name = try std.fmt.bufPrint(&buf, "{}", .{ arch.reg.sr1.Index.init(@intCast(i)) });
-                            try writer.writeByteNTimes(' ', 20 - index_name.len);
+                            try writer.splatByteAll(' ', 20 - index_name.len);
                             try writer.writeAll(index_name);
                             try writer.print("={}", .{ self.state.registers[pipe.rsn.raw()].sr1[i] });
                         } else {
-                            try writer.writeByteNTimes(' ', 20);
+                            try writer.splatByteAll(' ', 20);
                         }
 
                         if (i < arch.reg.sr2.Index.count) {
                             const index_name = try std.fmt.bufPrint(&buf, "{}", .{ arch.reg.sr2.Index.init(@intCast(i)) });
-                            try writer.writeByteNTimes(' ', 16 - index_name.len);
+                            try writer.splatByteAll(' ', 16 - index_name.len);
                             try writer.writeAll(index_name);
                             try writer.print("={}", .{ self.state.registers[pipe.rsn.raw()].sr2[i] });
                         }

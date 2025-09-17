@@ -2,11 +2,11 @@ pub fn Handler(comptime handler: arch.microcode.Slot) type {
     return struct {
         pub const slot = handler;
 
-        pub const entry = store_status;
+        pub const entry = store_last_d;
 
-        pub fn store_status(c: *Cycle) void {
-            c.status_to_l();
-            c.l_to_sr_alt(.fault_status);
+        pub fn store_last_d(c: *Cycle) void {
+            c.last_d_to_l();
+            c.l_to_sr_alt(.fault_d);
             c.next(store_flags);
         }
 
@@ -24,20 +24,14 @@ pub fn Handler(comptime handler: arch.microcode.Slot) type {
 
         pub fn store_ir(c: *Cycle) void {
             c.ir_to_l();
+            c.disable_flags(.{ .at_enable = true, .bus_override = true });
             c.l_to_sr_alt(.fault_ir);
-            c.next(read_atr);
-        }
-
-        pub fn read_atr(c: *Cycle) void {
-            c.atr_to_l();
-            c.disable_flags(.{ .ate = true, .read_override = true });
-            c.l_to_sr(.bp);
-            c.reload_asn();
             c.next(load_vector);
         }
 
         pub fn load_vector(c: *Cycle) void {
             c.read_to_d(.zero, @offsetOf(arch.data_structures.Vector_Table, @tagName(handler)), .@"16b", .physical);
+            c.reload_asn();
             c.d_to_l();
             c.l_to_sr(.temp_1);
             c.next(branch);

@@ -819,6 +819,8 @@ fn finalize_encoding(self: *Processor, parsed: Instruction_Encoding, constraints
         }
     }
 
+    validate_constant_values(parsed, final_encoders);
+
     final_encoders = merge_adjacent_constant_encoders(final_encoders);
 
     return .{
@@ -826,6 +828,19 @@ fn finalize_encoding(self: *Processor, parsed: Instruction_Encoding, constraints
         .constraints = final_constraints,
         .encoders = final_encoders,
     };
+}
+
+fn validate_constant_values(parsed: Instruction_Encoding, encoders: []Encoder) void {
+    for (encoders) |encoder| {
+        if (encoder.value != .constant) continue;
+        var data: isa.Encoded_Instruction.Data = 0;
+        if (!encoder.encode_value(encoder.value.constant, &data)) {
+            std.debug.panic("Can't encode constant {d} for instruction encoding: {f}", .{
+                encoder.value.constant,
+                parsed,
+            });
+        }
+    }
 }
 
 fn merge_adjacent_constant_encoders(encoders: []Encoder) []Encoder {
@@ -839,7 +854,7 @@ fn merge_adjacent_constant_encoders(encoders: []Encoder) []Encoder {
 
     var out_index: usize = 0;
     for (encoders[1..]) |second| {
-        const first = &encoders[out_index];
+        const first = encoders[out_index];
         if (first.value != .constant or second.value != .constant or first.bit_offset + first.bit_count != second.bit_offset) {
             out_index += 1;
             encoders[out_index] = second;
@@ -853,20 +868,25 @@ fn merge_adjacent_constant_encoders(encoders: []Encoder) []Encoder {
 
         const ok2 = second.encode_value(second.value.constant, &data);
         std.debug.assert(ok2);
+        
+        var temp: Encoder = .{
+            .bit_offset = first.bit_offset,
+            .bit_count = first.bit_count + second.bit_count,
+            .domain = .{ .int = .{
+                .signedness = .unsigned,
+                .bits = @intCast(first.bit_count + second.bit_count),
+                .multiple = 1,
+            }},
+            .value = .{ .placeholder = .{
+                .index = .invalid,
+                .kind =  .param_constant,
+                .name = "",
+            }},
+        };
+        const constant_value = temp.decode_value(data) orelse unreachable;
+        temp.value = .{ .constant = constant_value };
 
-        first.bit_count += second.bit_count;
-        first.domain = .{ .int = .{
-            .signedness = .unsigned,
-            .bits = @intCast(first.bit_count),
-            .multiple = 1,
-        }};
-        // wipe out first.value to ensure that first.decode_value will work correctly
-        first.value = .{ .placeholder = .{
-            .index = .invalid,
-            .kind =  .param_constant,
-            .name = "",
-        } };
-        first.value = .{ .constant = first.decode_value(data) orelse unreachable };
+        encoders[out_index] = temp;
     }
 
     return encoders[0..out_index + 1];

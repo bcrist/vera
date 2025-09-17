@@ -1,4 +1,4 @@
-[arch] Only reload ASN6 when special_op is not .write_to_other_rsn or special is .rsn_from_l and sr2ri is .asn
+[arch] LSRC can be 2 bits instead of 3.
 
 [isa] Allow arbitrary mnemonics and mnemonic suffixes - maybe use hash of text for lookup?  Can still use enum literals for manually initializing mnemonics/suffixes in the few places necessary
 
@@ -6,14 +6,10 @@
 
 [arch] conditional load/store instructions - equivalent to a conditional jump just before, but 1 cycle faster when the load does need to happen
 
-[arch] Use 4x CY7C028V-15AC (64kx16 DPSRAMs) for address translation.  4 extra address lines - ASN6 instead of ASN4, increase slot to 8 bits, decrease tag to 12 bits.  Gives 2 extra bits in entry (required pipeline number?)
-[arch] 64 GPRs per RSN instead of 32; 64 RSNs instead of 128
-[arch] Don't reserve half of RSNs for fault handling; instead use 4 hardcoded RSNs like for interrupts (except 4-7 instead of 0-3) - need a way for FRET to know which RSN to return to though.  Remove Special_Op.toggle_rsn
-
-[sdram] SDRAM for unsharable memory - add pipe ID to address translation entries & new fault when it isn't owned by the current pipe? (replaces present/update-frame-state flags - use a sentinel I/O frame to indicate not present, always update frame state for ram locations?  Or have a separate bitmap ram to determine which frames are dirty-tracked)   physical address space: 64MB total (26 bit address), 16MB SRAM, 16MB I/O, 32MB private SDRAM
+[sdram] SDRAM for unsharable memory - physical address space: 64MB total (26 bit address), 16MB SRAM, 16MB I/O, 32MB private SDRAM
 [sdram] refresh timing: Minimum required refreshes is 839 per 32k ucycles (8k per 64ms).  10 bit counter counts number of refreshes seen so far this 32768 cycle period.  First SR latch is set when refresh counter reaches 896.  Second SR latch is set when the 15-bit ucycle counter reaches 31872.  When the 15-bit ucycle counter resets, both SR latches and the refresh counter are also reset.  Refresh interrupt is asserted whenever the first SR latch is not set, but the second one is.
 
-[arch] consider allowing fault handlers to set a flag that overrides the next bus operation - to allow more reasonable implementation of unaligned load/store crossing page boundaries - encode this data in the AT entry - instead of a frame number, encode the address offset that is being overridden and the pipe number being overridden - or just a flag in the status register; since RSN is only 6 bits now, there is an extra bit; maybe have a FRETO instruction that sets that bit while returning.  Maybe reuse the "last AT op" register for containing the replacement data.  Or maybe just have the flag disable the load into the DR; use the value in the DR instead?
+[frame tracker] always update frame state for ram locations?  Or have a separate bitmap ram to determine which frames are dirty-tracked
 
 [isa] write instructions file as zon instead of s-exp
 [isa] "select" instructions - rough equivalent of cmov; pop top two register stack values, then re-add one or the other based on condition

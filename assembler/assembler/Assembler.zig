@@ -164,7 +164,7 @@ pub fn assemble(self: *Assembler) void {
     }
 }
 
-pub fn print_errors(self: *Assembler, writer: anytype) !void {
+pub fn print_errors(self: *Assembler, writer: *std.io.Writer) !void {
     for (self.errors.items) |err| {
         try err.print(self, writer);
     }

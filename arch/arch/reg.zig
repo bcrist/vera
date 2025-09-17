@@ -106,7 +106,7 @@ pub const sr1 = struct {
         // 9 unused
         // 10 unused
         // 11 unused
-        fault_status = 12,    // Upon entering a fault handler, the status register is stored here
+        fault_d = 12,
         fault_flags = 13,   // Upon entering a fault handler, the flags register is stored here
         fault_dr = 14,      // Upon entering a fault handler, DR is stored here.
         fault_ir = 15,      // Upon entering a fault handler, IR is stored here.
@@ -194,7 +194,7 @@ pub const sr = struct {
         bp = raw_from_sr1(.bp),
         temp_1 = raw_from_sr1(.temp_1),
         int_flags = raw_from_sr1(.int_flags),
-        fault_status = raw_from_sr1(.fault_status),
+        fault_d = raw_from_sr1(.fault_d),
         fault_flags = raw_from_sr1(.fault_flags),
         fault_dr = raw_from_sr1(.fault_dr),
         fault_ir = raw_from_sr1(.fault_ir),
@@ -281,7 +281,7 @@ pub const guard = struct {
             return @bitCast(raw_value);
         }
 
-        pub inline fn from_frame_and_offset(frame: addr.Frame, offset: addr.Offset) Value {
+        pub inline fn from_frame_and_offset(frame: addr.Frame, offset: addr.Frame.Offset) Value {
             return .{
                 .offset = @intCast(offset.raw() >> 3),
                 .frame = @truncate(frame.raw()),
@@ -378,9 +378,11 @@ pub const IR = enum (u16) {
 pub const Status = packed struct (u32) {
     rsn: RSN,
     pipe: misc.Pipeline,
-    _unused: u8 = 0,
-    pucs: microcode.Slot,
-    _unused2: u4 = 0,
+    fwrite: bool,
+    fwidth: bus.D.Width,
+    fspace: addr.Space,
+    fucs: microcode.Slot,
+    _unused: u7 = 0,
 
     pub inline fn init(raw_value: Raw) Status {
         return @bitCast(raw_value);
@@ -400,20 +402,20 @@ pub const Flags = packed struct (u32) {
     n: bool, // negative
     c: bool, // carry
     v: bool, // overflow
-    ate: bool, // address translation enabled
-    read_override: bool, // suppress next bus operation (read data will come from AT register)
+    at_enable: bool, // address translation enabled
+    bus_override: bool, // suppress next bus operation
     super: bool, // kernel/supervisor mode
     _unused: u1 = 0,
-    mode: misc.Execution_Mode,
-    _unused2: u6 = 0,
     top: gpr.Write_Index,
-    _unused3: u10 = 0,
+    _unused2: u2 = 0,
+    mode: misc.Execution_Mode,
+    _unused3: u14 = 0,
 
-    pub inline fn init(raw_value: Raw) Status {
+    pub inline fn init(raw_value: Raw) Flags {
         return @bitCast(raw_value);
     }
 
-    pub inline fn raw(self: Status) Raw {
+    pub inline fn raw(self: Flags) Raw {
         return @bitCast(self);
     }
 
@@ -421,17 +423,17 @@ pub const Flags = packed struct (u32) {
 
     pub const Raw = meta.Backing(Flags);
 
+    // These bits are able to be toggled with .clear_bits and .set_bits
     pub const Writable = packed struct (u32) {
         z: bool = false,
         n: bool = false,
         c: bool = false,
         v: bool = false,
-        ate: bool = false,
-        read_override: bool = false,
-        super: bool = false,
-        _unused: u25 = 0,
+        at_enable: bool = false,
+        bus_override: bool = false,
+        _unused: u26 = 0,
 
-        pub inline fn init(raw_value: Writable.Raw) Op {
+        pub inline fn init(raw_value: Writable.Raw) Writable {
             return @bitCast(raw_value);
         }
 
@@ -470,6 +472,7 @@ pub const Flags = packed struct (u32) {
 
 const addr = @import("addr.zig");
 const microcode = @import("microcode.zig");
+const bus = @import("bus.zig");
 const misc = @import("misc.zig");
 const fmt = @import("fmt.zig");
 const meta = @import("meta");

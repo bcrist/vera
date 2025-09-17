@@ -16,7 +16,7 @@ pub const Flags = enum {
     is_instruction_encoding_error,
 };
 
-pub fn print(self: Error, a: *Assembler, writer: anytype) !void {
+pub fn print(self: Error, a: *Assembler, writer: *std.io.Writer) !void {
     const file = a.get_source(self.file);
     const s = file.slices();
 

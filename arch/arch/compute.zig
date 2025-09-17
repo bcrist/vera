@@ -41,7 +41,7 @@ pub const Mode = packed union {
 
     pub const ALU = packed struct (u5) {
         op: Opcode,
-        use_stat_c: bool,
+        use_carry_flag: bool,
         invert_cin: bool,
 
         /// As specified in L4C381 datasheet
@@ -68,18 +68,18 @@ pub const Mode = packed union {
             pub const Raw = meta.Backing(Opcode);
         };
 
-        pub const all_zeroes: ALU = .{ .op = .all_zeroes, .use_stat_c = false, .invert_cin = false };
-        pub const nadd: ALU = .{ .op = .not_j_plus_k, .use_stat_c = false, .invert_cin = true };
-        pub const naddc: ALU = .{ .op = .not_j_plus_k, .use_stat_c = true, .invert_cin = false };
-        pub const sub: ALU = .{ .op = .j_plus_not_k, .use_stat_c = false, .invert_cin = true };
-        pub const subc: ALU = .{ .op = .j_plus_not_k, .use_stat_c = true, .invert_cin = false };
-        pub const add: ALU = .{ .op = .j_plus_k, .use_stat_c = false, .invert_cin = false };
-        pub const addc: ALU = .{ .op = .j_plus_k, .use_stat_c = true, .invert_cin = false };
-        pub const addi: ALU = .{ .op = .j_plus_k, .use_stat_c = false, .invert_cin = true };
-        pub const logic_xor: ALU = .{ .op = .j_xor_k, .use_stat_c = false, .invert_cin = false };
-        pub const logic_or: ALU = .{ .op = .j_or_k, .use_stat_c = false, .invert_cin = false };
-        pub const logic_and: ALU = .{ .op = .j_and_k, .use_stat_c = false, .invert_cin = false };
-        pub const all_ones: ALU = .{ .op = .all_ones, .use_stat_c = false, .invert_cin = false };
+        pub const all_zeroes: ALU = .{ .op = .all_zeroes, .use_carry_flag = false, .invert_cin = false };
+        pub const nadd: ALU = .{ .op = .not_j_plus_k, .use_carry_flag = false, .invert_cin = true };
+        pub const naddc: ALU = .{ .op = .not_j_plus_k, .use_carry_flag = true, .invert_cin = false };
+        pub const sub: ALU = .{ .op = .j_plus_not_k, .use_carry_flag = false, .invert_cin = true };
+        pub const subc: ALU = .{ .op = .j_plus_not_k, .use_carry_flag = true, .invert_cin = false };
+        pub const add: ALU = .{ .op = .j_plus_k, .use_carry_flag = false, .invert_cin = false };
+        pub const addc: ALU = .{ .op = .j_plus_k, .use_carry_flag = true, .invert_cin = false };
+        pub const addi: ALU = .{ .op = .j_plus_k, .use_carry_flag = false, .invert_cin = true };
+        pub const logic_xor: ALU = .{ .op = .j_xor_k, .use_carry_flag = false, .invert_cin = false };
+        pub const logic_or: ALU = .{ .op = .j_or_k, .use_carry_flag = false, .invert_cin = false };
+        pub const logic_and: ALU = .{ .op = .j_and_k, .use_carry_flag = false, .invert_cin = false };
+        pub const all_ones: ALU = .{ .op = .all_ones, .use_carry_flag = false, .invert_cin = false };
     };
 
     pub const Shift = packed struct (u5) {
@@ -90,14 +90,14 @@ pub const Mode = packed union {
             zero = 0,
             zero_bitreverse = 1,
             j31 = 2,
-            stat_c = 3,
+            carry_flag = 3,
         },
         
         pub const shrl: Shift = .{ .left = false, .left_xor_swap_bytes = false, .left_xor_swap_halves = false, .cin = .zero };
         pub const shra: Shift = .{ .left = false, .left_xor_swap_bytes = false, .left_xor_swap_halves = false, .cin = .j31 };
-        pub const shrc: Shift = .{ .left = false, .left_xor_swap_bytes = false, .left_xor_swap_halves = false, .cin = .stat_c };
+        pub const shrc: Shift = .{ .left = false, .left_xor_swap_bytes = false, .left_xor_swap_halves = false, .cin = .carry_flag };
         pub const shl: Shift = .{ .left = true, .left_xor_swap_bytes = true, .left_xor_swap_halves = true, .cin = .zero };
-        pub const shlc: Shift = .{ .left = true, .left_xor_swap_bytes = true, .left_xor_swap_halves = true, .cin = .stat_c };
+        pub const shlc: Shift = .{ .left = true, .left_xor_swap_bytes = true, .left_xor_swap_halves = true, .cin = .carry_flag };
 
         // K should be zero for these:
         pub const swap_bytes: Shift = .{ .left = false, .left_xor_swap_bytes = true, .left_xor_swap_halves = false, .cin = .zero };

@@ -11,6 +11,8 @@ pub const Execution_Mode = misc.Execution_Mode;
 pub const Power_Mode = misc.Power_Mode;
 pub const Sequencer_Op = misc.Sequencer_Op;
 pub const Special_Op = misc.Special_Op;
+pub const Generic_Write_Enable = misc.Generic_Write_Enable;
+pub const Interrupt_Enable = misc.Interrupt_Enable;
 pub const Control_Signal = misc.Control_Signal;
 pub const Control_Signals = @import("arch/Control_Signals.zig");
 

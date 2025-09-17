@@ -57,7 +57,7 @@ pub const Pipeline_Policy = enum (u3) {
     pub const Raw = meta.Backing(Pipeline_Policy);
 };
 
-pub const Translation_File = [Entry.Address.count]Entry_Pair;
+pub const File = [Entry.Address.count]Entry_Pair;
 
 pub const Entry_Pair = struct {
     primary: Entry,
@@ -112,11 +112,12 @@ pub const Entry = packed struct (u32) {
             return @enumFromInt(raw_value);
         }
 
-        pub fn from_space_and_dir(space: addr.Space, dir: arch.bus.D.Direction) Group {
+        pub fn from_space_and_dsrc(space: addr.Space, dsrc: bus.D.Source) Group {
             return switch (space) {
-                .physical, .data => switch (dir) {
-                    .write_from_l, .write_from_dr_ir => .data_write,
-                    .none, .read => .data_read,
+                .physical => .data_read,
+                .data => switch (dsrc) {
+                    .system => .data_read,
+                    .l, .dr_ir, .atr => .data_write,
                 },
                 .stack => .stack,
                 .insn => .insn,
@@ -139,7 +140,7 @@ pub const Entry = packed struct (u32) {
             return @enumFromInt(raw_value);
         }
 
-        pub inline fn from_asn(asn: arch.Reg) ASN6 {
+        pub inline fn from_asn(asn: reg.sr2.Value) ASN6 {
             return ASN6.init(@truncate(asn.raw()));
         }
 
@@ -153,34 +154,9 @@ pub const Entry = packed struct (u32) {
     };
 };
 
-// Address Translation Register:
-// saved when handling a fault; useful for determining what page needs to be loaded for a page fault.
-// N.B. Upper 20 bits are identical to virtual address
-// This register is also used when a fault handler wants to override the result of a faulted read.
-pub const ATR = packed struct(u32) {
-    mode: arch.Execution_Mode,
-    bus_dir: arch.D.Direction,
-    bus_width: arch.D.Width,
-    op: Op,
-    space: addr.Space,
-    _padding: u2 = 0,
-    page: addr.Page,
-
-    pub inline fn init(raw_value: Raw) ATR {
-        return @bitCast(raw_value);
-    }
-
-    pub inline fn raw(self: ATR) Raw {
-        return @bitCast(self);
-    }
-
-    pub const format = fmt.format_raw_hex;
-
-    pub const Raw = meta.Backing(ATR);
-};
-
+const reg = @import("../reg.zig");
+const bus = @import("../bus.zig");
 const fmt = @import("../fmt.zig");
 const addr = @import("../addr.zig");
-const arch = @import("../../arch.zig");
 const meta = @import("meta");
 const std = @import("std");

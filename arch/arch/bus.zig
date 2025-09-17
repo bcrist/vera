@@ -157,12 +157,13 @@ pub const L = enum (u32) {
 
     pub const Source = enum (u3) {
         compute_or_d = 0, // D bus when compute_unit == .none
-        // unused = 1,
+        flags = 1,
         status = 2,
-        flags = 3,
+        last_d = 3,
         // unused = 4,
         // unused = 5,
         // unused = 6,
+        // unused = 7,
 
         pub inline fn init(raw_value: Source.Raw) Source {
             return @enumFromInt(raw_value);

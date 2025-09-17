@@ -158,7 +158,7 @@ pub fn doWindow(self: Pipeline_State) void {
 
     {
         zgui.sameLine(.{ .offset_from_start_x = 54 * glyph_width });
-        const c = if (self.stat_c) "C" else " ";
+        const c = if (self.carry_flag) "C" else " ";
         const v = if (self.stat_v) "V" else " ";
         const n = if (self.stat_n) "N" else " ";
         const z = if (self.stat_z) "Z" else " ";

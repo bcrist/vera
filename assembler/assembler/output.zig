@@ -131,7 +131,7 @@ pub fn write_hex_files_for_section(a: *const Assembler, maybe_section_handle: ?S
     }
 }
 
-pub fn write_hex_for_section(a: *const Assembler, maybe_section_handle: ?Section.Handle, writer: anytype, rom_number: u8, options: Hex_Options) !void {
+pub fn write_hex_for_section(a: *const Assembler, maybe_section_handle: ?Section.Handle, writer: *std.io.Writer, rom_number: u8, options: Hex_Options) !void {
     switch (options.format) {
         .motorola => {
             var buf: [8]u8 = undefined;
@@ -149,7 +149,7 @@ pub fn write_hex_for_section(a: *const Assembler, maybe_section_handle: ?Section
 }
 
 // writer should be srec.Writer or ihex.Writer
-fn write_hex_for_section_inner(a: *const Assembler, maybe_section_handle: ?Section.Handle, writer: anytype, rom_number: u8, options: Hex_Options) !void {
+fn write_hex_for_section_inner(a: *const Assembler, maybe_section_handle: ?Section.Handle, writer: *std.io.Writer, rom_number: u8, options: Hex_Options) !void {
     const page_data = a.pages.items(.data);
 
     var temp = std.ArrayListUnmanaged(u8){};
@@ -325,7 +325,7 @@ pub fn write_sim_sx(a: *Assembler, temp_alloc: std.mem.Allocator, writer: std.io
     try sx_writer.done();
 }
 
-fn write_listing_sx_line_and_source(line_number: u32, source: []const u8, sx_writer: anytype) !void {
+fn write_listing_sx_line_and_source(line_number: u32, source: []const u8, sx_writer: *sx.Writer) !void {
     if (line_number > 0) {
         try sx_writer.expression("line");
         try sx_writer.int(line_number, 10);
@@ -338,7 +338,7 @@ fn write_listing_sx_line_and_source(line_number: u32, source: []const u8, sx_wri
     }
 }
 
-pub fn write_sim_sx_page(a: *const Assembler, page: arch.addr.Page, sx_writer: anytype) !void {
+pub fn write_sim_sx_page(a: *const Assembler, page: arch.addr.Page, sx_writer: *sx.Writer) !void {
     if (a.page_lookup.get(page)) |page_data_handle| {
         const pages_slice = a.pages.slice();
         const page_data = pages_slice.items(.data);

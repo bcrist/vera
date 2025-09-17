@@ -25,7 +25,7 @@ test "add 123" {
     try expectEqual(arch.Write_Index.init(0), p.ti);
     try expectEqual(arch.Reg.init(123), sim.state.registers[0].reg[0]);
     try expect(!p.flags.contains(.stat_n));
-    try expect(!p.flags.contains(.stat_c));
+    try expect(!p.flags.contains(.carry_flag));
     try expect(!p.flags.contains(.stat_v));
     try expect(!p.flags.contains(.stat_z));
 
@@ -33,7 +33,7 @@ test "add 123" {
     try expectEqual(arch.Write_Index.init(0), p.ti);
     try expectEqual(arch.Reg.init(124), sim.state.registers[0].reg[0]);
     try expect(!p.flags.contains(.stat_n));
-    try expect(!p.flags.contains(.stat_c));
+    try expect(!p.flags.contains(.carry_flag));
     try expect(!p.flags.contains(.stat_v));
     try expect(!p.flags.contains(.stat_z));
 
@@ -42,7 +42,7 @@ test "add 123" {
     try expectEqual(arch.Reg.init(0x222), sim.state.registers[0].reg[1]);
     try expectEqual(arch.Reg.init(124), sim.state.registers[0].reg[0]);
     try expect(!p.flags.contains(.stat_n));
-    try expect(!p.flags.contains(.stat_c));
+    try expect(!p.flags.contains(.carry_flag));
     try expect(!p.flags.contains(.stat_v));
     try expect(!p.flags.contains(.stat_z));
 
@@ -50,7 +50,7 @@ test "add 123" {
     try expectEqual(arch.Write_Index.init(0), p.ti);
     try expectEqual(arch.Reg.init(670), sim.state.registers[0].reg[0]);
     try expect(!p.flags.contains(.stat_n));
-    try expect(!p.flags.contains(.stat_c));
+    try expect(!p.flags.contains(.carry_flag));
     try expect(!p.flags.contains(.stat_v));
     try expect(!p.flags.contains(.stat_z));
 

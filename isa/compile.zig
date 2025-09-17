@@ -85,6 +85,7 @@ pub fn main() !void {
         @import("handlers/reset.zig"),
         faults.Handler(.page_fault),
         faults.Handler(.access_fault),
+        faults.Handler(.pipe_fault),
         faults.Handler(.page_align_fault),
         faults.Handler(.align_fault),
         faults.Handler(.overflow_fault),

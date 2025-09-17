@@ -5,7 +5,7 @@ pub const entry = save_flags;
 pub fn save_flags(c: *Cycle) void {
     c.flags_to_l();
     c.l_to_sr_alt(.int_flags);
-    c.disable_flags(.{ .ate = true, .read_override = true });
+    c.disable_flags(.{ .at_enable = true, .bus_override = true });
     c.next(read_vector);
 }
 

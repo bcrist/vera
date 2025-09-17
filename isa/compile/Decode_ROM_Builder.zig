@@ -34,27 +34,26 @@ pub fn add_entry(self: *Decode_ROM_Builder, addr: arch.insn_decode.Address, unde
                 or existing.cv != entry.cv
             ) {
                 var buf: [32768]u8 = undefined;
-                var stream = std.io.fixedBufferStream(&buf);
-                var writer = stream.writer();
+                var w = std.io.Writer.fixed(&buf);
 
                 if (existing_handle != entry.slot_handle) {
-                    writer.print("Handle: {d: >30} != {d}\n", .{ existing_handle.raw(), entry.slot_handle.?.raw() }) catch @panic("IO Error");
+                    w.print("Handle: {d: >30} != {d}\n", .{ existing_handle.raw(), entry.slot_handle.?.raw() }) catch @panic("IO Error");
                 }
                 if (existing.wio != entry.wio) {
-                    writer.print("WIO:    {d: >30} != {d}\n", .{ existing.wio.raw(), entry.wio.raw() }) catch @panic("IO Error");
+                    w.print("WIO:    {d: >30} != {d}\n", .{ existing.wio.raw(), entry.wio.raw() }) catch @panic("IO Error");
                 }
                 if (existing.krio != entry.krio) {
-                    writer.print("KRIO:   {d: >30} != {d}\n", .{ existing.krio.raw(), entry.krio.raw() }) catch @panic("IO Error");
+                    w.print("KRIO:   {d: >30} != {d}\n", .{ existing.krio.raw(), entry.krio.raw() }) catch @panic("IO Error");
                 }
                 if (existing.cv != entry.cv) {
-                    writer.print("CV:     {s: >30} != {s}\n", .{ @tagName(existing.cv), @tagName(entry.cv) }) catch @panic("IO Error");
+                    w.print("CV:     {s: >30} != {s}\n", .{ @tagName(existing.cv), @tagName(entry.cv) }) catch @panic("IO Error");
                 }
 
                 // inline for (std.enums.values(hw.Control_Signal)) |field| {
                 //     if (@field(existing.
                 // }
 
-                std.debug.panic("Decode address 0x{X} already used:\n{s}", .{ addr.raw(), stream.getWritten() });
+                std.debug.panic("Decode address 0x{X} already used:\n{s}", .{ addr.raw(), w.buffered() });
             }
         } else self.entries[addr_raw] = entry;
     }

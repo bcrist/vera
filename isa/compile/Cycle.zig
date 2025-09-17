@@ -152,6 +152,7 @@ pub fn finish(cycle: *Cycle) void {
             },
             else => cycle.validate_compute_mode(),
         },
+        .last_d => {},
         .status => {},
         .flags => {},
     }
@@ -215,6 +216,7 @@ pub fn finish(cycle: *Cycle) void {
         .none => {},
         .set_guard => {},
         .check_guard => {},
+        .load_fucs_from_l => {},
         .load_rsn_from_l => {},
         .read_from_other_rsn => {
             if (cycle.flags.contains(.disallow_read_from_other_rsn)) {
@@ -414,7 +416,7 @@ fn compute_flags(c: *Cycle, freshness: Freshness, flags: Flags_Mode) void {
 pub fn j_plus_k(c: *Cycle, freshness: Freshness, flags: Flags_Mode) void {
     const mode: arch.compute.Mode.ALU = .{
         .op = .j_plus_k,
-        .use_stat_c = freshness == .cont,
+        .use_carry_flag = freshness == .cont,
         .invert_cin = false,
     };
     c.set_compute(.alu, mode);
@@ -423,7 +425,7 @@ pub fn j_plus_k(c: *Cycle, freshness: Freshness, flags: Flags_Mode) void {
 pub fn j_minus_k(c: *Cycle, freshness: Freshness, flags: Flags_Mode) void {
     const mode: arch.compute.Mode.ALU = .{
         .op = .j_plus_not_k,
-        .use_stat_c = freshness == .cont,
+        .use_carry_flag = freshness == .cont,
         .invert_cin = freshness == .fresh,
     };
     c.set_compute(.alu, mode);
@@ -432,7 +434,7 @@ pub fn j_minus_k(c: *Cycle, freshness: Freshness, flags: Flags_Mode) void {
 pub fn k_minus_j(c: *Cycle, freshness: Freshness, flags: Flags_Mode) void {
     const mode: arch.compute.Mode.ALU = .{
         .op = .not_j_plus_k,
-        .use_stat_c = freshness == .cont,
+        .use_carry_flag = freshness == .cont,
         .invert_cin = freshness == .fresh,
     };
     c.set_compute(.alu, mode);
@@ -729,6 +731,10 @@ pub fn literal_to_l(c: *Cycle, literal: i16) void {
         c.literal_to_k(literal);
         c.k_to_l();
     }
+}
+
+pub fn last_d_to_l(c: *Cycle) void {
+    c.set_control_signal(.lsrc, .last_d);
 }
 
 pub fn status_to_l(c: *Cycle) void {
@@ -1039,6 +1045,10 @@ pub fn l_to_rsn(c: *Cycle) void {
     c.set_control_signal(.special, .load_rsn_from_l);
 }
 
+pub fn l_to_fucs(c: *Cycle) void {
+    c.set_control_signal(.special, .load_fucs_from_l);
+}
+
 pub fn reload_asn(c: *Cycle) void {
     c.sr2_to_sr2(.asn, .asn);
 }
@@ -1258,8 +1268,8 @@ pub fn allow_interrupt(c: *Cycle) void {
 }
 
 pub fn fault_return(c: *Cycle) void {
+    c.status_to_l(); // .fault_return implies loading UCA the Status.fucs bits of L
     c.set_control_signal(.seqop, .fault_return);
-    c.sr_alt_to_l(.fault_status); // .fault_return implies loading UCA from upper bits of L
 }
 
 fn trigger_fault(c: *Cycle, slot: arch.microcode.Slot) void {

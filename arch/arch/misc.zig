@@ -144,7 +144,7 @@ pub const Special_Op = enum (u4) {
     none = 0,
     set_guard = 1,
     check_guard = 2,
-    // 3 unused
+    load_fucs_from_l = 3,
     load_rsn_from_l = 4,
     read_from_other_rsn = 5, // note: never affects virtual address base
     write_to_other_rsn = 6,

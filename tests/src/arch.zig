@@ -44,12 +44,13 @@ test "arch.addr.Virtual.Base" {
 
 test "arch.reg.Flags.Writable" {
     inline for (@typeInfo(arch.reg.Flags.Writable).@"struct".fields) |field| {
-        if (std.mem.eql(u8, field.name, "_unused")) continue;
-        try std.testing.expectEqual(
-            @bitOffsetOf(arch.reg.Flags, field.name),
-            @bitOffsetOf(arch.reg.Flags.Writable, field.name),
-        );
-        try std.testing.expectEqual(@FieldType(arch.reg.Flags, field.name), field.type);
+        if (!std.mem.eql(u8, field.name, "_unused")) {
+            try std.testing.expectEqual(
+                @bitOffsetOf(arch.reg.Flags, field.name),
+                @bitOffsetOf(arch.reg.Flags.Writable, field.name),
+            );
+            try std.testing.expectEqual(@FieldType(arch.reg.Flags, field.name), field.type);
+        }
     }
 }
 

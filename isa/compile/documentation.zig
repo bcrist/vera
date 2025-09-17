@@ -99,7 +99,7 @@ fn generate_control_signal_analysis(header: []const u8, footer: []const u8, proc
         , .{ footer });
 }
 
-fn analyze_control_signal_usage(processor: *Processor, comptime signals: []const Control_Signal, writer: anytype) !void {
+fn analyze_control_signal_usage(processor: *Processor, comptime signals: []const Control_Signal, writer: *std.io.Writer) !void {
     processor.temp.reset();
     var temp = std.ArrayList(u8).init(processor.temp.allocator());
     var data = std.StringHashMap(u16).init(processor.temp.allocator());

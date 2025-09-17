@@ -16,7 +16,7 @@ pub const forms = .{
             opcodes.LSB.misc_16,
             Encoder.init(8, opcodes.Misc_16.freto),
         };
-        pub const krio: arch.bus.K.Read_Index_Offset.Raw = @bitOffsetOf(arch.reg.Flags, "read_override");
+        pub const krio: arch.bus.K.Read_Index_Offset.Raw = @bitOffsetOf(arch.reg.Flags, "bus_override");
 
         pub const entry = load_atr;
     },
@@ -26,12 +26,12 @@ pub fn load_atr(c: *Cycle, flags: Flags) void {
     if (!flags.kernel()) return c.illegal_instruction();
     c.reg_to_j_to_l();
     c.l_to_atr();
-    c.next(restore_flags_set_read_override);
+    c.next(restore_flags_set_bus_override);
 }
 
-pub fn restore_flags_set_read_override(c: *Cycle) void {
+pub fn restore_flags_set_bus_override(c: *Cycle) void {
     c.sr_alt_to_j(.fault_flags);
-    c.literal_to_k((arch.reg.Flags.Writable { .read_override = true }).raw());
+    c.literal_to_k((arch.reg.Flags.Writable { .bus_override = true }).raw());
     c.j_logic_k_to_l(._or, .fresh, .no_flags);
     c.l_to_flags();
     c.next(restore_ir);
@@ -63,7 +63,6 @@ pub fn restore_asn6(c: *Cycle) void {
 }
 
 pub fn restore_uca_and_retry(c: *Cycle) void {
-    c.sr_alt_to_l(.fault_status);
     c.fault_return();
 }
 

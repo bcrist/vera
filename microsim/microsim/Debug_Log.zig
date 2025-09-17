@@ -1,33 +1,43 @@
+gpa: std.mem.Allocator,
 log: std.ArrayList(Report),
 current_microcycle: usize,
 
 pub const Report = struct {
     microcycle: usize,
     pipeline: arch.Pipeline,
+    ucs: arch.microcode.Slot,
     action: Action,
 };
 
 pub const Action = union (enum) {
-    rsn: arch.Register_Set_Number,
+    rsn: arch.reg.RSN,
     reg: Reg_Info,
-    sr: SR_Info,
+    sr1: SR1_Info,
+    sr2: SR2_Info,
     read: Bus_Info,
     write: Bus_Info,
     fault: arch.microcode.Slot,
 };
 
 pub const Reg_Info = struct {
-    rsn: arch.Register_Set_Number,
-    wi: arch.Write_Index,
-    old_data: arch.Reg,
-    new_data: arch.Reg,
+    rsn: arch.reg.RSN,
+    wi: arch.reg.gpr.Write_Index,
+    old_data: arch.reg.gpr.Value,
+    new_data: arch.reg.gpr.Value,
 };
 
-pub const SR_Info = struct {
-    rsn: arch.Register_Set_Number,
-    index: arch.reg.sr.Any_Index,
-    old_data: arch.Reg,
-    new_data: arch.Reg,
+pub const SR1_Info = struct {
+    rsn: arch.reg.RSN,
+    index: arch.reg.sr1.Index,
+    old_data: arch.reg.sr1.Value,
+    new_data: arch.reg.sr1.Value,
+};
+
+pub const SR2_Info = struct {
+    rsn: arch.reg.RSN,
+    index: arch.reg.sr2.Index,
+    old_data: arch.reg.sr2.Value,
+    new_data: arch.reg.sr2.Value,
 };
 
 pub const Bus_Info = struct {
@@ -38,23 +48,25 @@ pub const Bus_Info = struct {
 
 pub fn init(gpa: std.mem.Allocator) Debug_Log {
     return .{
-        .log = std.ArrayList(Report).init(gpa),
+        .gpa = gpa,
+        .log = .empty,
         .current_microcycle = 0,
     };
 }
 
 pub fn deinit(self: *Debug_Log) void {
-    self.log.deinit();
+    self.log.deinit(self.gpa);
 }
 
 pub fn clear(self: *Debug_Log) void {
     self.log.clearRetainingCapacity();
 }
 
-pub fn report(self: *Debug_Log, pipeline: arch.Pipeline, action: Action) void {
-    self.log.append(.{
+pub fn report(self: *Debug_Log, pipeline: arch.Pipeline, ucs: arch.microcode.Slot, action: Action) void {
+    self.log.append(self.gpa, .{
         .microcycle = self.current_microcycle,
         .pipeline = pipeline,
+        .ucs = ucs,
         .action = action,
     }) catch @panic("OOM");
 }
@@ -63,30 +75,50 @@ const Dump_Options = struct {
     insn_stuff: bool = false,
 };
 
-pub fn dump(self: *Debug_Log, writer: anytype, options: Dump_Options) !void {
+pub fn dump(self: *Debug_Log, writer: ?*std.io.Writer, options: Dump_Options) !void {
+    var buf: [64]u8 = undefined;
+    var stderr = std.fs.File.stderr().writer(&buf);
+    var w = writer orelse &stderr.interface;
+
     for (self.log.items) |r| {
+        if (options.insn_stuff) {
+            try w.print("{:>6} {f} {f}: {t}", .{
+                r.microcycle,
+                r.pipeline,
+                r.ucs,
+                r.action,
+            });
+        } else {
+            try w.print("{:>6} {f}: {t}", .{
+                r.microcycle,
+                r.pipeline,
+                r.action,
+            });
+        }
+
         switch (r.action) {
-            .fault => |slot| {
-                try writer.print("{:>6} {}: {s}: {}\n", .{ r.microcycle, r.pipeline, @tagName(r.action), slot });
-            },
-            .rsn => |rsn| {
-                try writer.print("{:>6} {}: {s} = {}\n", .{ r.microcycle, r.pipeline, @tagName(r.action), rsn });
-            },
-            .reg => |info| {
-                try writer.print("{:>6} {}: {s} {} = {}\n", .{ r.microcycle, r.pipeline, @tagName(r.action), info.wi, info.new_data });
-            },
-            .sr => |info| {
+            .fault => |slot| try w.print(": {f}\n", .{ slot }),
+            .rsn => |rsn| try w.print(" = {f}\n", .{ rsn }),
+            .reg => |info| try w.print(" {f} = {f}\n", .{ info.wi, info.new_data }),
+            .sr1 => |info| {
                 if (options.insn_stuff or switch (info.index) {
-                    .temp_1, .int_stat, .fault_stat, .fault_dr, .fault_ir, .ip, .next_ip, .temp_2 => false,
+                    .temp_1, .int_flags, .fault_d, .fault_dr, .fault_ir => false,
                     else => true,
                 }) {
-                    try writer.print("{:>6} {}: {s} {} = {}\n", .{ r.microcycle, r.pipeline, @tagName(r.action), info.index, info.new_data });
+                    try w.print(" {f} = {f}\n", .{ info.index, info.new_data });
+                }
+            },
+            .sr2 => |info| {
+                if (options.insn_stuff or switch (info.index) {
+                    .ip, .next_ip, .temp_2 => false,
+                    else => true,
+                }) {
+                    try w.print(" {f} = {f}\n", .{ info.index, info.new_data });
                 }
             },
             .read, .write => |info| {
                 if (options.insn_stuff or info.space != .insn) {
-                    try writer.print("{:>6} {}: {s}{s}{} DB:{} DA:{} F:{} AB:{} AA:{} {s}{s}{s}{s} {s}{s}{s}\n", .{
-                        r.microcycle, r.pipeline, @tagName(r.action),
+                    try w.print("{s}{f} DB:{f} DA:{f} F:{f} AB:{f} AA:{f} {s}{s}{s}{s} {s}\n", .{
                         if (r.action == .read) "  " else " ",
                         info.space,
                         info.data.db,
@@ -98,20 +130,21 @@ pub fn dump(self: *Debug_Log, writer: anytype, options: Dump_Options) !void {
                         if (info.ctrl.lbb) "b" else ".",
                         if (info.ctrl.uba) "A" else ".",
                         if (info.ctrl.lba) "a" else ".",
-                        if (info.ctrl.update_frame_state) "U" else " ",
                         if (info.ctrl.guard_mismatch) "!" else " ",
                     });
                 }
             },
         }
     }
+
+    try w.flush();
 }
 
 pub fn expect(self: *Debug_Log, options: Dump_Options, expected: []const u8) !void {
-    var temp = std.ArrayList(u8).init(std.testing.allocator);
+    var temp = std.io.Writer.Allocating.init(std.testing.allocator);
     defer temp.deinit();
-    try self.dump(temp.writer(), options);
-    try std.testing.expectEqualStrings(expected, temp.items);
+    try self.dump(&temp.writer, options);
+    try std.testing.expectEqualStrings(expected, temp.written());
 }
 
 const Debug_Log = @This();

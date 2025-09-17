@@ -4,7 +4,7 @@ pub fn build(b: *std.Build) void {
     const isa = b.dependency("isa", .{});
     const arch = b.dependency("arch", .{}).module("arch");
     //const assembler = b.dependency("assembler", .{}).module("assembler");
-    //const microsim = b.dependency("microsim", .{});
+    const microsim = b.dependency("microsim", .{});
 
     all_tests = b.step("test", "run all tests");
 
@@ -26,6 +26,18 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .imports = &.{
             .{ .name = "isa", .module = isa.module("isa") },
+        },
+    }));
+
+    add_test(b, "microsim", b.createModule(.{
+        .root_source_file = b.path("src/microsim.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "arch", .module = arch },
+            .{ .name = "isa", .module = isa.module("isa") },
+            .{ .name = "microsim", .module = microsim.module("microsim") },
+            .{ .name = "Simulator_Data", .module = microsim.module("Simulator_Data") },
         },
     }));
 

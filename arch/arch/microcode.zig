@@ -21,10 +21,10 @@ pub const Address = packed struct (u16) {
 
 pub const Slot = enum (u12) {
     reset = 0,
-    interrupt = 1,
-    double_fault = 2,
-    page_fault = 3,
-    access_fault = 4,
+    double_fault = 1,
+    page_fault = 2,
+    access_fault = 3,
+    pipe_fault = 4,
     page_align_fault = 5,
     align_fault = 6,
     overflow_fault = 7,
@@ -32,6 +32,7 @@ pub const Slot = enum (u12) {
     register_stack_overflow_fault = 9,
     invalid_instruction_fault = 10,
     instruction_protection_fault = 11,
+    interrupt = 12,
     invalid_instruction = 0xFFF,
     _,
     pub inline fn init(raw_value: Raw) Slot {
@@ -112,10 +113,7 @@ pub const Flags_With_Carry = packed struct (u4) {
         return @bitCast(self);
     }
 
-    pub fn format(self: Flags, comptime f: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = f;
-        _ = options;
-
+    pub fn format(self: Flags, writer: *std.io.Writer) !void {
         try writer.writeByte(if (self.k) 'K' else '.');
         try writer.writeByte(if (self.z) 'Z' else '.');
         try writer.writeByte(if (self.n) 'N' else '.');
@@ -147,10 +145,7 @@ pub const Flags_With_Overflow = packed struct (u4) {
         return @bitCast(self);
     }
 
-    pub fn format(self: Flags, comptime f: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = f;
-        _ = options;
-
+    pub fn format(self: Flags, writer: *std.io.Writer) !void {
         try writer.writeByte(if (self.k) 'K' else '.');
         try writer.writeByte(if (self.z) 'Z' else '.');
         try writer.writeByte(if (self.n) 'N' else '.');
