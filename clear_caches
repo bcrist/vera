@@ -1,0 +1,8 @@
+rm -rf .zig-cache
+rm -rf arch/.zig-cache
+rm -rf assembler/.zig-cache
+rm -rf block_diagrams/.zig-cache
+rm -rf boards/.zig-cache
+rm -rf isa/.zig-cache
+rm -rf microsim/.zig-cache
+rm -rf tests/.zig-cache

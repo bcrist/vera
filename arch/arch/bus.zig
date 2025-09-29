@@ -198,7 +198,7 @@ pub const D = enum (u32) {
         system = 0,
         l = 1,
         dr_ir = 2, // low half is IR if DRW == 0, otherwise full DR is presented
-        atr = 3,
+        vabor = 3,
 
         pub inline fn init(raw_value: Source.Raw) Source {
             return @enumFromInt(raw_value);

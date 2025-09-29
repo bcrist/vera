@@ -18,14 +18,14 @@ pub const forms = .{
         };
         pub const krio: arch.bus.K.Read_Index_Offset.Raw = @bitOffsetOf(arch.reg.Flags, "bus_override");
 
-        pub const entry = load_atr;
+        pub const entry = load_vabor;
     },
 };
 
-pub fn load_atr(c: *Cycle, flags: Flags) void {
+pub fn load_vabor(c: *Cycle, flags: Flags) void {
     if (!flags.kernel()) return c.illegal_instruction();
     c.reg_to_j_to_l();
-    c.l_to_atr();
+    c.l_to_vabor();
     c.next(restore_flags_set_bus_override);
 }
 

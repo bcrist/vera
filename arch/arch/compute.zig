@@ -86,12 +86,14 @@ pub const Mode = packed union {
         left: bool,
         left_xor_swap_bytes: bool,
         left_xor_swap_halves: bool,
-        cin: enum (u2) {
+        cin: Carry,
+        
+        pub const Carry = enum (u2) {
             zero = 0,
             zero_bitreverse = 1,
             j31 = 2,
             carry_flag = 3,
-        },
+        };
         
         pub const shrl: Shift = .{ .left = false, .left_xor_swap_bytes = false, .left_xor_swap_halves = false, .cin = .zero };
         pub const shra: Shift = .{ .left = false, .left_xor_swap_bytes = false, .left_xor_swap_halves = false, .cin = .j31 };

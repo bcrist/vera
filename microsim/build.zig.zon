@@ -12,20 +12,12 @@
             .path = "../isa",
         },
         .bit_helper = .{
-            .path = "../../zig-bithelper",
+            .url = "git+https://github.com/bcrist/zig-bithelper#01fe5f519f54ab42c649096573c45ddaa351e1d5",
+            .hash = "bit_helper-1.0.1-C8c75iguAABAXw3jPh9pvNp-RPvblh1vV7MbQ1w99fFF",
         },
         .sx = .{
-            .path = "../../zig-sx",
+            .url = "git+https://github.com/bcrist/zig-sx#ba72271b89ec977abe63a2619d78275ad6327bdd",
+            .hash = "sx-1.1.6-0vgbao7JAADRoEBKC_iS9RBg2onrsLD-yeUiM_XuqStj",
         },
-        // .dear_zig_bindings = .{
-        //     .path = "../../dear_zig_bindings",
-        // },
-        // .dear_zig_bindings_sokol = .{
-        //     .path = "../../dear_zig_bindings_sokol",
-        // },
-        // .sokol = .{
-        //     .url = "git+https://github.com/floooh/sokol-zig#580b2ac40621a886c0d440140b6f9704466be20e",
-        //     .hash = "1220247e48f0feb8ef490bca108c5abbcf418d502f25b719bfd5a70393f67cab4888",
-        // },
     },
 }

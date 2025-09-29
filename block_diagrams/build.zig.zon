@@ -1,0 +1,22 @@
+.{
+    .name = .vera_block_diagrams,
+    .version = "0.0.0",
+    .minimum_zig_version = "0.15.1",
+    .fingerprint = 0x1c34d9089e25c856,
+    .paths = .{""},
+    .dependencies = .{
+        .arch = .{
+            .path = "../arch",
+        },
+        .isa = .{
+            .path = "../isa",
+        },
+        .microsim = .{
+            .path = "../microsim",
+        },
+        .zbox = .{
+            .url = "git+https://github.com/bcrist/zbox#2d99c481adc0433fa9c1dea18d42509aa1525f09",
+            .hash = "zbox-1.2.0-tae9Nw49AgD5YEHDKA71yRX9O7WbMHVlaOhCPA0E15Pb",
+        },
+    },
+}

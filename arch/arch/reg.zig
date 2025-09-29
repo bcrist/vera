@@ -405,7 +405,7 @@ pub const Flags = packed struct (u32) {
     at_enable: bool, // address translation enabled
     bus_override: bool, // suppress next bus operation
     super: bool, // kernel/supervisor mode
-    _unused: u1 = 0,
+    at_super: bool, // copied to super when IR is loaded for a new instruction
     top: gpr.Write_Index,
     _unused2: u2 = 0,
     mode: misc.Execution_Mode,

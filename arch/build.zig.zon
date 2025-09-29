@@ -6,16 +6,20 @@
     .paths = .{""},
     .dependencies = .{
         .meta = .{
-            .path = "../../zig-meta",
+            .url = "git+https://github.com/bcrist/zig-meta#00758f3af9dffa2c38ae7af1536119cf8990da8e",
+            .hash = "meta-0.0.1-ZzooiQALAAC0bhdWXxn2uec-vwtEBcUtHbpyj1hwjaDv",
         },
         .rom_compress = .{
-            .path = "../../zig-rom-compress",
+            .url = "git+https://github.com/bcrist/zig-rom-compress#90884536007e91f6f9841353e882f5c64d286fc9",
+            .hash = "rom_compress-1.0.1-PWOjHFpLAADLztP2cyFbYlbLLj2YP0zghhrK_jUj4MA9",
         },
         .srec = .{
-            .path = "../../zig-srec",
+            .url = "git+https://github.com/bcrist/zig-s-records#55e4bde454d71f0e8f1d1f92fcb0da1233ad4656",
+            .hash = "srec-1.1.0-o9cTmBQVAADA3Z2kUr1ZuFzRJc5nmUDcHUKIloneolet",
         },
         .ihex = .{
-            .path = "../../zig-ihex",
+            .url = "git+https://github.com/bcrist/zig-intel-hex#d27533895e5f77d97acfbdb080800a43218b5739",
+            .hash = "ihex-1.1.0-F0-T3K8UAACSaDmufFmqDy6-O-Qcz72sCffsiO1A4w8S",
         },
     },
 }

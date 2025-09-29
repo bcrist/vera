@@ -1,9 +1,8 @@
-pub const Op = enum (u3) {
+pub const Op = enum (u2) {
     none = 0,
     translate = 1,
     update = 2,
     invalidate = 3,
-    write_atr = 4,
 
     pub inline fn init(raw_value: Raw) Op {
         return @enumFromInt(raw_value);
@@ -117,7 +116,7 @@ pub const Entry = packed struct (u32) {
                 .physical => .data_read,
                 .data => switch (dsrc) {
                     .system => .data_read,
-                    .l, .dr_ir, .atr => .data_write,
+                    .l, .dr_ir, .vabor => .data_write,
                 },
                 .stack => .stack,
                 .insn => .insn,

@@ -1,6 +1,6 @@
 pub const Space = enum (u2) {
-    physical = 0, // data_write group when ATOP is .update or .invalidate
-    data = 1, // data_read group when ATOP is .update or .invalidate and DSRC is not .system.  data_write group when DSRC is .system
+    physical = 0, // data_write group when AT_OP is .update or .invalidate
+    data = 1, // data_read group when AT_OP is .update or .invalidate and DSRC is not .system.  data_write group when DSRC is .system
     stack = 2,
     insn = 3,
 

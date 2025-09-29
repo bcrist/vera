@@ -10,11 +10,10 @@ dr: arch.reg.DR = .init(0),
 ir: arch.reg.IR = .init(0),
 ti: arch.reg.gpr.Write_Index = .init(0),
 wi: arch.reg.gpr.Write_Index = .init(0),
-jri: arch.bus.J.Read_Index = .init(0),
 krio: arch.bus.K.Read_Index_Offset = .init(0),
 kri: arch.bus.K.Read_Index = .init(0),
 asn6: at.Entry.ASN6 = .init(0),
-atr: arch.addr.Virtual = .init(0),
+vabor: arch.addr.Virtual = .init(0), // fault virtual address / bus override register
 
 // non-persistent state
 uca: arch.microcode.Address = .init(0),
@@ -61,8 +60,8 @@ pub const Flag = enum {
     align_fault,
     overflow_fault,
     insn_fault,
-    reg_stack_underflow_fault,
-    reg_stack_overflow_fault,
+    rs_underflow_fault,
+    rs_overflow_fault,
 
     any_fault,
 
@@ -76,7 +75,7 @@ pub const Flag = enum {
     guard_mismatch,
 };
 
-const fault_flags = std.EnumSet(Flag).initMany(&.{
+pub const fault_flags = std.EnumSet(Flag).initMany(&.{
     .page_fault,
     .access_fault,
     .pipe_fault,
@@ -84,22 +83,14 @@ const fault_flags = std.EnumSet(Flag).initMany(&.{
     .align_fault,
     .overflow_fault,
     .insn_fault,
-    .reg_stack_underflow_fault,
-    .reg_stack_overflow_fault,
+    .rs_underflow_fault,
+    .rs_overflow_fault,
 });
 
 fn fault_slot(self: *Pipeline_State, flag: Flag) arch.microcode.Slot {
     return switch (flag) {
-        .page_fault => .page_fault,
-        .access_fault => .access_fault,
-        .pipe_fault => .pipe_fault,
-        .page_align_fault => .page_align_fault,
-        .align_fault => .align_fault,
-        .overflow_fault => .overflow_fault,
-        .reg_stack_underflow_fault => .register_stack_underflow_fault,
-        .reg_stack_overflow_fault => .register_stack_overflow_fault,
         .insn_fault => self.cs.next,
-        else => unreachable,
+        inline else => |f| if (@hasField(arch.microcode.Slot, @tagName(f))) @field(arch.microcode.Slot, @tagName(f)) else unreachable,
     };
 }
 
@@ -164,8 +155,8 @@ pub fn simulate_decode(self: *Pipeline_State,
     const id_result = insn_decode_rom[self.ir.raw()];
 
     const seq_result = simulate_sequencer(
-        self.cs.seqop,
-        self.cs.allowint,
+        self.cs.seq_op,
+        self.cs.allow_int,
         self.emode,
         pending_interrupt,
         reset,
@@ -185,9 +176,9 @@ pub fn simulate_decode(self: *Pipeline_State,
             },
         },
         .slot = switch (seq_result.slot_src) {
-            .hold => self.uca.slot,
+            .fucs => self.status.fucs,
             .continuation =>  self.cs.next,
-            .seq_literal => .init(seq_result.slot_literal),
+            .seq_literal => seq_result.slot_literal.slot(),
             .insn_decoder => id_result.entry,
         },
     };
@@ -212,7 +203,6 @@ pub fn simulate_decode(self: *Pipeline_State,
         self.flags.insert(.wi_underflow);
     }
 
-    self.jri = .init(ti_raw);
     self.kri = .init(kri_raw);
     self.krio = .init(krio_raw);
     self.wi = .init(@truncate(@as(u32, @bitCast(wi_raw))));
@@ -223,7 +213,7 @@ pub fn simulate_decode(self: *Pipeline_State,
 }
 
 const Sequencer_Result = struct {
-    slot_literal: u4,
+    slot_literal: arch.microcode.Slot.Sequencer_Literal,
     slot_src: arch.microcode.Slot.Source,
     emode: arch.Execution_Mode,
 };
@@ -237,81 +227,81 @@ fn simulate_sequencer(
     flags: std.EnumSet(Flag),
 ) Sequencer_Result {
     return if (reset) .{
-        .slot_literal = slot_literal(.reset),
+        .slot_literal = .from_slot(.reset),
         .slot_src = .seq_literal,
         .emode = .interrupt,
     } else if (flags.contains(.any_fault)) result: {
         break :result if (emode.is_fault()) .{
-            .slot_literal = slot_literal(.double_fault),
+            .slot_literal = .from_slot(.double_fault),
             .slot_src = .seq_literal,
             .emode = .fault,
         } else if (flags.contains(.page_fault)) .{
-            .slot_literal = slot_literal(.page_fault),
+            .slot_literal = .from_slot(.page_fault),
             .slot_src = .seq_literal,
             .emode = if (emode.is_interrupt()) .interrupt_fault else .fault,
         } else if (flags.contains(.access_fault)) .{
-            .slot_literal = slot_literal(.access_fault),
+            .slot_literal = .from_slot(.access_fault),
+            .slot_src = .seq_literal,
+            .emode = if (emode.is_interrupt()) .interrupt_fault else .fault,
+        } else if (flags.contains(.pipe_fault)) .{
+            .slot_literal = .from_slot(.pipe_fault),
             .slot_src = .seq_literal,
             .emode = if (emode.is_interrupt()) .interrupt_fault else .fault,
         } else if (flags.contains(.page_align_fault)) .{
-            .slot_literal = slot_literal(.page_align_fault),
+            .slot_literal = .from_slot(.page_align_fault),
             .slot_src = .seq_literal,
             .emode = if (emode.is_interrupt()) .interrupt_fault else .fault,
         } else if (flags.contains(.align_fault)) .{
-            .slot_literal = slot_literal(.align_fault),
+            .slot_literal = .from_slot(.align_fault),
             .slot_src = .seq_literal,
             .emode = if (emode.is_interrupt()) .interrupt_fault else .fault,
         } else if (flags.contains(.overflow_fault)) .{
-            .slot_literal = slot_literal(.overflow_fault),
+            .slot_literal = .from_slot(.overflow_fault),
             .slot_src = .seq_literal,
             .emode = if (emode.is_interrupt()) .interrupt_fault else .fault,
-        } else if (flags.contains(.reg_stack_underflow_fault)) .{
-            .slot_literal = slot_literal(.register_stack_underflow_fault),
+        } else if (flags.contains(.rs_underflow_fault)) .{
+            .slot_literal = .from_slot(.rs_underflow_fault),
             .slot_src = .seq_literal,
             .emode = if (emode.is_interrupt()) .interrupt_fault else .fault,
-        } else if (flags.contains(.reg_stack_overflow_fault)) .{
-            .slot_literal = slot_literal(.register_stack_overflow_fault),
+        } else if (flags.contains(.rs_overflow_fault)) .{
+            .slot_literal = .from_slot(.rs_overflow_fault),
             .slot_src = .seq_literal,
             .emode = if (emode.is_interrupt()) .interrupt_fault else .fault,
         } else if (flags.contains(.insn_fault)) .{
-            .slot_literal = slot_literal(.reset),
+            .slot_literal = .from_slot(.reset),
             .slot_src = .continuation,
             .emode = if (emode.is_interrupt()) .interrupt_fault else .fault,
         } else unreachable;
     } else if (emode == .normal and interrupt_pending and allow_int == .allow) .{
-        .slot_literal = slot_literal(.interrupt),
+        .slot_literal = .from_slot(.interrupt),
         .slot_src = .seq_literal,
         .emode = .interrupt,
     } else switch (op) {
         .next_uop => .{
-            .slot_literal = slot_literal(.reset),
+            .slot_literal = .from_slot(.reset),
             .slot_src = .continuation,
             .emode = emode,
         },
         .next_instruction => .{
-            .slot_literal = slot_literal(.reset),
+            .slot_literal = .from_slot(.reset),
             .slot_src = .insn_decoder,
             .emode = emode,
         },
         .next_uop_force_normal => .{
-            .slot_literal = slot_literal(.reset),
+            .slot_literal = .from_slot(.reset),
             .slot_src = .continuation,
             .emode = .normal,
         },
         .fault_return => if (emode.is_fault()) .{
-            .slot_literal = slot_literal(.reset),
-            .slot_src = .hold,
+            .slot_literal = .from_slot(.reset),
+            .slot_src = .fucs,
             .emode = if (emode.is_interrupt()) .interrupt else .normal,
         } else .{
-            .slot_literal = slot_literal(.instruction_protection_fault),
+            .slot_literal = .from_slot(.instruction_protection_fault),
             .slot_src = .seq_literal,
             .emode = .fault,
         },
     };
-}
-
-fn slot_literal(slot: arch.microcode.Slot) u4 {
-    return @intCast(slot.raw());
 }
 
 pub fn simulate_setup(self: *Pipeline_State, registers: *const arch.reg.File) void {
@@ -353,7 +343,7 @@ pub fn simulate_setup(self: *Pipeline_State, registers: *const arch.reg.File) vo
 
     self.j = arch.bus.J.init(switch (self.cs.jsrc) {
         .zero => 0,
-        .jr => registers[read_rsn].reg[self.jri.raw()].raw(),
+        .jr => registers[read_rsn].reg[self.ti.raw()].raw(),
         .sr1 => sr1d.raw(),
         .sr2 => sr2d.raw(),
     });
@@ -374,12 +364,17 @@ pub fn simulate_setup(self: *Pipeline_State, registers: *const arch.reg.File) vo
     });
 
     if (self.cs.ksrc == .kr and self.flags.contains(.kri_underflow)) {
-        self.flags.insert(.reg_stack_underflow_fault);
+        self.flags.insert(.rs_underflow_fault);
     }
 
     self.sr1d = sr1d;
     self.sr2d = sr2d;
     self.va = .init(va_base +% va_offset);
+    self.at_entry_addr = .{
+        .slot = self.va.page.slot,
+        .group = at.Entry.Group.from_space_and_dsrc(self.cs.space, self.cs.dsrc),
+        .asn6 = self.asn6,
+    };
     self.next_stage = .compute;
 }
 
@@ -408,27 +403,29 @@ pub fn simulate_compute(self: *Pipeline_State, translations: *const at.File) voi
         .read_from_other_rsn => {},
         .write_to_other_rsn => {},
         .read_and_write_other_rsn => {},
+        .load_vabor_from_d => {},
 
         .fault_on_overflow => if (self.compute_result.vout) self.flags.insert(.overflow_fault),
 
         .trigger_fault => self.flags.insert(.insn_fault),
+        _ => self.report(.{ .corrupted_microcode = "SPECIAL" }),
     }
 
     self.compute_address_translation(translations);
 
     if (self.cs.tiw == .write or self.cs.gprw == .write) {
-        if (self.flags.contains(.wi_underflow)) self.flags.insert(.reg_stack_underflow_fault);
-        if (self.flags.contains(.wi_overflow)) self.flags.insert(.reg_stack_overflow_fault);
+        if (self.flags.contains(.wi_underflow)) self.flags.insert(.rs_underflow_fault);
+        if (self.flags.contains(.wi_overflow)) self.flags.insert(.rs_overflow_fault);
     }
 
     // N.B. All faults flags must be computed before this point!
     const any_fault = self.flags.intersectWith(fault_flags).count() > 0;
     self.flags.setPresent(.any_fault, any_fault);
 
-    if (!any_fault and self.cs.atop == .translate and !self.flags.contains(.bus_override)) {
+    if (!any_fault and self.cs.at_op == .translate and !self.flags.contains(.bus_override)) {
         switch (self.cs.dsrc) {
             .system => self.flags.insert(.read),
-            .l, .dr_ir, .atr => self.flags.insert(.write),
+            .l, .dr_ir, .vabor => self.flags.insert(.write),
         }
     }
 
@@ -466,64 +463,65 @@ fn compute_alu(mode: arch.compute.Mode.ALU, j: arch.bus.J, k: arch.bus.K, carry_
 }
 
 fn compute_shift(mode: arch.compute.Mode.Shift, j: arch.bus.J, k: arch.bus.K, carry_flag: bool) Compute_Result {
-    const cin: u64 = switch (mode.cin) {
+    const raw_j = j.raw();
+    var conditioned_j = raw_j;
+    if (mode.left) {
+        conditioned_j = @bitReverse(conditioned_j);
+
+        if (!mode.left_xor_swap_bytes) {
+            conditioned_j = ((conditioned_j << 8) & 0xFF00_FF00) | ((conditioned_j >> 8) & 0x00FF_00FF);
+        }
+
+        if (!mode.left_xor_swap_halves) {
+            conditioned_j = (conditioned_j << 16) | (conditioned_j >> 16);
+        }
+    } else {
+        if (mode.left_xor_swap_bytes) {
+            conditioned_j = ((conditioned_j << 8) & 0xFF00_FF00) | ((conditioned_j >> 8) & 0x00FF_00FF);
+        }
+
+        if (mode.left_xor_swap_halves) {
+            conditioned_j = (conditioned_j << 16) | (conditioned_j >> 16);
+        }
+    }
+
+    const cin: u1 = switch (mode.cin) {
         .zero => 0,
         .zero_bitreverse => 0,
-        .j31 => if (0 != (j.raw() & 0x8000_0000)) 0xFFFF_FFFF_0000_0000 else 0,
-        .carry_flag => if (carry_flag) 0xFFFF_FFFF_0000_0000 else 0,
+        .j31 => @intCast(raw_j >> 31),
+        .carry_flag => @intFromBool(carry_flag),
     };
 
-    var raw_j = j.raw();
+    const input: u64 = switch (cin) {
+        0 => conditioned_j,
+        1 => @as(u64, conditioned_j) | 0xFFFF_FFFF_0000_0000,
+    };
+
     const raw_k = k.raw();
     const k5: u5 = @truncate(raw_k);
-    if (raw_k != k5) {
-        return .{
-            .value = .init(0),
-            .cout = if (raw_k == 32) 0 != (raw_j & 0x8000_0000) else 0 != cin,
-            .vout = if (raw_k == 32) raw_j != 0 else raw_j != 0 or 0 != cin,
-        };
-    } else {
-        if (mode.left) {
-            raw_j = @bitReverse(raw_j);
+    const shift_bits = if (raw_k != k5) 0 else k5;
 
-            if (!mode.left_xor_swap_bytes) {
-                raw_j = ((raw_j << 8) & 0xFF00_FF00) | ((raw_j >> 8) & 0x00FF_00FF);
-            }
+    const value64: u64 = input >> shift_bits;
+    const cout: u1 = @truncate(input >> (shift_bits -% 1));
+    const discarded_bits: u32 = @truncate(input << (@as(u6, 32) - shift_bits));
 
-            if (!mode.left_xor_swap_halves) {
-                raw_j = (raw_j << 16) | (raw_j >> 16);
-            }
-        } else {
-            if (mode.left_xor_swap_bytes) {
-                raw_j = ((raw_j << 8) & 0xFF00_FF00) | ((raw_j >> 8) & 0x00FF_00FF);
-            }
-
-            if (mode.left_xor_swap_halves) {
-                raw_j = (raw_j << 16) | (raw_j >> 16);
-            }
-        }
-
-        var value: u64 = raw_j | cin;
-        value = value >> k5;
-
-        const cout: u1 = if (k5 > 0) @truncate(value >> (k5 - 1)) else @intFromBool(carry_flag);
-        const shifted_out: u32 = @truncate(value << (@as(u6, 32) - k5));
-
-        var result: u32 = @truncate(value);
-        if (mode.left != (mode.cin == .zero_bitreverse)) {
-            result = @bitReverse(result);
-        }
-        
-        return .{
-            .value = .init(@truncate(result)),
-            .cout = cout != 0,
-            .vout = shifted_out != 0,
-        };
+    var result: u32 = @truncate(value64);
+    if (mode.left != (mode.cin == .zero_bitreverse)) {
+        result = @bitReverse(result);
     }
+
+    return if (raw_k != k5) .{
+        .value = .init(0),
+        .cout = 0 != if (raw_k == 32) cout else cin,
+        .vout = raw_j != 0 or (raw_k != 32 and 0 != cin),
+    } else .{
+        .value = .init(result),
+        .cout = 0 != if (raw_k == 0) 0 else cout,
+        .vout = discarded_bits != 0,
+    };
 }
 
 fn compute_mult(mode: arch.compute.Mode.Multiply, j: arch.bus.J, k: arch.bus.K) Compute_Result {
-
     const jhalf: u16 = switch (mode.j) {
         .lsb => @truncate(j.raw()),
         .msb => @truncate(j.raw() >> 16),
@@ -547,6 +545,18 @@ fn compute_mult(mode: arch.compute.Mode.Multiply, j: arch.bus.J, k: arch.bus.K) 
     const product = js * ks;
     var result: u32 = @bitCast(product);
 
+    const high_bits = result >> 16;
+    var vout = false;
+    if (mode.j_type == .signed or mode.k_type == .signed) {
+        vout = switch (result & 0x8000) {
+            0x0000 => high_bits != 0x0000,
+            0x8000 => high_bits != 0xFFFF,
+            else => unreachable,
+        };
+    } else {
+        vout = high_bits != 0x0000;
+    }
+
     if (mode.shift_result) {
         result = result << 16;
     }
@@ -554,7 +564,7 @@ fn compute_mult(mode: arch.compute.Mode.Multiply, j: arch.bus.J, k: arch.bus.K) 
     return .{
         .value = .init(result),
         .cout = false,
-        .vout = false,
+        .vout = vout,
     };
 }
 
@@ -587,7 +597,12 @@ fn compute_count_extend(unit: arch.compute.Unit, mode: arch.compute.Mode.Count_E
     const masked_j = raw_j & final_k;
 
     const count = @popCount(masked_j);
-    const ext = if (mode.sign_extend and 0 != (raw_j & raw_k)) masked_j | ~final_k else masked_j;
+    const ext = if (mode.sign_extend and 0 != (raw_j & raw_k))
+        masked_j | ~final_k
+    else
+        masked_j
+    ;
+
     return .{
         .value = .init(switch (unit) {
             .count => count,
@@ -601,26 +616,16 @@ fn compute_count_extend(unit: arch.compute.Unit, mode: arch.compute.Mode.Count_E
 
 fn compute_address_translation(self: *Pipeline_State, translations: *const at.File) void {
     const va = self.va;
-    const op = self.cs.atop;
-    const space = self.cs.vaspace;
-    const dsrc = self.cs.dsrc;
-    const width = self.cs.width;
+    const op = self.cs.at_op;
 
-    const entry_addr: at.Entry.Address = .{
-        .slot = va.page.slot,
-        .group = at.Entry.Group.from_space_and_dsrc(space, dsrc),
-        .asn6 = self.asn6,
-    };
-
-    const entries = translations[entry_addr.raw()];
-    self.at_entry_addr = entry_addr;
+    const entries = translations[self.at_entry_addr.raw()];
 
     const primary_match = entries.primary.present and entries.primary.tag == va.page.tag;
     const secondary_match = entries.secondary.present and entries.secondary.tag == va.page.tag;
     const any_match = primary_match or secondary_match;
 
     const swap_entries = switch (op) {
-         .none, .write_atr => false,
+         .none => false,
          .update => !primary_match,
          .translate, .invalidate, => !primary_match and secondary_match,
     };
@@ -632,7 +637,7 @@ fn compute_address_translation(self: *Pipeline_State, translations: *const at.Fi
 
     if (self.flags.contains(.at_enable)) {
         // address translation enabled
-        if (op == .translate and space != .physical and !self.flags.contains(.bus_override)) {
+        if (op == .translate and self.cs.space != .physical and !self.flags.contains(.bus_override)) {
             if (any_match) {
                 self.frame = matching.frame;
 
@@ -696,7 +701,7 @@ fn compute_address_translation(self: *Pipeline_State, translations: *const at.Fi
 
 
     if (op == .translate and !self.flags.contains(.bus_override)) {
-        if (space != .physical) switch (width) {
+        if (self.cs.space != .physical) switch (self.cs.width) {
             .@"8b" => {},
             .@"16b" => if (va.page_offset.raw() == arch.addr.Page.Offset.max.raw()) self.flags.insert(.page_align_fault),
             .@"24b" => if (va.page_offset.raw() >= arch.addr.Page.Offset.max.raw() - 1) self.flags.insert(.page_align_fault),
@@ -705,7 +710,7 @@ fn compute_address_translation(self: *Pipeline_State, translations: *const at.Fi
 
         const addr_alignment: u2 = @truncate(va.page_offset.raw());
         switch (addr_alignment) {
-            0 => switch (width) {
+            0 => switch (self.cs.width) {
                 .@"8b" => {
                     self.flags.insert(.lba);
                 },
@@ -725,7 +730,7 @@ fn compute_address_translation(self: *Pipeline_State, translations: *const at.Fi
                     self.flags.insert(.ubb);
                 },
             },
-            1 => switch (width) {
+            1 => switch (self.cs.width) {
                 .@"8b" => {
                     self.flags.insert(.uba);
                 },
@@ -742,7 +747,7 @@ fn compute_address_translation(self: *Pipeline_State, translations: *const at.Fi
                     self.flags.insert(.align_fault);
                 },
             },
-            2 => switch (width) {
+            2 => switch (self.cs.width) {
                 .@"8b" => {
                     self.flags.insert(.lbb);
                 },
@@ -762,7 +767,7 @@ fn compute_address_translation(self: *Pipeline_State, translations: *const at.Fi
                     self.flags.insert(.uba);
                 },
             },
-            3 => switch (width) {
+            3 => switch (self.cs.width) {
                 .@"8b" => {
                     self.flags.insert(.ubb);
                 },
@@ -799,6 +804,7 @@ pub fn get_l(self: Pipeline_State) arch.bus.L {
             .at_enable = self.flags.contains(.at_enable),
             .bus_override = self.flags.contains(.bus_override),
             .super = self.flags.contains(.super),
+            .at_super = self.flags.contains(.at_super),
             .top = self.ti,
             .mode = self.emode,
         }).raw()),
@@ -820,9 +826,9 @@ pub fn simulate_transact(self: *Pipeline_State,
     const any_fault = self.flags.contains(.any_fault);
 
     const d: arch.bus.D = switch (self.cs.dsrc) {
-        .system => self.read_d(arch.bus.D),
+        .system => if (self.flags.contains(.bus_override)) .init(self.vabor.raw()) else self.read_d(arch.bus.D),
         .l => .init(self.get_l().raw()),
-        .atr => .init(self.atr.raw()),
+        .vabor => .init(self.vabor.raw()),
         .dr_ir => .init(switch (self.cs.drw) {
             .write => self.dr.raw(),
             .hold => self.dr.raw() & 0xFFFF0000 | self.ir.raw(),
@@ -875,6 +881,10 @@ pub fn simulate_transact(self: *Pipeline_State,
         self.report(.{ .rsn = self.status.rsn });
     }
 
+    if (!any_fault and self.cs.special == .load_vabor_from_d) {
+        self.vabor = .init(d.raw());
+    }
+
     if (self.flags.contains(.write)) {
         const guard = arch.reg.guard.Value.from_frame_and_offset(self.frame, self.va.page_offset);
         const cur_pipe = self.status.pipe.raw();
@@ -886,7 +896,7 @@ pub fn simulate_transact(self: *Pipeline_State,
     if (self.debug_log) |_| {
         if (self.flags.contains(.write)) {
             self.report(.{ .write = .{
-                .space = self.cs.vaspace,
+                .space = self.cs.space,
                 .ctrl = self.get_bus_control(),
                 .data = .{ .da = self.da, .db = self.db },
             }});
@@ -894,7 +904,7 @@ pub fn simulate_transact(self: *Pipeline_State,
 
         if (self.flags.contains(.read)) {
             self.report(.{ .read = .{
-                .space = self.cs.vaspace,
+                .space = self.cs.space,
                 .ctrl = self.get_bus_control(),
                 .data = .{ .da = self.da, .db = self.db },
             }});
@@ -907,10 +917,6 @@ pub fn simulate_transact(self: *Pipeline_State,
     }
 
     if (!any_fault) {
-        if (self.cs.seqop == .fault_return and self.emode.is_fault()) {
-            self.uca.slot = arch.reg.Status.init(l.raw()).fucs;
-        }
-
         if (self.cs.gprw == .write) {
             self.report(.{ .reg = .{
                 .rsn = write_rsn,
@@ -975,11 +981,15 @@ pub fn simulate_transact(self: *Pipeline_State,
             self.flags.remove(.at_super);
         }
 
-        if (self.cs.seqop == .next_instruction) {
+        if (self.cs.seq_op == .next_instruction) {
             self.flags.setPresent(.super, self.flags.contains(.at_super));
         }
 
-        switch (self.cs.flagop) {
+        if (self.cs.at_op == .translate) {
+            self.flags.remove(.bus_override);
+        }
+
+        switch (self.cs.flag_op) {
             .hold => {},
             .zn_from_l => {
                 self.flags.setPresent(.zero, 0 == l.raw());
@@ -1021,7 +1031,7 @@ pub fn simulate_transact(self: *Pipeline_State,
                 self.flags.setPresent(.negative, f.n);
                 self.flags.setPresent(.carry, f.c);
                 self.flags.setPresent(.overflow, f.v);
-                if (self.cs.flagop == .load) {
+                if (self.cs.flag_op == .load) {
                     self.flags.setPresent(.at_enable, f.at_enable);
                     self.flags.setPresent(.bus_override, f.bus_override);
                     self.ti = f.top;
@@ -1029,7 +1039,11 @@ pub fn simulate_transact(self: *Pipeline_State,
             },
         }
 
-        if (self.cs.flagop != .load and self.cs.tiw == .write) {
+        if (self.flags.contains(.guard_mismatch)) {
+            self.flags.insert(.overflow);
+        }
+
+        if (self.cs.flag_op != .load and self.cs.tiw == .write) {
             self.ti = self.wi;
         }
 
@@ -1042,14 +1056,14 @@ pub fn simulate_transact(self: *Pipeline_State,
         }
     }
 
-    const atop = self.cs.atop;
+    const at_op = self.cs.at_op;
     if (any_fault) {
-        self.atr = self.va;
+        self.vabor = self.va;
         self.status.fucs = self.uca.slot;
-        self.status.fspace = self.cs.vaspace;
+        self.status.fspace = self.cs.space;
         self.status.fwidth = self.cs.width;
         self.status.fwrite = self.cs.dsrc != .system;
-    } else switch (atop) {
+    } else switch (at_op) {
         .none => {},
         .translate => translations[self.at_entry_addr.raw()] = .{
             .primary = self.matching_entry,
@@ -1078,9 +1092,6 @@ pub fn simulate_transact(self: *Pipeline_State,
                 .primary = matching,
                 .secondary = other,
             };
-        },
-        .write_atr => {
-            self.atr = .init(d.raw());
         },
     }
 

@@ -28,8 +28,8 @@ pub const Slot = enum (u12) {
     page_align_fault = 5,
     align_fault = 6,
     overflow_fault = 7,
-    register_stack_underflow_fault = 8,
-    register_stack_overflow_fault = 9,
+    rs_underflow_fault = 8,
+    rs_overflow_fault = 9,
     invalid_instruction_fault = 10,
     instruction_protection_fault = 11,
     interrupt = 12,
@@ -50,7 +50,7 @@ pub const Slot = enum (u12) {
     pub const count = std.math.maxInt(Raw) + 1;
 
     pub const Source = enum (u2) {
-        hold = 0,
+        fucs = 0,
         insn_decoder = 1,
         continuation = 2,
         seq_literal = 3,
@@ -66,6 +66,42 @@ pub const Slot = enum (u12) {
         pub const format = fmt.format_enum_dec;
 
         pub const Raw = meta.Backing(Source);
+    };
+
+    pub const Sequencer_Literal = enum(u4) {
+        reset = 0,
+        double_fault = 1,
+        page_fault = 2,
+        access_fault = 3,
+        pipe_fault = 4,
+        page_align_fault = 5,
+        align_fault = 6,
+        overflow_fault = 7,
+        rs_underflow_fault = 8,
+        rs_overflow_fault = 9,
+        invalid_instruction_fault = 10,
+        instruction_protection_fault = 11,
+        interrupt = 12,
+        _,
+
+        pub inline fn init(raw_value: Sequencer_Literal.Raw) Sequencer_Literal {
+            return @enumFromInt(raw_value);
+        }
+        pub inline fn raw(self: Sequencer_Literal) Sequencer_Literal.Raw {
+            return @intFromEnum(self);
+        }
+
+        pub fn from_slot(s: Slot) Sequencer_Literal {
+            return .init(@intCast(@intFromEnum(s)));
+        }
+        pub fn slot(self: Sequencer_Literal) Slot {
+            return .init(self.raw());
+        }
+
+        pub const format = fmt.format_enum_hex;
+
+        pub const Raw = meta.Backing(Sequencer_Literal); 
+        pub const count = std.math.maxInt(Sequencer_Literal.Raw) + 1;
     };
 };
 
@@ -163,13 +199,15 @@ pub const Flags_With_Overflow = packed struct (u4) {
     pub const Raw = meta.Backing(Flags_With_Overflow);
 };
 
-pub const Setup_Microcode_Entry = packed struct (u24) {
+pub const Setup_Microcode_Entry = packed struct (u32) {
     vao: addr.Virtual.Offset,
     vari: addr.Virtual.Base,
     sr1ri: reg.sr1.Index,
     sr2ri: reg.sr2.Index,
     jsrc: bus.J.Source,
     ksrc: bus.K.Source,
+    special: misc.Special_Op,
+    _unused: u4 = 0,
 
     pub inline fn init(raw_value: Raw) Setup_Microcode_Entry {
         return @bitCast(raw_value);
@@ -184,17 +222,16 @@ pub const Setup_Microcode_Entry = packed struct (u24) {
     pub const Raw = meta.Backing(Setup_Microcode_Entry);
 };
 
-pub const Compute_Microcode_Entry = packed struct (u32) {
+pub const Compute_Microcode_Entry = packed struct (u24) {
     mode: compute.Mode,
     unit: compute.Unit,
     width: bus.D.Width,
     dsrc: bus.D.Source,
-    vaspace: addr.Space,
-    atop: addr.translation.Op,
+    space: addr.Space,
+    at_op: addr.translation.Op,
     sr2wsrc: reg.sr.Write_Source,
     sr2wi: reg.sr2.Index,
-    special: misc.Special_Op,
-    _unused: u5 = 0,
+    _unused: u2 = 0,
 
     pub inline fn init(raw_value: Raw) Compute_Microcode_Entry {
         return @bitCast(raw_value);
@@ -209,19 +246,17 @@ pub const Compute_Microcode_Entry = packed struct (u32) {
     pub const Raw = meta.Backing(Compute_Microcode_Entry);
 };
 
-pub const Transact_Microcode_Entry = packed struct (u32) {
-    next: Slot,
+pub const Transact_Microcode_Entry = packed struct (u24) {
     sr1wi: reg.sr1.Index,
     sr1wsrc: reg.sr.Write_Source,
-    seqop: misc.Sequencer_Op,
-    flagop: reg.Flags.Op,
+    flag_op: reg.Flags.Op,
     tiw: misc.Generic_Write_Enable,
     gprw: misc.Generic_Write_Enable,
     drw: misc.Generic_Write_Enable,
     irw: misc.Generic_Write_Enable,
     lsrc: bus.L.Source,
-    allowint: misc.Interrupt_Enable,
-    power: misc.Power_Mode,
+    seq_op: misc.Sequencer_Op,
+    _unused: u6 = 0,
 
     pub inline fn init(raw_value: Raw) Transact_Microcode_Entry {
         return @bitCast(raw_value);
@@ -234,6 +269,25 @@ pub const Transact_Microcode_Entry = packed struct (u32) {
     pub const format = fmt.format_raw_hex;
 
     pub const Raw = meta.Backing(Transact_Microcode_Entry);
+};
+
+pub const Decode_Microcode_Entry = packed struct (u16) {
+    next: Slot,
+    allow_int: misc.Interrupt_Enable,
+    power: misc.Power_Mode,
+    _unused: u2 = 0,
+
+    pub inline fn init(raw_value: Raw) Decode_Microcode_Entry {
+        return @bitCast(raw_value);
+    }
+
+    pub inline fn raw(self: Decode_Microcode_Entry) Raw {
+        return @bitCast(self);
+    }
+
+    pub const format = fmt.format_raw_hex;
+
+    pub const Raw = meta.Backing(Decode_Microcode_Entry);
 };
 
 pub fn write_compressed_rom(comptime Entry: type, temp_allocator: std.mem.Allocator, w: *std.io.Writer, microcode: *const [Address.count]?Control_Signals) !void {
@@ -483,7 +537,7 @@ fn write_csv_signals(w: *std.io.Writer, cs: Control_Signals) !void {
             .irw => try w.writeAll(if (value == .write) ",IRW" else ","),
             .drw => try w.writeAll(if (value == .write) ",DRW" else ","),
             .tiw => try w.writeAll(if (value == .write) ",TIW" else ","),
-            .allowint => try w.writeAll(if (value == .allow) ",ALLOWINT" else ","),
+            .allow_int => try w.writeAll(if (value == .allow) ",ALLOW_INT" else ","),
             .power => try w.writeAll(switch (value) {
                 .run => ",",
                 .sleep => ",SLEEP",

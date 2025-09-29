@@ -67,6 +67,8 @@ pub fn build(b: *std.Build) void {
     const compute_uc = compile.addOutputFileArg("compute_uc.crom");
     compile.addArg("--transact-uc");
     const transact_uc = compile.addOutputFileArg("transact_uc.crom");
+    compile.addArg("--decode-uc");
+    const decode_uc = compile.addOutputFileArg("decode_uc.crom");
     compile.addArg("--id-rom");
     const id_rom = compile.addOutputFileArg("insn_decode.crom");
     compile.addArg("--uc-csv");
@@ -81,12 +83,14 @@ pub fn build(b: *std.Build) void {
     b.getInstallStep().dependOn(&b.addInstallFile(setup_uc, "setup_uc.crom").step);
     b.getInstallStep().dependOn(&b.addInstallFile(compute_uc, "compute_uc.crom").step);
     b.getInstallStep().dependOn(&b.addInstallFile(transact_uc, "transact_uc.crom").step);
+    b.getInstallStep().dependOn(&b.addInstallFile(decode_uc, "decode_uc.crom").step);
 
     _ = b.addModule("iedb.sx", .{ .root_source_file = iedb_sx });
     _ = b.addModule("insn_decode.crom", .{ .root_source_file = id_rom });
     _ = b.addModule("setup_uc.crom", .{ .root_source_file = setup_uc });
     _ = b.addModule("compute_uc.crom", .{ .root_source_file = compute_uc });
     _ = b.addModule("transact_uc.crom", .{ .root_source_file = transact_uc });
+    _ = b.addModule("decode_uc.crom", .{ .root_source_file = decode_uc });
 }
 
 const std = @import("std");

@@ -18,28 +18,36 @@
             .path = "../microsim",
         },
         .bit_helper = .{
-            .path = "../../zig-bithelper",
+            .url = "git+https://github.com/bcrist/zig-bithelper#01fe5f519f54ab42c649096573c45ddaa351e1d5",
+            .hash = "bit_helper-1.0.1-C8c75iguAABAXw3jPh9pvNp-RPvblh1vV7MbQ1w99fFF",
         },
         .deep_hash_map = .{
-            .path = "../../zig-deephashmap",
+            .url = "git+https://github.com/bcrist/zig-deephashmap#ec22725ad1e4ea65488fe7c5bc1f2041d92bf87c",
+            .hash = "deep_hash_map-1.0.1-RLYshCUbAABnDZhPzE87HipEv7FG7ktpMSxLRxWvXuO7",
         },
         .sx = .{
-            .path = "../../zig-sx",
+            .url = "git+https://github.com/bcrist/zig-sx#ba72271b89ec977abe63a2619d78275ad6327bdd",
+            .hash = "sx-1.1.6-0vgbao7JAADRoEBKC_iS9RBg2onrsLD-yeUiM_XuqStj",
         },
         .console_helper = .{
-            .path = "../../zig-consolehelper",
+            .url = "git+https://github.com/bcrist/zig-consolehelper#6b662a6f9294657855eb652f5506eeee645738a7",
+            .hash = "console_helper-0.3.1-19g4EypEAACdbhJI9ZkRAXTR7xOalHE2rMiLlqa0zf9N",
         },
         .ihex = .{
-            .path = "../../zig-ihex",
+            .url = "git+https://github.com/bcrist/zig-intel-hex#d27533895e5f77d97acfbdb080800a43218b5739",
+            .hash = "ihex-1.1.0-F0-T3K8UAACSaDmufFmqDy6-O-Qcz72sCffsiO1A4w8S",
         },
         .srec = .{
-            .path = "../../zig-srec",
+            .url = "git+https://github.com/bcrist/zig-s-records#55e4bde454d71f0e8f1d1f92fcb0da1233ad4656",
+            .hash = "srec-1.1.0-o9cTmBQVAADA3Z2kUr1ZuFzRJc5nmUDcHUKIloneolet",
         },
         .Temp_Allocator = .{
-            .path = "../../zig-tempallocator",
+            .url = "git+https://github.com/bcrist/zig-tempallocator#88164409c68f1b766df08d93728f1ff62929be71",
+            .hash = "Temp_Allocator-1.0.3-tT3p3OQwAADyXdF18H0zjXuId3fPBjPUN-DK5glT4DQr",
         },
         .meta = .{
-            .path = "../../zig-meta",
+            .url = "git+https://github.com/bcrist/zig-meta#00758f3af9dffa2c38ae7af1536119cf8990da8e",
+            .hash = "meta-0.0.1-ZzooiQALAAC0bhdWXxn2uec-vwtEBcUtHbpyj1hwjaDv",
         },
     },
 }

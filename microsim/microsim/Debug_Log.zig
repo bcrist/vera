@@ -17,6 +17,7 @@ pub const Action = union (enum) {
     read: Bus_Info,
     write: Bus_Info,
     fault: arch.microcode.Slot,
+    corrupted_microcode: []const u8,
 };
 
 pub const Reg_Info = struct {
@@ -133,6 +134,9 @@ pub fn dump(self: *Debug_Log, writer: ?*std.io.Writer, options: Dump_Options) !v
                         if (info.ctrl.guard_mismatch) "!" else " ",
                     });
                 }
+            },
+            .corrupted_microcode => |what| {
+                try w.print(" {s}", .{ what });
             },
         }
     }

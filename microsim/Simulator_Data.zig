@@ -27,6 +27,7 @@ pub fn get() !*const Simulator_Data {
         arch.microcode.read_compressed_rom(arch.microcode.Setup_Microcode_Entry, setup_uc_data, microcode);
         arch.microcode.read_compressed_rom(arch.microcode.Compute_Microcode_Entry, compute_uc_data, microcode);
         arch.microcode.read_compressed_rom(arch.microcode.Transact_Microcode_Entry, transact_uc_data, microcode);
+        arch.microcode.read_compressed_rom(arch.microcode.Decode_Microcode_Entry, decode_uc_data, microcode);
 
         data = .{
             .edb = try iedb.read_database.parse_encoding_db(&pd, db_data),
@@ -44,6 +45,7 @@ const insn_decode_data = @embedFile("insn_decode.crom");
 const setup_uc_data = @embedFile("setup_uc.crom");
 const compute_uc_data = @embedFile("compute_uc.crom");
 const transact_uc_data = @embedFile("transact_uc.crom");
+const decode_uc_data = @embedFile("decode_uc.crom");
 
 const Simulator_Data = @This();
 

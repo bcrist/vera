@@ -83,7 +83,7 @@ fn warn(cycle: *Cycle, comptime format: []const u8, args: anytype) void {
 }
 
 pub fn finish(cycle: *Cycle) void {
-    switch (cycle.signals.atop) {
+    switch (cycle.signals.at_op) {
         .none => {},
         .translate => {
             cycle.validate_address();
@@ -92,15 +92,11 @@ pub fn finish(cycle: *Cycle) void {
         .update, .invalidate => {
             cycle.validate_address();
         },
-        .write_atr => switch (cycle.signals.dsrc) {
-            .l, .dr_ir => {},
-            .system, .atr => cycle.warn("Expected `dsrc` to be .l or .dr_ir", .{}),
-        },
     }
 
     if (cycle.signals.dsrc == .dr_ir) {
         cycle.ensure_set(.drw);
-        if (cycle.signals.atop == .translate or cycle.signals.lsrc == .compute_or_d and cycle.signals.unit == .none) {
+        if (cycle.signals.at_op == .translate or cycle.signals.lsrc == .compute_or_d and cycle.signals.unit == .none) {
             // writing to system bus or reading to L, this is the expected case.
         } else {
             cycle.warn("DR value is written to D, but there is no bus transaction happening, and D is not being read to L", .{});
@@ -109,10 +105,10 @@ pub fn finish(cycle: *Cycle) void {
 
     if (cycle.signals.drw == .write) {
         switch (cycle.signals.dsrc) {
-            .l, .dr_ir, .atr => {},
+            .l, .dr_ir, .vabor => {},
             .system => {
                 cycle.validate_address();
-                if (cycle.signals.atop != .translate) cycle.warn("Expected `atop` to be .translate", .{});
+                if (cycle.signals.at_op != .translate) cycle.warn("Expected `at_op` to be .translate", .{});
             },
         }
     }
@@ -139,16 +135,16 @@ pub fn finish(cycle: *Cycle) void {
         .compute_or_d => switch (cycle.signals.unit) {
             .none =>  switch (cycle.signals.dsrc) {
                 .l => cycle.warn("`dsrc` cannot be .l when the L bus is being read from D", .{}),
-                .system => switch (cycle.signals.atop) {
+                .system => switch (cycle.signals.at_op) {
                     .none => {},
                     .translate => {
                         cycle.validate_address();
                         cycle.ensure_set(.width);
                     },
-                    else => cycle.warn("Expected `atop` to be .translate", .{}),
+                    else => cycle.warn("Expected `at_op` to be .translate", .{}),
                 },
                 .dr_ir => {},
-                .atr => {},
+                .vabor => {},
             },
             else => cycle.validate_compute_mode(),
         },
@@ -178,14 +174,14 @@ pub fn finish(cycle: *Cycle) void {
         cycle.warn("Expected `sr2wi` to be set when SR2 is being written!", .{});
     }
 
-    switch (cycle.signals.flagop) {
+    switch (cycle.signals.flag_op) {
         .hold, .zn_from_l => {},
         .compute, .compute_no_set_z => cycle.validate_compute_mode(),
         .clear_bits, .set_bits => cycle.ensure_set(.vao),
         .load_zncv, .load => cycle.ensure_set(.lsrc),
     }
 
-    switch (cycle.signals.seqop) {
+    switch (cycle.signals.seq_op) {
         .next_instruction, .fault_return => {
             cycle.flags.remove(.next_insn_loaded);
             if (cycle.next_func != null) {
@@ -197,8 +193,8 @@ pub fn finish(cycle: *Cycle) void {
         },
     }
 
-    if (cycle.signals.seqop == .next_instruction and cycle.signals.allowint != .allow) {
-        cycle.warn("Expected `allowint` when `seqop` is .next_instruction", .{});
+    if (cycle.signals.seq_op == .next_instruction and cycle.signals.allow_int != .allow) {
+        cycle.warn("Expected `allow_int` when `seq_op` is .next_instruction", .{});
     }
 
     if (cycle.signals.drw == .write) {
@@ -238,6 +234,13 @@ pub fn finish(cycle: *Cycle) void {
         },
         .fault_on_overflow => {},
         .trigger_fault => {},
+        .load_vabor_from_d => switch (cycle.signals.dsrc) {
+            .l, .dr_ir => {},
+            .system, .vabor => cycle.warn("Expected `dsrc` to be .l or .dr_ir", .{}),
+        },
+        _ => {
+            cycle.warn("Unrecognized SPECIAL command: {d}", .{ @intFromEnum(cycle.signals.special) });
+        },
     }
     
     cycle.flags.remove(.disallow_read_from_other_rsn);
@@ -295,8 +298,8 @@ fn validate_compute_mode(cycle: *Cycle) void {
 fn validate_address(cycle: *Cycle) void {
     cycle.ensure_set(.vari);
     cycle.ensure_set(.vao);
-    cycle.ensure_set(.atop);
-    cycle.ensure_set(.vaspace);
+    cycle.ensure_set(.at_op);
+    cycle.ensure_set(.space);
     cycle.ensure_set(.dsrc);
 }
 
@@ -408,8 +411,8 @@ fn compute_flags(c: *Cycle, freshness: Freshness, flags: Flags_Mode) void {
         .flags => {},
     }
     switch (freshness) {
-        .fresh => c.set_control_signal(.flagop, .compute),
-        .cont => c.set_control_signal(.flagop, .compute_no_set_z),
+        .fresh => c.set_control_signal(.flag_op, .compute),
+        .cont => c.set_control_signal(.flag_op, .compute_no_set_z),
     }
 }
 
@@ -555,11 +558,11 @@ pub fn saturate_k(c: *Cycle, what: Bit_Count_Polarity, dir: Bit_Count_Direction,
 
 pub fn enable_flags(c: *Cycle, flags: arch.reg.Flags.Writable) void {
     c.set_control_signal(.vao, arch.addr.Virtual.Offset.init_unsigned(@intCast(flags.raw())));
-    c.set_control_signal(.flagop, .set_bits);
+    c.set_control_signal(.flag_op, .set_bits);
 }
 pub fn disable_flags(c: *Cycle, flags: arch.reg.Flags.Writable) void {
     c.set_control_signal(.vao, arch.addr.Virtual.Offset.init_unsigned(@intCast(flags.raw())));
-    c.set_control_signal(.flagop, .clear_bits);
+    c.set_control_signal(.flag_op, .clear_bits);
 }
 
 //////////////
@@ -745,10 +748,10 @@ pub fn flags_to_l(c: *Cycle) void {
     c.set_control_signal(.lsrc, .flags);
 }
 
-pub fn atr_to_l(c: *Cycle) void {
+pub fn vabor_to_l(c: *Cycle) void {
     c.set_control_signal(.lsrc, .compute_or_d);
     c.set_control_signal(.unit, .none);
-    c.set_control_signal(.dsrc, .atr);
+    c.set_control_signal(.dsrc, .vabor);
 }
 
 pub fn reg_to_j_to_l(c: *Cycle) void {
@@ -882,7 +885,7 @@ pub fn saturate_k_to_l(c: *Cycle, what: Bit_Count_Polarity, dir: Bit_Count_Direc
 }
 
 pub fn dr_to_l(c: *Cycle) void {
-    c.set_control_signal(.atop, .none);
+    c.set_control_signal(.at_op, .none);
     c.set_control_signal(.dsrc, .dr_ir);
     c.set_control_signal(.drw, .write);
     c.d_to_l();
@@ -893,7 +896,7 @@ pub fn dr_to_ir(c: *Cycle) void {
 }
 
 pub fn ir_to_l(c: *Cycle) void {
-    c.set_control_signal(.atop, .none);
+    c.set_control_signal(.at_op, .none);
     c.set_control_signal(.dsrc, .dr_ir);
     c.set_control_signal(.drw, .hold);
     c.d_to_l();
@@ -1023,20 +1026,20 @@ pub fn sr2_alt_to_sr2_alt(c: *Cycle, src_index: arch.reg.sr2.Index, dest_index: 
 }
 
 pub fn l_to_zncv(c: *Cycle) void {
-    c.set_control_signal(.flagop, .load_zncv);
+    c.set_control_signal(.flag_op, .load_zncv);
 }
 
 /// N.B. this also updates TI!
 pub fn l_to_flags(c: *Cycle) void {
-    c.set_control_signal(.flagop, .load);
+    c.set_control_signal(.flag_op, .load);
 }
 
 pub fn zn_flags_from_l(c: *Cycle) void {
-    c.set_control_signal(.flagop, .zn_from_l);
+    c.set_control_signal(.flag_op, .zn_from_l);
 }
 
 pub fn l_to_dr(c: *Cycle) void {
-    c.set_control_signal(.atop, .none);
+    c.set_control_signal(.at_op, .none);
     c.set_control_signal(.dsrc, .l);
     c.set_control_signal(.drw, .write);
 }
@@ -1056,9 +1059,9 @@ pub fn reload_asn_alt(c: *Cycle) void {
     c.sr2_alt_to_sr2_alt(.asn, .asn);
 }
 
-pub fn l_to_atr(c: *Cycle) void {
+pub fn l_to_vabor(c: *Cycle) void {
     c.set_control_signal(.dsrc, .l);
-    c.set_control_signal(.atop, .write_atr);
+    c.set_control_signal(.special, .load_vabor_from_d);
 }
 
 /////////////////////
@@ -1067,8 +1070,8 @@ pub fn l_to_atr(c: *Cycle) void {
 
 pub fn update_address_translation_from_l(c: *Cycle, base: arch.addr.Virtual.Base, group: arch.addr.translation.Entry.Group) void {
     c.address(base, 0);
-    c.set_control_signal(.atop, .update);
-    c.set_control_signal(.vaspace, @as(arch.addr.Space, switch (group) {
+    c.set_control_signal(.at_op, .update);
+    c.set_control_signal(.space, @as(arch.addr.Space, switch (group) {
         .data_read => .physical,
         .data_write => .data,
         .stack => .stack,
@@ -1080,8 +1083,8 @@ pub fn update_address_translation_from_l(c: *Cycle, base: arch.addr.Virtual.Base
 
 pub fn invalidate_address_translation_from_l(c: *Cycle, base: arch.addr.Virtual.Base, group: arch.addr.translation.Entry.Group) void {
     c.address(base, 0);
-    c.set_control_signal(.atop, .invalidate);
-    c.set_control_signal(.vaspace, @as(arch.addr.Space, switch (group) {
+    c.set_control_signal(.at_op, .invalidate);
+    c.set_control_signal(.space, @as(arch.addr.Space, switch (group) {
         .data_read => .physical,
         .data_write => .data,
         .stack => .stack,
@@ -1117,8 +1120,8 @@ pub fn address(c: *Cycle, base: arch.addr.Virtual.Base, offset: anytype) void {
 
 pub fn read_to_d(c: *Cycle, base: arch.addr.Virtual.Base, offset: anytype, width: arch.bus.D.Width, space: arch.addr.Space) void {
     c.address(base, offset);
-    c.set_control_signal(.atop, .translate);
-    c.set_control_signal(.vaspace, space);
+    c.set_control_signal(.at_op, .translate);
+    c.set_control_signal(.space, space);
     c.set_control_signal(.width, width);
     c.set_control_signal(.dsrc, .system);
     if (base == .ip and space == .insn and c.signals.sr2wi != .ip and c.signals.sr2wi != .next_ip and @typeInfo(@TypeOf(offset)) != .enum_literal) {
@@ -1159,16 +1162,16 @@ pub fn ip_read_24b_to_dr_ir(c: *Cycle, offset: anytype) void {
 
 pub fn write_from_l(c: *Cycle, base: arch.addr.Virtual.Base, offset: anytype, width: arch.bus.D.Width, space: arch.addr.Space) void {
     c.address(base, offset);
-    c.set_control_signal(.atop, .translate);
-    c.set_control_signal(.vaspace, space);
+    c.set_control_signal(.at_op, .translate);
+    c.set_control_signal(.space, space);
     c.set_control_signal(.width, width);
     c.set_control_signal(.dsrc, .l);
 }
 
 pub fn write_from_dr(c: *Cycle, base: arch.addr.Virtual.Base, offset: anytype, width: arch.bus.D.Width, space: arch.addr.Space) void {
     c.address(base, offset);
-    c.set_control_signal(.atop, .translate);
-    c.set_control_signal(.vaspace, space);
+    c.set_control_signal(.at_op, .translate);
+    c.set_control_signal(.space, space);
     c.set_control_signal(.width, width);
     c.set_control_signal(.dsrc, .dr_ir);
     c.set_control_signal(.drw, .write);
@@ -1246,7 +1249,7 @@ pub fn branch(c: *Cycle, base: arch.addr.Virtual.Base, offset: anytype) void {
 
 pub fn exec_ir_insn(c: *Cycle) void {
     c.allow_interrupt();
-    c.set_control_signal(.seqop, .next_instruction);
+    c.set_control_signal(.seq_op, .next_instruction);
 }
 
 pub fn wi_to_ti(c: *Cycle) void {
@@ -1259,22 +1262,21 @@ pub fn next(c: *Cycle, func: *const anyopaque) void {
 }
 
 pub fn force_normal_execution(c: *Cycle, func: *const anyopaque) void {
-    c.set_control_signal(.seqop, .next_uop_force_normal);
+    c.set_control_signal(.seq_op, .next_uop_force_normal);
     c.next(func);
 }
 
 pub fn allow_interrupt(c: *Cycle) void {
-    c.set_control_signal(.allowint, .allow);
+    c.set_control_signal(.allow_int, .allow);
 }
 
 pub fn fault_return(c: *Cycle) void {
-    c.status_to_l(); // .fault_return implies loading UCA the Status.fucs bits of L
-    c.set_control_signal(.seqop, .fault_return);
+    c.set_control_signal(.seq_op, .fault_return);
 }
 
 fn trigger_fault(c: *Cycle, slot: arch.microcode.Slot) void {
     c.set_control_signal(.special, .trigger_fault);
-    c.set_control_signal(.seqop, .next_uop);
+    c.set_control_signal(.seq_op, .next_uop);
     c.set_control_signal(.next, slot);
 }
 

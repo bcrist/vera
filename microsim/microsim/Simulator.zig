@@ -161,7 +161,7 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
 
         pub fn simulate_reset_and_init(self: *Self) void {
             self.simulate_reset();
-            while (self.state.pipelines[0].cs.seqop != .next_instruction) {
+            while (self.state.pipelines[0].cs.seq_op != .next_instruction) {
                 self.simulate_cycles(1);
             }
         }
@@ -315,7 +315,7 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
                 if (options.cs) {
                     try writer.writeAll("   Control Signals:\n");
 
-                    const want_compute = switch (pipe.cs.statop) {
+                    const want_compute = switch (pipe.cs.flag_op) {
                         .compute, .compute_no_set_z => true,
                         .hold, .zn_from_l, .clear_a, .set_a, .load_zncv, .load_zncva_ti => false,
                     } or switch (pipe.cs.lsrc) {
@@ -345,9 +345,9 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
 
                     try writer.print("      LSRC={}\n", .{ pipe.cs.lsrc });
 
-                    if (pipe.cs.dir != .none or pipe.cs.atop != .none) {
+                    if (pipe.cs.dir != .none or pipe.cs.at_op != .none) {
                         try writer.print("      VARI={}  VAO={}\n", .{ pipe.cs.vari, pipe.cs.vao });
-                        try writer.print("      DIR={}  WIDTH={}  VASPACE={}  ATOP={}\n", .{ pipe.cs.dir, pipe.cs.width, pipe.cs.vaspace, pipe.cs.atop });
+                        try writer.print("      DIR={}  WIDTH={}  SPACE={}  AT_OP={}\n", .{ pipe.cs.dir, pipe.cs.width, pipe.cs.space, pipe.cs.at_op });
                     }
 
                     if (pipe.cs.sr1wsrc != .no_write) {
@@ -382,8 +382,8 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
                         try writer.print("      write DR -> IR\n", .{});
                     }
 
-                    if (pipe.cs.statop != .hold) {
-                        try writer.print("      STATOP={}\n", .{ pipe.cs.statop });
+                    if (pipe.cs.flag_op != .hold) {
+                        try writer.print("      FLAG_OP={}\n", .{ pipe.cs.flag_op });
                     }
 
                     if (pipe.cs.special != .none) {
@@ -391,9 +391,9 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
                     }
 
                     if (options.uca) {
-                        try writer.print("      SEQOP={}  NEXT={}  ALLOWINT={}  POWER={}\n", .{ pipe.cs.seqop, pipe.cs.next, pipe.cs.allowint, pipe.cs.power });
+                        try writer.print("      SEQ_OP={}  NEXT={}  ALLOW_INT={}  POWER={}\n", .{ pipe.cs.seq_op, pipe.cs.next, pipe.cs.allow_int, pipe.cs.power });
                     } else {
-                        try writer.print("      SEQOP={}  ALLOWINT={}  POWER={}\n", .{ pipe.cs.seqop, pipe.cs.allowint, pipe.cs.power });
+                        try writer.print("      SEQ_OP={}  ALLOW_INT={}  POWER={}\n", .{ pipe.cs.seq_op, pipe.cs.allow_int, pipe.cs.power });
                     }
                 }
 

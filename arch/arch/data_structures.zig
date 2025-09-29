@@ -31,8 +31,8 @@ pub const Vector_Table = extern struct {
     page_align_fault: u16,
     align_fault: u16,
     overflow_fault: u16,
-    register_stack_underflow_fault: u16,
-    register_stack_overflow_fault: u16,
+    rs_underflow_fault: u16,
+    rs_overflow_fault: u16,
     invalid_instruction_fault: u16,
     instruction_protection_fault: u16,
 };

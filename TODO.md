@@ -1,15 +1,13 @@
 [arch] LSRC can be 2 bits instead of 3.
 
-[isa] Allow arbitrary mnemonics and mnemonic suffixes - maybe use hash of text for lookup?  Can still use enum literals for manually initializing mnemonics/suffixes in the few places necessary
-
-
+[isa/assembler] Allow arbitrary mnemonics and mnemonic suffixes - maybe use hash of text for lookup?  Can still use enum literals for manually initializing mnemonics/suffixes in the few places necessary
 
 [arch] conditional load/store instructions - equivalent to a conditional jump just before, but 1 cycle faster when the load does need to happen
 
 [sdram] SDRAM for unsharable memory - physical address space: 64MB total (26 bit address), 16MB SRAM, 16MB I/O, 32MB private SDRAM
 [sdram] refresh timing: Minimum required refreshes is 839 per 32k ucycles (8k per 64ms).  10 bit counter counts number of refreshes seen so far this 32768 cycle period.  First SR latch is set when refresh counter reaches 896.  Second SR latch is set when the 15-bit ucycle counter reaches 31872.  When the 15-bit ucycle counter resets, both SR latches and the refresh counter are also reset.  Refresh interrupt is asserted whenever the first SR latch is not set, but the second one is.
 
-[frame tracker] always update frame state for ram locations?  Or have a separate bitmap ram to determine which frames are dirty-tracked
+[frametracker] always update frame state for ram locations?  Or have a separate bitmap ram to determine which frames are dirty-tracked
 
 [isa] write instructions file as zon instead of s-exp
 [isa] "select" instructions - rough equivalent of cmov; pop top two register stack values, then re-add one or the other based on condition
@@ -28,11 +26,11 @@
 [microsim] Add a warning if two pipes ever use the same RSN concurrently
 [microsim] Warning if an interrupt or fault ends with TI > 0
 
-[arch] Finish block diagram
-[arch] Finish Encoding_Database.similar_encodings
+[isa] Finish Encoding_Database.similar_encodings
 
 [compile] Revamp instruction_builder.print_cycle_path()
 
+[assembler] .dw/.dd => .dh/.dw (words are 32 bit now)
 [assembler] Need more robust checking for page alignment faults since we now load 24b for instructions
 [assembler] Fix EDB loading
 [assembler] CLI
@@ -66,9 +64,6 @@
 [microsim] History of instructions executed, microcode cycles (don't track when running in real time)
 [microsim] Allow undo during single stepping
 [microsim] Error console - Access to invalid memory, Faults
-[microsim] Improve SST39VF802C emulation accuracy in memory.zig (timing, status polling, IDs, write protection, etc.)
-
-
 
 
 [frontpanel] RSN, pipe number LED displays, indicator that pipe being displayed is fixed instead of the pipe currently about to finish transact stage

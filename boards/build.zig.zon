@@ -1,6 +1,6 @@
 .{
     .name = .vera_boards,
-    .fingerprint = 0xf3ee4d134c573c0b,
+    .fingerprint = 0x1f7bd8f0a1b6df4e,
     .version = "0.0.0",
     .minimum_zig_version = "0.15.1",
     .paths = .{""},
@@ -12,16 +12,16 @@
             .path = "../isa",
         },
         .bit_helper = .{
-            .path = "../../zig-bithelper",
-        },
-        .sx = .{
-            .path = "../../zig-sx",
+            .url = "git+https://github.com/bcrist/zig-bithelper#01fe5f519f54ab42c649096573c45ddaa351e1d5",
+            .hash = "bit_helper-1.0.1-C8c75iguAABAXw3jPh9pvNp-RPvblh1vV7MbQ1w99fFF",
         },
         .zoink = .{
-            .path = "../../zoink",
+            .url = "git+https://github.com/bcrist/zoink#05f756fad09f695c93e87719810f91bc7b11e6e9",
+            .hash = "zoink-0.0.1-mnf-NcbIDADVRCci7WfhOZUfw3ILMqgaXwTdbPrLfOTl",
         },
         .lc4k = .{
-            .path = "../../zig-lc4k",
+            .url = "git+https://github.com/bcrist/zig-lc4k#034340051bd8ffaf83c849dbc455876edc35904c",
+            .hash = "lc4k-0.2.3-5R47QotYEwAfvU_lpNiBN2_XTfPO6Py3vWLWTMnbXhas",
         },
     },
 }

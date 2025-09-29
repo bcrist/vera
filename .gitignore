@@ -4,4 +4,3 @@ zig-out/
 *.code-workspace
 _archive/
 .obsidian/
-block_diagram/

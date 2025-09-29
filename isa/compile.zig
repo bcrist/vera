@@ -16,6 +16,7 @@ const CLI_Option = enum {
     setup_uc_path,
     compute_uc_path,
     transact_uc_path,
+    decode_uc_path,
     uc_csv_path,
     id_rom_path,
     id_csv_path,
@@ -28,6 +29,7 @@ const cli_options = std.StaticStringMap(CLI_Option).initComptime(.{
     .{ "--setup-uc", .setup_uc_path },
     .{ "--compute-uc", .compute_uc_path },
     .{ "--transact-uc", .transact_uc_path },
+    .{ "--decode-uc", .decode_uc_path },
     .{ "--uc-csv", .uc_csv_path },
     .{ "--id-rom", .id_rom_path },
     .{ "--id-csv", .id_csv_path },
@@ -50,6 +52,7 @@ pub fn main() !void {
     var setup_uc_path: ?[]const u8 = null;
     var compute_uc_path: ?[]const u8 = null;
     var transact_uc_path: ?[]const u8 = null;
+    var decode_uc_path: ?[]const u8 = null;
     var uc_csv_path: ?[]const u8 = null;
     var id_csv_path: ?[]const u8 = null;
     var id_rom_path: ?[]const u8 = null;
@@ -65,6 +68,7 @@ pub fn main() !void {
                 .setup_uc_path => setup_uc_path = try arena.allocator().dupe(u8, arg_iter.next() orelse expected_output_path("--setup-uc")),
                 .compute_uc_path => compute_uc_path = try arena.allocator().dupe(u8, arg_iter.next() orelse expected_output_path("--compute-uc")),
                 .transact_uc_path => transact_uc_path = try arena.allocator().dupe(u8, arg_iter.next() orelse expected_output_path("--transact-uc")),
+                .decode_uc_path => decode_uc_path = try arena.allocator().dupe(u8, arg_iter.next() orelse expected_output_path("--decode-uc")),
                 .uc_csv_path => uc_csv_path = try arena.allocator().dupe(u8, arg_iter.next() orelse expected_output_path("--uc-csv")),
                 .id_rom_path => id_rom_path = try arena.allocator().dupe(u8, arg_iter.next() orelse expected_output_path("--id-rom")),
                 .id_csv_path => id_csv_path = try arena.allocator().dupe(u8, arg_iter.next() orelse expected_output_path("--id-csv")),
@@ -89,8 +93,8 @@ pub fn main() !void {
         faults.Handler(.page_align_fault),
         faults.Handler(.align_fault),
         faults.Handler(.overflow_fault),
-        faults.Handler(.register_stack_underflow_fault),
-        faults.Handler(.register_stack_overflow_fault),
+        faults.Handler(.rs_underflow_fault),
+        faults.Handler(.rs_overflow_fault),
         faults.Handler(.instruction_protection_fault),
         faults.Handler(.invalid_instruction_fault),
         faults.Handler(.double_fault),
@@ -259,6 +263,29 @@ pub fn main() !void {
 
     if (transact_uc_path) |path| {
         const Entry = arch.microcode.Transact_Microcode_Entry;
+        var buf: [4096]u8 = undefined;
+        var af = try std.fs.cwd().atomicFile(path, .{
+            .write_buffer = &buf,
+            .make_path = true,
+        });
+        defer af.deinit();
+        const w = &af.file_writer.interface;
+        switch (rom_fmt) {
+            .srec => try arch.microcode.write_srec_rom(Entry, gpa, w, uc),
+            .ihex => try arch.microcode.write_ihex_rom(Entry, gpa, w, uc),
+            .compressed => try arch.microcode.write_compressed_rom(Entry, gpa, w, uc),
+            .compressed_dump => {
+                var compressed = std.io.Writer.Allocating.init(gpa);
+                defer compressed.deinit();
+                try arch.microcode.write_compressed_rom(Entry, gpa, &compressed.writer, uc);
+                try rom_decompress.dump(compressed.written(), w);
+            },
+        }
+        try af.finish();
+    }
+
+    if (decode_uc_path) |path| {
+        const Entry = arch.microcode.Decode_Microcode_Entry;
         var buf: [4096]u8 = undefined;
         var af = try std.fs.cwd().atomicFile(path, .{
             .write_buffer = &buf,

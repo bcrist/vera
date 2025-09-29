@@ -39,6 +39,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "setup_uc.crom", .module = isa.module("setup_uc.crom") },
             .{ .name = "compute_uc.crom", .module = isa.module("compute_uc.crom") },
             .{ .name = "transact_uc.crom", .module = isa.module("transact_uc.crom") },
+            .{ .name = "decode_uc.crom", .module = isa.module("decode_uc.crom") },
         },
     });
 

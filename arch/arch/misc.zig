@@ -40,11 +40,11 @@ pub const Pipeline = enum (u2) {
 
         // - Data is driven to the `L` and `D`/`DA`/`DB` buses
         //    - If there is a fault:
-        //       - Information about the current address translation is stored to `ATR`
+        //       - Information about the current address translation is stored to `VABOR`
         //    - If there is not a fault:
         //       - System bus writes are performed
         //       - `L` and `D` buses may be connected if necessary
-        //       - `DR`/`IR`/`ATR` may be loaded from `D` if necessary
+        //       - `DR`/`IR`/`VABOR` may be loaded from `D` if necessary
         //       - General-purpose and special-register files are written if necessary
         //       - Flags are updated if necessary
         //       - Guard registers may be updated
@@ -150,8 +150,10 @@ pub const Special_Op = enum (u4) {
     write_to_other_rsn = 6,
     read_and_write_other_rsn = 7, // note: never affects virtual address base
     fault_on_overflow = 8,
-    // 9...14 unused
+    load_vabor_from_d = 9, // VABOR = Virtual address/bus override register
+    // 10...14 unused
     trigger_fault = 15,
+    _,
 
     pub inline fn init(raw_value: Raw) Special_Op {
         return @enumFromInt(raw_value);
