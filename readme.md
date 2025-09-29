@@ -30,6 +30,6 @@ Since everyone in the homebrew CPU community has their own ideas of what kinds o
     * &gt;= 0.8mm pitch for BGA
 * Modern SRAM and SDRAM is fine to use
 * FPGAs are not allowed
-* Other programmable logic (CPLDs) are allowed only if I have [written the entire programming toolchain myself](https://github.com/bcrist/zig-lc4k)
-* Microcontrollers are allowed for bootstrapping or debugging purposes, or within peripheral devices
-    * No MCUs within the data or control paths of the CPU itself
+* CPLDs and other programmable logic are allowed only if I have [created the entire programming toolchain myself](https://github.com/bcrist/zig-lc4k)
+* Microcontrollers or other ASICs are allowed for bootstrapping or debugging purposes, or within peripheral devices
+    * Absolutely none within the data or control paths of the CPU itself
