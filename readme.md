@@ -28,7 +28,8 @@ Since everyone in the homebrew CPU community has their own ideas of what kinds o
 * SMD footprints are fine
     * &gt;= 0.5mm pitch for QFP/QFN/(T)(S)SOP
     * &gt;= 0.8mm pitch for BGA
-* Modern SRAM and SDRAM is fine to use
+* Modern SRAM, dual-port SRAM, and SDRAM is fine to use
+* Dedicated adder/multiplier/ALU ASICs are allowed
 * FPGAs are not allowed
 * CPLDs and other programmable logic are allowed only if I have [created the entire programming toolchain myself](https://github.com/bcrist/zig-lc4k)
 * Microcontrollers or other ASICs are allowed for bootstrapping or debugging purposes, or within peripheral devices
