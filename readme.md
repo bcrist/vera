@@ -1,5 +1,5 @@
 # Homebrew discrete-logic CPU
-### _I call it Vera_
+### _"I call it Vera"_ - Jayne Cobb
 
 ## Specs
 * up to 20 MHz clock
@@ -16,3 +16,20 @@
     * up to 16 MiB SRAM
     * up to 16 MiB I/O space
     * up to 32 MiB pipeline-private, zero-wait SDRAM
+
+## Design Constraints
+Since everyone in the homebrew CPU community has their own ideas of what kinds of technology are acceptable to use, here are my self-imposed restrictions and allowances:
+
+* 3.3V LVTTL/LVCMOS signalling is preferred
+    * Backplane signals must not exceed 3.3V (ignoring overshoot transients)
+    * 5V TTL outputs are allowed within a board, when paired with an 5V-tolerant receiver
+    * Differential LVPECL/LVDS signalling is allowed for clocks
+    * All boards should locally generate their own Vcc from a common 12V supply distributed by the backplane
+* SMD footprints are fine
+    * &gt;= 0.5mm pitch for QFP/QFN/(T)(S)SOP
+    * &gt;= 0.8mm pitch for BGA
+* Modern SRAM and SDRAM is fine to use
+* FPGAs are not allowed
+* Other programmable logic (CPLDs) are allowed only if I have [written the entire programming toolchain myself](https://github.com/bcrist/zig-lc4k)
+* Microcontrollers are allowed for bootstrapping or debugging purposes, or within peripheral devices
+    * No MCUs within the data or control paths of the CPU itself
