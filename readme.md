@@ -11,7 +11,8 @@
 * 32b popcount/extension/truncation unit
 * 32b virtual addresses
 * 16x4x128 entry, 2 way set-associative, software filled TLB
+    * 4 KiB pages
 * 64 MiB physical address space (24b address x 32b data)
-* 8 MiB SRAM
-* 4 MiB FLASH (not directly addressable by CPU)
-* 32 MiB PSRAM (not directly addressable by CPU)
+    * up to 16 MiB SRAM
+    * up to 16 MiB I/O space
+    * up to 32 MiB pipeline-private, zero-wait SDRAM
