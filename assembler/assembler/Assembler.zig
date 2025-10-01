@@ -260,11 +260,11 @@ pub fn record_error_fmt(self: *Assembler, file_handle: Source_File.Handle, conte
     }) catch @panic("OOM");
 }
 
-pub fn record_token_error(self: *Assembler, file_handle: Source_File.Handle, token: lex.Token.Handle, desc: []const u8, flags: Error.Flag_Set) void {
+pub fn record_token_error(self: *Assembler, file_handle: Source_File.Handle, token: isa.lex.Token.Handle, desc: []const u8, flags: Error.Flag_Set) void {
     record_error(self, file_handle, .{ .token = token }, desc, flags);
 }
 
-pub fn record_token_error_fmt(self: *Assembler, file_handle: Source_File.Handle, token: lex.Token.Handle, comptime fmt: []const u8, args: anytype, flags: Error.Flag_Set) void {
+pub fn record_token_error_fmt(self: *Assembler, file_handle: Source_File.Handle, token: isa.lex.Token.Handle, comptime fmt: []const u8, args: anytype, flags: Error.Flag_Set) void {
     record_error_fmt(self, file_handle, .{ .token = token }, fmt, args, flags);
 }
 
@@ -305,7 +305,7 @@ pub fn record_insn_encoding_error(self: *Assembler, file_handle: Source_File.Han
     }) catch @panic("OOM");
 }
 
-pub fn build_instruction(self: *Assembler, s: Source_File.Slices, ip: u32, mnemonic: Mnemonic, suffix: Mnemonic_Suffix, params: ?Expression.Handle, record_errors: bool) ?isa.Instruction {
+pub fn build_instruction(self: *Assembler, s: Source_File.Slices, ip: u32, mnemonic: isa.Mnemonic, params: ?Expression.Handle, record_errors: bool) ?isa.Instruction {
     self.params_temp.clearRetainingCapacity();
     if (params != null) {
         const expr_infos = s.expr.items(.info);
@@ -333,7 +333,6 @@ pub fn build_instruction(self: *Assembler, s: Source_File.Slices, ip: u32, mnemo
 
     return .{
         .mnemonic = mnemonic,
-        .suffix = suffix,
         .params = self.params_temp.items,
     };
 }
@@ -361,8 +360,8 @@ fn build_instruction_parameter(
     };
     self.params_temp.append(self.gpa, isa.Parameter{
         .signature = resolved_type.param_signature(),
-        .base_register_index = resolved_type.param_base_register_index(),
-        .offset_register_index = resolved_type.param_offset_register_index(),
+        .base_register = resolved_type.param_base_register(),
+        .offset_register = resolved_type.param_offset_register(),
         .constant = constant_value,
     }) catch @panic("OOM");
     return true;
@@ -381,10 +380,7 @@ const Expression = @import("Expression.zig");
 const Source_File = @import("Source_File.zig");
 const Error = @import("Error.zig");
 const Page_Data = @import("Page_Data.zig");
-const Mnemonic = isa.Mnemonic;
-const Mnemonic_Suffix = isa.Mnemonic_Suffix;
 const iedb = @import("iedb");
-const lex = isa.lex;
 const isa = @import("isa");
 const arch = @import("arch");
 const std = @import("std");

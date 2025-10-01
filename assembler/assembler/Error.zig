@@ -30,7 +30,7 @@ pub fn print(self: Error, a: *Assembler, writer: *std.io.Writer) !void {
     const last = file.tokens.get(context.last);
 
     const highlight_start = first.offset;
-    const highlight_end = last.offset + last.location(file.source).len;
+    const highlight_end = last.offset + last.span(file.source).len;
 
     try writer.writeByte('\n');
     try console.print_context(file.source, &.{
@@ -45,29 +45,25 @@ pub fn print(self: Error, a: *Assembler, writer: *std.io.Writer) !void {
 
     if (self.flags.contains(.is_instruction_encoding_error)) {
         const insn_handle = self.context.instruction;
-        const mn: Instruction.MnemonicAndSuffix = switch (s.insn.items(.operation)[insn_handle]) {
-            .insn => |info| info,
-            .bound_insn => |encoding| .{
-                .mnemonic = encoding.signature.mnemonic,
-                .suffix = encoding.signature.suffix,
-            },
+        const mnemonic: isa.Mnemonic = switch (s.insn.items(.operation)[insn_handle]) {
+            .insn => |mnemonic| mnemonic,
+            .bound_insn => |id| iedb.get_mnemonic(id),
             else => unreachable,
         };
 
         const address = s.insn.items(.address)[insn_handle];
         const params = s.insn.items(.params)[insn_handle];
-        const insn = a.build_instruction(s, address, mn.mnemonic, mn.suffix, params, false).?;
-        try isa.print.print_instruction(insn, address, writer);
+        const insn = a.build_instruction(s, address, mnemonic, params, false).?;
+        try isa.fmt.print_instruction(insn, address, writer);
         try writer.writeByte('\n');
 
-        var iter = a.edb.similar_encodings(insn, 10);
-        var first_alternative = true;
-        if (iter.next()) |enc| {
-            if (first_alternative) {
+        var similar_buf: [10]isa.Instruction.Form = undefined;
+        const similar_forms = a.edb.find_similar(&similar_buf, insn);
+        for (0.., similar_forms) |i, form| {
+            if (i == 0) {
                 try writer.writeAll("Encodings with the same signature:\n");
-                first_alternative = false;
             }
-            try isa.print.print_encoding(enc, writer);
+            try isa.fmt.print_form(form, writer);
             try writer.writeByte('\n');
         }
     }
@@ -109,7 +105,7 @@ fn get_expression_context(expr: Expression.Handle, range: ?lex.Token.Range, toke
         .crlf_cast, .lf_cast,
         => |inner| return get_expression_context(inner, result, tokens, infos),
 
-        .arrow, .literal_int, .literal_str, .literal_reg,
+        .literal_int, .literal_str, .literal_reg,
         .literal_current_address, .literal_symbol_def, .literal_symbol_ref,
         => return result,
     }
@@ -122,6 +118,7 @@ const Assembler = @import("Assembler.zig");
 const Source_File = @import("Source_File.zig");
 const Instruction = @import("Instruction.zig");
 const Expression = @import("Expression.zig");
+const iedb = @import("iedb");
 const isa = @import("isa");
 const arch = @import("arch");
 const console = @import("console");

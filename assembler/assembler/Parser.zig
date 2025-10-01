@@ -72,20 +72,15 @@ pub fn parse_instruction(self: *Parser) bool {
             .none, .insn, .bound_insn => unreachable,
 
             inline else => |d| {
-                const params = self.parse_expr_list(false);
+                const params = self.parse_expr_list();
                 const op = @unionInit(Instruction.Operation, @tagName(d), {});
                 self.add_instruction(label, directive_token, op, params);
             },
         }
-    } else if (parse_helpers.parse_mnemonic(self)) |mnemonic| {
+    } else if (parse_mnemonic(self)) |mnemonic| {
         const mnemonic_token = self.next_token - 1;
-        var swap_params = false;
-        const suffix = parse_helpers.parse_suffix(self, &swap_params);
-        const params = self.parse_expr_list(swap_params);
-        self.add_instruction(label, mnemonic_token, .{ .insn = .{
-            .mnemonic = mnemonic,
-            .suffix = suffix,
-        }}, params);
+        const params = self.parse_expr_list();
+        self.add_instruction(label, mnemonic_token, .{ .insn = mnemonic }, params);
     } else if (label) |_| {
         self.add_instruction(label, label_token, .none, null);
     }
@@ -127,38 +122,18 @@ fn add_instruction(self: *Parser, label: ?Expression.Handle, token: Token.Handle
     }) catch @panic("OOM");
 }
 
-fn parse_expr_list(self: *Parser, swap_params: bool) ?Expression.Handle {
+fn parse_expr_list(self: *Parser) ?Expression.Handle {
     const begin = self.next_token;
     self.skip_linespace();
-    if (self.try_token(.arrow)) {
-        const token = self.next_token - 1;
-        const lhs = self.add_typed_terminal_expression(.arrow, token, .arrow);
-        if (self.parse_expr_list(false)) |rhs| {
-            return self.add_binary_expression(.list, token, lhs, rhs);
-        } else {
-            return lhs;
-        }
-    } else if (self.parse_expr()) |lhs| {
+    if (self.parse_expr()) |lhs| {
         self.skip_linespace();
-        if (self.try_token(.comma) or self.try_token(.arrow)) {
+        if (self.try_token(.comma)) {
             const token = self.next_token - 1;
-            if (self.parse_expr_list(false)) |rhs| {
+            if (self.parse_expr_list()) |rhs| {
                 switch (self.token_kinds[token]) {
-                    .comma => if (swap_params) {
-                        return self.add_binary_expression(.list, token, rhs, lhs);
-                    } else {
-                        return self.add_binary_expression(.list, token, lhs, rhs);
-                    },
-                    .arrow => {
-                        const arrow = self.add_typed_terminal_expression(.arrow, token, .arrow);
-                        const arrow_rhs = self.add_binary_expression(.list, token, arrow, rhs);
-                        return self.add_binary_expression(.list, token, lhs, arrow_rhs);
-                    },
+                    .comma => return self.add_binary_expression(.list, token, lhs, rhs),
                     else => unreachable,
                 }
-            } else if (self.token_kinds[token] == .arrow) {
-                const rhs = self.add_typed_terminal_expression(.arrow, token, .arrow);
-                return self.add_binary_expression(.list, token, lhs, rhs);
             } else {
                 if (!self.sync_to_end_of_line) {
                     self.record_error("Expected expression");
@@ -187,29 +162,27 @@ const Operator_Info = struct {
 fn parse_prefix_operator(self: *Parser) ?Operator_Info {
     const begin = self.next_token;
     self.skip_linespace();
-    var t = self.next_token;
+    const t = self.next_token;
     const info: Operator_Info = switch (self.token_kinds[t]) {
         .minus => .{ .token = t, .left_bp = 1, .right_bp = 0xFF, .expr = .negate },
         .tilde => .{ .token = t, .left_bp = 1, .right_bp = 0xFF, .expr = .complement },
         .at    => .{ .token = t, .left_bp = 1, .right_bp = 0xFF, .expr = .absolute_address_cast },
-        .dot => {
-            t += 1;
-            self.next_token = t;
-            if (self.try_keyword("d")) {
+        .id => {
+            if (self.try_keyword(".d")) {
                 return .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .data_address_cast };
-            } else if (self.try_keyword("i")) {
+            } else if (self.try_keyword(".i")) {
                 return .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .insn_address_cast };
-            } else if (self.try_keyword("s")) {
+            } else if (self.try_keyword(".s")) {
                 return .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .stack_address_cast };
-            } else if (self.try_keyword("raw")) {
+            } else if (self.try_keyword(".raw")) {
                 return .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .remove_address_cast };
-            } else if (self.try_keyword("r")) {
+            } else if (self.try_keyword(".r")) {
                 return .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .index_to_reg };
-            } else if (self.try_keyword("idx")) {
+            } else if (self.try_keyword(".idx")) {
                 return .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .reg_to_index };
-            } else if (self.try_keyword("crlf")) {
+            } else if (self.try_keyword(".crlf")) {
                 return .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .crlf_cast };
-            } else if (self.try_keyword("lf")) {
+            } else if (self.try_keyword(".lf")) {
                 return .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .lf_cast };
             } else {
                 self.next_token = begin;
@@ -227,7 +200,7 @@ fn parse_prefix_operator(self: *Parser) ?Operator_Info {
 fn parse_operator(self: *Parser) ?Operator_Info {
     const begin = self.next_token;
     self.skip_linespace();
-    var t = self.next_token;
+    const t = self.next_token;
     const info: Operator_Info = switch (self.token_kinds[t]) {
         .bar        => .{ .token = t, .left_bp = 10, .right_bp = 11, .expr = .bitwise_or },
         .caret      => .{ .token = t, .left_bp = 12, .right_bp = 13, .expr = .bitwise_xor },
@@ -240,24 +213,20 @@ fn parse_operator(self: *Parser) ?Operator_Info {
         .plus_plus  => .{ .token = t, .left_bp = 40, .right_bp = 41, .expr = .concat },
         .star_star  => .{ .token = t, .left_bp = 42, .right_bp = 43, .expr = .concat_repeat },
         .apostrophe => .{ .token = t, .left_bp = 52, .right_bp = 53, .expr = .length_cast },
-        .dot => info: {
-            t += 1;
-            self.next_token = t;
-            defer self.next_token = t;
-            if (self.try_keyword("zx")) {
+        .id => info: {
+            if (self.try_keyword(".zx")) {
                 break :info .{ .token = t, .left_bp = 50, .right_bp = 51, .expr = .zero_extend };
-            } else if (self.try_keyword("sx")) {
+            } else if (self.try_keyword(".sx")) {
                 break :info .{ .token = t, .left_bp = 50, .right_bp = 51, .expr = .sign_extend };
-            } else if (self.try_keyword("trunc")) {
+            } else if (self.try_keyword(".trunc")) {
                 break :info .{ .token = t, .left_bp = 50, .right_bp = 51, .expr = .truncate };
-            } else if (self.try_keyword("signed")) {
+            } else if (self.try_keyword(".signed")) {
                 break :info .{ .token = t, .left_bp = 50, .right_bp = null, .expr = .signed_cast };
-            } else if (self.try_keyword("unsigned")) {
+            } else if (self.try_keyword(".unsigned")) {
                 break :info .{ .token = t, .left_bp = 50, .right_bp = null, .expr = .unsigned_cast };
-            } else if (self.try_keyword("without_signedness")) {
+            } else if (self.try_keyword(".without_signedness")) {
                 break :info .{ .token = t, .left_bp = 50, .right_bp = null, .expr = .remove_signedness_cast };
             } else {
-                t = begin;
                 return null;
             }
         },
@@ -456,15 +425,7 @@ fn parse_label(self: *Parser) ?Expression.Handle {
 }
 
 fn parse_local_label_directive(self: *Parser) bool {
-    const begin = self.next_token;
-    if (self.try_token(.dot) and self.try_token(.id)) {
-        const directive_str = self.token_span(self.next_token - 1);
-        if (std.mem.eql(u8, directive_str, "local")) {
-            return true;
-        }
-    }
-    self.next_token = begin;
-    return false;
+    return self.try_keyword(".local");
 }
 
 fn parse_symbol_def_list(self: *Parser) ?Expression.Handle {
@@ -493,9 +454,7 @@ fn parse_symbol_def_list(self: *Parser) ?Expression.Handle {
 fn parse_symbol_def(self: *Parser) ?Expression.Handle {
     const begin = self.next_token;
     self.skip_linespace();
-    if (self.try_token(.id)) {
-        return self.add_terminal_expression(.literal_symbol_def, self.next_token - 1);
-    } else if (self.try_token(.dot) and self.try_keyword("sym")) {
+    if (self.try_keyword(".sym")) {
         const sym_token = self.next_token - 1;
         if (self.parse_string_literal()) |expr| {
             return self.add_unary_expression(.directive_symbol_def, sym_token, expr);
@@ -503,6 +462,8 @@ fn parse_symbol_def(self: *Parser) ?Expression.Handle {
             self.record_error("Expected constant expression");
             self.sync_to_end_of_line = true;
         }
+    } else if (self.try_token(.id)) {
+        return self.add_terminal_expression(.literal_symbol_def, self.next_token - 1);
     }
     self.next_token = begin;
     return null;
@@ -510,9 +471,7 @@ fn parse_symbol_def(self: *Parser) ?Expression.Handle {
 fn parse_symbol_ref(self: *Parser) ?Expression.Handle {
     const begin = self.next_token;
     self.skip_linespace();
-    if (self.try_token(.id)) {
-        return self.add_terminal_expression(.literal_symbol_ref, self.next_token - 1);
-    } else if (self.try_token(.dot) and self.try_keyword("sym")) {
+    if (self.try_keyword(".sym")) {
         const sym_token = self.next_token - 1;
         if (self.parse_string_literal()) |expr| {
             return self.add_unary_expression(.directive_symbol_ref, sym_token, expr);
@@ -520,21 +479,33 @@ fn parse_symbol_ref(self: *Parser) ?Expression.Handle {
             self.record_error("Expected constant expression");
             self.sync_to_end_of_line = true;
         }
+    } else if (self.try_token(.id)) {
+        return self.add_terminal_expression(.literal_symbol_ref, self.next_token - 1);
     }
     self.next_token = begin;
+    return null;
+}
+
+pub fn parse_mnemonic(self: *Parser) ?isa.Mnemonic {
+    if (self.sync_to_end_of_line) return null;
+    if (!self.try_token(.id)) return null;
+
+    const mnemonic_str = self.token_span(self.next_token - 1);
+
+    const mnemonic = isa.Mnemonic.init(mnemonic_str);
+
+    if (mnemonic.name().len < mnemonic_str.len) {
+        self.record_error_rel("Mnemonic too long!", -1);
+    }
+
+    self.sync_to_end_of_line = true;
     return null;
 }
 
 fn try_keyword(self: *Parser, comptime kw: []const u8) bool {
     const begin = self.next_token;
     if (self.try_token(.id)) {
-        const str = self.token_span(begin);
-        if (str.len == kw.len) {
-            var buf = [_]u8 {0} ** kw.len;
-            if (std.mem.eql(u8, std.ascii.lowerString(&buf, str), kw)) {
-                return true;
-            }
-        }
+        if (std.ascii.eqlIgnoreCase(kw, self.token_span(begin))) return true;
     }
     self.next_token = begin;
     return false;
@@ -566,7 +537,6 @@ fn add_expression_info(self: *Parser, token: Token.Handle, info: Expression.Info
 
 fn add_terminal_expression(self: *Parser, kind: Expression.Kind, token: Token.Handle) Expression.Handle {
     return self.add_expression_info(token, switch (kind) {
-        .arrow => .arrow,
         .literal_int => .literal_int,
         .literal_str => .literal_str,
         .literal_reg => .literal_reg,
@@ -630,7 +600,6 @@ fn add_unary_expression(self: *Parser, kind: Expression.Kind, token: Token.Handl
         .crlf_cast => .{ .crlf_cast = inner },
         .lf_cast => .{ .lf_cast = inner },
 
-        .arrow,
         .literal_int,
         .literal_str,
         .literal_reg,
@@ -678,7 +647,6 @@ fn add_binary_expression(self: *Parser, kind: Expression.Kind, token: Token.Hand
         .zero_extend => .{ .zero_extend = bin },
         .truncate => .{ .truncate = bin },
 
-        .arrow,
         .directive_symbol_def,
         .directive_symbol_ref,
         .local_label_def,
@@ -707,18 +675,15 @@ fn add_binary_expression(self: *Parser, kind: Expression.Kind, token: Token.Hand
 }
 
 fn parse_directive(self: *Parser) ?Instruction.Operation_Type {
-    if (self.sync_to_end_of_line or !self.try_token(.dot)) return null;
+    const token = self.next_token;
+    if (self.sync_to_end_of_line or !self.try_token(.id)) return null;
 
-    if (self.try_token(.id)) {
-        const directive_str = self.token_span(self.next_token - 1);
-        if (directive_map.get(directive_str)) |directive| {
-            return directive;
-        }
-        self.record_error_rel("Unrecognized directive", -1);
-    } else {
-        self.record_error("Expected directive");
-    }
-    self.sync_to_end_of_line = true;
+    const directive_str = self.token_span(token);
+    if (directive_str[0] == '.') if (directive_map.get(directive_str[1..])) |directive| {
+        return directive;
+    };
+
+    self.next_token = token;
     return null;
 }
 
@@ -756,7 +721,7 @@ pub fn token_span(self: *Parser, handle: Token.Handle) []const u8 {
     return self.out.tokens.get(handle).span(self.out.source);
 }
 
-const directive_map = parse_helpers.case_insensitive_enum_map(Instruction.Operation_Type, .{
+const directive_map = isa.lex.case_insensitive_enum_map(Instruction.Operation_Type, .{
     .excluded_values = &.{ "none", "insn", "bound_insn" },
 }, .{});
 

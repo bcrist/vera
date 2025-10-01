@@ -23,13 +23,6 @@ pub const Address_Space = enum {
     }
 };
 
-pub const Branch_Kind = enum {
-    nonbranching,
-    conditional,
-    unconditional,
-    call,
-};
-
 pub const Mnemonic = enum (u128) {
     nop = raw_mnemonic("nop"),
     park = raw_mnemonic("park"),
@@ -107,6 +100,12 @@ pub const Mnemonic = enum (u128) {
     @"rev.1.16" = raw_mnemonic("rev.1.16"),
     @"rev.1.8" = raw_mnemonic("rev.1.8"),
 
+    frame = raw_mnemonic("frame"),
+    unframe = raw_mnemonic("unframe"),
+
+    b = raw_mnemonic("b"),
+    call = raw_mnemonic("call"),
+
     _,
 
     pub fn init(text: []const u8) Mnemonic {
@@ -117,8 +116,24 @@ pub const Mnemonic = enum (u128) {
         return std.mem.sliceTo(std.mem.asBytes(self), 0);
     }
 
-    pub fn format(self: *const Mnemonic, writer: *std.io.Writer) !void {
+    pub fn format(self: Mnemonic, writer: *std.io.Writer) !void {
         try writer.writeAll(self.name());
+    }
+
+    // if this returns true, the instruction will never cause the next instruction to execute; therefore it can be considered to end a block of code
+    pub fn is_unconditional_branch(self: Mnemonic) bool {
+        return switch (self) {
+            .b, .ret, .iret, .fret, .freto, .park => true,
+            else => false,
+        };
+    }
+
+    // if this returns true, the instruction will never directly execute the next instruction, but it will move the address of the next instruction into the return pointer register, so it will/may be executed later.
+    pub fn is_unconditional_call(self: Mnemonic) bool {
+        return switch (self) {
+            .call => true,
+            else => false,
+        };
     }
 };
 

@@ -50,7 +50,7 @@ fn trace_references_in_expr(a: *Assembler, s: Source_File.Slices, insn_handle: I
 
         .literal_symbol_ref => {
             const token_handle = s.expr.items(.token)[expr_handle];
-            const raw_symbol = s.file.tokens.get(token_handle).location(s.file.source);
+            const raw_symbol = s.file.tokens.get(token_handle).span(s.file.source);
             const symbol_constant = Constant.init_symbol_literal(a.gpa, &a.constant_temp, raw_symbol);
             trace_symbol(a, s, token_handle, symbol_constant.as_string());
         },
@@ -76,7 +76,6 @@ fn trace_references_in_expr(a: *Assembler, s: Source_File.Slices, insn_handle: I
         .literal_str,
         .literal_reg,
         .literal_current_address,
-        .arrow,
         => {},
     }
 }

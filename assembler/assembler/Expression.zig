@@ -14,7 +14,6 @@ pub const Flags = enum {
 pub const Kind = std.meta.Tag(Info);
 pub const Info = union (enum) {
     list: Binary,
-    arrow,
     literal_int,
     literal_str,
     literal_reg,
@@ -64,7 +63,6 @@ pub const Type = union (enum) {
     unknown,
     poison,
     symbol_def,
-    arrow,
     raw: Base_Offset_Type,
     data: Base_Offset_Type,
     insn: Base_Offset_Type,
@@ -72,14 +70,14 @@ pub const Type = union (enum) {
 
     pub fn base_offset_type(self: Type) ?Base_Offset_Type {
         return switch (self) {
-            .unknown, .poison, .symbol_def, .arrow => null,
+            .unknown, .poison, .symbol_def => null,
             .raw, .data, .insn, .stack => |bot| bot,
         };
     }
 
     pub fn address_space(self: Type) ?Address_Space {
         return switch (self) {
-            .unknown, .poison, .symbol_def, .arrow, .raw => null,
+            .unknown, .poison, .symbol_def, .raw => null,
             .data => .data,
             .insn => .insn,
             .stack => .stack,
@@ -88,11 +86,6 @@ pub const Type = union (enum) {
 
     pub fn param_signature(self: Type) Parameter.Signature {
         return switch (self) {
-            .arrow => .{
-                .address_space = null,
-                .base = .arrow,
-                .offset = .none,
-            },
             .raw => |bot| .{
                 .address_space = null,
                 .base = bot.base.param_kind(),
@@ -117,14 +110,14 @@ pub const Type = union (enum) {
         };
     }
 
-    pub fn param_base_register_index(self: Type) arch.reg.gpr.Index {
-        const bot = self.base_offset_type() orelse return 0;
-        return bot.base.register_index() orelse 0;
+    pub fn param_base_register(self: Type) arch.bus.K.Read_Index_Offset {
+        const bot = self.base_offset_type() orelse return .init(0);
+        return bot.base.register_offset() orelse .init(0);
     }
 
-    pub fn param_offset_register_index(self: Type) arch.reg.gpr.Index {
-        const bot = self.base_offset_type() orelse return 0;
-        return bot.offset.register_index() orelse 0;
+    pub fn param_offset_register(self: Type) arch.bus.K.Read_Index_Offset {
+        const bot = self.base_offset_type() orelse return .init(0);
+        return bot.offset.register_offset() orelse .init(0);
     }
 
     pub fn simple_base(self: Type) ?Term_Type {
@@ -158,10 +151,10 @@ pub const Type = union (enum) {
         }};
     }
 
-    pub fn reg(index: arch.reg.gpr.Index, signedness: ?Signedness) Type {
+    pub fn reg(offset: arch.bus.K.Read_Index_Offset, signedness: ?Signedness) Type {
         return .{ .raw = .{
             .base = .{ .reg = .{
-                .index = index,
+                .offset = offset,
                 .signedness = signedness,
             }},
             .offset = .none,
@@ -231,17 +224,17 @@ pub const Term_Type = union (enum) {
         };
     }
 
-    pub fn register_index(self: Term_Type) ?arch.reg.gpr.Index {
+    pub fn register_offset(self: Term_Type) ?arch.bus.K.Read_Index_Offset {
         return switch (self) {
             .none, .constant, .sr => null,
-            .reg => |reg| reg.index,
+            .reg => |reg| reg.offset,
         };
     }
 };
 
 pub const Indexed_Register_Type = struct {
     signedness: ?Signedness,
-    index: arch.reg.gpr.Index,
+    offset: arch.bus.K.Read_Index_Offset,
 };
 
 pub const Type_Builder = struct {
@@ -256,7 +249,7 @@ pub const Type_Builder = struct {
         switch (t) {
             .unknown => self.unknown = true,
             .poison => self.poison = true,
-            .symbol_def, .arrow => self.invalid = true,
+            .symbol_def => self.invalid = true,
             .raw, .data, .insn, .stack => |bot| {
                 self.try_add_term(bot.base);
                 self.try_add_term(bot.offset);
@@ -275,7 +268,7 @@ pub const Type_Builder = struct {
         switch (t) {
             .unknown => self.unknown = true,
             .poison => self.poison = true,
-            .symbol_def, .arrow => self.invalid = true,
+            .symbol_def => self.invalid = true,
             .raw, .data, .insn, .stack => |bot| {
                 self.try_subtract_term(bot.base);
                 self.try_subtract_term(bot.offset);
@@ -364,7 +357,7 @@ pub const Type_Builder = struct {
         return switch (t) {
             .none => 0,
             .constant => 1,
-            .reg => |r| @as(u8, 0x10) + r.index,
+            .reg => |r| @as(u8, 0x10) + r.offset.raw(),
             .sr => |r| @as(u8, 0x40) + @intFromEnum(r),
         };
     }

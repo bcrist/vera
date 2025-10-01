@@ -240,9 +240,9 @@ pub fn collect_chunks(
                     state.try_add_chunk(new_chunk_begin, false);
                     state.is_fixed = true;
                 },
-                .insn => |i| {
+                .insn => |mnemonic| {
                     state.check_chunk_type(.code, insn_handle);
-                    if (isa.branch_kind(i.mnemonic, i.suffix) == .unconditional) {
+                    if (mnemonic.is_unconditional_branch()) {
                         state.try_add_chunk(insn_handle + 1, true);
                     }
                 },

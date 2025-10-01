@@ -4,6 +4,8 @@
 //! The set of permutations represented and length of the instruction is mostly determined by the set of encoders used and their domain,
 //! but Constraints may be used to shrink the set of permutations.
 
+id: ?u16 = null, // when set, you can use iedb.get(id) to reconstruct this Form.
+
 signature: Instruction.Signature,
 constraints: []const Constraint,
 encoders: []const Encoder, // If there are multiple encoders, each must correspond to a unique subset of the bits of the instruction.

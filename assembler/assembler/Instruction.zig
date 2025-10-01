@@ -15,8 +15,8 @@ pub const Operation = union (enum) {
     nil, // same as none, but blocks wont backtrack over this
 
     // .insn are transformed to .bound_insn during the layout process:
-    insn: MnemonicAndSuffix,
-    bound_insn: *const isa.Instruction_Encoding,
+    insn: isa.Mnemonic,
+    bound_insn: u16, // use iedb.get() to convert into an Instruction.Form
 
     // Data directives:
     db, zb,
@@ -49,11 +49,6 @@ pub const Operation = union (enum) {
     undef,
     local,
     range,
-};
-
-pub const MnemonicAndSuffix = struct {
-    mnemonic: isa.Mnemonic,
-    suffix: isa.Mnemonic_Suffix,
 };
 
 pub const Flags = enum {

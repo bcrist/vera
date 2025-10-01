@@ -99,13 +99,13 @@ fn resolve_auto_org_address(a: *Assembler, chunk: Source_File.Chunk) u32 {
             var begin: usize = 0;
             while (unused.findFirstSet()) |raw_unused_range_begin| {
                 const address = bits.concat(.{
-                    arch.addr.Offset.init(@intCast(raw_unused_range_begin)).raw(),
+                    arch.addr.Page.Offset.init(@intCast(raw_unused_range_begin)).raw(),
                     page.raw(),
                 });
                 const aligned_address = apply_alignment(address, alignment.modulo, alignment.offset);
 
-                if (arch.addr.Page.init(@intCast(aligned_address >> @bitSizeOf(arch.addr.Offset))).raw() != page.raw()) break;
-                const unused_range_begin = arch.addr.Offset.init(@truncate(aligned_address));
+                if (arch.addr.Page.init(@intCast(aligned_address >> @bitSizeOf(arch.addr.Page.Offset))).raw() != page.raw()) break;
+                const unused_range_begin = arch.addr.Page.Offset.init(@truncate(aligned_address));
 
                 used.setRangeValue(.{
                     .start = begin,
@@ -137,8 +137,8 @@ fn resolve_auto_org_address(a: *Assembler, chunk: Source_File.Chunk) u32 {
 
     const allowed_range = a.get_section(chunk_section_handle).address_range();
 
-    const search_range_begin: usize = allowed_range.first >> @bitSizeOf(arch.addr.Offset);
-    const search_range_end: usize = (allowed_range.first + allowed_range.len) >> @bitSizeOf(arch.addr.Offset);
+    const search_range_begin: usize = allowed_range.first >> @bitSizeOf(arch.addr.Page.Offset);
+    const search_range_end: usize = (allowed_range.first + allowed_range.len) >> @bitSizeOf(arch.addr.Page.Offset);
 
     var initial_page = search_range_begin;
     for (search_range_begin..search_range_end) |page_usize| {
@@ -168,7 +168,7 @@ fn resolve_auto_org_address(a: *Assembler, chunk: Source_File.Chunk) u32 {
         }
     }
 
-    return @as(u32, @intCast(initial_page)) << @bitSizeOf(arch.addr.Offset);
+    return @as(u32, @intCast(initial_page)) << @bitSizeOf(arch.addr.Page.Offset);
 }
 
 fn get_alignment_for_chunk(a: *Assembler, chunk: Source_File.Chunk) Assembler.Alignment {
@@ -272,23 +272,20 @@ fn do_chunk_layout(a: *Assembler, chunk: Source_File.Chunk, initial_address: u32
                 }
             },
             .insn => {
-                const length = resolve_insn_encoding(a, s, address, insn_handle, &insn_operations[insn_handle], insn_params[insn_handle]);
+                const length = resolve_insn_form(a, s, address, insn_handle, &insn_operations[insn_handle], insn_params[insn_handle]);
                 insn_lengths[insn_handle] = length;
                 address += length;
                 layout_changed = true;
                 check_for_alignment_holes = true;
             },
-            .bound_insn => |encoding| {
+            .bound_insn => |id| {
                 if (insn_flags[insn_handle].contains(.depends_on_layout)) {
-                    const old_encoding = encoding;
-                    insn_operations[insn_handle] = .{ .insn = .{
-                        .mnemonic = old_encoding.signature.mnemonic,
-                        .suffix = old_encoding.signature.suffix,
-                    }};
-                    const length = resolve_insn_encoding(a, s, address, insn_handle, &insn_operations[insn_handle], insn_params[insn_handle]);
+                    const old_form = iedb.get(id);
+                    insn_operations[insn_handle] = .{ .insn = old_form.signature.mnemonic };
+                    const length = resolve_insn_form(a, s, address, insn_handle, &insn_operations[insn_handle], insn_params[insn_handle]);
                     address += length;
                     switch (insn_operations[insn_handle]) {
-                        .bound_insn => |new_encoding| if (!old_encoding.eql(new_encoding.*)) {
+                        .bound_insn => |new_id| if (id != new_id) {
                             insn_lengths[insn_handle] = length;
                             layout_changed = true;
                         },
@@ -347,8 +344,8 @@ fn do_chunk_layout(a: *Assembler, chunk: Source_File.Chunk, initial_address: u32
 
     if (chunk.section) |section_handle| {
         const chunk_bytes = address - initial_address;
-        const initial_page = initial_address >> @bitSizeOf(arch.addr.Offset);
-        const final_page = if (address == initial_address) initial_page else (address - 1) >> @bitSizeOf(arch.addr.Offset);
+        const initial_page = initial_address >> @bitSizeOf(arch.addr.Page.Offset);
+        const final_page = if (address == initial_address) initial_page else (address - 1) >> @bitSizeOf(arch.addr.Page.Offset);
 
         const section = a.get_section(section_handle);
         var access = section.kind.access_policies(chunk_bytes);
@@ -358,8 +355,8 @@ fn do_chunk_layout(a: *Assembler, chunk: Source_File.Chunk, initial_address: u32
             var page_usage = a.pages.items(.usage);
             if (page == initial_page or page == final_page) {
                 const range = std.bit_set.Range{
-                    .start = if (page == initial_page) arch.addr.Offset.init(@truncate(initial_address)).raw() else 0,
-                    .end = if (page == final_page) arch.addr.Offset.init(@truncate(address)).raw() else Page_Data.page_size,
+                    .start = if (page == initial_page) arch.addr.Page.Offset.init(@truncate(initial_address)).raw() else 0,
+                    .end = if (page == final_page) arch.addr.Page.Offset.init(@truncate(address)).raw() else Page_Data.page_size,
                 };
                 page_usage[page_data_handle].setRangeValue(range, true);
                 // std.debug.print("{X:0>13}: ({}) Marking page used: {} - {}\n", .{ page, page_data_handle, range.start, range.end });
@@ -556,21 +553,20 @@ fn resolve_push_pop_directive_length(a: *Assembler, s: Source_File.Slices, insn_
             .pop => .unframe,
             else => unreachable,
         },
-        .suffix = .none,
         .params = &.{
             .{
                 .signature = Expression.Type.constant().param_signature(),
-                .base_register_index = 0,
-                .offset_register_index = 0,
+                .base_register = .init(0),
+                .offset_register = .init(0),
                 .constant = stack_size,
             },
         },
     };
-    const maybe_encoding = find_best_insn_encoding(a, insn);
+    const maybe_form = find_best_insn_form(a, insn);
 
     var length: u32 = 0;
-    if (maybe_encoding) |encoding| {
-        length = encoding.len();
+    if (maybe_form) |form| {
+        length = form.len();
     } else {
         var flags = Error.Flag_Set.initEmpty();
         if (flagset.contains(.depends_on_layout)) {
@@ -688,11 +684,6 @@ pub fn resolve_expression_constant(a: *Assembler, s: Source_File.Slices, ip: u32
         .index_to_reg,
         => return null,
 
-        .arrow => {
-            const constant = Constant.init_int(@as(u1, 0));
-            expr_resolved_constants[expr_handle] = constant.intern(a.arena, a.gpa, &a.constants);
-        },
-
         .literal_current_address => {
             var value = ip;
             switch (s.expr.items(.resolved_type)[expr_handle]) {
@@ -706,7 +697,7 @@ pub fn resolve_expression_constant(a: *Assembler, s: Source_File.Slices, ip: u32
 
         .literal_symbol_ref => {
             const token_handle = s.expr.items(.token)[expr_handle];
-            const raw_symbol = s.file.tokens.get(token_handle).location(s.file.source);
+            const raw_symbol = s.file.tokens.get(token_handle).span(s.file.source);
             const symbol_constant = Constant.init_symbol_literal(a.gpa, &a.constant_temp, raw_symbol);
             resolve_symbol_ref_expr_constant(a, s, ip, expr_handle, token_handle, symbol_constant);
         },
@@ -942,7 +933,7 @@ pub fn resolve_expression_constant(a: *Assembler, s: Source_File.Slices, ip: u32
     return expr_resolved_constants[expr_handle];
 }
 
-fn resolve_symbol_ref_expr_constant(a: *Assembler, s: Source_File.Slices, ip: u32, expr_handle: Expression.Handle, symbol_token_handle: lex.Token.Handle, symbol_constant: Constant) void {
+fn resolve_symbol_ref_expr_constant(a: *Assembler, s: Source_File.Slices, ip: u32, expr_handle: Expression.Handle, symbol_token_handle: isa.lex.Token.Handle, symbol_constant: Constant) void {
     switch (symbols.lookup_symbol(a, s, symbol_token_handle, symbol_constant.as_string(), false)) {
         .expression => |target_expr_handle| {
             s.expr.items(.resolved_constant)[expr_handle] = resolve_expression_constant(a, s, ip, target_expr_handle);
@@ -970,14 +961,14 @@ fn resolve_symbol_ref_expr_constant(a: *Assembler, s: Source_File.Slices, ip: u3
     }
 }
 
-fn resolve_insn_encoding(a: *Assembler, s: Source_File.Slices, ip: u32, insn_handle: Instruction.Handle, op: *Instruction.Operation, params: ?Expression.Handle) Encoded_Instruction.Length_Type {
-    const insn = a.build_instruction(s, ip, op.insn.mnemonic, op.insn.suffix, params, true) orelse return 0;
-    const best_encoding = find_best_insn_encoding(a, insn);
+fn resolve_insn_form(a: *Assembler, s: Source_File.Slices, ip: u32, insn_handle: Instruction.Handle, op: *Instruction.Operation, params: ?Expression.Handle) isa.Instruction.Encoded.Length_Bytes {
+    const insn = a.build_instruction(s, ip, op.insn, params, true) orelse return 0;
+    const best_form = find_best_insn_form(a, insn);
     a.params_temp.clearRetainingCapacity();
 
-    if (best_encoding) |enc| {
-        op.* = .{ .bound_insn = enc };
-        return enc.len();
+    if (best_form) |form| {
+        op.* = .{ .bound_insn = form.id.? };
+        return form.len();
     } else {
         const err_flags = Error.Flag_Set.initOne(.remove_on_layout_reset);
         a.record_insn_encoding_error(s.file.handle, insn_handle, err_flags);
@@ -985,25 +976,27 @@ fn resolve_insn_encoding(a: *Assembler, s: Source_File.Slices, ip: u32, insn_han
     }
 }
 
-pub fn find_best_insn_encoding(a: *Assembler, insn: isa.Instruction) ?*const isa.Instruction_Encoding {
-    var iter = a.edb.matching_encodings(insn);
+pub fn find_best_insn_form(a: *Assembler, insn: isa.Instruction) ?isa.Instruction.Form {
+    var iter = a.edb.find_matches(insn);
 
-    var best_length: ?isa.Encoded_Instruction.Length_Type = null;
-    var best_encoding: ?*const isa.Instruction_Encoding = null;
-    while (iter.next_ptr()) |enc| {
-        const length = enc.len();
+    // TODO use priority system
+
+    var best_length: ?isa.Instruction.Encoded.Length_Bytes = null;
+    var best_form: ?isa.Instruction.Form = null;
+    while (iter.next()) |form| {
+        const length = form.len();
         if (best_length) |cur_length| {
             if (length < cur_length) {
-                best_encoding = enc;
+                best_form = form;
                 best_length = length;
             }
         } else {
-            best_encoding = enc;
+            best_form = form;
             best_length = length;
         }
     }
 
-    return best_encoding;
+    return best_form;
 }
 
 pub fn populate_page_chunks(a: *Assembler, chunks: []const Source_File.Chunk) void {
@@ -1012,10 +1005,10 @@ pub fn populate_page_chunks(a: *Assembler, chunks: []const Source_File.Chunk) vo
     for (chunks) |chunk| {
         if (chunk.section) |section| {
             const addresses = chunk.address_range(a);
-            const first_page = addresses.first >> @bitSizeOf(arch.addr.Offset);
+            const first_page = addresses.first >> @bitSizeOf(arch.addr.Page.Offset);
             var last_page = first_page;
             if (addresses.len > 0) {
-                last_page = addresses.last() >> @bitSizeOf(arch.addr.Offset);
+                last_page = addresses.last() >> @bitSizeOf(arch.addr.Page.Offset);
             }
 
             a.sections.values()[section].has_chunks = true;
@@ -1079,11 +1072,12 @@ pub fn encode_page_data(a: *Assembler, file: *Source_File) void {
             .section, .boot, .code, .kcode, .entry, .kentry, .data, .kdata, .@"const", .kconst, .stack,
             => {},
 
-            .bound_insn => |encoding| {
+            .bound_insn => |id| {
                 const address = insn_addresses[insn_handle];
                 const params = insn_params[insn_handle];
-                const insn = a.build_instruction(s, address, encoding.signature.mnemonic, encoding.signature.suffix, params, false).?;
-                encode_instruction(a, s, insn_handle, address, insn_lengths[insn_handle], insn, encoding, page_datas);
+                const form = iedb.get(id);
+                const insn = a.build_instruction(s, address, form.signature.mnemonic, params, false).?;
+                encode_instruction(a, s, insn_handle, address, insn_lengths[insn_handle], insn, form, page_datas);
             },
 
             .db, .dh, .dw => {
@@ -1096,8 +1090,8 @@ pub fn encode_page_data(a: *Assembler, file: *Source_File) void {
                 const address = insn_addresses[insn_handle];
                 const length: usize = insn_lengths[insn_handle];
                 const params = insn_params[insn_handle] orelse continue;
-                var page = arch.addr.Page.init(@truncate(address >> @bitSizeOf(arch.addr.Offset)));
-                const initial_offset = arch.addr.Offset.init(@truncate(address));
+                var page = arch.addr.Page.init(@truncate(address >> @bitSizeOf(arch.addr.Page.Offset)));
+                const initial_offset = arch.addr.Page.Offset.init(@truncate(address));
                 var page_data_handle = a.page_lookup.get(page) orelse continue;
                 var buffer = page_datas[page_data_handle][initial_offset.raw()..];
                 var written: usize = 0;
@@ -1114,8 +1108,8 @@ pub fn encode_page_data(a: *Assembler, file: *Source_File) void {
             .zb, .zh, .zw => {
                 const address = insn_addresses[insn_handle];
                 var remaining: usize = insn_lengths[insn_handle];
-                var page = arch.addr.Page.init(@truncate(address >> @bitSizeOf(arch.addr.Offset)));
-                const initial_offset = arch.addr.Offset.init(@truncate(address));
+                var page = arch.addr.Page.init(@truncate(address >> @bitSizeOf(arch.addr.Page.Offset)));
+                const initial_offset = arch.addr.Page.Offset.init(@truncate(address));
                 var page_data_handle = a.page_lookup.get(page) orelse continue;
                 var buffer = page_datas[page_data_handle][initial_offset.raw()..];
 
@@ -1138,18 +1132,17 @@ pub fn encode_page_data(a: *Assembler, file: *Source_File) void {
                         .pop => .unframe,
                         else => unreachable,
                     },
-                    .suffix = .none,
                     .params = &.{
                         .{
                             .signature = Expression.Type.constant().param_signature(),
-                            .base_register_index = 0,
-                            .offset_register_index = 0,
+                            .base_register = .init(0),
+                            .offset_register = .init(0),
                             .constant = stack_size,
                         },
                     },
                 };
-                if (find_best_insn_encoding(a, insn)) |encoding| {
-                    encode_instruction(a, s, insn_handle, insn_addresses[insn_handle], insn_lengths[insn_handle], insn, encoding, page_datas);
+                if (find_best_insn_form(a, insn)) |form| {
+                    encode_instruction(a, s, insn_handle, insn_addresses[insn_handle], insn_lengths[insn_handle], insn, form, page_datas);
                 }
             },
         }
@@ -1163,16 +1156,16 @@ fn encode_instruction(
     address: u32,
     length: u32,
     insn: isa.Instruction,
-    encoding: *const isa.Instruction_Encoding,
+    form: isa.Instruction.Form,
     page_datas: [][Page_Data.page_size]u8
 ) void {
-    const page = arch.addr.Page.init(@truncate(address >> @bitSizeOf(arch.addr.Offset)));
-    const offset = arch.addr.Offset.init(@truncate(address));
+    const page = arch.addr.Page.init(@truncate(address >> @bitSizeOf(arch.addr.Page.Offset)));
+    const offset = arch.addr.Page.Offset.init(@truncate(address));
 
     const page_data_handle = a.page_lookup.get(page) orelse return;
     const buffer = page_datas[page_data_handle][offset.raw()..];
 
-    const temp_insn = encoding.encode(insn, 0);
+    const temp_insn = form.encode(insn, 0);
 
     if (length > buffer.len) {
         if (@as(u1, @truncate(address)) == 1) {
@@ -1250,8 +1243,7 @@ const Instruction = @import("Instruction.zig");
 const Expression = @import("Expression.zig");
 const Page_Data = @import("Page_Data.zig");
 const Error = @import("Error.zig");
-const Encoded_Instruction = isa.Encoded_Instruction;
-const lex = isa.lex;
+const iedb = @import("iedb");
 const isa = @import("isa");
 const arch = @import("arch");
 const bits = @import("bits");

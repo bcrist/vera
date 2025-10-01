@@ -7,20 +7,14 @@ pub fn main() !void {
     try console.init();
     defer console.deinit();
 
+    const edb = try iedb.Encoding_Database.init(gpa);
+
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     var temp = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    var gpa = std.heap.GeneralPurposeAllocator(.{}) {};
 
-    var pd: iedb.read_database.Parser_Data = .{
-        .arena = arena.allocator(),
-        .temp = gpa.allocator(),
-    };
+    var a = Assembler.init(gpa, arena.allocator(), edb);
 
-    const edb = try iedb.read_database.parse_encoding_db(&pd, @embedFile("iedb.sx"));
-
-    var a = Assembler.init(gpa.allocator(), arena.allocator(), edb);
-
-    var output_file = std.array_list.Managed(u8).init(gpa.allocator());
+    var output_file = std.array_list.Managed(u8).init(gpa);
 
     var arg_iter = try std.process.ArgIterator.initWithAllocator(temp.allocator());
     _ = arg_iter.next(); // ignore assemble command name
@@ -38,14 +32,22 @@ pub fn main() !void {
 
     a.assemble();
 
-    var list = output.create_listing(&a, gpa.allocator(), .{});
+    var list = output.create_listing(&a, gpa, .{});
     defer list.deinit();
 
-    try list.write_all(*Assembler, &a, std.io.getStdOut().writer());
+    var stdout_buf: [64]u8 = undefined;
+    var stdout = std.fs.File.stdout().writer(&stdout_buf);
+    defer stdout.interface.flush() catch {};
+
+    var stderr_buf: [64]u8 = undefined;
+    var stderr = std.fs.File.stderr().writer(&stderr_buf);
+    defer stderr.interface.flush() catch {};
+
+    try list.write_all(*Assembler, &a, &stdout.interface);
 
     //try dump.dump(&a, std.io.getStdOut().writer());
 
-    try a.print_errors(std.io.getStdErr().writer());
+    try a.print_errors(&stderr.interface);
 
     // try output.write_hex(&a, std.fs.cwd(), output_file.items, .{
     //     .merge_all_sections = true,
@@ -54,10 +56,13 @@ pub fn main() !void {
     const simsx_filename = try std.fmt.allocPrint(arena.allocator(), "{s}.ssx", .{ output_file.items });
     var f = try std.fs.cwd().createFile(simsx_filename, .{});
     defer f.close();
-    const writer = f.writer();
-    try output.write_sim_sx(&a, gpa.allocator(), writer.any(), .{});
-
+    var buf: [4096]u8 = undefined;
+    var w = f.writer(&buf);
+    try output.write_sim_sx(&a, gpa, &w.interface, .{});
+    try w.interface.flush();
 }
+
+const gpa = std.heap.smp_allocator;
 
 const arch = @import("arch");
 const isa = @import("isa");

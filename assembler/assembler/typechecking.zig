@@ -214,11 +214,11 @@ pub fn try_resolve_expr_type(a: *Assembler, s: Source_File.Slices, expr_handle: 
 
     const info = expr_infos[expr_handle];
     switch (info) {
-        .list, .arrow => expr_resolved_types[expr_handle] = .poison,
+        .list => expr_resolved_types[expr_handle] = .poison,
         .literal_int => {
             const token_handle = s.expr.items(.token)[expr_handle];
             const token = s.file.tokens.get(token_handle);
-            if (Constant.init_int_literal(a.gpa, &a.constant_temp, token.location(s.file.source))) |constant| {
+            if (Constant.init_int_literal(a.gpa, &a.constant_temp, token.span(s.file.source))) |constant| {
                 expr_resolved_types[expr_handle] = Expression.Type.constant();
                 s.expr.items(.resolved_constant)[expr_handle] = constant.intern(a.arena, a.gpa, &a.constants);
             } else |err| {
@@ -235,7 +235,7 @@ pub fn try_resolve_expr_type(a: *Assembler, s: Source_File.Slices, expr_handle: 
             if (token.kind == .str_literal_raw) {
                 const token_kinds = s.file.tokens.items(.kind);
                 a.constant_temp.clearRetainingCapacity();
-                var raw = token.location(s.file.source);
+                var raw = token.span(s.file.source);
                 if (raw[raw.len - 1] == '\n') {
                     raw.len -= 1;
                 }
@@ -248,7 +248,7 @@ pub fn try_resolve_expr_type(a: *Assembler, s: Source_File.Slices, expr_handle: 
                     switch (token_kinds[token_handle]) {
                         .str_literal_raw => {
                             token = s.file.tokens.get(token_handle);
-                            raw = token.location(s.file.source);
+                            raw = token.span(s.file.source);
                             if (raw[raw.len - 1] == '\n') {
                                 raw.len -= 1;
                             }
@@ -266,7 +266,7 @@ pub fn try_resolve_expr_type(a: *Assembler, s: Source_File.Slices, expr_handle: 
                 const constant = Constant.init_string(a.constant_temp.items);
                 expr_resolved_types[expr_handle] = Expression.Type.constant();
                 s.expr.items(.resolved_constant)[expr_handle] = constant.intern(a.arena, a.gpa, &a.constants);
-            } else if (Constant.init_string_literal(a.gpa, &a.constant_temp, token.location(s.file.source))) |constant| {
+            } else if (Constant.init_string_literal(a.gpa, &a.constant_temp, token.span(s.file.source))) |constant| {
                 expr_resolved_types[expr_handle] = Expression.Type.constant();
                 s.expr.items(.resolved_constant)[expr_handle] = constant.intern(a.arena, a.gpa, &a.constants);
             } else |err| {
@@ -285,10 +285,10 @@ pub fn try_resolve_expr_type(a: *Assembler, s: Source_File.Slices, expr_handle: 
             // SFR types are preassigned when parsed, so we can assume we're dealing with a GPR name.
             const token_handle = s.expr.items(.token)[expr_handle];
             const token = s.file.tokens.get(token_handle);
-            const name = token.location(s.file.source);
-            const index = std.fmt.parseUnsigned(Register_Index, name[1..], 10) catch unreachable;
+            const name = token.span(s.file.source);
+            const offset = std.fmt.parseUnsigned(arch.bus.K.Read_Index_Offset.Raw, name[1..], 10) catch unreachable;
             const reg_type: Expression.Type = switch (name[0]) {
-                'r', 'R' => Expression.Type.reg(index, null),
+                'r', 'R' => Expression.Type.reg(.init(offset), null),
                 else => unreachable,
             };
             expr_resolved_types[expr_handle] = reg_type;
@@ -316,7 +316,7 @@ pub fn try_resolve_expr_type(a: *Assembler, s: Source_File.Slices, expr_handle: 
         },
         .literal_symbol_ref => {
             const token_handle = s.expr.items(.token)[expr_handle];
-            const symbol_literal = s.file.tokens.get(token_handle).location(s.file.source);
+            const symbol_literal = s.file.tokens.get(token_handle).span(s.file.source);
             const symbol_constant = Constant.init_symbol_literal(a.gpa, &a.constant_temp, symbol_literal);
             return try_resolve_symbol_type(a, s, expr_handle, token_handle, symbol_constant.as_string());
         },
@@ -371,13 +371,13 @@ pub fn try_resolve_expr_type(a: *Assembler, s: Source_File.Slices, expr_handle: 
                             expr_resolved_types[expr_handle] = .poison;
                             return true;
                         };
-                        const index = constant.as_int(Register_Index) catch {
+                        const offset = constant.as_int(arch.bus.K.Read_Index_Offset.Raw) catch {
                             a.record_expr_error(s.file.handle, expr_handle, "Operand out of range", .{});
                             expr_resolved_types[expr_handle] = .poison;
                             return true;
                         };
 
-                        expr_resolved_types[expr_handle] = Expression.Type.reg(index, null);
+                        expr_resolved_types[expr_handle] = Expression.Type.reg(.init(offset), null);
                         return true;
                     }
 
@@ -388,8 +388,8 @@ pub fn try_resolve_expr_type(a: *Assembler, s: Source_File.Slices, expr_handle: 
 
                 .reg_to_index => {
                     if (inner_type.simple_base()) |base| {
-                        if (base.register_index()) |index| {
-                            const constant = Constant.init_int(index);
+                        if (base.register_offset()) |offset| {
+                            const constant = Constant.init_int(offset.raw());
                             s.expr.items(.resolved_constant)[expr_handle] = constant.intern(a.arena, a.gpa, &a.constants);
                             expr_resolved_types[expr_handle] = Expression.Type.constant();
                             return true;
@@ -413,14 +413,14 @@ pub fn try_resolve_expr_type(a: *Assembler, s: Source_File.Slices, expr_handle: 
                     } else if (inner_type.simple_base()) |base| {
                         switch (base) {
                             .reg => |reg| {
-                                const signedness: ?Signedness = switch (info) {
+                                const signedness: ?std.builtin.Signedness = switch (info) {
                                     .signed_cast => .signed,
                                     .unsigned_cast => .unsigned,
                                     .remove_signedness_cast => null,
                                     else => unreachable,
                                 };
 
-                                expr_resolved_types[expr_handle] = Expression.Type.reg(reg.index, signedness);
+                                expr_resolved_types[expr_handle] = Expression.Type.reg(reg.offset, signedness);
                                 return true;
                             },
                             else => {},
@@ -448,7 +448,7 @@ pub fn try_resolve_expr_type(a: *Assembler, s: Source_File.Slices, expr_handle: 
 
                 .data_address_cast, .insn_address_cast, .stack_address_cast => {
                     if (inner_type.base_offset_type()) |bot| {
-                        const new_space: Address_Space = switch (info) {
+                        const new_space: isa.Address_Space = switch (info) {
                             .data_address_cast => .data,
                             .insn_address_cast => .insn,
                             .stack_address_cast => .stack,
@@ -546,7 +546,7 @@ fn resolve_constant_depends_on_layout_binary(s: Source_File.Slices, expr_handle:
     }
 }
 
-fn try_resolve_symbol_type(a: *Assembler, s: Source_File.Slices, expr_handle: Expression.Handle, token_handle: Token.Handle, symbol: []const u8) bool {
+fn try_resolve_symbol_type(a: *Assembler, s: Source_File.Slices, expr_handle: Expression.Handle, token_handle: isa.lex.Token.Handle, symbol: []const u8) bool {
     var expr_resolved_types = s.expr.items(.resolved_type);
     var expr_flags = s.expr.items(.flags);
 
@@ -601,8 +601,8 @@ pub fn check_instructions_and_directives_in_file(a: *Assembler, s: Source_File.S
     var insn_operations = s.insn.items(.operation);
     var insn_params = s.insn.items(.params);
 
-    var pushed_stacks = std.ArrayList([]const u8).init(a.gpa);
-    defer pushed_stacks.deinit();
+    var pushed_stacks: std.ArrayList([]const u8) = .empty;
+    defer pushed_stacks.deinit(a.gpa);
 
     for (s.block.items(.first_insn), s.block.items(.end_insn)) |first_insn, end_insn| {
         var allow_code = false;
@@ -771,7 +771,7 @@ fn check_pushed_stack(a: *Assembler, s: Source_File.Slices, expr_handle: Express
             return false;
         }
     }
-    pushed_stacks.append(stack_block_name) catch @panic("OOM");
+    pushed_stacks.append(a.gpa, stack_block_name) catch @panic("OOM");
 
     if (s.file.stacks.get(stack_block_name)) |stack_block_handle| {
         var iter = s.block_instructions(stack_block_handle);
@@ -971,7 +971,7 @@ fn check_range_params(a: *Assembler, s: Source_File.Slices, insn_handle: Instruc
                 a.record_expr_error(s.file.handle, expr, "Expression must fit in u32", .{});
                 break :a 0x1000;
             };
-            if (arch.addr.Offset.init(@truncate(range.first)).raw() != 0) {
+            if (arch.addr.Page.Offset.init(@truncate(range.first)).raw() != 0) {
                 a.record_expr_error(s.file.handle, expr, "Expected an address with a page offset of 0", .{});
             }
         }
@@ -989,7 +989,7 @@ fn check_range_params(a: *Assembler, s: Source_File.Slices, insn_handle: Instruc
                 a.record_expr_error(s.file.handle, expr, "Expression must fit in u32", .{});
                 break :a 0xFFFF_FFFF;
             };
-            if (arch.addr.Offset.init(@truncate(last)) != arch.addr.Offset.max) {
+            if (arch.addr.Page.Offset.init(@truncate(last)) != arch.addr.Page.Offset.max) {
                 a.record_expr_error(s.file.handle, expr, "Expected an address with a page offset of 0xFFF", .{});
             }
             range.len = @as(usize, last - range.first) + 1;
@@ -1051,11 +1051,6 @@ const Expression = @import("Expression.zig");
 const Constant = @import("Constant.zig");
 const Section = @import("Section.zig");
 const Error = @import("Error.zig");
-const Token = lex.Token;
-const lex = isa.lex;
-const Address_Space = isa.Address_Space;
 const isa = @import("isa");
-const Register_Index = arch.Register_Index;
 const arch = @import("arch");
-const Signedness = std.builtin.Signedness;
 const std = @import("std");

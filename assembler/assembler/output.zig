@@ -37,13 +37,13 @@ pub fn copy_memory(a: *const Assembler, maybe_section_handle: ?Section.Handle, a
         var address: usize = address_range.first;
         const last_address = address_range.last();
         while (address < last_address) {
-            const page = arch.addr.Page.init(@truncate(address >> @bitSizeOf(arch.addr.Offset)));
-            const page_end = (@as(u64, page.raw()) + 1) << @bitSizeOf(arch.addr.Offset);
+            const page = arch.addr.Page.init(@truncate(address >> @bitSizeOf(arch.addr.Page.Offset)));
+            const page_end = (@as(u64, page.raw()) + 1) << @bitSizeOf(arch.addr.Page.Offset);
             const end: u32 = @intCast(@min(page_end, last_address + 1));
 
             if (a.page_lookup.get(page)) |page_data_handle| {
-                const begin_offset = arch.addr.Offset.init(@truncate(address));
-                const end_offset = arch.addr.Offset.init(@truncate(end));
+                const begin_offset = arch.addr.Page.Offset.init(@truncate(address));
+                const end_offset = arch.addr.Page.Offset.init(@truncate(end));
 
                 var data: []const u8 = &page_data[page_data_handle];
                 if (end_offset.raw() == 0) {
@@ -169,13 +169,13 @@ fn write_hex_for_section_inner(a: *const Assembler, maybe_section_handle: ?Secti
         var address: usize = address_range.first;
         const last_address = address_range.last();
         while (address < last_address) {
-            const page: arch.addr.Page = @truncate(address >> @bitSizeOf(arch.addr.Offset));
-            const page_end = (@as(u64, page) + 1) << @bitSizeOf(arch.addr.Offset);
+            const page: arch.addr.Page = @truncate(address >> @bitSizeOf(arch.addr.Page.Offset));
+            const page_end = (@as(u64, page) + 1) << @bitSizeOf(arch.addr.Page.Offset);
             const end: u32 = @intCast(@min(page_end, last_address + 1));
 
             if (a.page_lookup.get(page)) |page_data_handle| {
-                const begin_offset: arch.addr.Offset = @truncate(address);
-                const end_offset: arch.addr.Offset = @truncate(end);
+                const begin_offset: arch.addr.Page.Offset = @truncate(address);
+                const end_offset: arch.addr.Page.Offset = @truncate(end);
 
                 var data: []const u8 = &page_data[page_data_handle];
                 if (end_offset == 0) {
@@ -226,7 +226,7 @@ fn write_hex_for_section_inner(a: *const Assembler, maybe_section_handle: ?Secti
 pub const Sim_Sx_Options = struct {
     include_listing: bool = true,
 };
-pub fn write_sim_sx(a: *Assembler, temp_alloc: std.mem.Allocator, writer: std.io.AnyWriter, options: Sim_Sx_Options) !void {
+pub fn write_sim_sx(a: *Assembler, temp_alloc: std.mem.Allocator, writer: *std.io.Writer, options: Sim_Sx_Options) !void {
     var sx_writer = sx.writer(temp_alloc, writer);
     defer sx_writer.deinit();
 
@@ -240,8 +240,8 @@ pub fn write_sim_sx(a: *Assembler, temp_alloc: std.mem.Allocator, writer: std.io
         if (address_range.len == 0) {
             continue;
         }
-        const first_page = address_range.first >> @bitSizeOf(arch.addr.Offset);
-        const last_page = (address_range.first + @as(u32, @intCast(address_range.len - 1))) >> @bitSizeOf(arch.addr.Offset);
+        const first_page = address_range.first >> @bitSizeOf(arch.addr.Page.Offset);
+        const last_page = (address_range.first + @as(u32, @intCast(address_range.len - 1))) >> @bitSizeOf(arch.addr.Page.Offset);
 
         for (first_page..last_page + 1) |page_usize| {
             const page = arch.addr.Page.init(@intCast(page_usize));
@@ -259,7 +259,7 @@ pub fn write_sim_sx(a: *Assembler, temp_alloc: std.mem.Allocator, writer: std.io
         const lines_slice = listing.lines.slice();
         const addresses = lines_slice.items(.address);
         const lengths = lines_slice.items(.length);
-        const insn_indices = lines_slice.items(.insn_index);
+        // const insn_indices = lines_slice.items(.insn_index);
 
         try sx_writer.expression_expanded("listing");
         for (0.., lines_slice.items(.kind), lines_slice.items(.line_number), lines_slice.items(.source)) |l, kind, line_number, source| {
@@ -281,11 +281,12 @@ pub fn write_sim_sx(a: *Assembler, temp_alloc: std.mem.Allocator, writer: std.io
                     try sx_writer.close();
                 },
                 .instruction => {
-                    const insn = listing.insns.items[insn_indices[l].?];
+                    //const insn = listing.insns.items[insn_indices[l].?];
                     try sx_writer.expression("insn");
                     try sx_writer.print_value("{X:0>8}", .{ addresses[l] });
                     try sx_writer.int(lengths[l], 10);
-                    try iedb.write_database.write_encoding(&sx_writer, true, insn.encoding);
+                    // TODO fixme!
+                    //try iedb.write_database.write_encoding(&sx_writer, true, insn.encoding);
                     try write_listing_sx_line_and_source(line_number, source, &sx_writer);
                     try sx_writer.close();
                 },
@@ -521,10 +522,11 @@ fn add_listing_for_chunk(a: *Assembler, listing: *Listing, chunk: Source_File.Ch
                 listing.add_org_line(addresses[i], line_numbers[i], line_source, options.clone_source_strings);
             },
 
-            .bound_insn => |encoding| {
-                const insn = a.build_instruction(s, addresses[i], encoding.signature.mnemonic, encoding.signature.suffix, params[i], false).?;
+            .bound_insn => |id| {
+                const form = iedb.get(id);
+                const insn = a.build_instruction(s, addresses[i], form.signature.mnemonic, params[i], false).?;
                 listing.add_instruction_line(addresses[i], lengths[i], .{
-                    .encoding = encoding.*,
+                    .form = form,
                     .params = insn.params,
                 }, line_numbers[i], line_source, options.clone_source_strings);
             },
@@ -536,19 +538,18 @@ fn add_listing_for_chunk(a: *Assembler, listing: *Listing, chunk: Source_File.Ch
                         .pop => .unframe,
                         else => unreachable,
                     },
-                    .suffix = .none,
                     .params = &.{
                         .{
                             .signature = Expression.Type.constant().param_signature(),
-                            .base_register_index = 0,
-                            .offset_register_index = 0,
+                            .base_register = .init(0),
+                            .offset_register = .init(0),
                             .constant = stack_size,
                         },
                     },
                 };
-                if (layout.find_best_insn_encoding(a, insn)) |encoding| {
+                if (layout.find_best_insn_form(a, insn)) |form| {
                     listing.add_instruction_line(addresses[i], lengths[i], .{
-                        .encoding = encoding.*,
+                        .form = form,
                         .params = insn.params,
                     }, line_numbers[i], line_source, options.clone_source_strings);
                 } else {

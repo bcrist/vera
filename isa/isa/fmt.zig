@@ -85,8 +85,8 @@ pub fn print_instruction_signature(signature: Instruction.Signature, writer: *st
 
 pub fn print_parameter(param: Parameter, insn_address: ?u32, writer: *std.io.Writer) !void {
     try print_parameter_signature(param.signature, .{
-        .base_register = param.base_register_index,
-        .offset_register = param.offset_register_index,
+        .base_register = param.base_register,
+        .offset_register = param.offset_register,
         .constant = param.constant,
         .insn_address = insn_address,
     }, writer);

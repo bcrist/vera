@@ -31,8 +31,8 @@ pub const Data_Iterator = struct {
     const dummy_data = [_]u8{0} ** Page_Data.page_size;
 
     pub fn init(assembler: *const Assembler, addr: u32) Data_Iterator {
-        const offset = arch.addr.Offset.init(@truncate(addr));
-        const page = arch.addr.Page.init(@truncate(addr >> @bitSizeOf(arch.addr.Offset)));
+        const offset = arch.addr.Page.Offset.init(@truncate(addr));
+        const page = arch.addr.Page.init(@truncate(addr >> @bitSizeOf(arch.addr.Page.Offset)));
         const page_datas = assembler.pages.items(.data);
         const whole_page = if (assembler.page_lookup.get(page)) |handle| &page_datas[handle] else &dummy_data;
         return .{

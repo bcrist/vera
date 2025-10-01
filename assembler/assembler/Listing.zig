@@ -35,7 +35,7 @@ pub const Line = struct {
 };
 
 pub const Instruction = struct {
-    encoding: isa.Instruction_Encoding,
+    form: isa.Instruction.Form,
     params: []const isa.Parameter,
 };
 
@@ -236,7 +236,7 @@ pub fn write_source(lines: Lines.Slice, begin: Line_Index, end: Line_Index, writ
 }
 
 fn write_filename_line(filename: []const u8, writer: *std.io.Writer) !void {
-    try writer.print(".source {s}\n", .{ std.fmt.fmtSliceEscapeUpper(filename) });
+    try writer.print(".source {f}\n", .{ std.ascii.hexEscape(filename, .upper) });
 }
 
 fn write_empty_line(line_number: u32, source: []const u8, writer: *std.io.Writer, source_only: bool) !void {
@@ -288,15 +288,11 @@ fn write_instruction_line(
 
     try buf_writer.print("{X:0>8} ", .{ address });
     const isa_insn = isa.Instruction{
-        .mnemonic = insn.encoding.signature.mnemonic,
-        .suffix = insn.encoding.signature.suffix,
+        .mnemonic = insn.form.signature.mnemonic,
         .params = insn.params,
     };
 
-    isa.print.print_instruction(isa_insn, address, &buf_writer) catch |err| switch (err) {
-        error.NoSpaceLeft => {},
-        else => return err,
-    };
+    isa.fmt.print_instruction(isa_insn, address, &buf_writer) catch {};
     buf_writer.writeByte(' ') catch {};
 
     try writer.writeAll(buf_writer.buffered());
@@ -482,9 +478,9 @@ fn write_source_for_line(line_number: u32, line_source: []const u8, writer: *std
             try writer.writeAll("//");
         }
         if (line_number == 0) {
-            try writer.print("{s}\n", .{ std.fmt.fmtSliceEscapeUpper(source) } );
+            try writer.print("{f}\n", .{ std.ascii.hexEscape(source, .upper) } );
         } else {
-            try writer.print("{:>5} | {s}\n", .{ line_number, std.fmt.fmtSliceEscapeUpper(source) } );
+            try writer.print("{:>5} | {f}\n", .{ line_number, std.ascii.hexEscape(source, .upper) } );
         }
     }
 }

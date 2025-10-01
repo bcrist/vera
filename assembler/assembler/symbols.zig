@@ -34,7 +34,7 @@ pub fn parse_symbol(a: *Assembler, s: Source_File.Slices, expr_handle: Expressio
         .literal_symbol_def, .literal_symbol_ref => {
             const file = s.file;
             const token_handle = s.expr.items(.token)[expr_handle];
-            const literal = file.tokens.get(token_handle).location(file.source);
+            const literal = file.tokens.get(token_handle).span(file.source);
             const constant = Constant.init_symbol_literal(a.gpa, &a.constant_temp, literal);
             return constant.intern(a.arena, a.gpa, &a.constants);
         },
@@ -283,7 +283,7 @@ fn undef_list_contains_symbol(a: *Assembler, s: Source_File.Slices, expr_handle:
         },
         .literal_symbol_def => {
             const token_handle = s.expr.items(.token)[expr_handle];
-            const raw_symbol = s.file.tokens.get(token_handle).location(s.file.source);
+            const raw_symbol = s.file.tokens.get(token_handle).span(s.file.source);
             const undef_symbol = Constant.init_symbol_literal(a.gpa, &a.constant_temp, raw_symbol);
             return std.mem.eql(u8, symbol, undef_symbol.as_string());
         },
