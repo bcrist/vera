@@ -15,11 +15,6 @@ pub fn get() !*const Simulator_Data {
         var temp = std.heap.ArenaAllocator.init(std.heap.page_allocator);
         defer temp.deinit();
 
-        var pd: iedb.read_database.Parser_Data = .{
-            .arena = arena.allocator(),
-            .temp = temp.allocator(),
-        };
-
         const insn_decode = try arena.allocator().create(arch.insn_decode.Rom);
         arch.insn_decode.read_compressed_rom(insn_decode_data, insn_decode);
 
@@ -30,8 +25,8 @@ pub fn get() !*const Simulator_Data {
         arch.microcode.read_compressed_rom(arch.microcode.Decode_Microcode_Entry, decode_uc_data, microcode);
 
         data = .{
-            .edb = try iedb.read_database.parse_encoding_db(&pd, db_data),
-            .ddb = try iedb.read_database.parse_decoding_db(&pd, db_data),
+            .edb = try .init(arena.allocator()),
+            .ddb = try .init(arena.allocator(), temp.allocator()),
             .insn_decode = insn_decode,
             .microcode = microcode,
         };
@@ -40,7 +35,6 @@ pub fn get() !*const Simulator_Data {
     return &(data.?);
 }
 
-const db_data = @embedFile("iedb.sx");
 const insn_decode_data = @embedFile("insn_decode.crom");
 const setup_uc_data = @embedFile("setup_uc.crom");
 const compute_uc_data = @embedFile("compute_uc.crom");

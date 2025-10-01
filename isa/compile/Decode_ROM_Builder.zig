@@ -2,7 +2,7 @@ allocator: std.mem.Allocator,
 entries: []Entry,
 
 pub const Entry = struct {
-    instruction_encoding: ?Instruction_Encoding = null,
+    form: ?isa.Instruction.Form = null,
     slot_handle: ?Slot_Data.Handle = null,
     wio: arch.reg.gpr.Write_Index_Offset = .init(0),
     krio: arch.bus.K.Read_Index_Offset = .init(0),
@@ -95,7 +95,6 @@ const log = std.log.scoped(.compile);
 const Decode_ROM_Builder = @This();
 const Slot_Data = Microcode_Builder.Slot_Data;
 const Microcode_Builder = @import("Microcode_Builder.zig");
-const Instruction_Encoding = isa.Instruction_Encoding;
 const isa = @import("isa");
 const arch = @import("arch");
 const bits = @import("bits");

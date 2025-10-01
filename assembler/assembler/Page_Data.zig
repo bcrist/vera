@@ -1,4 +1,4 @@
-pub const page_size = arch.addr.Offset.count;
+pub const page_size = arch.addr.Page.Offset.count;
 pub const num_pages = arch.addr.Page.count;
 
 page: arch.addr.Page,

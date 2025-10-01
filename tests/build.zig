@@ -59,7 +59,6 @@ pub fn build(b: *std.Build) void {
         .imports = &.{
             .{ .name = "isa", .module = isa.module("isa") },
             .{ .name = "iedb", .module = isa.module("iedb") },
-            .{ .name = "iedb.sx", .module = isa.module("iedb.sx") },
             .{ .name = "arch", .module = arch },
         },
     }));

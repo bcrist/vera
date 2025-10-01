@@ -115,7 +115,7 @@ pub fn second(condition: isa.Mnemonic_Suffix) isa.Mnemonic_Suffix {
     };
 }
 
-const Encoder = isa.Instruction_Encoding.Encoder;
+const Encoder = isa.Encoder;
 const Flags = arch.microcode.Flags;
 const isa = @import("isa");
 const arch = @import("arch");

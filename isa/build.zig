@@ -18,17 +18,6 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    const iedb = b.addModule("iedb", .{
-        .root_source_file = b.path("iedb.zig"),
-        .imports = &.{
-            .{ .name = "arch", .module = arch },
-            .{ .name = "isa", .module = isa },
-            .{ .name = "bits", .module = bits },
-            .{ .name = "sx", .module = sx },
-            .{ .name = "deep_hash_map", .module = deep_hash_map },
-        },
-    });
-
     const compile_exe = b.addExecutable(.{
         .name = "compile",
         .root_module = b.createModule(.{
@@ -38,7 +27,6 @@ pub fn build(b: *std.Build) void {
             .imports = &.{
                 .{ .name = "arch", .module = arch },
                 .{ .name = "isa", .module = isa },
-                .{ .name = "iedb", .module = iedb },
                 .{ .name = "bits", .module = bits },
                 .{ .name = "sx", .module = sx },
                 .{ .name = "rom_decompress", .module = rom_compress.module("rom_decompress") },
@@ -56,9 +44,8 @@ pub fn build(b: *std.Build) void {
     b.step("compile", "run ISA/arch compile step").dependOn(&run.step);
 
     const compile = b.addRunArtifact(compile_exe);
-    compile.addArg("--compact");
     compile.addArg("--db");
-    const iedb_sx = compile.addOutputFileArg("iedb.sx");
+    const iedb_data_zig_source = compile.addOutputFileArg("iedb_data.zig");
     compile.addArg("--rom-format");
     compile.addArg("compressed");
     compile.addArg("--setup-uc");
@@ -76,7 +63,7 @@ pub fn build(b: *std.Build) void {
     compile.addArg("--id-csv");
     const id_csv = compile.addOutputFileArg("insn_decode.csv");
 
-    b.getInstallStep().dependOn(&b.addInstallFile(iedb_sx, "iedb.sx").step);
+    b.getInstallStep().dependOn(&b.addInstallFile(iedb_data_zig_source, "iedb_data.zig").step);
     b.getInstallStep().dependOn(&b.addInstallFile(uc_csv, "microcode.csv").step);
     b.getInstallStep().dependOn(&b.addInstallFile(id_csv, "insn_decode.csv").step);
     b.getInstallStep().dependOn(&b.addInstallFile(id_rom, "insn_decode.crom").step);
@@ -85,12 +72,28 @@ pub fn build(b: *std.Build) void {
     b.getInstallStep().dependOn(&b.addInstallFile(transact_uc, "transact_uc.crom").step);
     b.getInstallStep().dependOn(&b.addInstallFile(decode_uc, "decode_uc.crom").step);
 
-    _ = b.addModule("iedb.sx", .{ .root_source_file = iedb_sx });
     _ = b.addModule("insn_decode.crom", .{ .root_source_file = id_rom });
     _ = b.addModule("setup_uc.crom", .{ .root_source_file = setup_uc });
     _ = b.addModule("compute_uc.crom", .{ .root_source_file = compute_uc });
     _ = b.addModule("transact_uc.crom", .{ .root_source_file = transact_uc });
     _ = b.addModule("decode_uc.crom", .{ .root_source_file = decode_uc });
+
+    const iedb_data = b.addModule("iedb_data", .{
+        .root_source_file = iedb_data_zig_source,
+        .imports = &.{
+            .{ .name = "isa", .module = isa },
+        },
+    });
+
+    _ = b.addModule("iedb", .{
+        .root_source_file = b.path("iedb.zig"),
+        .imports = &.{
+            .{ .name = "iedb_data", .module = iedb_data },
+            .{ .name = "arch", .module = arch },
+            .{ .name = "isa", .module = isa },
+            .{ .name = "deep_hash_map", .module = deep_hash_map },
+        },
+    });
 }
 
 const std = @import("std");

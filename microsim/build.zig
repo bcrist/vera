@@ -34,7 +34,6 @@ pub fn build(b: *std.Build) void {
         .imports = &.{
             .{ .name = "arch", .module = arch },
             .{ .name = "iedb", .module = isa.module("iedb") },
-            .{ .name = "iedb.sx", .module = isa.module("iedb.sx") },
             .{ .name = "insn_decode.crom", .module = isa.module("insn_decode.crom") },
             .{ .name = "setup_uc.crom", .module = isa.module("setup_uc.crom") },
             .{ .name = "compute_uc.crom", .module = isa.module("compute_uc.crom") },

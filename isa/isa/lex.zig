@@ -11,10 +11,8 @@ pub const Token_Kind = enum (u8) {
     str_literal,
     str_literal_raw,
     id,
-    dot,
     comma,
     colon,
-    arrow,
     paren_open,
     paren_close,
     plus,
@@ -59,7 +57,6 @@ pub const Token = struct {
             .newline => 1,
 
             .reserved,
-            .dot,
             .comma,
             .colon,
             .paren_open,
@@ -74,7 +71,6 @@ pub const Token = struct {
             .apostrophe,
             .at,
             .money,
-            .arrow,
             .shl,
             .shr,
             .plus_plus,
@@ -126,14 +122,13 @@ pub const Token = struct {
         };
     }
 
-    pub fn location(self: Token, source: []const u8) []const u8 {
+    pub fn span(self: Token, source: []const u8) []const u8 {
         var remaining = source[self.offset..];
         const token_len = switch (self.kind) {
             .eof => 0,
 
             .reserved,
             .newline,
-            .dot,
             .comma,
             .colon,
             .paren_open,
@@ -150,7 +145,6 @@ pub const Token = struct {
             .money,
             => 1,
 
-            .arrow,
             .shl,
             .shr,
             .plus_plus,
@@ -162,7 +156,7 @@ pub const Token = struct {
                 var end: usize = 1;
                 while (end < remaining.len) : (end += 1) {
                     switch (remaining[end]) {
-                        'A'...'Z', 'a'...'z', '0'...'9', '_', 128...255 => {
+                        'A'...'Z', 'a'...'z', '0'...'9', '_', '.', 128...255 => {
                             consume_linespace = false;
                         },
                         '\\' => {
@@ -282,10 +276,9 @@ pub fn lex(allocator: std.mem.Allocator, source: []const u8) Token_List {
             .kind = undefined,
         };
         token.kind = switch (source[i]) {
-            'A'...'Z', 'a'...'z', '_', 128...255 => .id,
+            'A'...'Z', 'a'...'z', '_', '.', 128...255 => .id,
             '\n' => .newline,
             '0'...'9' => .int_literal,
-            '.' => .dot,
             ',' => .comma,
             ':' => .colon,
             '(' => .paren_open,
@@ -298,6 +291,7 @@ pub fn lex(allocator: std.mem.Allocator, source: []const u8) Token_List {
             '\'' => .apostrophe,
             '@' => .at,
             '$' => .money,
+            '-' => .minus,
             '+' => if (source.len <= i + 1) .plus else switch (source[i + 1]) {
                 '+' => .plus_plus,
                 else => .plus,
@@ -305,10 +299,6 @@ pub fn lex(allocator: std.mem.Allocator, source: []const u8) Token_List {
             '*' => if (source.len <= i + 1) .star else switch (source[i + 1]) {
                 '*' => .star_star,
                 else => .star,
-            },
-            '-' => if (source.len <= i + 1) .minus else switch (source[i + 1]) {
-                '>' => .arrow,
-                else => .minus,
             },
             '/' => if (source.len <= i + 1) .reserved else switch (source[i + 1]) {
                 '/' => .comment,
@@ -331,7 +321,7 @@ pub fn lex(allocator: std.mem.Allocator, source: []const u8) Token_List {
         };
 
         tokens.append(allocator, token) catch @panic("OOM");
-        i += @intCast(token.location(source).len);
+        i += @intCast(token.span(source).len);
     }
 
     tokens.append(allocator, .{
@@ -345,6 +335,56 @@ pub fn lex(allocator: std.mem.Allocator, source: []const u8) Token_List {
         old.deinit(allocator);
     }
     return tokens;
+}
+
+pub const Case_Insensitive_Enum_Map_Options = struct {
+    excluded_values: []const []const u8 = &.{},
+    excluded_chars: []const u8 = "",
+};
+pub fn case_insensitive_enum_map(comptime T: type, comptime options: Case_Insensitive_Enum_Map_Options, comptime extra_entries: anytype) std.StaticStringMapWithEql(T, std.ascii.eqlIgnoreCase) {
+    comptime var tuple_types: []const type = &.{};
+
+    outer: inline for (comptime std.enums.values(T)) |val| {
+        for (options.excluded_values) |excluded| {
+            if (std.mem.eql(u8, @tagName(val), excluded)) {
+                continue :outer;
+            }
+        }
+        if (options.excluded_chars.len > 0) {
+            if (std.mem.indexOfAny(u8, @tagName(val), options.excluded_chars) != null) {
+                continue :outer;
+            }
+        }
+
+        tuple_types = tuple_types ++ .{ @TypeOf(.{ @tagName(val), val }) };
+    }
+    inline for (extra_entries) |entry| {
+        tuple_types = tuple_types ++ .{ @TypeOf(entry) };
+    }
+
+    comptime var entries: std.meta.Tuple(tuple_types) = undefined;
+    comptime var n = 0;
+    outer: inline for (comptime std.enums.values(T)) |val| {
+        for (options.excluded_values) |excluded| {
+            if (std.mem.eql(u8, @tagName(val), excluded)) {
+                continue :outer;
+            }
+        }
+        if (options.excluded_chars.len > 0) {
+            if (std.mem.indexOfAny(u8, @tagName(val), options.excluded_chars) != null) {
+                continue :outer;
+            }
+        }
+
+        entries[n] = .{ @tagName(val), val };
+        n += 1;
+    }
+    inline for (extra_entries) |entry| {
+        entries[n] = entry;
+        n += 1;
+    }
+
+    return std.StaticStringMapWithEql(T, std.ascii.eqlIgnoreCase).initComptime(entries);
 }
 
 const std = @import("std");

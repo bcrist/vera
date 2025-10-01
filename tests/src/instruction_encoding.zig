@@ -1,15 +1,9 @@
 test "Instruction encoding" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
+    var ddb = try iedb.Decoding_Database.init(std.testing.allocator, std.testing.allocator);
+    defer ddb.deinit(std.testing.allocator);
 
-    const source = @embedFile("iedb.sx");
-    var parse_data: iedb.read_database.Parser_Data = .{
-        .arena = arena.allocator(),
-        .temp = std.testing.allocator,
-    };
-    const ddb = try iedb.read_database.parse_decoding_db(&parse_data, source);
-    const edb = try iedb.read_database.parse_encoding_db(&parse_data, source);
-    parse_data.deinit();
+    var edb = try iedb.Encoding_Database.init(std.testing.allocator);
+    defer edb.deinit(std.testing.allocator);
 
     const buf = try std.testing.allocator.alloc(u8, 0x10000);
     defer std.testing.allocator.free(buf);
@@ -29,9 +23,9 @@ test "Instruction encoding" {
         // try isa.print.print_instruction(insn, null, stderr);
         // try stderr.writeByte('\n');
 
-        var iter = edb.matching_encodings(insn);
+        var iter = edb.find_matches(insn);
         while (iter.next()) |encoding| {
-            const encoded = encoding.encode(insn, decoder.last_instruction_data().data);
+            const encoded = encoding.encode(insn, decoder.last_encoded_instruction().data);
             if (std.mem.eql(u8, decoder.last_instruction, encoded.as_bytes())) break;
         } else {
             return error.EncodingNotFound;
@@ -39,8 +33,6 @@ test "Instruction encoding" {
     }
 }
 
-const Encoding_Database = iedb.Encoding_Database;
-const Decoding_Database = iedb.Decoding_Database;
 const iedb = @import("iedb");
 const isa = @import("isa");
 const arch = @import("arch");

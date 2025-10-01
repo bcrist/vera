@@ -14,7 +14,7 @@ pub fn entry(c: *Cycle, flags: Flags) void {
 
 const opcodes = @import("opcodes.zig");
 const Cycle = @import("../compile/Cycle.zig");
-const Encoder = isa.Instruction_Encoding.Encoder;
+const Encoder = isa.Encoder;
 const isa = @import("isa");
 const Flags = arch.microcode.Flags;
 const arch = @import("arch");

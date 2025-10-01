@@ -66,7 +66,6 @@ pub const LSB = enum (u8) {
 };
 
 pub const Misc_12 = enum (u4) {
-    set_zncv,
 };
 
 pub const Misc_16 = enum (u8) {
@@ -93,12 +92,12 @@ pub const Misc_16 = enum (u8) {
     ssbt,
     szbt,
 
-    swap,
-    swap2,
-    byterev,
-    bitrev,
-    bitrev1,
-    bitrev2,
+    @"swap.16",
+    @"swap.8",
+    @"rev.8.32",
+    @"rev.1.32",
+    @"rev.1.16",
+    @"rev.1.8",
 
 };
 
@@ -238,18 +237,15 @@ pub fn mnemonic_encoder(comptime E: type, comptime options: Mnemonic_Encoder_Opt
 }
 
 pub fn mnemonic_cast(comptime E: type, comptime suffix: []const u8, mnemonic: isa.Mnemonic) E {
-    switch (mnemonic) {
-        inline else => |in| {
-            const name = @tagName(in) ++ suffix;
-            if (@hasField(E, name)) {
-                return @field(E, name);
-            } else {
-                std.debug.panic("{} does not have the field: .{s}", .{ E, name });
-            }
-        },
+    const mnemonic_name = mnemonic.name();
+    inline for (@typeInfo(E).@"enum".fields) |field| {
+        if (std.mem.startsWith(u8, field.name, mnemonic_name) and std.mem.eql(u8, field.name[mnemonic_name.len ..], suffix)) {
+            return @enumFromInt(field.value);
+        }
     }
+    std.debug.panic("{} does not have the field: .{s}{s}", .{ E, mnemonic_name, suffix });
 }
 
-const Encoder = isa.Instruction_Encoding.Encoder;
+const Encoder = isa.Encoder;
 const isa = @import("isa");
 const std = @import("std");

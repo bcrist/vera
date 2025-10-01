@@ -1,5 +1,5 @@
-encoding: Instruction_Encoding,
-placeholder: Placeholder_Info,
+form: Instruction.Form,
+placeholder: Placeholder,
 state: State,
 temp: [256]u8,
 
@@ -26,9 +26,9 @@ pub const Restriction = struct {
     },
 };
 
-pub fn init(encoding: Instruction_Encoding, placeholder: Placeholder_Info) Placeholder_Restrictions_Iterator {
+pub fn init(form: Instruction.Form, placeholder: Placeholder) Placeholder_Restrictions_Iterator {
     return .{
-        .encoding = encoding,
+        .form = form,
         .placeholder = placeholder,
         .state = .initial,
         .temp = undefined,
@@ -121,11 +121,11 @@ fn constraint_restriction(self: *Placeholder_Restrictions_Iterator, constraint_i
     };
 }
 
-fn render_placeholder(buf: []u8, value: Value, negate: bool) ![]const u8 {
+fn render_placeholder(buf: []u8, value: Encoder.Value, negate: bool) ![]const u8 {
     switch (value) {
         .constant => |v| {
             const final_v = if (negate) -v else v;
-            return print.buf_print_constant(buf, final_v);
+            return fmt.buf_print_constant(buf, final_v);
         },
         .placeholder => |info| {
             if (negate) {
@@ -141,7 +141,7 @@ fn render_placeholder(buf: []u8, value: Value, negate: bool) ![]const u8 {
             const prefix = try render_placeholder(buf, info.inner.*, negate);
             const remaining = buf[prefix.len..];
             const final_offset = if (negate) -info.offset else info.offset;
-            const offset_str = try print.buf_print_offset(remaining, final_offset);
+            const offset_str = try fmt.buf_print_offset(remaining, final_offset);
             return buf[0 .. prefix.len + offset_str.len];
         },
     }
@@ -163,9 +163,9 @@ fn int_min(signedness: std.builtin.Signedness, bit_count: u6, multiple: u8) i64 
 }
 
 const Placeholder_Restrictions_Iterator = @This();
-const Value = Instruction_Encoding.Value;
-const Domain = Instruction_Encoding.Domain;
-const Placeholder_Info = Instruction_Encoding.Placeholder_Info;
-const Instruction_Encoding = @import("Instruction_Encoding.zig");
-const print = @import("print.zig");
+
+const Encoder = @import("Encoder.zig");
+const Placeholder = @import("Placeholder.zig");
+const Instruction = @import("Instruction.zig");
+const fmt = @import("fmt.zig");
 const std = @import("std");

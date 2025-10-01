@@ -1,28 +1,12 @@
-pub fn print_mnemonic_and_suffix(mnemonic: Mnemonic, suffix: Mnemonic_Suffix, writer: *std.io.Writer) !usize {
-    const mnemonic_str = @tagName(mnemonic);
-    var len = mnemonic_str.len;
-    try writer.writeAll(mnemonic_str);
-    if (suffix != .none) {
-        const suffix_str = @tagName(suffix);
-        try writer.writeByte('.');
-        for (suffix_str) |b| {
-            try writer.writeByte(if (b == '_') '.' else b);
-        }
-        len += suffix_str.len + 1;
-    }
-    return len;
-}
-
-pub fn print_encoding(encoding: Instruction_Encoding, writer: *std.io.Writer) !void {
-    const len = try print_mnemonic_and_suffix(encoding.signature.mnemonic, encoding.signature.suffix, writer);
-    if (len < 5) {
-        try writer.splatByteAll(' ', 5 - len);
+pub fn print_form(form: Instruction.Form, writer: *std.io.Writer) !void {
+    const mnemonic = form.signature.mnemonic.name();
+    try writer.writeAll(mnemonic);
+    if (mnemonic.len < 5) {
+        try writer.splatByteAll(' ', 5 - mnemonic.len);
     }
     var skip_comma = true;
-    for (encoding.signature.params, 0..) |param, raw_index| {
-        if (param.base == .arrow) {
-            skip_comma = true;
-        } else if (skip_comma) {
+    for (form.signature.params, 0..) |param, raw_index| {
+        if (skip_comma) {
             skip_comma = false;
         } else {
             try writer.writeByte(',');
@@ -31,19 +15,19 @@ pub fn print_encoding(encoding: Instruction_Encoding, writer: *std.io.Writer) !v
 
         const index = Parameter.Index.init(@intCast(raw_index));
 
-        var base_register_index: ?arch.reg.gpr.Index = null;
-        var offset_register_index: ?arch.reg.gpr.Index = null;
+        var base_register: ?arch.bus.K.Read_Index_Offset = null;
+        var offset_register: ?arch.bus.K.Read_Index_Offset = null;
         var constant: ?i64 = null;
 
-        for (encoding.constraints) |constraint| {
+        for (form.constraints) |constraint| {
             if (constraint.kind == .equal and constraint.right == .constant) {
-                if (constraint.left.get_placeholder_info()) |info| {
-                    if (info.index == index) {
+                if (constraint.left.get_placeholder()) |info| {
+                    if (info.param == index) {
                         const c = constraint.right.constant;
                         switch (info.kind) {
                             .param_constant => constant = c,
-                            .param_base_register => base_register_index = @intCast(c),
-                            .param_offset_register => offset_register_index = @intCast(c),
+                            .param_base_register => base_register = .init(@intCast(c)),
+                            .param_offset_register => offset_register = .init(@intCast(c)),
                         }
                     }
                 }
@@ -52,25 +36,24 @@ pub fn print_encoding(encoding: Instruction_Encoding, writer: *std.io.Writer) !v
 
         try print_parameter_signature(param, .{
             .index = index,
-            .encoders = encoding.encoders,
-            .constraints = encoding.constraints,
-            .base_register_index = base_register_index,
-            .offset_register_index = offset_register_index,
+            .encoders = form.encoders,
+            .constraints = form.constraints,
+            .base_register = base_register,
+            .offset_register = offset_register,
             .constant = constant,
         }, writer);
     }
 }
 
 pub fn print_instruction(insn: Instruction, insn_address: ?u32, writer: *std.io.Writer) !void {
-    const len = try print_mnemonic_and_suffix(insn.mnemonic, insn.suffix, writer);
-    if (len < 5) {
-        try writer.splatByteAll(' ', 5 - len);
+    const mnemonic = insn.mnemonic.name();
+    try writer.writeAll(mnemonic);
+    if (mnemonic.len < 5) {
+        try writer.splatByteAll(' ', 5 - mnemonic.len);
     }
     var skip_comma = true;
     for (insn.params) |param| {
-        if (param.signature.base == .arrow) {
-            skip_comma = true;
-        } else if (skip_comma) {
+        if (skip_comma) {
             skip_comma = false;
         } else {
             try writer.writeByte(',');
@@ -81,9 +64,10 @@ pub fn print_instruction(insn: Instruction, insn_address: ?u32, writer: *std.io.
 }
 
 pub fn print_instruction_signature(signature: Instruction.Signature, writer: *std.io.Writer) !void {
-    const len = try print_mnemonic_and_suffix(signature.mnemonic, signature.suffix, writer);
-    if (len < 5) {
-        try writer.splatByteAll(' ', 5 - len);
+    const mnemonic = signature.mnemonic.name();
+    try writer.writeAll(mnemonic);
+    if (mnemonic.len < 5) {
+        try writer.splatByteAll(' ', 5 - mnemonic.len);
     }
     var skip_comma = true;
     for (signature.params) |param_signature| {
@@ -101,8 +85,8 @@ pub fn print_instruction_signature(signature: Instruction.Signature, writer: *st
 
 pub fn print_parameter(param: Parameter, insn_address: ?u32, writer: *std.io.Writer) !void {
     try print_parameter_signature(param.signature, .{
-        .base_register_index = param.base_register_index,
-        .offset_register_index = param.offset_register_index,
+        .base_register = param.base_register_index,
+        .offset_register = param.offset_register_index,
         .constant = param.constant,
         .insn_address = insn_address,
     }, writer);
@@ -112,8 +96,8 @@ pub const Print_Parameter_Signature_Extra = struct {
     index: ?Parameter.Index = null,
     encoders: []const Encoder = &.{},
     constraints: []const Constraint = &.{},
-    base_register_index: ?arch.reg.gpr.Index = null,
-    offset_register_index: ?arch.reg.gpr.Index = null,
+    base_register: ?arch.bus.K.Read_Index_Offset = null,
+    offset_register: ?arch.bus.K.Read_Index_Offset = null,
     constant: ?i64 = null,
     insn_address: ?u32 = null,
 };
@@ -127,7 +111,7 @@ pub fn print_parameter_signature(signature: Parameter.Signature, extra: Print_Pa
         .index = extra.index,
         .encoders = extra.encoders,
         .constraints = extra.constraints,
-        .register_index = extra.base_register_index,
+        .register = extra.base_register,
         .constant = extra.constant,
     }, writer);
 
@@ -150,7 +134,7 @@ pub fn print_parameter_signature(signature: Parameter.Signature, extra: Print_Pa
             .index = extra.index,
             .encoders = extra.encoders,
             .constraints = extra.constraints,
-            .register_index = extra.offset_register_index,
+            .register = extra.offset_register,
             .constant = extra.constant,
         }, writer);
     }
@@ -160,13 +144,12 @@ pub const Print_Parameter_Kind_Extra = struct {
     index: ?Parameter.Index = null,
     encoders: []const Encoder = &.{},
     constraints: []const Constraint = &.{},
-    register_index: ?arch.reg.gpr.Index = null,
+    register: ?arch.bus.K.Read_Index_Offset = null,
     constant: ?i64 = null,
 };
-pub fn print_parameter_kind(kind: Parameter.Kind, register_kind: Instruction_Encoding.Placeholder_Kind, extra: Print_Parameter_Kind_Extra, writer: *std.io.Writer) !void {
+pub fn print_parameter_kind(kind: Parameter.Kind, register_kind: Placeholder.Kind, extra: Print_Parameter_Kind_Extra, writer: *std.io.Writer) !void {
     switch (kind) {
         .none => {},
-        .arrow => try writer.writeAll("->"),
         .constant => if (extra.constant) |k| {
             try print_constant(k, writer);
         } else {
@@ -174,8 +157,8 @@ pub fn print_parameter_kind(kind: Parameter.Kind, register_kind: Instruction_Enc
         },
         .reg => |sign| {
             try writer.writeByte('r');
-            if (extra.register_index) |reg| {
-                try writer.print("{}", .{ reg });
+            if (extra.register) |reg| {
+                try writer.print("{}", .{ reg.raw() });
             } else {
                 try print_placeholder_list(register_kind, extra.index, extra.encoders, extra.constraints, writer);
             }
@@ -192,13 +175,13 @@ pub fn print_parameter_kind(kind: Parameter.Kind, register_kind: Instruction_Enc
     }
 }
 
-fn print_placeholder_list(kind: Instruction_Encoding.Placeholder_Kind, maybe_index: ?Parameter.Index, encoders: []const Encoder, constraints: []const Constraint, writer: *std.io.Writer) !void {
+fn print_placeholder_list(kind: Placeholder.Kind, maybe_index: ?Parameter.Index, encoders: []const Encoder, constraints: []const Constraint, writer: *std.io.Writer) !void {
     try writer.writeByte('(');
     var found_encoder = false;
     if (maybe_index) |index| {
         for (encoders) |enc| {
-            if (enc.value.get_placeholder_info()) |info| {
-                if (info.index == index and info.kind == kind and info.name.len > 0) {
+            if (enc.value.get_placeholder()) |info| {
+                if (info.param == index and info.kind == kind and info.name.len > 0) {
                     if (found_encoder) try writer.writeByte(',');
                     try writer.writeAll(info.name);
                     found_encoder = true;
@@ -207,9 +190,9 @@ fn print_placeholder_list(kind: Instruction_Encoding.Placeholder_Kind, maybe_ind
         }
         for (constraints) |c| {
             if (c.kind != .equal) continue;
-            if (c.left.get_placeholder_info()) |left| {
-                if (c.right.get_placeholder_info()) |right| {
-                    if (left.index != index or left.kind != kind) continue;
+            if (c.left.get_placeholder()) |left| {
+                if (c.right.get_placeholder()) |right| {
+                    if (left.param != index or left.kind != kind) continue;
                     if (found_encoder) try writer.writeByte(',');
                     try writer.writeAll(right.name);
                     found_encoder = true;
@@ -267,14 +250,13 @@ pub fn buf_print_offset(buf: []u8, offset: i64) ![]const u8 {
     }
 }
 
-const Constraint = Instruction_Encoding.Constraint;
-const Encoder = Instruction_Encoding.Encoder;
-const Instruction_Encoding = isa.Instruction_Encoding;
-const Instruction = isa.Instruction;
-const Parameter = isa.Parameter;
-const Mnemonic = isa.Mnemonic;
-const Mnemonic_Suffix = isa.Mnemonic_Suffix;
-const isa = @import("../isa.zig");
+const Placeholder = @import("Placeholder.zig");
+const Constraint = @import("Constraint.zig");
+const Encoder = @import("Encoder.zig");
+const Instruction = @import("Instruction.zig");
+const Parameter = @import("Parameter.zig");
+const Mnemonic = enums.Mnemonic;
+const enums = @import("enums.zig");
 const arch = @import("arch");
 const Signedness = std.builtin.Signedness;
 const std = @import("std");

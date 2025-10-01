@@ -20,7 +20,7 @@ pub fn main() !void {
 
     var a = Assembler.init(gpa.allocator(), arena.allocator(), edb);
 
-    var output_file = std.ArrayList(u8).init(gpa.allocator());
+    var output_file = std.array_list.Managed(u8).init(gpa.allocator());
 
     var arg_iter = try std.process.ArgIterator.initWithAllocator(temp.allocator());
     _ = arg_iter.next(); // ignore assemble command name

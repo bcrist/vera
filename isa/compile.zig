@@ -11,7 +11,6 @@ pub const placeholders = @import("compile/placeholders.zig");
 
 const CLI_Option = enum {
     db_path,
-    compact_db,
     rom_format,
     setup_uc_path,
     compute_uc_path,
@@ -24,7 +23,6 @@ const CLI_Option = enum {
 
 const cli_options = std.StaticStringMap(CLI_Option).initComptime(.{
     .{ "--db", .db_path },
-    .{ "--compact", .compact_db },
     .{ "--rom-format", .rom_format },
     .{ "--setup-uc", .setup_uc_path },
     .{ "--compute-uc", .compute_uc_path },
@@ -47,7 +45,6 @@ pub fn main() !void {
     var temp = try Temp_Allocator.init(0x1000_0000);
 
     var db_path: ?[]const u8 = null;
-    var compact_db = false;
     var rom_fmt: ROM_Format = .compressed;
     var setup_uc_path: ?[]const u8 = null;
     var compute_uc_path: ?[]const u8 = null;
@@ -63,7 +60,6 @@ pub fn main() !void {
         if (cli_options.get(arg)) |option| {
             switch (option) {
                 .db_path => db_path = try arena.allocator().dupe(u8, arg_iter.next() orelse expected_output_path("--db")),
-                .compact_db => compact_db = true,
                 .rom_format => rom_fmt = std.meta.stringToEnum(ROM_Format, arg_iter.next() orelse expected_rom_format()) orelse invalid_rom_format(arg),
                 .setup_uc_path => setup_uc_path = try arena.allocator().dupe(u8, arg_iter.next() orelse expected_output_path("--setup-uc")),
                 .compute_uc_path => compute_uc_path = try arena.allocator().dupe(u8, arg_iter.next() orelse expected_output_path("--compute-uc")),
@@ -186,10 +182,8 @@ pub fn main() !void {
 
         var buf: [4096]u8 = undefined;
         var writer = f.writer(&buf);
-        var sxw = sx.writer(gpa, &writer.interface);
-        defer sxw.deinit();
 
-        try iedb.write_database.write(&sxw, compact_db, processor.encoding_list.items);
+        try iedb_data_module_gen.write_module(gpa, processor.instruction_forms.items, &writer.interface);
         try writer.interface.flush();
     }
 
@@ -376,7 +370,7 @@ const log = std.log.scoped(.compile);
 
 const faults = @import("handlers/faults.zig");
 const documentation = @import("compile/documentation.zig");
-const iedb = @import("iedb");
+const iedb_data_module_gen = @import("compile/iedb_data_module_gen.zig");
 const isa = @import("isa");
 const arch = @import("arch");
 const rom_decompress = @import("rom_decompress");

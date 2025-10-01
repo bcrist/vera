@@ -31,6 +31,6 @@ pub fn entry(c: *Cycle, krio: arch.bus.K.Read_Index_Offset) void {
 
 const opcodes = @import("opcodes.zig");
 const Cycle = @import("../compile/Cycle.zig");
-const Encoder = isa.Instruction_Encoding.Encoder;
+const Encoder = isa.Encoder;
 const isa = @import("isa");
 const arch = @import("arch");

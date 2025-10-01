@@ -3,7 +3,7 @@ pub fn Int(comptime name_or_enum_literal: anytype, comptime T: type) type {
         value: i64,
 
         pub const placeholder = parse_name(name_or_enum_literal);
-        pub const domain: Domain = .{ .int = .{
+        pub const domain: isa.Encoder.Domain = .{ .int = .{
             .signedness = @typeInfo(T).int.signedness,
             .bits = @bitSizeOf(T),
             .multiple = 1,
@@ -16,7 +16,7 @@ pub fn Int_Mult(comptime name_or_enum_literal: anytype, comptime T: type, compti
         value: i64,
 
         pub const placeholder = parse_name(name_or_enum_literal);
-        pub const domain: Domain = .{ .int = .{
+        pub const domain: isa.Encoder.Domain = .{ .int = .{
             .signedness = @typeInfo(T).int.signedness,
             .bits = @bitSizeOf(T),
             .multiple = multiple,
@@ -29,7 +29,7 @@ pub fn Range(comptime name_or_enum_literal: anytype, comptime first: i64, compti
         value: i64,
 
         pub const placeholder = parse_name(name_or_enum_literal);
-        pub const domain: Domain = .{ .range = .{
+        pub const domain: isa.Encoder.Domain = .{ .range = .{
             .first = first,
             .last = last,
         }};
@@ -41,7 +41,7 @@ pub fn Options(comptime name_or_enum_literal: anytype, comptime options: anytype
         value: i64,
 
         pub const placeholder = parse_name(name_or_enum_literal);
-        pub const domain: Domain = .{ .enumerated = &options };
+        pub const domain: isa.Encoder.Domain = .{ .enumerated = &options };
     };
 }
 
@@ -114,19 +114,17 @@ fn parse_name(comptime name_or_enum_literal: anytype) []const u8 {
 pub fn Param(comptime index_name_or_enum_literal: anytype) type {
     return switch (@typeInfo(@TypeOf(index_name_or_enum_literal))) {
         .int, .comptime_int => struct {
-            signature: Parameter.Signature,
-            pub const index = Parameter.Index.init(index_name_or_enum_literal);
+            signature: isa.Parameter.Signature,
+            pub const index = isa.Parameter.Index.init(index_name_or_enum_literal);
         },
         else => return struct {
-            signature: Parameter.Signature,
+            signature: isa.Parameter.Signature,
             pub const placeholder = parse_name(index_name_or_enum_literal);
         },
     };
     
 }
 
-const Parameter = isa.Parameter;
-const Domain = isa.Instruction_Encoding.Domain;
 const isa = @import("isa");
 const arch = @import("arch");
 const std = @import("std");

@@ -955,7 +955,7 @@ pub const instructions = .{
 };
 
 const Cycle = @import("../compile/Cycle.zig");
-const Encoder = isa.Instruction_Encoding.Encoder;
+const Encoder = isa.Encoder;
 const Parameter = isa.Parameter;
 const Options = placeholders.Options;
 const Range = placeholders.Range;

@@ -3,8 +3,8 @@ arena: std.mem.Allocator,
 temp: *Temp_Allocator,
 microcode: Microcode_Builder,
 decode_rom: Decode_ROM_Builder,
-encoding_list: std.ArrayList(isa.Instruction_Encoding),
-encoding_slots: std.AutoHashMapUnmanaged(usize, std.ArrayList(arch.insn_decode.Address)), // key is index into encoding_list
+instruction_forms: std.ArrayList(isa.Instruction.Form),
+form_slots: std.AutoHashMapUnmanaged(usize, std.ArrayList(arch.insn_decode.Address)), // key is index into instruction_forms
 
 pub fn init(gpa: std.mem.Allocator, arena: std.mem.Allocator, temp: *Temp_Allocator) Processor {
     return .{
@@ -13,8 +13,8 @@ pub fn init(gpa: std.mem.Allocator, arena: std.mem.Allocator, temp: *Temp_Alloca
         .temp = temp,
         .microcode = .init(gpa),
         .decode_rom = .init(gpa),
-        .encoding_list = .empty,
-        .encoding_slots = .empty,
+        .instruction_forms = .empty,
+        .form_slots = .empty,
     };
 }
 
@@ -112,10 +112,10 @@ fn process_form(
             const krio_encoders = krio_fn(alloc, parsed.signature, parsed.encoders);
             const wio_encoders = wio_fn(alloc, parsed.signature, parsed.encoders);
 
-            const final_encoding = self.finalize_encoding(parsed, constraints, encoders);
-            self.encoding_list.append(self.gpa, final_encoding) catch @panic("OOM");
+            const final_form = self.finalize_form(parsed, constraints, encoders);
+            self.instruction_forms.append(self.gpa, final_form) catch @panic("OOM");
 
-            self.process_instruction(entry, final_encoding, constraints, encoders, krio_encoders, wio_encoders, cv_mode, lookup);
+            self.process_instruction(entry, final_form, constraints, encoders, krio_encoders, wio_encoders, cv_mode, lookup);
         }
     } else {
         const encoders = encoders_fn(alloc, null, &.{});
@@ -135,11 +135,11 @@ fn locate_decl(comptime Types: anytype, comptime name: []const u8) type {
 fn process_instruction(
     self: *Processor,
     entry_fn: *const anyopaque,
-    instruction_encoding: ?isa.Instruction_Encoding,
-    constraints: []const Constraint,
-    encoders: []const Encoder,
-    krio_encoders: []const Encoder,
-    wio_encoders: []const Encoder,
+    maybe_form: ?isa.Instruction.Form,
+    constraints: []const isa.Constraint,
+    encoders: []const isa.Encoder,
+    krio_encoders: []const isa.Encoder,
+    wio_encoders: []const isa.Encoder,
     cv_mode: arch.insn_decode.CV_Mode,
     lookup: *Slot_Info.Lookup,
 ) void {
@@ -151,7 +151,7 @@ fn process_instruction(
         cycle_flags.insert(.initial_wio_valid);
     }
 
-    const encoding_len = if (instruction_encoding == null) null else encoding_length(encoders);
+    const encoding_len = if (maybe_form == null) null else encoding_length(encoders);
 
     var iter = Initial_Word_Encoding_Iterator.init(self.temp.allocator(), constraints, encoders);
 
@@ -183,8 +183,8 @@ fn process_instruction(
                     .initial_dr = dr,
                     .initial_krio = maybe_krio,
                     .initial_wio = maybe_wio,
-                    .signature = if (instruction_encoding) |ie| ie.signature else null,
-                    .parsed_encoders = if (instruction_encoding) |ie| ie.encoders else &.{},
+                    .signature = if (maybe_form) |form| form.signature else null,
+                    .parsed_encoders = if (maybe_form) |form| form.encoders else &.{},
                     .encoding_len = encoding_len,
                     .cv_mode = cv_mode,
                 },
@@ -201,43 +201,43 @@ fn process_instruction(
 
         const krio = maybe_krio orelse arch.bus.K.Read_Index_Offset.init(
             std.math.cast(arch.bus.K.Read_Index_Offset.Raw, iter.encode(krio_encoders, "KRIO")) orelse {
-                if (instruction_encoding) |ie| {
-                    std.debug.print("Bad KRIO for instruction encoding: {f}\n", .{ ie });
+                if (maybe_form) |form| {
+                    std.debug.print("Bad KRIO for instruction form: {f}\n", .{ form });
                 }
                 std.debug.panic("Bad KRIO: Value {} is not valid\n", .{ iter.encode(krio_encoders, "KRIO") });
             }
         );
         const wio = maybe_wio orelse arch.reg.gpr.Write_Index_Offset.init_unsigned(
             std.math.cast(arch.reg.gpr.Write_Index_Offset.Raw_Unsigned, iter.encode(wio_encoders, "WIO")) orelse {
-                if (instruction_encoding) |ie| {
-                    std.debug.print("Bad WIO for instruction encoding: {f}\n", .{ ie });
+                if (maybe_form) |form| {
+                    std.debug.print("Bad WIO for instruction form: {f}\n", .{ form });
                 }
                 std.debug.panic("Bad WIO: Value {} is not valid\n", .{ iter.encode(wio_encoders, "WIO") });
             }
         );
 
         self.decode_rom.add_entry(addr, @truncate(iter.undefined_bits), .{
-            .instruction_encoding = instruction_encoding,
+            .form = maybe_form,
             .slot_handle = slot_handle,
             .wio = wio,
             .krio = krio,
             .cv = cv_mode,
         });
 
-        const encoding_list_index = self.encoding_list.items.len - 1;
-        const result = self.encoding_slots.getOrPut(self.gpa, encoding_list_index) catch @panic("OOM");
+        const form_index = self.instruction_forms.items.len - 1;
+        const result = self.form_slots.getOrPut(self.gpa, form_index) catch @panic("OOM");
         if (!result.found_existing) {
-            result.key_ptr.* = encoding_list_index;
+            result.key_ptr.* = form_index;
             result.value_ptr.* = .empty;
         }
         result.value_ptr.append(self.gpa, addr) catch @panic("OOM");
     }
 }
 
-fn resolve_constraints(comptime constraints: anytype) []const Constraint {
+fn resolve_constraints(comptime constraints: anytype) []const isa.Constraint {
     switch (@typeInfo(@TypeOf(constraints))) {
         .@"struct" => |info| if (info.is_tuple) {
-            comptime var out: [constraints.len]Constraint = undefined;
+            comptime var out: [constraints.len]isa.Constraint = undefined;
             inline for (constraints, &out) |in, *constraint| {
                 constraint.* = comptime resolve_single_constraint(in);
             }
@@ -251,9 +251,9 @@ fn resolve_constraints(comptime constraints: anytype) []const Constraint {
     return &.{ comptime resolve_single_constraint(constraints) };
 }
 
-fn resolve_single_constraint(comptime constraint: anytype) Constraint {
+fn resolve_single_constraint(comptime constraint: anytype) isa.Constraint {
     const T = @TypeOf(constraint);
-    if (T == Constraint) return constraint;
+    if (T == isa.Constraint) return constraint;
     switch (@typeInfo(T)) {
         .@"struct" => |info| {
             std.debug.assert(info.is_tuple);
@@ -270,7 +270,7 @@ fn resolve_single_constraint(comptime constraint: anytype) Constraint {
                 less_or_equal
             };
             const ext_kind: Extended_Kind = constraint[1];
-            const kind: Constraint.Kind = switch (ext_kind) {
+            const kind: isa.Constraint.Kind = switch (ext_kind) {
                 .equal => .equal,
                 .not_equal => .not_equal,
                 .greater, .greater_than, .less, .less_than => .greater,
@@ -299,16 +299,16 @@ fn resolve_single_constraint(comptime constraint: anytype) Constraint {
     }
 }
 
-fn resolve_constraint_value(comptime value: anytype) Value {
+fn resolve_constraint_value(comptime value: anytype) isa.Encoder.Value {
     const T = @TypeOf(value);
-    if (T == Value) return value;
+    if (T == isa.Encoder.Value) return value;
     switch (@typeInfo(T)) {
         .int, .comptime_int => {
             return .{ .constant = @intCast(value) };
         },
         .enum_literal => {
             return .{ .placeholder = .{
-                .index = .invalid,
+                .param = .invalid,
                 .kind = .param_constant,
                 .name = @tagName(value),
             }};
@@ -317,14 +317,14 @@ fn resolve_constraint_value(comptime value: anytype) Value {
     }
 }
 
-const Encoder_Provider = *const fn (allocator: std.mem.Allocator, signature: ?isa.Instruction.Signature, parsed_encoders: []const Encoder) []const Encoder;
+const Encoder_Provider = *const fn (allocator: std.mem.Allocator, signature: ?isa.Instruction.Signature, parsed_encoders: []const isa.Encoder) []const isa.Encoder;
 
 fn resolve_encoders(comptime encoders: anytype) Encoder_Provider {
     return struct {
-        pub fn provider(allocator: std.mem.Allocator, signature: ?isa.Instruction.Signature, parsed_encoders: []const Encoder) []const Encoder {
+        pub fn provider(allocator: std.mem.Allocator, signature: ?isa.Instruction.Signature, parsed_encoders: []const isa.Encoder) []const isa.Encoder {
             switch (@typeInfo(@TypeOf(encoders))) {
                 .@"struct" => |info| if (info.is_tuple) {
-                    const out = allocator.alloc(Encoder, encoders.len) catch @panic("OOM");
+                    const out = allocator.alloc(isa.Encoder, encoders.len) catch @panic("OOM");
                     inline for (encoders, out) |in, *encoder| {
                         encoder.* = resolve_single_encoder(in, signature, parsed_encoders);
                     }
@@ -333,16 +333,16 @@ fn resolve_encoders(comptime encoders: anytype) Encoder_Provider {
                 else => {},
             }
 
-            var out = allocator.alloc(Encoder, 1) catch @panic("OOM");
+            var out = allocator.alloc(isa.Encoder, 1) catch @panic("OOM");
             out[0] = resolve_single_encoder(encoders, signature, parsed_encoders);
             return out;
         }
     }.provider;
 }
 
-fn resolve_single_encoder(encoder: anytype, signature: ?isa.Instruction.Signature, parsed_encoders: []const Encoder) Encoder {
+fn resolve_single_encoder(encoder: anytype, signature: ?isa.Instruction.Signature, parsed_encoders: []const isa.Encoder) isa.Encoder {
     const T = @TypeOf(encoder);
-    if (T == Encoder) return encoder;
+    if (T == isa.Encoder) return encoder;
     switch (@typeInfo(T)) {
         .@"fn" => {
             var args: std.meta.ArgsTuple(T) = undefined;
@@ -375,14 +375,14 @@ fn resolve_single_encoder(encoder: anytype, signature: ?isa.Instruction.Signatur
             }
             return resolve_single_encoder(@call(.auto, encoder, args), signature, parsed_encoders);
         },
-        else => return Encoder.init(0, encoder),
+        else => return isa.Encoder.init(0, encoder),
     }
 }
 
-fn encoding_length(encoders: []const Encoder) Encoded_Instruction.Length_Type {
-    var len: Encoded_Instruction.Length_Type = 0;
+fn encoding_length(encoders: []const isa.Encoder) isa.Instruction.Encoded.Length_Bytes {
+    var len: isa.Instruction.Encoded.Length_Bytes = 0;
     for (encoders) |encoder| {
-        const bytes: Encoded_Instruction.Length_Type = @intCast(encoder.required_bits() / 8);
+        const bytes: isa.Instruction.Encoded.Length_Bytes = @intCast(encoder.required_bits() / 8);
         len = @max(len, bytes);
     }
     return len;
@@ -392,11 +392,11 @@ pub const Initial_Word_Encoding_Iterator = struct {
     first: bool = true,
     undefined_bits: arch.reg.DR.Raw,
     last_encoded: arch.reg.IR.Raw,
-    constraints: []const Constraint,
-    value_iters: []Encoder.Value_Iterator,
+    constraints: []const isa.Constraint,
+    value_iters: []isa.Encoder.Value_Iterator,
 
-    pub fn init(allocator: std.mem.Allocator, constraints: []const Constraint, encoders: []const Encoder) Initial_Word_Encoding_Iterator {
-        const out = allocator.alloc(Encoder.Value_Iterator, encoders.len) catch @panic("OOM");
+    pub fn init(allocator: std.mem.Allocator, constraints: []const isa.Constraint, encoders: []const isa.Encoder) Initial_Word_Encoding_Iterator {
+        const out = allocator.alloc(isa.Encoder.Value_Iterator, encoders.len) catch @panic("OOM");
         var undefined_bits = ~@as(arch.reg.DR.Raw, 0);
         var n: usize = 0;
         for (encoders, 0..) |*encoder, i| {
@@ -439,7 +439,7 @@ pub const Initial_Word_Encoding_Iterator = struct {
 
     fn next_internal(self: *Initial_Word_Encoding_Iterator) ?arch.insn_decode.Address {
         if (self.first) {
-            var encoded: isa.Encoded_Instruction.Data = 0;
+            var encoded: isa.Instruction.Encoded.Data = 0;
             for (self.value_iters) |*value_iter| {
                 value_iter.reset();
                 std.debug.assert(value_iter.next() != null);
@@ -457,7 +457,7 @@ pub const Initial_Word_Encoding_Iterator = struct {
                     self.value_iters[j].reset();
                     std.debug.assert(self.value_iters[j].next() != null);
                 }
-                var encoded: isa.Encoded_Instruction.Data = 0;
+                var encoded: isa.Instruction.Encoded.Data = 0;
                 for (self.value_iters) |iter| {
                     std.debug.assert(iter.encoder.encode_value(iter.last_value, &encoded));
                 }
@@ -469,7 +469,7 @@ pub const Initial_Word_Encoding_Iterator = struct {
         return null;
     }
 
-    fn constraint_matches(self: *Initial_Word_Encoding_Iterator, constraint: Constraint) bool {
+    fn constraint_matches(self: *Initial_Word_Encoding_Iterator, constraint: isa.Constraint) bool {
         const left = self.constraint_value(constraint.left) orelse return true;
         const right = self.constraint_value(constraint.right) orelse return true;
         return switch (constraint.kind) {
@@ -480,7 +480,7 @@ pub const Initial_Word_Encoding_Iterator = struct {
         };
     }
 
-    fn constraint_value(self: Initial_Word_Encoding_Iterator, val: Value) ?i64 {
+    fn constraint_value(self: Initial_Word_Encoding_Iterator, val: isa.Encoder.Value) ?i64 {
         return switch (val) {
             .constant => |k| k,
             .placeholder => |info| self.value(info.name),
@@ -492,7 +492,7 @@ pub const Initial_Word_Encoding_Iterator = struct {
 
     pub fn value(self: Initial_Word_Encoding_Iterator, placeholder: []const u8) ?i64 {
         for (self.value_iters) |iter| {
-            if (get_placeholder_info(iter.encoder.value)) |info| {
+            if (get_placeholder(iter.encoder.value)) |info| {
                 if (std.mem.eql(u8, placeholder, info.name)) {
                     return iter.last_value;
                 }
@@ -501,12 +501,12 @@ pub const Initial_Word_Encoding_Iterator = struct {
         return null;
     }
 
-    pub fn encode(self: Initial_Word_Encoding_Iterator, encoders: []const Encoder, context: []const u8) isa.Encoded_Instruction.Data {
+    pub fn encode(self: Initial_Word_Encoding_Iterator, encoders: []const isa.Encoder, context: []const u8) isa.Instruction.Encoded.Data {
         return self.maybe_encode(encoders) orelse std.debug.panic("An encoder for {s} references a placeholder that is not encoded in the initial word of the instruction", .{ context });
     }
 
-    pub fn maybe_encode(self: Initial_Word_Encoding_Iterator, encoders: []const Encoder) ?isa.Encoded_Instruction.Data {
-        var data: isa.Encoded_Instruction.Data = 0;
+    pub fn maybe_encode(self: Initial_Word_Encoding_Iterator, encoders: []const isa.Encoder) ?isa.Instruction.Encoded.Data {
+        var data: isa.Instruction.Encoded.Data = 0;
         for (encoders) |encoder| {
             const v = self.constraint_value(encoder.value) orelse return null;
             std.debug.assert(encoder.encode_value(v, &data));
@@ -514,8 +514,8 @@ pub const Initial_Word_Encoding_Iterator = struct {
         return data;
     }
 
-    pub fn encode_ignore_errors(self: Initial_Word_Encoding_Iterator, encoders: []const Encoder) isa.Encoded_Instruction.Data {
-        var data: isa.Encoded_Instruction.Data = 0;
+    pub fn encode_ignore_errors(self: Initial_Word_Encoding_Iterator, encoders: []const isa.Encoder) isa.Instruction.Encoded.Data {
+        var data: isa.Instruction.Encoded.Data = 0;
         for (encoders) |encoder| {
             const v = self.constraint_value(encoder.value) orelse continue;
             std.debug.assert(encoder.encode_value(v, &data));
@@ -652,8 +652,8 @@ pub const Slot_Info = struct {
         initial_krio: ?arch.bus.K.Read_Index_Offset,
         initial_wio: ?arch.reg.gpr.Write_Index_Offset,
         signature: ?isa.Instruction.Signature,
-        parsed_encoders: []const Encoder,
-        encoding_len: ?Encoded_Instruction.Length_Type,
+        parsed_encoders: []const isa.Encoder,
+        encoding_len: ?isa.Instruction.Encoded.Length_Bytes,
         cv_mode: arch.insn_decode.CV_Mode,
     };
 
@@ -729,8 +729,6 @@ pub const Slot_Info = struct {
                         a.* = ctx.signature.?;
                     } else if (Arg == isa.Mnemonic) {
                         a.* = ctx.signature.?.mnemonic;
-                    } else if (Arg == isa.Mnemonic_Suffix) {
-                        a.* = ctx.signature.?.suffix;
                     } else if (Arg == []const isa.Parameter.Signature) {
                         a.* = ctx.signature.?.params;
                     } else if (Arg == arch.bus.K.Read_Index_Offset) {
@@ -780,14 +778,14 @@ pub const Slot_Info = struct {
     }
 };
 
-fn finalize_encoding(self: *Processor, parsed: Instruction_Encoding, constraints: []const Constraint, encoders: []const Encoder) Instruction_Encoding {
-    var final_encoders = self.arena.dupe(Encoder, encoders) catch @panic("OOM");
+fn finalize_form(self: *Processor, parsed: isa.Instruction.Form, constraints: []const isa.Constraint, encoders: []const isa.Encoder) isa.Instruction.Form {
+    var final_encoders = self.arena.dupe(isa.Encoder, encoders) catch @panic("OOM");
     for (final_encoders) |*encoder| {
         dupe_inner_values(self.arena, &encoder.value);
         fixup_placeholder_value(&encoder.value, parsed.encoders);
     }
 
-    const final_constraints = self.arena.alloc(Constraint, parsed.constraints.len + constraints.len) catch @panic("OOM");
+    const final_constraints = self.arena.alloc(isa.Constraint, parsed.constraints.len + constraints.len) catch @panic("OOM");
     @memcpy(final_constraints.ptr, parsed.constraints);
     @memcpy(final_constraints[parsed.constraints.len..], constraints);
 
@@ -801,17 +799,17 @@ fn finalize_encoding(self: *Processor, parsed: Instruction_Encoding, constraints
     for (parsed.encoders) |parsed_encoder| {
         const placeholder = parsed_encoder.value.placeholder.name;
 
-        if (find_placeholder_info(placeholder, final_encoders) != null) continue;
+        if (find_placeholder(placeholder, final_encoders) != null) continue;
 
         for (final_constraints) |constraint| {
             if (constraint.kind != .equal) continue;
             if (is_placeholder(placeholder, constraint.left)) {
-                if (get_placeholder(constraint.right)) |other_placeholder| {
-                    if (find_placeholder_info(other_placeholder, final_encoders) != null) break;
+                if (get_placeholder_name(constraint.right)) |other_placeholder| {
+                    if (find_placeholder(other_placeholder, final_encoders) != null) break;
                 }
             } else if (is_placeholder(placeholder, constraint.right)) {
-                if (get_placeholder(constraint.left)) |other_placeholder| {
-                    if (find_placeholder_info(other_placeholder, final_encoders) != null) break;
+                if (get_placeholder_name(constraint.left)) |other_placeholder| {
+                    if (find_placeholder(other_placeholder, final_encoders) != null) break;
                 }
             }
         } else {
@@ -830,10 +828,10 @@ fn finalize_encoding(self: *Processor, parsed: Instruction_Encoding, constraints
     };
 }
 
-fn validate_constant_values(parsed: Instruction_Encoding, encoders: []Encoder) void {
+fn validate_constant_values(parsed: isa.Instruction.Form, encoders: []isa.Encoder) void {
     for (encoders) |encoder| {
         if (encoder.value != .constant) continue;
-        var data: isa.Encoded_Instruction.Data = 0;
+        var data: isa.Instruction.Encoded.Data = 0;
         if (!encoder.encode_value(encoder.value.constant, &data)) {
             std.debug.panic("Can't encode constant {d} for instruction encoding: {f}", .{
                 encoder.value.constant,
@@ -843,11 +841,11 @@ fn validate_constant_values(parsed: Instruction_Encoding, encoders: []Encoder) v
     }
 }
 
-fn merge_adjacent_constant_encoders(encoders: []Encoder) []Encoder {
+fn merge_adjacent_constant_encoders(encoders: []isa.Encoder) []isa.Encoder {
     if (encoders.len <= 1) return encoders;
 
-    std.sort.block(Encoder, encoders, {}, struct {
-        pub fn less_than(_: void, a: Encoder, b: Encoder) bool {
+    std.sort.block(isa.Encoder, encoders, {}, struct {
+        pub fn less_than(_: void, a: isa.Encoder, b: isa.Encoder) bool {
             return a.bit_offset < b.bit_offset;
         } 
     }.less_than);
@@ -861,7 +859,7 @@ fn merge_adjacent_constant_encoders(encoders: []Encoder) []Encoder {
             continue;
         }
 
-        var data: isa.Encoded_Instruction.Data = 0;
+        var data: isa.Instruction.Encoded.Data = 0;
 
         const ok1 = first.encode_value(first.value.constant, &data);
         std.debug.assert(ok1);
@@ -869,7 +867,7 @@ fn merge_adjacent_constant_encoders(encoders: []Encoder) []Encoder {
         const ok2 = second.encode_value(second.value.constant, &data);
         std.debug.assert(ok2);
         
-        var temp: Encoder = .{
+        var temp: isa.Encoder = .{
             .bit_offset = first.bit_offset,
             .bit_count = first.bit_count + second.bit_count,
             .domain = .{ .int = .{
@@ -878,7 +876,7 @@ fn merge_adjacent_constant_encoders(encoders: []Encoder) []Encoder {
                 .multiple = 1,
             }},
             .value = .{ .placeholder = .{
-                .index = .invalid,
+                .param = .invalid,
                 .kind =  .param_constant,
                 .name = "",
             }},
@@ -896,28 +894,27 @@ fn finalize_instruction_signature(self: *Processor, signature: isa.Instruction.S
     const final_param_signatures = self.arena.dupe(isa.Parameter.Signature, signature.params) catch @panic("OOM");
     return .{
         .mnemonic = signature.mnemonic,
-        .suffix = signature.suffix,
         .params = final_param_signatures,
     };
 }
 
-fn dupe_inner_values(arena: std.mem.Allocator, value: *Value) void {
+fn dupe_inner_values(arena: std.mem.Allocator, value: *isa.Encoder.Value) void {
     switch (value.*) {
         .constant, .placeholder => {},
         .negate => |inner| {
-            const new_inner = arena.create(Value) catch @panic("OOM");
+            const new_inner = arena.create(isa.Encoder.Value) catch @panic("OOM");
             new_inner.* = inner.*;
             dupe_inner_values(arena, new_inner);
             value.* = .{ .negate = new_inner };
         },
         .xor => |*info| {
-            const new_inner = arena.create(Value) catch @panic("OOM");
+            const new_inner = arena.create(isa.Encoder.Value) catch @panic("OOM");
             new_inner.* = info.inner.*;
             dupe_inner_values(arena, new_inner);
             info.inner = new_inner;
         },
         .offset => |*info| {
-            const new_inner = arena.create(Value) catch @panic("OOM");
+            const new_inner = arena.create(isa.Encoder.Value) catch @panic("OOM");
             new_inner.* = info.inner.*;
             dupe_inner_values(arena, new_inner);
             info.inner = new_inner;
@@ -925,20 +922,20 @@ fn dupe_inner_values(arena: std.mem.Allocator, value: *Value) void {
     }
 }
 
-fn fixup_placeholder_value(value: *Value, parsed_encoders: []const Encoder) void {
+fn fixup_placeholder_value(value: *isa.Encoder.Value, parsed_encoders: []const isa.Encoder) void {
     switch (value.*) {
         .constant => {},
-        .placeholder => |*info| fixup_placeholder_info(info, parsed_encoders),
+        .placeholder => |*info| fixup_placeholder(info, parsed_encoders),
         .negate => |inner| fixup_placeholder_value(@constCast(inner), parsed_encoders), // TODO refactor to avoid @constCast
         .xor => |info| fixup_placeholder_value(@constCast(info.inner), parsed_encoders), // TODO refactor to avoid @constCast
         .offset => |info| fixup_placeholder_value(@constCast(info.inner), parsed_encoders), // TODO refactor to avoid @constCast
     }
 }
 
-fn fixup_placeholder_info(info: *Placeholder_Info, parsed_encoders: []const Encoder) void {
-    if (info.index == .invalid) {
-        if (find_placeholder_info(info.name, parsed_encoders)) |parsed_info| {
-            info.index = parsed_info.index;
+fn fixup_placeholder(info: *isa.Placeholder, parsed_encoders: []const isa.Encoder) void {
+    if (info.param == .invalid) {
+        if (find_placeholder(info.name, parsed_encoders)) |parsed_info| {
+            info.param = parsed_info.param;
             info.kind = parsed_info.kind;
         } else if (!std.mem.eql(u8, info.name, "__")) {
             std.debug.panic("Encoder {s} not found in parsed instruction", .{ info.name });
@@ -946,36 +943,36 @@ fn fixup_placeholder_info(info: *Placeholder_Info, parsed_encoders: []const Enco
     }
 }
 
-fn find_placeholder_info(needle: []const u8, haystack: []const Encoder) ?Instruction_Encoding.Placeholder_Info {
+fn find_placeholder(needle: []const u8, haystack: []const isa.Encoder) ?isa.Placeholder {
     for (haystack) |encoder| {
-        if (get_placeholder_info(encoder.value)) |info| {
+        if (get_placeholder(encoder.value)) |info| {
             if (std.mem.eql(u8, info.name, needle)) return info;
         }
     }
     return null;
 }
 
-fn get_placeholder(value: Value) ?[]const u8 {
+fn get_placeholder_name(value: isa.Encoder.Value) ?[]const u8 {
     return switch (value) {
         .constant => null,
         .placeholder => |info| info.name,
+        .negate => |inner| get_placeholder_name(inner.*),
+        .xor => |info| get_placeholder_name(info.inner.*),
+        .offset => |info| get_placeholder_name(info.inner.*),
+    };
+}
+
+fn get_placeholder(val: isa.Encoder.Value) ?isa.Placeholder {
+    return switch (val) {
+        .constant => null,
+        .placeholder => |info| info,
         .negate => |inner| get_placeholder(inner.*),
         .xor => |info| get_placeholder(info.inner.*),
         .offset => |info| get_placeholder(info.inner.*),
     };
 }
 
-fn get_placeholder_info(val: Value) ?Instruction_Encoding.Placeholder_Info {
-    return switch (val) {
-        .constant => null,
-        .placeholder => |info| info,
-        .negate => |inner| get_placeholder_info(inner.*),
-        .xor => |info| get_placeholder_info(info.inner.*),
-        .offset => |info| get_placeholder_info(info.inner.*),
-    };
-}
-
-fn is_placeholder(needle: []const u8, value: Value) bool {
+fn is_placeholder(needle: []const u8, value: isa.Encoder.Value) bool {
     return switch (value) {
         .constant => false,
         .placeholder => |info| std.mem.eql(u8, info.name, needle),
@@ -1003,12 +1000,6 @@ const Cycle = @import("Cycle.zig");
 const Slot_Data = Microcode_Builder.Slot_Data;
 const Microcode_Builder = @import("Microcode_Builder.zig");
 const Decode_ROM_Builder = @import("Decode_ROM_Builder.zig");
-const Value = Instruction_Encoding.Value;
-const Constraint = Instruction_Encoding.Constraint;
-const Placeholder_Info = Instruction_Encoding.Placeholder_Info;
-const Encoder = Instruction_Encoding.Encoder;
-const Instruction_Encoding = isa.Instruction_Encoding;
-const Encoded_Instruction = isa.Encoded_Instruction;
 const isa = @import("isa");
 const arch = @import("arch");
 const Temp_Allocator = @import("Temp_Allocator");

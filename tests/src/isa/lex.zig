@@ -61,11 +61,10 @@ test "Lexer strings" {
 }
 
 test "Lexer operators" {
-    try test_lex(".,:->", &.{
-        .dot,
+    try test_lex(".,:", &.{
+        .id,
         .comma,
         .colon,
-        .arrow,
         .eof,
     });
 }
@@ -73,18 +72,18 @@ test "Lexer operators" {
 test "Lexer examples" {
     try test_lex(
         \\label:
-        \\   addc r0, 15 -> r0 //comment
+        \\   addc r0, 15, r0 //comment
         \\   neg r0
         \\   b label
         \\
         \\asdf: .db 0 1 2 0x54
     , &.{
         .id, .colon, .newline,
-        .linespace, .id, .linespace, .id, .comma, .linespace, .int_literal, .linespace, .arrow, .linespace, .id, .linespace, .comment, .newline,
+        .linespace, .id, .linespace, .id, .comma, .linespace, .int_literal, .linespace, .comma, .linespace, .id, .linespace, .comment, .newline,
         .linespace, .id, .linespace, .id, .newline,
         .linespace, .id, .linespace, .id, .newline,
         .newline,
-        .id, .colon, .linespace, .dot, .id, .linespace, .int_literal, .linespace, .int_literal, .linespace, .int_literal, .linespace, .int_literal, .eof
+        .id, .colon, .linespace, .id, .linespace, .int_literal, .linespace, .int_literal, .linespace, .int_literal, .linespace, .int_literal, .eof
     });
 }
 

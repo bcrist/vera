@@ -20,6 +20,9 @@
 ## Design Constraints
 Since everyone in the homebrew CPU community has their own ideas of what kinds of technology are acceptable to use, here are my self-imposed restrictions and allowances:
 
+* Backplane/card cage construction is preferred
+    * This facilitates building and testing smaller parts separately
+    * Blinkenlights are cool, but not particularly interesting at MHz frequencies
 * 3.3V LVTTL/LVCMOS signalling is preferred
     * Backplane signals must not exceed 3.3V (ignoring overshoot transients)
     * 5V TTL outputs are allowed within a board, when paired with an 5V-tolerant receiver
@@ -30,7 +33,10 @@ Since everyone in the homebrew CPU community has their own ideas of what kinds o
     * &gt;= 0.8mm pitch for BGA
 * Modern SRAM, dual-port SRAM, and SDRAM is fine to use
 * Dedicated adder/multiplier/ALU ASICs are allowed
+    * But "not quite microprocessor" parts like Am2901 or Am29116/7 are not allowed (except in peripheral devices)
 * FPGAs are not allowed
+    * Designing with HDLs feels more like work than fun for me, and all of the FPGA toolchains make me want to pull my hair out
 * CPLDs and other programmable logic are allowed only if I have [created the entire programming toolchain myself](https://github.com/bcrist/zig-lc4k)
+    * Designing for CPLDs (without HDLs) is extremely similar to designing for discrete logic, but simplifies board layout significantly, and often provides better timing characteristics
 * Microcontrollers or other ASICs are allowed for bootstrapping or debugging purposes, or within peripheral devices
     * Absolutely none within the data or control paths of the CPU itself

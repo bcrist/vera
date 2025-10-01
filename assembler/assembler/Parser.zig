@@ -384,7 +384,7 @@ fn parse_register_literal(self: *Parser) ?Expression.Handle {
     self.skip_linespace();
     if (self.try_token(.id)) {
         const token = self.next_token - 1;
-        const id = self.token_location(token);
+        const id = self.token_span(token);
         if (is_gpr_literal(id)) {
             return self.add_terminal_expression(.literal_reg, token);
         }
@@ -458,7 +458,7 @@ fn parse_label(self: *Parser) ?Expression.Handle {
 fn parse_local_label_directive(self: *Parser) bool {
     const begin = self.next_token;
     if (self.try_token(.dot) and self.try_token(.id)) {
-        const directive_str = self.token_location(self.next_token - 1);
+        const directive_str = self.token_span(self.next_token - 1);
         if (std.mem.eql(u8, directive_str, "local")) {
             return true;
         }
@@ -528,7 +528,7 @@ fn parse_symbol_ref(self: *Parser) ?Expression.Handle {
 fn try_keyword(self: *Parser, comptime kw: []const u8) bool {
     const begin = self.next_token;
     if (self.try_token(.id)) {
-        const str = self.token_location(begin);
+        const str = self.token_span(begin);
         if (str.len == kw.len) {
             var buf = [_]u8 {0} ** kw.len;
             if (std.mem.eql(u8, std.ascii.lowerString(&buf, str), kw)) {
@@ -710,7 +710,7 @@ fn parse_directive(self: *Parser) ?Instruction.Operation_Type {
     if (self.sync_to_end_of_line or !self.try_token(.dot)) return null;
 
     if (self.try_token(.id)) {
-        const directive_str = self.token_location(self.next_token - 1);
+        const directive_str = self.token_span(self.next_token - 1);
         if (directive_map.get(directive_str)) |directive| {
             return directive;
         }
@@ -752,8 +752,8 @@ pub fn record_error_rel(self: *Parser, desc: []const u8, token_offset: i8) void 
     }) catch @panic("OOM");
 }
 
-pub fn token_location(self: *Parser, handle: Token.Handle) []const u8 {
-    return self.out.tokens.get(handle).location(self.out.source);
+pub fn token_span(self: *Parser, handle: Token.Handle) []const u8 {
+    return self.out.tokens.get(handle).span(self.out.source);
 }
 
 const directive_map = parse_helpers.case_insensitive_enum_map(Instruction.Operation_Type, .{

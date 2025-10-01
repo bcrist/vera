@@ -1,10 +1,10 @@
 pub const spec =
-    \\ swap
-    \\ swap2
-    \\ byterev
-    \\ bitrev
-    \\ bitrev1
-    \\ bitrev2
+    \\ swap.16
+    \\ swap.8
+    \\ rev.8.32
+    \\ rev.1.32
+    \\ rev.1.16
+    \\ rev.1.8
     ;
     
 pub const encoding = .{
@@ -17,12 +17,12 @@ pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
     c.reg_to_j();
     c.zero_to_k();
     c.swap_j_to_l(switch (mnemonic) {
-        .swap => .swap_halves,
-        .swap2 => .swap_bytes,
-        .byterev => .reverse_bytes,
-        .bitrev => .reverse_bits,
-        .bitrev1 => .reverse_bits_in_bytes,
-        .bitrev2 => .reverse_bits_in_halves,
+        .@"swap.16" => .swap_halves,
+        .@"swap.8" => .swap_bytes,
+        .@"rev.8.32" => .reverse_bytes,
+        .@"rev.1.32" => .reverse_bits,
+        .@"rev.1.16" => .reverse_bits_in_halves,
+        .@"rev.1.8" => .reverse_bits_in_bytes,
         else => unreachable,
     }, .no_flags);
     c.l_to_reg(true);
@@ -34,7 +34,7 @@ const Int = placeholders.Int;
 const Reg = placeholders.Reg;
 const placeholders = @import("../compile/placeholders.zig");
 const Cycle = @import("../compile/Cycle.zig");
-const Encoder = isa.Instruction_Encoding.Encoder;
+const Encoder = isa.Encoder;
 const isa = @import("isa");
 const Flags = arch.microcode.Flags;
 const arch = @import("arch");

@@ -98,7 +98,7 @@ pub fn boot(c: *Cycle) void {
 }
 
 const Cycle = @import("../compile/Cycle.zig");
-const Encoder = isa.Instruction_Encoding.Encoder;
+const Encoder = isa.Encoder;
 const Int = placeholders.Int;
 const Range = placeholders.Range;
 const Reg = placeholders.Reg;

@@ -5,12 +5,12 @@ instruction_signature: ?isa.Instruction.Signature,
 initial_dr: arch.reg.DR,
 initial_krio: arch.bus.K.Read_Index_Offset,
 initial_wio: arch.reg.gpr.Write_Index_Offset,
-encoding_len: ?Encoded_Instruction.Length_Type,
+encoding_len: ?isa.Instruction.Encoded.Length_Bytes,
 flags: std.EnumSet(Cycle_Flags),
-assigned_signals: std.EnumSet(Control_Signal),
+assigned_signals: std.EnumSet(arch.Control_Signal),
 
 // These fields *are* considered when deduplicating:
-signals: Control_Signals,
+signals: arch.Control_Signals,
 next_func: ?*const anyopaque,
 next_slot: ?Microcode_Builder.Slot_Data.Handle, // only considered when next_func is null
 
@@ -32,7 +32,7 @@ pub fn init(
     initial_dr: arch.reg.DR,
     initial_krio: arch.bus.K.Read_Index_Offset,
     initial_wio: arch.reg.gpr.Write_Index_Offset,
-    encoding_len: ?Encoded_Instruction.Length_Type,
+    encoding_len: ?isa.Instruction.Encoded.Length_Bytes,
     flags: std.EnumSet(Cycle_Flags)
 ) Cycle {
     var final_flags = flags;
@@ -247,11 +247,11 @@ pub fn finish(cycle: *Cycle) void {
     cycle.flags.remove(.disallow_write_to_other_rsn);
 }
 
-fn is_set(cycle: *Cycle, signal: Control_Signal) bool {
+fn is_set(cycle: *Cycle, signal: arch.Control_Signal) bool {
     return cycle.assigned_signals.contains(signal);
 }
 
-fn ensure_set(cycle: *Cycle, signal: Control_Signal) void {
+fn ensure_set(cycle: *Cycle, signal: arch.Control_Signal) void {
     if (!cycle.is_set(signal)) {
         cycle.warn("Expected {s} to be assigned", .{ @tagName(signal) });
     }
@@ -303,7 +303,7 @@ fn validate_address(cycle: *Cycle) void {
     cycle.ensure_set(.dsrc);
 }
 
-fn set_control_signal(c: *Cycle, comptime signal: Control_Signal, raw_value: anytype) void {
+fn set_control_signal(c: *Cycle, comptime signal: arch.Control_Signal, raw_value: anytype) void {
     const current_value = @field(c.signals, @tagName(signal));
     const T = @TypeOf(current_value);
     const value = @as(T, raw_value);
@@ -1359,10 +1359,6 @@ const log = std.log.scoped(.cycle);
 
 const Cycle = @This();
 const Microcode_Builder = @import("Microcode_Builder.zig");
-const Control_Signals = arch.Control_Signals;
-const Control_Signal = arch.Control_Signal;
-const Register_Index = arch.Register_Index;
-const Encoded_Instruction = isa.Encoded_Instruction;
 const isa = @import("isa");
 const arch = @import("arch");
 const bits = @import("bits");

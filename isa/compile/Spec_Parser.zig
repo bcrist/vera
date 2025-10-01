@@ -1,16 +1,16 @@
 allocator: std.mem.Allocator,
-next_token: Token.Handle,
-token_kinds: []Token_Kind,
+next_token: isa.lex.Token.Handle,
+token_kinds: []isa.lex.Token_Kind,
 token_offsets: []u32,
-tokens: lex.Token_List,
+tokens: isa.lex.Token_List,
 source: []const u8,
-temp_param_signatures: std.ArrayListUnmanaged(Parameter.Signature),
-temp_constraints: std.ArrayListUnmanaged(Constraint),
-temp_encoders: std.ArrayListUnmanaged(Encoder),
-start_of_line: Token.Handle,
+temp_param_signatures: std.ArrayListUnmanaged(isa.Parameter.Signature),
+temp_constraints: std.ArrayListUnmanaged(isa.Constraint),
+temp_encoders: std.ArrayListUnmanaged(isa.Encoder),
+start_of_line: isa.lex.Token.Handle,
 
 pub fn init(allocator: std.mem.Allocator, source: []const u8) Spec_Parser {
-    const tokens = lex.lex(allocator, source);
+    const tokens = isa.lex.lex(allocator, source);
     return .{
         .allocator = allocator,
         .next_token = 0,
@@ -34,7 +34,7 @@ pub fn prev_line(self: *Spec_Parser, source: []const u8) []const u8 {
 /// N.B. The parsed encoding's constraints, encodings, and param signatures are only
 /// valid until the next call to next().  It is the caller's responsibility to copy them
 /// to permanent storage if necessary.
-pub fn next(self: *Spec_Parser) ?Instruction_Encoding {
+pub fn next(self: *Spec_Parser) ?isa.Instruction.Form {
     self.temp_param_signatures.clearRetainingCapacity();
     self.temp_constraints.clearRetainingCapacity();
     self.temp_encoders.clearRetainingCapacity();
@@ -43,32 +43,21 @@ pub fn next(self: *Spec_Parser) ?Instruction_Encoding {
 
         self.skip_linespace();
 
-        if (parse_helpers.parse_mnemonic(self)) |mnemonic| {
-            var swap_params = false;
-            const suffix = parse_helpers.parse_suffix(self, &swap_params);
-            if (swap_params) {
-                self.record_error_rel("Please swap the suffix ordering!", -1);
-            }
-
+        if (self.parse_mnemonic()) |mnemonic| {
             var first = true;
             while (true) {
                 self.skip_linespace();
-
-                if (self.try_token(.arrow)) {
-                    self.add_signature(null, .arrow, .none);
-                    continue;
-                }
 
                 const addr_space = self.parse_addr_space();
                 self.skip_linespace();
 
                 if (self.parse_int_literal()) |literal| {
-                    const param_index = Parameter.Index.init(@intCast(self.temp_param_signatures.items.len));
+                    const param_index: isa.Parameter.Index = .init(@intCast(self.temp_param_signatures.items.len));
                     self.add_constant(param_index, literal);
                     self.add_signature(addr_space, .constant, .none);
 
                 } else if (self.parse_first_placeholder()) |placeholder| {
-                    const param_index = Parameter.Index.init(@intCast(self.temp_param_signatures.items.len));
+                    const param_index: isa.Parameter.Index = .init(@intCast(self.temp_param_signatures.items.len));
                     self.add_placeholder_constant(param_index, placeholder);
                     while (self.parse_additional_placeholder()) |p| {
                         self.add_placeholder_constant(param_index, p);
@@ -86,10 +75,7 @@ pub fn next(self: *Spec_Parser) ?Instruction_Encoding {
                 first = false;
 
                 self.skip_linespace();
-                if (self.try_token(.arrow)) {
-                    self.add_signature(null, .arrow, .none);
-                    continue;
-                } else if (!self.try_token(.comma)) {
+                if (!self.try_token(.comma)) {
                     break;
                 }
             }
@@ -102,7 +88,6 @@ pub fn next(self: *Spec_Parser) ?Instruction_Encoding {
             return .{
                 .signature = .{
                     .mnemonic = mnemonic,
-                    .suffix = suffix,
                     .params = self.temp_param_signatures.items,
                 },
                 .constraints = self.temp_constraints.items,
@@ -115,7 +100,7 @@ pub fn next(self: *Spec_Parser) ?Instruction_Encoding {
     }
 }
 
-fn add_signature(self: *Spec_Parser, addr_space: ?isa.Address_Space, base: Parameter.Kind, offset: Parameter.Kind) void {
+fn add_signature(self: *Spec_Parser, addr_space: ?isa.Address_Space, base: isa.Parameter.Kind, offset: isa.Parameter.Kind) void {
     self.temp_param_signatures.append(self.allocator, .{
         .address_space = addr_space,
         .base = base,
@@ -123,11 +108,11 @@ fn add_signature(self: *Spec_Parser, addr_space: ?isa.Address_Space, base: Param
     }) catch @panic("OOM");
 }
 
-fn add_constant(self: *Spec_Parser, index: Parameter.Index, constant: i64) void {
+fn add_constant(self: *Spec_Parser, index: isa.Parameter.Index, constant: i64) void {
     self.temp_constraints.append(self.allocator, .{
         .kind = .equal,
         .left = .{ .placeholder = .{
-            .index = index,
+            .param = index,
             .kind = .param_constant,
             .name = "",
         }},
@@ -135,11 +120,11 @@ fn add_constant(self: *Spec_Parser, index: Parameter.Index, constant: i64) void 
     }) catch @panic("OOM");
 }
 
-fn add_base_register(self: *Spec_Parser, index: Parameter.Index, reg: arch.reg.gpr.Index) void {
+fn add_base_register(self: *Spec_Parser, index: isa.Parameter.Index, reg: arch.reg.gpr.Index) void {
     self.temp_constraints.append(self.allocator, .{
         .kind = .equal,
         .left = .{ .placeholder = .{
-            .index = index,
+            .param = index,
             .kind = .param_base_register,
             .name = "",
         }},
@@ -147,11 +132,11 @@ fn add_base_register(self: *Spec_Parser, index: Parameter.Index, reg: arch.reg.g
     }) catch @panic("OOM");
 }
 
-fn add_offset_register(self: *Spec_Parser, index: Parameter.Index, reg: arch.reg.gpr.Index) void {
+fn add_offset_register(self: *Spec_Parser, index: isa.Parameter.Index, reg: arch.reg.gpr.Index) void {
     self.temp_constraints.append(self.allocator, .{
         .kind = .equal,
         .left = .{ .placeholder = .{
-            .index = index,
+            .param = index,
             .kind = .param_offset_register,
             .name = "",
         }},
@@ -159,13 +144,13 @@ fn add_offset_register(self: *Spec_Parser, index: Parameter.Index, reg: arch.reg
     }) catch @panic("OOM");
 }
 
-fn add_placeholder(self: *Spec_Parser, index: Parameter.Index, placeholder: []const u8, kind: Instruction_Encoding.Placeholder_Kind) void {
+fn add_placeholder(self: *Spec_Parser, index: isa.Parameter.Index, placeholder: []const u8, kind: isa.Placeholder.Kind) void {
     for (self.temp_encoders.items) |encoder| {
         if (std.mem.eql(u8, encoder.value.placeholder.name, placeholder)) {
             self.temp_constraints.append(self.allocator, .{
                 .kind = .equal,
                 .left = .{ .placeholder = .{
-                    .index = index,
+                    .param = index,
                     .kind = kind,
                     .name = placeholder,
                 }},
@@ -176,7 +161,7 @@ fn add_placeholder(self: *Spec_Parser, index: Parameter.Index, placeholder: []co
     }
     self.temp_encoders.append(self.allocator, .{
         .value = .{ .placeholder = .{
-            .index = index,
+            .param = index,
             .kind = kind,
             .name = placeholder,
         }},
@@ -185,18 +170,33 @@ fn add_placeholder(self: *Spec_Parser, index: Parameter.Index, placeholder: []co
         .bit_count = 0,
     }) catch @panic("OOM");
 }
-fn add_placeholder_constant(self: *Spec_Parser, index: Parameter.Index, placeholder: []const u8) void {
+fn add_placeholder_constant(self: *Spec_Parser, index: isa.Parameter.Index, placeholder: []const u8) void {
     self.add_placeholder(index, placeholder, .param_constant);
 }
-fn add_placeholder_base_register(self: *Spec_Parser, index: Parameter.Index, placeholder: []const u8) void {
+fn add_placeholder_base_register(self: *Spec_Parser, index: isa.Parameter.Index, placeholder: []const u8) void {
     self.add_placeholder(index, placeholder, .param_base_register);
 }
-fn add_placeholder_offset_register(self: *Spec_Parser, index: Parameter.Index, placeholder: []const u8) void {
+fn add_placeholder_offset_register(self: *Spec_Parser, index: isa.Parameter.Index, placeholder: []const u8) void {
     self.add_placeholder(index, placeholder, .param_offset_register);
 }
 
+
+pub fn parse_mnemonic(self: *Spec_Parser) ?isa.Mnemonic {
+    if (!self.try_token(.id)) return null;
+
+    const mnemonic_str = self.token_span(self.next_token - 1);
+
+    const mnemonic = isa.Mnemonic.init(mnemonic_str);
+
+    if (mnemonic.name().len < mnemonic_str.len) {
+        self.record_error_rel("Mnemonic too long!", -1);
+    }
+
+    return mnemonic;
+}
+
 fn parse_base_register(self: *Spec_Parser, addr_space: ?isa.Address_Space) bool {
-    const param_index = Parameter.Index.init(@intCast(self.temp_param_signatures.items.len));
+    const param_index: isa.Parameter.Index = .init(@intCast(self.temp_param_signatures.items.len));
     if (self.parse_sr()) |sr| {
         self.add_signature(addr_space, .{ .sr = sr }, .none);
 
@@ -219,7 +219,7 @@ fn parse_base_register(self: *Spec_Parser, addr_space: ?isa.Address_Space) bool 
 }
 
 fn parse_offset(self: *Spec_Parser) void {
-    const param_index = Parameter.Index.init(@intCast(self.temp_param_signatures.items.len - 1));
+    const param_index: isa.Parameter.Index = .init(@intCast(self.temp_param_signatures.items.len - 1));
 
     self.skip_linespace();
     if (self.try_token(.plus)) {
@@ -274,7 +274,7 @@ fn parse_int_literal(self: *Spec_Parser) ?i64 {
     }
     const token = self.next_token;
     if (self.try_token(.int_literal)) {
-        var remaining = self.token_location(token);
+        var remaining = self.token_span(token);
         var radix: u8 = 10;
         if (remaining.len > 2 and remaining[0] == '0') {
             switch (remaining[1]) {
@@ -315,31 +315,31 @@ fn parse_int_literal(self: *Spec_Parser) ?i64 {
 
 fn parse_addr_space(self: *Spec_Parser) ?isa.Address_Space {
    const map = std.StaticStringMapWithEql(isa.Address_Space, std.ascii.eqlIgnoreCase).initComptime(.{
-        .{ "d", .data },
-        .{ "i", .insn },
-        .{ "s", .stack },
+        .{ ".d", .data },
+        .{ ".i", .insn },
+        .{ ".s", .stack },
     });
 
     const begin = self.next_token;
     self.skip_linespace();
-    if (self.try_token(.dot) and self.try_token(.id)) {
-        const str = self.token_location(self.next_token - 1);
+    if (self.try_token(.id)) {
+        const str = self.token_span(self.next_token - 1);
         if (map.get(str)) |addr_space| return addr_space;
     }
     self.next_token = begin;
     return null;
 }
 
-fn parse_signedness(self: *Spec_Parser) ?Signedness {
-   const map = std.StaticStringMapWithEql(Signedness, std.ascii.eqlIgnoreCase).initComptime(.{
-        .{ "unsigned", .unsigned },
-        .{ "signed", .signed },
+fn parse_signedness(self: *Spec_Parser) ?std.builtin.Signedness {
+   const map = std.StaticStringMapWithEql(std.builtin.Signedness, std.ascii.eqlIgnoreCase).initComptime(.{
+        .{ ".unsigned", .unsigned },
+        .{ ".signed", .signed },
     });
 
     const begin = self.next_token;
     self.skip_linespace();
-    if (self.try_token(.dot) and self.try_token(.id)) {
-        const str = self.token_location(self.next_token - 1);
+    if (self.try_token(.id)) {
+        const str = self.token_span(self.next_token - 1);
         if (map.get(str)) |signedness| return signedness;
     }
     self.next_token = begin;
@@ -353,7 +353,7 @@ fn parse_first_placeholder(self: *Spec_Parser) ?[]const u8 {
         self.skip_linespace();
         const placeholder_token = self.next_token;
         if (self.try_token(.id)) {
-            return self.token_location(placeholder_token);
+            return self.token_span(placeholder_token);
         } else {
             self.record_error("Expected placeholder name");
         }
@@ -369,7 +369,7 @@ fn parse_additional_placeholder(self: *Spec_Parser) ?[]const u8 {
         self.skip_linespace();
         const placeholder_token = self.next_token;
         if (self.try_token(.id)) {
-            return self.token_location(placeholder_token);
+            return self.token_span(placeholder_token);
         } else {
             self.record_error("Expected placeholder name");
         }
@@ -381,11 +381,11 @@ fn parse_additional_placeholder(self: *Spec_Parser) ?[]const u8 {
 }
 
 fn parse_sr(self: *Spec_Parser) ?isa.Special_Register {
-    const map = parse_helpers.case_insensitive_enum_map(isa.Special_Register, .{}, .{});
+    const map = isa.lex.case_insensitive_enum_map(isa.Special_Register, .{}, .{});
     const begin = self.next_token;
     self.skip_linespace();
     if (self.try_token(.id)) {
-        const id = self.token_location(self.next_token - 1);
+        const id = self.token_span(self.next_token - 1);
         if (map.get(id)) |sr| return sr;
     }
     self.next_token = begin;
@@ -394,7 +394,7 @@ fn parse_sr(self: *Spec_Parser) ?isa.Special_Register {
 
 fn parse_literal_reg(self: *Spec_Parser) ?arch.reg.gpr.Index {
     if (self.token_kinds[self.next_token] == .id) {
-        const id = self.token_location(self.next_token);
+        const id = self.token_span(self.next_token);
         if (id.len >= 1 and std.ascii.toLower(id[0]) == 'r') {
             const index = std.fmt.parseUnsigned(arch.reg.gpr.Index, id[1..], 10) catch return null;
             self.next_token += 1;
@@ -407,7 +407,7 @@ fn parse_literal_reg(self: *Spec_Parser) ?arch.reg.gpr.Index {
 fn parse_first_placeholder_reg(self: *Spec_Parser) ?[]const u8 {
     const begin = self.next_token;
     if (self.try_token(.id)) {
-        const id = self.token_location(self.next_token - 1);
+        const id = self.token_span(self.next_token - 1);
         if (id.len == 1 and std.ascii.toLower(id[0]) == 'r') {
             if (self.parse_first_placeholder()) |placeholder| return placeholder;
         }
@@ -420,7 +420,7 @@ pub fn skip_linespace(self: *Spec_Parser) void {
     _ = self.try_token(.linespace);
 }
 
-pub fn try_token(self: *Spec_Parser, kind: Token_Kind) bool {
+pub fn try_token(self: *Spec_Parser, kind: isa.lex.Token_Kind) bool {
     if (self.token_kinds[self.next_token] == kind) {
         self.next_token += 1;
         return true;
@@ -435,16 +435,16 @@ pub fn record_error(self: *Spec_Parser, desc: []const u8) noreturn {
 pub fn record_error_rel(self: *Spec_Parser, desc: []const u8, token_offset: i8) noreturn {
     self.record_error_abs(desc, @intCast(@as(i32, self.next_token) + token_offset));
 }
-pub fn record_error_abs(self: *Spec_Parser, desc: []const u8, token_handle: Token.Handle) noreturn {
+pub fn record_error_abs(self: *Spec_Parser, desc: []const u8, token_handle: isa.lex.Token.Handle) noreturn {
     const token = self.tokens.get(token_handle);
-    const location = token.location(self.source);
+    const span = token.span(self.source);
     var buf: [64]u8 = undefined;
     var writer = std.fs.File.stderr().writer(&buf);
     writer.interface.writeByte('\n') catch @panic("IO Error");
     console.print_context(self.source, &.{
         .{
             .offset = token.offset,
-            .len = location.len,
+            .len = span.len,
             .note = desc,
         },
     }, &writer.interface, 160, .{}) catch @panic("IO Error");
@@ -452,24 +452,13 @@ pub fn record_error_abs(self: *Spec_Parser, desc: []const u8, token_handle: Toke
     @panic("Error parsing spec");
 }
 
-pub fn token_location(self: *Spec_Parser, handle: Token.Handle) []const u8 {
-    return self.tokens.get(handle).location(self.source);
+pub fn token_span(self: *Spec_Parser, handle: isa.lex.Token.Handle) []const u8 {
+    return self.tokens.get(handle).span(self.source);
 }
 
 const Spec_Parser = @This();
-const Token = lex.Token;
-const Token_Kind = lex.Token_Kind;
-const lex = isa.lex;
-const parse_helpers = isa.parse_helpers;
-const Value = Instruction_Encoding.Value;
-const Constraint = Instruction_Encoding.Constraint;
-const Encoder = Instruction_Encoding.Encoder;
-const Instruction_Encoding = isa.Instruction_Encoding;
-const Parameter = isa.Parameter;
-const Mnemonic = isa.Mnemonic;
-const Mnemonic_Suffix = isa.Mnemonic_Suffix;
+
 const isa = @import("isa");
 const arch = @import("arch");
-const Signedness = std.builtin.Signedness;
 const console = @import("console");
 const std = @import("std");

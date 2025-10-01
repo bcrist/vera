@@ -256,7 +256,7 @@ pub const Transact_Microcode_Entry = packed struct (u24) {
     irw: misc.Generic_Write_Enable,
     lsrc: bus.L.Source,
     seq_op: misc.Sequencer_Op,
-    _unused: u6 = 0,
+    _unused: u7 = 0,
 
     pub inline fn init(raw_value: Raw) Transact_Microcode_Entry {
         return @bitCast(raw_value);

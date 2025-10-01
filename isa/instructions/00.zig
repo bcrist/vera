@@ -1281,7 +1281,7 @@ fn rp_uxp_kxp_asn_encoder(comptime shift: u8, comptime param_index: Parameter.In
 }
 
 const Cycle = @import("../compile/Cycle.zig");
-const Encoder = isa.Instruction_Encoding.Encoder;
+const Encoder = isa.Encoder;
 const Parameter = isa.Parameter;
 const Options = placeholders.Options;
 const Range = placeholders.Range;
