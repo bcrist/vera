@@ -1,9 +1,6 @@
 pub fn copy_memory(a: *const Assembler, maybe_section_handle: ?Section.Handle, allocator: std.mem.Allocator) ![]u8 {
     const page_data = a.pages.items(.data);
 
-    // var temp = std.ArrayListUnmanaged(u8){};
-    // defer temp.deinit(a.gpa);
-
     var max_addr: u32 = 0;
 
     for (a.chunks.items) |chunk_and_address| {
@@ -95,39 +92,43 @@ pub fn write_hex(a: *const Assembler, dir: std.fs.Dir, output_filename_prefix: [
 }
 
 pub fn write_hex_files_for_section(a: *const Assembler, maybe_section_handle: ?Section.Handle, dir: std.fs.Dir, output_filename_prefix: []const u8, options: Hex_Options) !void {
-    var filename_temp = std.ArrayList(u8).init(a.gpa);
+    var filename_temp = std.io.Writer.Allocating.init(a.gpa);
     defer filename_temp.deinit();
 
-    try filename_temp.appendSlice(output_filename_prefix);
+    try filename_temp.writer.writeAll(output_filename_prefix);
     if (maybe_section_handle) |section_handle| {
-        try filename_temp.append('.');
+        try filename_temp.writer.writeByte('.');
         const section = a.sections.values()[section_handle];
         for (section.name) |ch| {
-            try filename_temp.append(switch (ch) {
+            try filename_temp.writer.writeByte(switch (ch) {
                 'a'...'z', 'A'...'Z', '0'...'9' => ch,
                 else => '_',
             });
         }
     }
 
-    const base_length = filename_temp.items.len;
+    const base_length = filename_temp.written().len;
 
     if (options.num_roms > 1) {
         for (0..options.num_roms) |rom_number| {
-            filename_temp.items.len = base_length;
-            try filename_temp.writer().print(".{}.{s}", .{ rom_number, options.file_extension });
-            var f = try dir.createFile(filename_temp.items, .{});
+            filename_temp.writer.end = base_length;
+            try filename_temp.writer.print(".{}.{s}", .{ rom_number, options.file_extension });
+            var f = try dir.createFile(filename_temp.written(), .{});
             defer f.close();
-            const writer = f.writer();
-            try write_hex_for_section(a, maybe_section_handle, writer, @intCast(rom_number), options);
+            var buf: [4096]u8 = undefined;
+            var writer = f.writer(&buf);
+            try write_hex_for_section(a, maybe_section_handle, &writer.interface, @intCast(rom_number), options);
+            try writer.interface.flush();
         }
     } else {
-        filename_temp.items.len = base_length;
-        try filename_temp.writer().print(".{s}", .{ options.file_extension });
-        var f = try dir.createFile(filename_temp.items, .{});
+        filename_temp.writer.end = base_length;
+        try filename_temp.writer.print(".{s}", .{ options.file_extension });
+        var f = try dir.createFile(filename_temp.written(), .{});
         defer f.close();
-        const writer = f.writer();
-        try write_hex_for_section(a, maybe_section_handle, writer, 0, options);
+        var buf: [4096]u8 = undefined;
+        var writer = f.writer(&buf);
+        try write_hex_for_section(a, maybe_section_handle, &writer.interface, 0, options);
+        try writer.interface.flush();
     }
 }
 
@@ -136,12 +137,17 @@ pub fn write_hex_for_section(a: *const Assembler, maybe_section_handle: ?Section
         .motorola => {
             var buf: [8]u8 = undefined;
             const header = try std.fmt.bufPrint(&buf, "rom {}", .{ rom_number });
-            var hex_writer = try srec.writer(u32, writer, header, options.add_spaces);
+            var hex_writer = try srec.writer(u32, writer, .{
+                .header_data = header,
+                .pretty = options.add_spaces,
+            });
             try write_hex_for_section_inner(a, maybe_section_handle, &hex_writer, rom_number, options);
             try hex_writer.finish(0);
         },
         .intel => {
-            var hex_writer = ihex.writer(u32, writer, options.add_spaces);
+            var hex_writer = ihex.writer(u32, writer, .{
+                .pretty = options.add_spaces,
+            });
             try write_hex_for_section_inner(a, maybe_section_handle, &hex_writer, rom_number, options);
             try hex_writer.finish(null);
         },
@@ -149,7 +155,7 @@ pub fn write_hex_for_section(a: *const Assembler, maybe_section_handle: ?Section
 }
 
 // writer should be srec.Writer or ihex.Writer
-fn write_hex_for_section_inner(a: *const Assembler, maybe_section_handle: ?Section.Handle, writer: *std.io.Writer, rom_number: u8, options: Hex_Options) !void {
+fn write_hex_for_section_inner(a: *const Assembler, maybe_section_handle: ?Section.Handle, writer: anytype, rom_number: u8, options: Hex_Options) !void {
     const page_data = a.pages.items(.data);
 
     var temp = std.ArrayListUnmanaged(u8){};
@@ -169,13 +175,13 @@ fn write_hex_for_section_inner(a: *const Assembler, maybe_section_handle: ?Secti
         var address: usize = address_range.first;
         const last_address = address_range.last();
         while (address < last_address) {
-            const page: arch.addr.Page = @truncate(address >> @bitSizeOf(arch.addr.Page.Offset));
-            const page_end = (@as(u64, page) + 1) << @bitSizeOf(arch.addr.Page.Offset);
+            const page: arch.addr.Page = .init(@truncate(address >> @bitSizeOf(arch.addr.Page.Offset)));
+            const page_end = (@as(u64, page.raw()) + 1) << @bitSizeOf(arch.addr.Page.Offset);
             const end: u32 = @intCast(@min(page_end, last_address + 1));
 
             if (a.page_lookup.get(page)) |page_data_handle| {
-                const begin_offset: arch.addr.Page.Offset = @truncate(address);
-                const end_offset: arch.addr.Page.Offset = @truncate(end);
+                const begin_offset: arch.addr.Page.Offset.Raw = @truncate(address);
+                const end_offset: arch.addr.Page.Offset.Raw = @truncate(end);
 
                 var data: []const u8 = &page_data[page_data_handle];
                 if (end_offset == 0) {

@@ -19,8 +19,6 @@
 [microsim] Add a warning if two pipes ever use the same RSN concurrently
 [microsim] Warning if an interrupt or fault ends with TI > 0
 
-[isa] Finish Encoding_Database.similar_encodings
-
 [compile] Revamp instruction_builder.print_cycle_path()
 
 [assembler] .dw/.dd => .dh/.dw (words are 32 bit now)
@@ -42,9 +40,6 @@
 [assembler] add an acceleration structure inside Section for finding partially filled chunks with >= N bytes free
 [assembler] Listing.write_instruction_line - analyze insn.encoding.encoders to figure out which chunks to pass to write_grouped_data_and_source
 [assembler] Explain magic constant in output.write_sim_sx_page for boot flash
-
-[test] Use assembler for test_instruction_behavior
-[test] Use assembler and disassembler for test_instruction_encoding
 
 [microsim] implement sleep flag based on when all contexts are executing PARK
 [microsim] fix Memory device

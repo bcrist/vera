@@ -79,7 +79,7 @@ test "Lexer examples" {
         \\asdf: .db 0 1 2 0x54
     , &.{
         .id, .colon, .newline,
-        .linespace, .id, .linespace, .id, .comma, .linespace, .int_literal, .linespace, .comma, .linespace, .id, .linespace, .comment, .newline,
+        .linespace, .id, .linespace, .id, .comma, .linespace, .int_literal, .comma, .linespace, .id, .linespace, .comment, .newline,
         .linespace, .id, .linespace, .id, .newline,
         .linespace, .id, .linespace, .id, .newline,
         .newline,

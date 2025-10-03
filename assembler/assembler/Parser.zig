@@ -227,6 +227,7 @@ fn parse_operator(self: *Parser) ?Operator_Info {
             } else if (self.try_keyword(".without_signedness")) {
                 break :info .{ .token = t, .left_bp = 50, .right_bp = null, .expr = .remove_signedness_cast };
             } else {
+                self.next_token = begin;
                 return null;
             }
         },
@@ -399,9 +400,9 @@ fn parse_special_literal(self: *Parser) ?Expression.Handle {
 fn is_gpr_literal(id: []const u8) bool {
     if (id.len < 2) return false;
     switch (id[0]) {
-        'r', 'R', 'x', 'X', 'b', 'B' => {
-            const index = std.fmt.parseUnsigned(u4, id[1..], 10) catch return false;
-            if (index != 0 and id[1] == '0') return false; // don't treat R01, X000010, etc. as register names
+        'r', 'R' => {
+            const index = std.fmt.parseUnsigned(arch.bus.K.Read_Index_Offset.Raw, id[1..], 10) catch return false;
+            if (index != 0 and id[1] == '0') return false; // don't treat R01, r000010, etc. as register names
             return true;
         },
         else => return false,
@@ -491,15 +492,20 @@ pub fn parse_mnemonic(self: *Parser) ?isa.Mnemonic {
     if (!self.try_token(.id)) return null;
 
     const mnemonic_str = self.token_span(self.next_token - 1);
+    if (mnemonic_str[0] == '.') {
+        self.next_token -= 1;
+        return null;
+    }
 
     const mnemonic = isa.Mnemonic.init(mnemonic_str);
 
     if (mnemonic.name().len < mnemonic_str.len) {
         self.record_error_rel("Mnemonic too long!", -1);
+        self.sync_to_end_of_line = true;
+        return null;
     }
 
-    self.sync_to_end_of_line = true;
-    return null;
+    return mnemonic;
 }
 
 fn try_keyword(self: *Parser, comptime kw: []const u8) bool {
@@ -679,9 +685,14 @@ fn parse_directive(self: *Parser) ?Instruction.Operation_Type {
     if (self.sync_to_end_of_line or !self.try_token(.id)) return null;
 
     const directive_str = self.token_span(token);
-    if (directive_str[0] == '.') if (directive_map.get(directive_str[1..])) |directive| {
-        return directive;
-    };
+    if (directive_str[0] == '.') {
+        if (directive_map.get(directive_str[1..])) |directive| {
+            return directive;
+        }
+
+        self.record_error_rel("Unrecognized directive", -1);
+        self.sync_to_end_of_line = true;
+    }
 
     self.next_token = token;
     return null;

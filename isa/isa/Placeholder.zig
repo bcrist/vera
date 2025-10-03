@@ -39,8 +39,15 @@ pub fn eql(a: Placeholder, b: Placeholder) bool {
     return a.param == b.param and a.kind == b.kind and std.mem.eql(u8, a.name, b.name);
 }
 
+pub fn restrictions(self: Placeholder, form: Instruction.Form) Restrictions_Iterator {
+    return .init(form, self);
+}
+
+pub const Restrictions_Iterator = @import("Placeholder/Restrictions_Iterator.zig");
+
 const Placeholder = @This();
 
+const Instruction = @import("Instruction.zig");
 const Parameter = @import("Parameter.zig");
 const arch = @import("arch");
 const std = @import("std");

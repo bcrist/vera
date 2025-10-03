@@ -1,9 +1,10 @@
-file: Source_File.Handle,
+file: ?Source_File.Handle,
 context: Context,
 desc: []const u8,
 flags: Flag_Set,
 
 pub const Context = union (enum) {
+    none,
     token: lex.Token.Handle,
     instruction: Instruction.Handle,
     expression: Expression.Handle,
@@ -17,55 +18,131 @@ pub const Flags = enum {
 };
 
 pub fn print(self: Error, a: *Assembler, writer: *std.io.Writer) !void {
-    const file = a.get_source(self.file);
-    const s = file.slices();
+    if (self.file) |file_handle| {
+        const file = a.get_source(file_handle);
+        const s = file.slices();
 
-    const context = switch (self.context) {
-        .token => |handle| lex.Token.Range.expand(null, handle),
-        .instruction => |handle| get_instruction_context(s, handle),
-        .expression => |handle| get_expression_context(handle, null, s.expr.items(.token), s.expr.items(.info)),
-    };
-
-    const first = file.tokens.get(context.first);
-    const last = file.tokens.get(context.last);
-
-    const highlight_start = first.offset;
-    const highlight_end = last.offset + last.span(file.source).len;
-
-    try writer.writeByte('\n');
-    try console.print_context(file.source, &.{
-        .{
-            .offset = highlight_start,
-            .len = highlight_end - highlight_start,
-            .note = self.desc,
-        },
-    }, writer, 160, .{
-        .filename = file.name,
-    });
-
-    if (self.flags.contains(.is_instruction_encoding_error)) {
-        const insn_handle = self.context.instruction;
-        const mnemonic: isa.Mnemonic = switch (s.insn.items(.operation)[insn_handle]) {
-            .insn => |mnemonic| mnemonic,
-            .bound_insn => |id| iedb.get_mnemonic(id),
-            else => unreachable,
+        const maybe_context: ?lex.Token.Range = switch (self.context) {
+            .none => null,
+            .token => |handle| lex.Token.Range.expand(null, handle),
+            .instruction => |handle| get_instruction_context(s, handle),
+            .expression => |handle| get_expression_context(handle, null, s.expr.items(.token), s.expr.items(.info)),
         };
 
-        const address = s.insn.items(.address)[insn_handle];
-        const params = s.insn.items(.params)[insn_handle];
-        const insn = a.build_instruction(s, address, mnemonic, params, false).?;
-        try isa.fmt.print_instruction(insn, address, writer);
-        try writer.writeByte('\n');
+        if (maybe_context) |context| {
+            const first = file.tokens.get(context.first);
+            const last = file.tokens.get(context.last);
 
-        var similar_buf: [10]isa.Instruction.Form = undefined;
-        const similar_forms = a.edb.find_similar(&similar_buf, insn);
-        for (0.., similar_forms) |i, form| {
-            if (i == 0) {
-                try writer.writeAll("Encodings with the same signature:\n");
-            }
-            try isa.fmt.print_form(form, writer);
+            const highlight_start = first.offset;
+            const highlight_end = last.offset + last.span(file.source).len;
+
             try writer.writeByte('\n');
+            try console.print_context(file.source, &.{
+                .{
+                    .offset = highlight_start,
+                    .len = highlight_end - highlight_start,
+                    .note = self.desc,
+                },
+            }, writer, 160, .{
+                .filename = file.name,
+            });
+        } else {
+            try (console.Style { .fg = .red }).apply(writer);
+            try writer.print("{s}: {s}\n", .{ file.name, self.desc });
+            try (console.Style {}).apply(writer);
         }
+
+        if (self.flags.contains(.is_instruction_encoding_error)) {
+            const insn_handle = self.context.instruction;
+            const mnemonic: isa.Mnemonic = switch (s.insn.items(.operation)[insn_handle]) {
+                .insn => |mnemonic| mnemonic,
+                .bound_insn => |id| iedb.get_mnemonic(id),
+                else => unreachable,
+            };
+
+            const address = s.insn.items(.address)[insn_handle];
+            const params = s.insn.items(.params)[insn_handle];
+            const insn = a.build_instruction(s, address, mnemonic, params, false).?;
+            try isa.fmt.print_instruction(insn, address, writer);
+            try writer.writeByte('\n');
+
+            var similar_buf: [10]isa.Instruction.Form = undefined;
+            const similar_forms = a.edb.find_similar(&similar_buf, insn);
+            for (0.., similar_forms) |i, form| {
+                if (i == 0) {
+                    try writer.writeAll("Possibly you intended:\n");
+                }
+                try isa.fmt.print_form(form, writer);
+
+                const placeholders = try form.placeholders(a.gpa);
+                defer a.gpa.free(placeholders);
+
+                var first_restriction = true;
+                for (placeholders) |pi| {
+                    var iter = pi.restrictions(form);
+                    while (try iter.next()) |restriction| {
+                        if (first_restriction) {
+                            try writer.writeAll("\t\twhere ");
+                            first_restriction = false;
+                        } else {
+                            try writer.writeAll(" and ");
+                        }
+                        try writer.print("{s} ", .{ restriction.left });
+                        switch (restriction.right) {
+                            .in_range => |range| {
+                                try writer.writeAll("in [ ");
+                                try isa.fmt.print_constant(range.first, writer);
+                                try writer.writeAll(", ");
+                                try isa.fmt.print_constant(range.last, writer);
+                                try writer.writeAll(" ]");
+                                if (range.multiple > 1) {
+                                    try writer.print(", {s} is multiple of {d}", .{ restriction.left, range.multiple });
+                                }
+                            },
+                            .in_set => |set| {
+                                if (std.mem.eql(i64, set, &.{
+                                    1, 2, 4, 8,
+                                    0x10, 0x20, 0x40, 0x80,
+                                    0x100, 0x200, 0x400, 0x800,
+                                    0x1000, 0x2000, 0x4000, 0x8000,
+                                    0x1_0000, 0x2_0000, 0x4_0000, 0x8_0000,
+                                    0x10_0000, 0x20_0000, 0x40_0000, 0x80_0000,
+                                    0x100_0000, 0x200_0000, 0x400_0000, 0x800_0000,
+                                    0x1000_0000, 0x2000_0000, 0x4000_0000, 0x8000_0000,
+                                })) {
+                                    try writer.writeAll("== 2^x for x in [ 0, 31 ]");
+                                } else {
+                                    try writer.writeAll("in { ");
+                                    for (set, 0..) |item, it| {
+                                        if (it > 0) try writer.writeAll(", ");
+                                        try isa.fmt.print_constant(item, writer);
+                                    }
+                                    try writer.writeAll(" }");
+                                }
+                            },
+                            .equal => |right| {
+                                try writer.print("== {s}", .{ right });
+                            },
+                            .not_equal => |right| {
+                                try writer.print("!= {s}", .{ right });
+                            },
+                            .greater => |right| {
+                                try writer.print("> {s}", .{ right });
+                            },
+                            .greater_or_equal => |right| {
+                                try writer.print(">= {s}", .{ right });
+                            },
+                        }
+                    }
+                }
+
+                try writer.writeByte('\n');
+            }
+        }
+    } else {
+        try (console.Style { .fg = .red }).apply(writer);
+        try writer.print("error: {s}\n", .{ self.desc });
+        try (console.Style {}).apply(writer);
     }
 }
 

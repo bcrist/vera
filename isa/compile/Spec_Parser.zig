@@ -91,7 +91,8 @@ pub fn next(self: *Spec_Parser) ?isa.Instruction.Form {
                     .params = self.temp_param_signatures.items,
                 },
                 .constraints = self.temp_constraints.items,
-                .encoders = self.temp_encoders.items,
+                .encoder_data = self.temp_encoders.items,
+                .encoder_indices = &.{},
             };
 
         } else if (!self.try_token(.newline) and self.token_kinds[self.next_token] != .eof) {

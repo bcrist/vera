@@ -3,7 +3,7 @@ var all_tests: *std.Build.Step = undefined;
 pub fn build(b: *std.Build) void {
     const isa = b.dependency("isa", .{});
     const arch = b.dependency("arch", .{}).module("arch");
-    //const assembler = b.dependency("assembler", .{}).module("assembler");
+    const assembler = b.dependency("assembler", .{}).module("assembler");
     const microsim = b.dependency("microsim", .{});
 
     all_tests = b.step("test", "run all tests");
@@ -41,16 +41,16 @@ pub fn build(b: *std.Build) void {
         },
     }));
 
-    // add_test(b, "assembler", b.createModule(.{
-    //     .root_source_file = b.path("src/assembler.zig"),
-    //     .target = target,
-    //     .optimize = optimize,
-    //     .imports = &.{
-    //         .{ .name = "isa", .module = isa.module("isa") },
-    //         .{ .name = "arch", .module = arch },
-    //         .{ .name = "assembler", .module = assembler },
-    //     },
-    // }));
+    add_test(b, "assembler", b.createModule(.{
+        .root_source_file = b.path("src/assembler.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "isa", .module = isa.module("isa") },
+            .{ .name = "arch", .module = arch },
+            .{ .name = "assembler", .module = assembler },
+        },
+    }));
 
     add_test(b, "instruction_encoding", b.createModule(.{
         .root_source_file = b.path("src/instruction_encoding.zig"),
@@ -63,19 +63,19 @@ pub fn build(b: *std.Build) void {
         },
     }));
 
-    // add_test(b, "instruction_behavior", b.createModule(.{
-    //     .root_source_file = b.path("instructions.zig"),
-    //     .target = target,
-    //     .optimize = optimize,
-    //     .imports = &.{
-    //         .{ .name = "arch", .module = arch },
-    //         .{ .name = "isa", .module = isa.module("isa") },
-    //         .{ .name = "iedb", .module = isa.module("iedb") },
-    //         .{ .name = "assembler", .module = assembler },
-    //         .{ .name = "microsim", .module = microsim.module("microsim") },
-    //         .{ .name = "Simulator_Data", .module = microsim.module("Simulator_Data") },
-    //     },
-    // }));
+    add_test(b, "instruction_behavior", b.createModule(.{
+        .root_source_file = b.path("src/instructions.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "arch", .module = arch },
+            .{ .name = "isa", .module = isa.module("isa") },
+            .{ .name = "iedb", .module = isa.module("iedb") },
+            .{ .name = "assembler", .module = assembler },
+            .{ .name = "microsim", .module = microsim.module("microsim") },
+            .{ .name = "Simulator_Data", .module = microsim.module("Simulator_Data") },
+        },
+    }));
 }
 
 fn add_test(b: *std.Build, comptime name: []const u8, root_module: *std.Build.Module) void {

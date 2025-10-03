@@ -14,18 +14,19 @@ pub fn main() !void {
 
     var a = Assembler.init(gpa, arena.allocator(), edb);
 
-    var output_file = std.array_list.Managed(u8).init(gpa);
+    var output_file = std.io.Writer.Allocating.init(gpa);
+    defer output_file.deinit();
 
     var arg_iter = try std.process.ArgIterator.initWithAllocator(temp.allocator());
     _ = arg_iter.next(); // ignore assemble command name
     while (arg_iter.next()) |arg| {
         const source = try std.fs.cwd().readFileAlloc(arena.allocator(), arg, 100_000_000);
         _ = a.adopt_source(try arena.allocator().dupe(u8, arg), source);
-        if (output_file.items.len == 0) {
-            try output_file.appendSlice(arg);
+        if (output_file.writer.end == 0) {
+            try output_file.writer.writeAll(arg);
         } else {
-            output_file.clearRetainingCapacity();
-            try output_file.appendSlice("a.out");
+            output_file.writer.end = 0;
+            try output_file.writer.writeAll("a.out");
         }
     }
     temp.deinit();
@@ -37,24 +38,25 @@ pub fn main() !void {
 
     var stdout_buf: [64]u8 = undefined;
     var stdout = std.fs.File.stdout().writer(&stdout_buf);
-    defer stdout.interface.flush() catch {};
+
+    try list.write_all(*Assembler, &a, &stdout.interface);
+    try stdout.interface.flush();
+
 
     var stderr_buf: [64]u8 = undefined;
     var stderr = std.fs.File.stderr().writer(&stderr_buf);
-    defer stderr.interface.flush() catch {};
 
-    try list.write_all(*Assembler, &a, &stdout.interface);
-
-    //try dump.dump(&a, std.io.getStdOut().writer());
+    // try dump.dump(&a, &stderr.interface);
 
     try a.print_errors(&stderr.interface);
+    try stderr.interface.flush();
 
-    // try output.write_hex(&a, std.fs.cwd(), output_file.items, .{
-    //     .merge_all_sections = true,
-    // });
+    try output.write_hex(&a, std.fs.cwd(), output_file.written(), .{
+        .merge_all_sections = true,
+    });
 
-    const simsx_filename = try std.fmt.allocPrint(arena.allocator(), "{s}.ssx", .{ output_file.items });
-    var f = try std.fs.cwd().createFile(simsx_filename, .{});
+    try output_file.writer.writeAll(".ssx");
+    var f = try std.fs.cwd().createFile(output_file.written(), .{});
     defer f.close();
     var buf: [4096]u8 = undefined;
     var w = f.writer(&buf);

@@ -82,30 +82,25 @@ pub fn dump(self: *Debug_Log, writer: ?*std.io.Writer, options: Dump_Options) !v
     var w = writer orelse &stderr.interface;
 
     for (self.log.items) |r| {
-        if (options.insn_stuff) {
-            try w.print("{:>6} {f} {f}: {t}", .{
-                r.microcycle,
-                r.pipeline,
-                r.ucs,
-                r.action,
-            });
-        } else {
-            try w.print("{:>6} {f}: {t}", .{
-                r.microcycle,
-                r.pipeline,
-                r.action,
-            });
-        }
-
         switch (r.action) {
-            .fault => |slot| try w.print(": {f}\n", .{ slot }),
-            .rsn => |rsn| try w.print(" = {f}\n", .{ rsn }),
-            .reg => |info| try w.print(" {f} = {f}\n", .{ info.wi, info.new_data }),
+            .fault => |slot| {
+                try dump_prefix(r, w, options);
+                try w.print(": {f}\n", .{ slot });
+            },
+            .rsn => |rsn| {
+                try dump_prefix(r, w, options);
+                try w.print(" = {f}\n", .{ rsn });
+            },
+            .reg => |info| {
+                try dump_prefix(r, w, options);
+                try w.print(" {f} = {f}\n", .{ info.wi, info.new_data });
+            },
             .sr1 => |info| {
                 if (options.insn_stuff or switch (info.index) {
                     .temp_1, .int_flags, .fault_d, .fault_dr, .fault_ir => false,
                     else => true,
                 }) {
+                    try dump_prefix(r, w, options);
                     try w.print(" {f} = {f}\n", .{ info.index, info.new_data });
                 }
             },
@@ -114,11 +109,13 @@ pub fn dump(self: *Debug_Log, writer: ?*std.io.Writer, options: Dump_Options) !v
                     .ip, .next_ip, .temp_2 => false,
                     else => true,
                 }) {
+                    try dump_prefix(r, w, options);
                     try w.print(" {f} = {f}\n", .{ info.index, info.new_data });
                 }
             },
             .read, .write => |info| {
                 if (options.insn_stuff or info.space != .insn) {
+                    try dump_prefix(r, w, options);
                     try w.print("{s}{f} DB:{f} DA:{f} F:{f} AB:{f} AA:{f} {s}{s}{s}{s} {s}\n", .{
                         if (r.action == .read) "  " else " ",
                         info.space,
@@ -136,12 +133,30 @@ pub fn dump(self: *Debug_Log, writer: ?*std.io.Writer, options: Dump_Options) !v
                 }
             },
             .corrupted_microcode => |what| {
+                try dump_prefix(r, w, options);
                 try w.print(" {s}", .{ what });
             },
         }
     }
 
     try w.flush();
+}
+
+fn dump_prefix(r: Report, w: *std.io.Writer, options: Dump_Options) !void {
+    if (options.insn_stuff) {
+        try w.print("{:>6} {f} {f}: {t}", .{
+            r.microcycle,
+            r.pipeline,
+            r.ucs,
+            r.action,
+        });
+    } else {
+        try w.print("{:>6} {f}: {t}", .{
+            r.microcycle,
+            r.pipeline,
+            r.action,
+        });
+    }
 }
 
 pub fn expect(self: *Debug_Log, options: Dump_Options, expected: []const u8) !void {

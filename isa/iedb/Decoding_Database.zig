@@ -6,7 +6,7 @@ lookup_extra: data.Compact_Range,
 
 pub fn init(allocator: std.mem.Allocator, temp: std.mem.Allocator) !Decoding_Database {
     var forms: std.ArrayList(u16) = .empty;
-    defer forms.deinit(allocator);
+    errdefer forms.deinit(allocator);
 
     var temp_8b: std.AutoHashMapUnmanaged(u8, std.ArrayListUnmanaged(u16)) = .empty;
     defer {
@@ -31,7 +31,8 @@ pub fn init(allocator: std.mem.Allocator, temp: std.mem.Allocator) !Decoding_Dat
 
     for (0..data.mnemonics.len) |i| {
         const form = iedb.get(i);
-        for (form.encoders) |enc| {
+        var encoder_iter = form.encoders();
+        while (encoder_iter.next()) |enc| {
             if (enc.value == .constant and enc.bit_offset == 0) {
                 var encoded: isa.Instruction.Encoded.Data = 0;
                 const ok = enc.encode(.{ .mnemonic = .init(""), .params = &.{} }, &encoded);

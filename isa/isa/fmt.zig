@@ -36,7 +36,7 @@ pub fn print_form(form: Instruction.Form, writer: *std.io.Writer) !void {
 
         try print_parameter_signature(param, .{
             .index = index,
-            .encoders = form.encoders,
+            .encoders = form.encoders(),
             .constraints = form.constraints,
             .base_register = base_register,
             .offset_register = offset_register,
@@ -94,7 +94,7 @@ pub fn print_parameter(param: Parameter, insn_address: ?u32, writer: *std.io.Wri
 
 pub const Print_Parameter_Signature_Extra = struct {
     index: ?Parameter.Index = null,
-    encoders: []const Encoder = &.{},
+    encoders: Instruction.Form.Encoder_Iterator = .{},
     constraints: []const Constraint = &.{},
     base_register: ?arch.bus.K.Read_Index_Offset = null,
     offset_register: ?arch.bus.K.Read_Index_Offset = null,
@@ -142,7 +142,7 @@ pub fn print_parameter_signature(signature: Parameter.Signature, extra: Print_Pa
 
 pub const Print_Parameter_Kind_Extra = struct {
     index: ?Parameter.Index = null,
-    encoders: []const Encoder = &.{},
+    encoders: Instruction.Form.Encoder_Iterator = .{},
     constraints: []const Constraint = &.{},
     register: ?arch.bus.K.Read_Index_Offset = null,
     constant: ?i64 = null,
@@ -175,11 +175,12 @@ pub fn print_parameter_kind(kind: Parameter.Kind, register_kind: Placeholder.Kin
     }
 }
 
-fn print_placeholder_list(kind: Placeholder.Kind, maybe_index: ?Parameter.Index, encoders: []const Encoder, constraints: []const Constraint, writer: *std.io.Writer) !void {
+fn print_placeholder_list(kind: Placeholder.Kind, maybe_index: ?Parameter.Index, encoders: Instruction.Form.Encoder_Iterator, constraints: []const Constraint, writer: *std.io.Writer) !void {
     try writer.writeByte('(');
     var found_encoder = false;
     if (maybe_index) |index| {
-        for (encoders) |enc| {
+        var encoder_iter = encoders;
+        while (encoder_iter.next()) |enc| {
             if (enc.value.get_placeholder()) |info| {
                 if (info.param == index and info.kind == kind and info.name.len > 0) {
                     if (found_encoder) try writer.writeByte(',');
@@ -216,16 +217,6 @@ pub fn print_constant(constant: i64, writer: *std.io.Writer) !void {
     }
 }
 
-pub fn buf_print_constant(buf: []u8, constant: i64) ![]const u8 {
-    if (constant < -15) {
-        return std.fmt.bufPrint(buf, "-0x{X}", .{ @abs(constant) });
-    } else if (constant > 15) {
-        return std.fmt.bufPrint(buf, "0x{X}", .{ constant });
-    } else {
-        return std.fmt.bufPrint(buf, "{}", .{ constant });
-    }
-}
-
 pub fn print_offset(offset: i64, writer: *std.io.Writer) !void {
     if (offset < -15) {
         return writer.print("- 0x{X}", .{ @abs(offset) });
@@ -235,18 +226,6 @@ pub fn print_offset(offset: i64, writer: *std.io.Writer) !void {
         return writer.print("- {}", .{ @abs(offset) });
     } else {
         return writer.print("+ {}", .{ offset });
-    }
-}
-
-pub fn buf_print_offset(buf: []u8, offset: i64) ![]const u8 {
-    if (offset < -15) {
-        return std.fmt.bufPrint(buf, "- 0x{X}", .{ @abs(offset) });
-    } else if (offset > 15) {
-        return std.fmt.bufPrint(buf, "+ 0x{X}", .{ offset });
-    } else if (offset < 0) {
-        return std.fmt.bufPrint(buf, "- {}", .{ @abs(offset) });
-    } else {
-        return std.fmt.bufPrint(buf, "+ {}", .{ offset });
     }
 }
 

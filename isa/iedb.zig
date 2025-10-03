@@ -8,7 +8,6 @@ pub fn get_mnemonic(id: usize) isa.Mnemonic {
 pub fn get(id: usize) isa.Instruction.Form {
     const params = data.param_ranges[id];
     const constraints = data.constraint_ranges[id];
-    const encoders = data.encoder_ranges[id];
     return .{
         .id = @intCast(id),
         .signature = .{
@@ -16,7 +15,8 @@ pub fn get(id: usize) isa.Instruction.Form {
             .params = data.param_signatures[params.offset..][0..params.len],
         },
         .constraints = data.constraints[constraints.offset..][0..constraints.len],
-        .encoders = data.encoders[encoders.offset..][0..encoders.len],
+        .encoder_data = &data.encoders,
+        .encoder_indices = data.encoder_ranges[id],
     };
 }
 

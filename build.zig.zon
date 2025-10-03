@@ -3,7 +3,7 @@
     .version = "0.0.1",
     .minimum_zig_version = "0.15.1",
     .paths = .{""},
-    .fingerprint = 0x5f0c521b7f8e9d50,
+    .fingerprint = 0x6b0632d22b8b27d,
     .dependencies = .{
         .arch = .{ .path = "arch" },
         .assembler = .{ .path = "assembler" },

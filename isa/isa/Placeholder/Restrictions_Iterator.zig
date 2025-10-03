@@ -65,9 +65,13 @@ pub fn next(self: *Placeholder_Restrictions_Iterator) !?Restriction {
 }
 
 fn find_domain_index(self: Placeholder_Restrictions_Iterator, start: usize) ?usize {
-    for (self.encoding.encoders[start..], 0..) |enc, n| {
-        if (enc.value.get_placeholder_info()) |pi| {
-            if (pi.index == self.placeholder.index and pi.kind == self.placeholder.kind and std.mem.eql(u8, pi.name, self.placeholder.name)) {
+    var encoder_iter = self.form.encoders();
+    var n: usize = 0;
+    while (encoder_iter.next()) |enc| {
+        defer n += 1;
+        if (n < start) continue;
+        if (enc.value.get_placeholder()) |pi| {
+            if (pi.param == self.placeholder.param and pi.kind == self.placeholder.kind and std.mem.eql(u8, pi.name, self.placeholder.name)) {
                 return n + start;
             }
         }
@@ -76,9 +80,13 @@ fn find_domain_index(self: Placeholder_Restrictions_Iterator, start: usize) ?usi
 }
 
 fn domain_restriction(self: *Placeholder_Restrictions_Iterator, domain_index: usize) !Restriction {
-    const encoder = self.encoding.encoders[domain_index];
+    var encoder_iter = self.form.encoders();
+    for (0..domain_index) |_| _ = encoder_iter.next();
+    const encoder = encoder_iter.next().?;
+    var writer = std.io.Writer.fixed(&self.temp);
+    try render_placeholder(encoder.value, false, &writer);
     return .{
-        .left = try render_placeholder(&self.temp, encoder.value, false),
+        .left = writer.buffered(),
         .right = switch (encoder.domain) {
             .int => |info| .{ .in_range = .{
                 .first = int_min(info.signedness, info.bits, info.multiple),
@@ -96,9 +104,9 @@ fn domain_restriction(self: *Placeholder_Restrictions_Iterator, domain_index: us
 }
 
 fn find_constraint_index(self: Placeholder_Restrictions_Iterator, start: usize) ?usize {
-    for (self.encoding.constraints[start..], 0..) |constraint, n| {
-        if (constraint.left.get_placeholder_info()) |pi| {
-            if (pi.index == self.placeholder.index and pi.kind == self.placeholder.kind and std.mem.eql(u8, pi.name, self.placeholder.name)) {
+    for (self.form.constraints[start..], 0..) |constraint, n| {
+        if (constraint.left.get_placeholder()) |pi| {
+            if (pi.param == self.placeholder.param and pi.kind == self.placeholder.kind and std.mem.eql(u8, pi.name, self.placeholder.name)) {
                 return n + start;
             }
         }
@@ -107,9 +115,16 @@ fn find_constraint_index(self: Placeholder_Restrictions_Iterator, start: usize) 
 }
 
 fn constraint_restriction(self: *Placeholder_Restrictions_Iterator, constraint_index: usize) !Restriction {
-    const constraint = self.encoding.constraints[constraint_index];
-    const left = try render_placeholder(self.temp[0..128], constraint.left, false);
-    const right = try render_placeholder(self.temp[128..], constraint.right, false);
+    const constraint = self.form.constraints[constraint_index];
+
+    var writer = std.io.Writer.fixed(&self.temp);
+    try render_placeholder(constraint.left, false, &writer);
+    const left = writer.buffered();
+
+    writer = std.io.Writer.fixed(self.temp[left.len..]);
+    try render_placeholder(constraint.right, false, &writer);
+    const right = writer.buffered();
+
     return .{
         .left = left,
         .right = switch (constraint.kind) {
@@ -121,28 +136,33 @@ fn constraint_restriction(self: *Placeholder_Restrictions_Iterator, constraint_i
     };
 }
 
-fn render_placeholder(buf: []u8, value: Encoder.Value, negate: bool) ![]const u8 {
+fn render_placeholder(value: Encoder.Value, negate: bool, writer: *std.io.Writer) !void {
     switch (value) {
         .constant => |v| {
             const final_v = if (negate) -v else v;
-            return fmt.buf_print_constant(buf, final_v);
+            try fmt.print_constant(final_v, writer);
         },
         .placeholder => |info| {
             if (negate) {
-                return std.fmt.bufPrint(buf, "-({s})", .{ info.name });
+                return writer.print("-({s})", .{ info.name });
             } else {
-                return std.fmt.bufPrint(buf, "{s}", .{ info.name });
+                return writer.print("{s}", .{ info.name });
             }
         },
         .negate => |inner| {
-            return render_placeholder(buf, inner.*, !negate);
+            return render_placeholder(inner.*, !negate, writer);
         },
         .offset => |info| {
-            const prefix = try render_placeholder(buf, info.inner.*, negate);
-            const remaining = buf[prefix.len..];
-            const final_offset = if (negate) -info.offset else info.offset;
-            const offset_str = try fmt.buf_print_offset(remaining, final_offset);
-            return buf[0 .. prefix.len + offset_str.len];
+            try render_placeholder(info.inner.*, negate, writer);
+            try writer.writeByte(' ');
+            try fmt.print_offset(if (negate) -info.offset else info.offset, writer);
+        },
+        .xor => |info| {
+            if (negate) try writer.writeAll("-(");
+            try render_placeholder(info.inner.*, false, writer);
+            try writer.writeAll(" ^ ");
+            try fmt.print_constant(info.mask, writer);
+            if (negate) try writer.writeAll(")");
         },
     }
 }
@@ -164,8 +184,8 @@ fn int_min(signedness: std.builtin.Signedness, bit_count: u6, multiple: u8) i64 
 
 const Placeholder_Restrictions_Iterator = @This();
 
-const Encoder = @import("Encoder.zig");
-const Placeholder = @import("Placeholder.zig");
-const Instruction = @import("Instruction.zig");
-const fmt = @import("fmt.zig");
+const Encoder = @import("../Encoder.zig");
+const Placeholder = @import("../Placeholder.zig");
+const Instruction = @import("../Instruction.zig");
+const fmt = @import("../fmt.zig");
 const std = @import("std");

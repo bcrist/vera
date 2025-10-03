@@ -1,28 +1,28 @@
 comptime {
-    _ = @import("instructions/reset.zig");
     _ = @import("instructions/add.zig");
 }
 
-const assembly_prefix =
-    \\    .boot
-    \\    .org 0
-    \\_reset:                         .dh (.raw @reset)'16
-    \\_double_fault:                  .dh (.raw @halt)'16
-    \\_page_fault:                    .dh (.raw @halt)'16
-    \\_access_fault:                  .dh (.raw @halt)'16
-    \\_page_align_fault:              .dh (.raw @halt)'16
-    \\_align_fault:                   .dh (.raw @halt)'16
-    \\_overflow_fault:                .dh (.raw @halt)'16
-    \\_invalid_instruction_fault:     .dh (.raw @halt)'16
-    \\_instruction_protection_fault:  .dh (.raw @halt)'16
-    \\_interrupt:                     .dh (.raw @halt)'16
-    \\
-    \\halt:
-    \\    park
-    \\
-    \\reset:
-    \\
-    ;
+const assembly_prefix = str: {
+    var result: []const u8 = 
+        \\    .boot
+        \\    .org 0
+        \\_reset: .dh (.raw @reset)'16
+        ;
+    for (@typeInfo(arch.data_structures.Vector_Table).@"struct".fields) |field| {
+        if (!std.mem.eql(u8, field.name, "reset")) {
+            result = result ++ "\n_" ++ field.name ++ ": .dh (.raw @halt)'16";
+        }
+    }
+
+    break :str result ++
+        \\
+        \\halt:
+        \\    park
+        \\
+        \\reset:
+        \\
+        ;
+};
 
 pub fn init_simulator(assembly: []const u8, comptime pipe: microsim.Pipeline, debug_log: ?*Debug_Log) !Simulator(pipe) {
     const data = try Simulator_Data.get();
@@ -39,10 +39,18 @@ pub fn init_simulator(assembly: []const u8, comptime pipe: microsim.Pipeline, de
     _ = a.add_source("main", final_assembly);
     a.assemble();
 
+    if (a.errors.items.len > 0) {
+        var buf: [64]u8 = undefined;
+        var w = std.fs.File.stderr().writer(&buf);
+        a.print_errors(&w.interface) catch {};
+        w.interface.flush() catch {};
+        return error.BadAssembly;
+    }
+
     const mem = try assembler.output.copy_memory(&a, null, std.testing.allocator);
     defer std.testing.allocator.free(mem);
 
-    const num_frames = (mem.len + arch.addr.Frame.count - 1) / arch.addr.Frame.count;
+    const num_frames = (mem.len + arch.addr.Frame.Offset.count - 1) / arch.addr.Frame.Offset.count;
     const mem_dev = try std.testing.allocator.create(microsim.devices.Simple_Memory);
     mem_dev.* = try microsim.devices.Simple_Memory.init(std.testing.allocator, .zero, num_frames);
     @memset(mem_dev.data, 0xFF);
@@ -61,105 +69,13 @@ pub fn deinit_simulator(comptime pipe: microsim.Pipeline, simulator: *Simulator(
     simulator.deinit();
 }
 
-// test "ADD X12, -128 -> X1" {
-//     var s = try initSimulator(&[_]ie.Instruction{
-//         .{
-//             .mnemonic = .ADD,
-//             .suffix = .none,
-//             .params = &[_]ie.Parameter{
-//                 ie.parameter(.reg32, 12),
-//                 ie.parameter(.constant, -128),
-//                 ie.toParameter(.reg32, 1),
-//             },
-//         },
-//     });
-//     defer deinitSimulator(&s);
-
-
-// }
-
-// test "ADD X0, R4U -> X0" {
-//     var s = try initSimulator(&[_]ie.Instruction{
-//         .{
-//             .mnemonic = .ADD,
-//             .suffix = .none,
-//             .params = &[_]ie.Parameter{
-//                 ie.parameter(.reg32, 7),
-//                 ie.parameter(.reg16u, 4),
-//                 ie.toParameter(.reg32, 7),
-//             },
-//         },
-//     });
-//     defer deinitSimulator(&s);
-
-//     s.register_file.writeGPR32(0, 7, 0);
-//     s.register_file.writeGPR(0, 4, 33000);
-//     s.cycle(1);
-//     try expectEqual(@as(u32, 33000), s.register_file.readGPR32(0, 7));
-//     try expect(!s.t.reg.stat.n);
-//     try expect(!s.t.reg.stat.c);
-//     try expect(!s.t.reg.stat.v);
-//     try expect(!s.t.reg.stat.z);
-
-//     s.resetAndInit();
-//     s.cycle(1);
-//     try expectEqual(@as(u32, 66000), s.register_file.readGPR32(0, 7));
-//     try expect(!s.t.reg.stat.n);
-//     try expect(!s.t.reg.stat.c);
-//     try expect(!s.t.reg.stat.v);
-//     try expect(!s.t.reg.stat.z);
-// }
-
-// test "ADD X1, R3S, X1" {
-//     var s = try initSimulator(&[_]ie.Instruction{
-//         .{
-//             .mnemonic = .ADD,
-//             .suffix = .none,
-//             .params = &[_]ie.Parameter{
-//                 ie.parameter(.reg32, 7),
-//                 ie.parameter(.reg16s, 3),
-//                 ie.toParameter(.reg32, 7),
-//             },
-//         },
-//     });
-//     defer deinitSimulator(&s);
-
-//     s.register_file.writeSignedGPR(0, 3, @as(i16, -32000));
-//     s.cycle(1);
-//     try expectEqual(@as(i32, -32000), s.register_file.readSignedGPR32(0, 7));
-//     try expect(s.t.reg.stat.n);
-//     try expect(!s.t.reg.stat.c);
-//     try expect(!s.t.reg.stat.v);
-//     try expect(!s.t.reg.stat.z);
-
-//     s.resetAndInit();
-//     s.cycle(1);
-//     try expectEqual(@as(i32, -64000), s.register_file.readSignedGPR32(0, 7));
-//     try expect(s.t.reg.stat.n);
-//     try expect(s.t.reg.stat.c);
-//     try expect(!s.t.reg.stat.v);
-//     try expect(!s.t.reg.stat.z);
-// }
-
-// test "ADDC R5, 12345, R4" {
-//     var s = try initSimulator(&[_]ie.Instruction{.{
-//         .mnemonic = .ADDC,
-//         .suffix = .none,
-//         .params = &[_]ie.Parameter{
-//             ie.parameter(.reg16, 5),
-//             ie.parameter(.constant, 12345),
-//             ie.toParameter(.reg16, 4),
-//         },
-//     }});
-//     defer deinitSimulator(&s);
-//     s.t.reg.stat.c = true;
-//     s.cycle(2);
-//     try expectEqual(@as(u32, 12346), s.register_file.readGPR(0, 4));
-//     try expect(!s.t.reg.stat.n);
-//     try expect(!s.t.reg.stat.c);
-//     try expect(!s.t.reg.stat.v);
-//     try expect(!s.t.reg.stat.z);
-// }
+pub fn dump_log(debug_log: *microsim.Debug_Log, insn_stuff: bool) void {
+    var buf: [64]u8 = undefined;
+    var w = std.fs.File.stderr().writer(&buf);
+    w.interface.writeAll("Debug Log:\n") catch {};
+    debug_log.dump(&w.interface, .{ .insn_stuff = insn_stuff }) catch {};
+    w.interface.flush() catch {};
+}
 
 const Simulator_Data = @import("Simulator_Data");
 const Debug_Log = microsim.Debug_Log;

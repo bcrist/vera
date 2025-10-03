@@ -8,7 +8,11 @@ id: ?u16 = null, // when set, you can use iedb.get(id) to reconstruct this Form.
 
 signature: Instruction.Signature,
 constraints: []const Constraint,
-encoders: []const Encoder, // If there are multiple encoders, each must correspond to a unique subset of the bits of the instruction.
+
+// If there are multiple encoders, each must correspond to a unique subset of the bits of the instruction.
+encoder_data: []const Encoder,
+encoder_indices: []const u16, // if empty, use all encoders in `encoder_data`
+
 // TODO priority: u32, // When assembling, if multiple Forms match a particular instruction, the one with the priority closest to 0 is selected.
 
 
@@ -21,7 +25,8 @@ encoders: []const Encoder, // If there are multiple encoders, each must correspo
 
 pub fn bits(self: Form) Instruction.Encoded.Length_Bits {
     var n: Instruction.Encoded.Length_Bits = 0;
-    for (self.encoders) |enc| {
+    var encoder_iter = self.encoders();
+    while (encoder_iter.next()) |enc| {
         n = @max(n, enc.required_bits());
     }
     return n;
@@ -39,8 +44,9 @@ pub fn placeholders(self: Form, allocator: std.mem.Allocator) ![]const Placehold
     var map = std.AutoHashMap(Key, Placeholder).init(allocator);
     defer map.deinit();
 
-    for (self.encoders) |enc| {
-        if (enc.value.get_placeholder_info()) |pi| {
+    var encoder_iter = self.encoders();
+    while (encoder_iter.next()) |enc| {
+        if (enc.value.get_placeholder()) |pi| {
             const k: Key = .{
                 .param = pi.param,
                 .kind = pi.kind,
@@ -79,9 +85,13 @@ pub fn matches(self: Form, insn: Instruction) bool {
     if (self.signature.mnemonic != insn.mnemonic) return false;
     if (self.signature.params.len != insn.params.len) return false;
     for (self.signature.params, insn.params) |ps, param| {
-        if (!std.meta.eql(ps, param.signature)) return false;
+        if (!std.meta.eql(ps, param.signature)) {
+            return false;
+        }
     }
-    for (self.encoders) |enc| {
+
+    var encoder_iter = self.encoders();
+    while (encoder_iter.next()) |enc| {
         if (enc.value == .placeholder and enc.value.placeholder.param == .invalid) continue;
         const value = enc.value.evaluate(insn.params);
         if (enc.domain.encode(value) == null) return false;
@@ -109,7 +119,8 @@ pub fn encode(self: Form, insn: Instruction, default_value: Instruction.Encoded.
         .len = self.len(),
     };
 
-    for (self.encoders) |enc| {
+    var encoder_iter = self.encoders();
+    while (encoder_iter.next()) |enc| {
         const success = enc.encode(insn, &out.data);
         std.debug.assert(success);
     }
@@ -123,7 +134,8 @@ pub fn matches_data(self: Form, data: Instruction.Encoded.Data) bool {
     var decoded_offset_register = [_]bool { false } ** Parameter.Index.count;
     var decoded_constant = [_]bool { false } ** Parameter.Index.count;
 
-    for (self.encoders) |enc| {
+    var encoder_iter = self.encoders();
+    while (encoder_iter.next()) |enc| {
         if (enc.value.get_placeholder()) |info| {
             // Multiple encoders might be attached to the same constant/register index within a parameter.
             // In this case, we need to make sure that the encoders write the same value to that constant/register index.
@@ -195,7 +207,8 @@ pub fn decode_params(self: Form, data: Instruction.Encoded.Data, params: []Param
         std.debug.assert(std.meta.eql(ps, param.signature));
     }
 
-    for (self.encoders) |enc| {
+    var encoder_iter = self.encoders();
+    while (encoder_iter.next()) |enc| {
         const ok = enc.decode(data, params);
         std.debug.assert(ok);
     }
@@ -207,6 +220,36 @@ pub fn decode_params(self: Form, data: Instruction.Encoded.Data, params: []Param
         }
     }
 }
+
+pub fn encoders(self: Form) Encoder_Iterator {
+    return .{
+        .encoders = self.encoder_data,
+        .remaining = self.encoder_indices,
+    };
+}
+pub const Encoder_Iterator = struct {
+    encoders: []const Encoder = &.{},
+    remaining: []const u16 = &.{},
+
+    pub fn next(self: *Encoder_Iterator) ?Encoder {
+        if (self.encoders.len == 0) return null;
+        if (self.remaining.len > 0) {
+            const remaining = self.remaining;
+            if (remaining.len == 1) {
+                const encoder = self.encoders[remaining[0]];
+                self.remaining = &.{};
+                self.encoders = &.{};
+                return encoder;
+            } else {
+                self.remaining = remaining[1..];
+                return self.encoders[remaining[0]];
+            }
+        }
+        const enc = self.encoders;
+        self.encoders = enc[1..];
+        return enc[0];
+    }
+};
 
 pub fn eql(self: Form, other: Form) bool {
     return deep_hash_map.deepEql(self, other, .DeepRecursive);

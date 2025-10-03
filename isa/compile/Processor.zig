@@ -108,9 +108,9 @@ fn process_form(
         var parser = Spec_Parser.init(alloc, Spec_Type.spec);
         while (parser.next()) |parsed| {
             log.debug("Processing encoding: {s}", .{ parser.prev_line(Spec_Type.spec) });
-            const encoders = encoders_fn(alloc, parsed.signature, parsed.encoders);
-            const krio_encoders = krio_fn(alloc, parsed.signature, parsed.encoders);
-            const wio_encoders = wio_fn(alloc, parsed.signature, parsed.encoders);
+            const encoders = encoders_fn(alloc, parsed.signature, parsed.encoder_data);
+            const krio_encoders = krio_fn(alloc, parsed.signature, parsed.encoder_data);
+            const wio_encoders = wio_fn(alloc, parsed.signature, parsed.encoder_data);
 
             const final_form = self.finalize_form(parsed, constraints, encoders);
             self.instruction_forms.append(self.gpa, final_form) catch @panic("OOM");
@@ -184,7 +184,7 @@ fn process_instruction(
                     .initial_krio = maybe_krio,
                     .initial_wio = maybe_wio,
                     .signature = if (maybe_form) |form| form.signature else null,
-                    .parsed_encoders = if (maybe_form) |form| form.encoders else &.{},
+                    .parsed_encoders = if (maybe_form) |form| form.encoder_data else &.{},
                     .encoding_len = encoding_len,
                     .cv_mode = cv_mode,
                 },
@@ -782,7 +782,7 @@ fn finalize_form(self: *Processor, parsed: isa.Instruction.Form, constraints: []
     var final_encoders = self.arena.dupe(isa.Encoder, encoders) catch @panic("OOM");
     for (final_encoders) |*encoder| {
         dupe_inner_values(self.arena, &encoder.value);
-        fixup_placeholder_value(&encoder.value, parsed.encoders);
+        fixup_placeholder_value(&encoder.value, parsed.encoder_data);
     }
 
     const final_constraints = self.arena.alloc(isa.Constraint, parsed.constraints.len + constraints.len) catch @panic("OOM");
@@ -792,11 +792,11 @@ fn finalize_form(self: *Processor, parsed: isa.Instruction.Form, constraints: []
     for (final_constraints) |*constraint| {
         dupe_inner_values(self.arena, &constraint.left);
         dupe_inner_values(self.arena, &constraint.right);
-        fixup_placeholder_value(&constraint.left, parsed.encoders);
-        fixup_placeholder_value(&constraint.right, parsed.encoders);
+        fixup_placeholder_value(&constraint.left, parsed.encoder_data);
+        fixup_placeholder_value(&constraint.right, parsed.encoder_data);
     }
 
-    for (parsed.encoders) |parsed_encoder| {
+    for (parsed.encoder_data) |parsed_encoder| {
         const placeholder = parsed_encoder.value.placeholder.name;
 
         if (find_placeholder(placeholder, final_encoders) != null) continue;
@@ -824,7 +824,8 @@ fn finalize_form(self: *Processor, parsed: isa.Instruction.Form, constraints: []
     return .{
         .signature = self.finalize_instruction_signature(parsed.signature),
         .constraints = final_constraints,
-        .encoders = final_encoders,
+        .encoder_data = final_encoders,
+        .encoder_indices = &.{},
     };
 }
 

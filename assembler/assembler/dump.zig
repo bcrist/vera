@@ -42,14 +42,11 @@ pub fn dump(a: *Assembler, writer: *std.io.Writer) !void {
                 try writer.print(" #{}:", .{ label });
             }
             switch (operation) {
-                .insn => |insn| {
-                    try writer.print(" {s}", .{ @tagName(insn.mnemonic) });
-                    if (insn.suffix != .none) {
-                        try writer.print(".{s}", .{ @tagName(insn.suffix) });
-                    }
+                .insn => |mnemonic| {
+                    try writer.print(" {f}", .{ mnemonic });
                 },
-                .bound_insn => {
-                    try writer.writeAll(" bound_insn");
+                .bound_insn => |id| {
+                    try writer.print(" bound_insn #{d}", .{ id });
                 },
                 else => {
                     try writer.print(" {s}", .{ @tagName(operation) });
@@ -65,9 +62,10 @@ pub fn dump(a: *Assembler, writer: *std.io.Writer) !void {
             }
 
             switch (operation) {
-                .bound_insn => |encoding| {
+                .bound_insn => |id| {
                     try writer.writeByte('\t');
-                    try encoding.print(writer);
+                    const form = iedb.get(id);
+                    try form.format(writer);
                 },
                 else => {},
             }
@@ -95,7 +93,7 @@ pub fn dump(a: *Assembler, writer: *std.io.Writer) !void {
                 .signed_cast, .unsigned_cast, .remove_signedness_cast,
                 .negate, .complement, .absolute_address_cast, .local_label_def,
                 .data_address_cast, .insn_address_cast, .stack_address_cast, .remove_address_cast,
-                .reg_to_index, .index_to_reg,
+                .reg_to_index, .index_to_reg, .crlf_cast, .lf_cast
                 => |unary| {
                     try writer.print(" #{}", .{ unary });
                 },
@@ -104,7 +102,7 @@ pub fn dump(a: *Assembler, writer: *std.io.Writer) !void {
                 => {},
             }
 
-            if (expr_type != .unknown) {
+            if (expr_type != .unknown and expr_type != .poison and expr_type != .symbol_def) {
                 try writer.writeByte(' ');
                 try print_expression_type(expr_type, writer);
             }
@@ -139,7 +137,7 @@ pub fn dump(a: *Assembler, writer: *std.io.Writer) !void {
 
     try writer.writeAll("Pages:\n");
     for (a.pages.items(.page), a.pages.items(.section), a.pages.items(.usage), a.pages.items(.data), a.pages.items(.chunks)) |page, section_handle, usage, data, chunks| {
-        try writer.print("   {X:0>5}: #{}\n", .{ page, section_handle });
+        try writer.print("   {X:0>5}: #{}\n", .{ page.raw(), section_handle });
         for (0..8) |row| {
             try writer.writeAll("      usage:");
             for (0..8) |col| {
@@ -160,7 +158,7 @@ pub fn dump(a: *Assembler, writer: *std.io.Writer) !void {
                 for (0..64) |i| {
                     try writer.print("{X:0>2}", .{ data_chunk[63 - i] });
                 }
-                try writer.print(" {}\n", .{ fmt_slice_replace_non_ascii(data_chunk) });
+                try writer.print(" {f}\n", .{ fmt_slice_replace_non_ascii(data_chunk) });
             }
         }
         for (chunks.items) |chunk| {
@@ -172,9 +170,9 @@ pub fn dump(a: *Assembler, writer: *std.io.Writer) !void {
 }
 
 fn print_expression_type(expr_type: Expression.Type, writer: *std.io.Writer) !void {
-    try isa.print.print_parameter_signature(expr_type.param_signature(), .{
-        .base_register_index = expr_type.param_base_register_index(),
-        .offset_register_index = expr_type.param_offset_register_index(),
+    try isa.fmt.print_parameter_signature(expr_type.param_signature(), .{
+        .base_register = expr_type.param_base_register(),
+        .offset_register = expr_type.param_offset_register(),
     }, writer);
 }
 
@@ -184,10 +182,10 @@ fn print_constant(writer: *std.io.Writer, constant: *const Constant) !void {
         const uint_value = constant.as_int(u64) catch unreachable;
         try writer.print("0x{X} {} ", .{ uint_value, int_value });
     }
-    try writer.print("'{s}'", .{ std.fmt.fmtSliceEscapeUpper(constant.as_string()) });
+    try writer.print("'{f}'", .{ std.ascii.hexEscape(constant.as_string(), .upper) });
 }
 
-fn fmt_slice_replace_non_ascii(bytes: []const u8) std.fmt.Alt(format_slice_replace_non_ascii_impl) {
+fn fmt_slice_replace_non_ascii(bytes: []const u8) std.fmt.Alt([]const u8, format_slice_replace_non_ascii_impl) {
     return .{ .data = bytes };
 }
 
@@ -206,5 +204,6 @@ fn format_slice_replace_non_ascii_impl(bytes: []const u8, writer: *std.io.Writer
 const Expression = @import("Expression.zig");
 const Assembler = @import("Assembler.zig");
 const Constant = @import("Constant.zig");
-const isa = @import("lib_arch").isa;
+const iedb = @import("iedb");
+const isa = @import("isa");
 const std = @import("std");

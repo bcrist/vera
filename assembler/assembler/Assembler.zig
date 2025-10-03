@@ -147,7 +147,14 @@ pub fn assemble(self: *Assembler) void {
     }
 
     if (attempts == max_attempts) {
-        std.debug.print("Failed to find a stable layout after {} iterations!\n", .{ attempts });
+        const desc = std.fmt.allocPrint(self.gpa, "Failed to find a stable layout after {} iterations!", .{ attempts }) catch @panic("OOM");
+        self.errors.append(self.gpa, .{
+            .file = null,
+            .context = .none,
+            .desc = desc,
+            .flags = Error.Flag_Set.initOne(.desc_is_allocated),
+
+        }) catch @panic("OOM");
     }
 
     layout.populate_page_chunks(self, fixed_org_chunks.items);

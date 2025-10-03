@@ -6,7 +6,6 @@ pub const slot = arch.microcode.Slot.reset;
 pub fn entry(c: *Cycle) void {
     c.status_to_l();
     c.l_to_sr(.temp_1);
-    // c.disable_address_translation();
     c.next(pipe_from_status);
 }
 
@@ -31,6 +30,7 @@ pub fn rsn_from_temp(c: *Cycle) void {
 pub fn init_rsn_0123_zero(c: *Cycle) void {
     c.zero_to_l();
     c.l_to_sr(.zero);
+    c.disable_flags(.{ .at_enable = true, .bus_override = true });
     c.next(init_rsn_0123_one);
 }
 pub fn init_rsn_0123_one(c: *Cycle) void {

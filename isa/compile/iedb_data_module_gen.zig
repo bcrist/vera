@@ -1,6 +1,69 @@
-pub fn write_module(allocator: std.mem.Allocator, forms: []const isa.Instruction.Form, writer: *std.io.Writer) !void {
-    const named_mnemonics = isa.lex.case_insensitive_enum_map(isa.Mnemonic, .{}, .{});
+pub fn write_module(allocator: std.mem.Allocator, unsorted_forms: []const isa.Instruction.Form, writer: *std.io.Writer) !void {
+    const forms = try allocator.dupe(isa.Instruction.Form, unsorted_forms);
+    defer allocator.free(forms);
+    @memcpy(forms, unsorted_forms);
+
+    std.sort.pdq(isa.Instruction.Form, forms, {}, struct {
+        pub fn less_than(_: void, a: isa.Instruction.Form, b: isa.Instruction.Form) bool {
+            if (a.signature.mnemonic != b.signature.mnemonic) {
+                return @intFromEnum(a.signature.mnemonic) < @intFromEnum(b.signature.mnemonic);
+            }
+
+            if (a.signature.params.len != b.signature.params.len) {
+                return a.signature.params.len < b.signature.params.len;
+            }
+
+            for (a.signature.params, b.signature.params) |ap, bp| {
+                if (!std.meta.eql(ap.base, bp.base)) {
+                    return param_kind_less_than(ap.base, bp.base);
+                }
+
+                if (!std.meta.eql(ap.offset, bp.offset)) {
+                    return param_kind_less_than(ap.offset, bp.offset);
+                }
+
+                if (!std.meta.eql(ap.address_space, bp.address_space)) {
+                    if (ap.address_space) |as| {
+                        if (bp.address_space) |bs| {
+                            return @intFromEnum(as) < @intFromEnum(bs);
+                        }
+                        return false;
+                    }
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        pub fn param_kind_less_than(a: isa.Parameter.Kind, b: isa.Parameter.Kind) bool {
+            const atag: std.meta.Tag(isa.Parameter.Kind) = a;
+            const btag: std.meta.Tag(isa.Parameter.Kind) = b;
+            if (atag != btag) {
+                return @intFromEnum(atag) < @intFromEnum(btag);
+            }
+
+            switch (a) {
+                .none, .constant => {},
+                .reg => |maybe_signedness| if (!std.meta.eql(maybe_signedness, b.reg)) {
+                    if (maybe_signedness) |as| {
+                        if (b.reg) |bs| {
+                            return @intFromEnum(as) < @intFromEnum(bs);
+                        }
+                        return false;
+                    }
+                    return true;
+                },
+                .sr => |sr| if (sr != b.sr) {
+                },
+            }
+
+            return false;
+        }
+    }.less_than);
     
+    const named_mnemonics = isa.lex.case_insensitive_enum_map(isa.Mnemonic, .{}, .{});
+
     var param_signatures: std.ArrayList(isa.Parameter.Signature) = .empty;
     defer param_signatures.deinit(allocator);
 
@@ -63,7 +126,7 @@ pub fn write_module(allocator: std.mem.Allocator, forms: []const isa.Instruction
         try writer.writeAll("\n    .{ .base = ");
         try write_param_kind(signature.base, writer);
         try writer.writeAll(", .offset = ");
-        try write_param_kind(signature.base, writer);
+        try write_param_kind(signature.offset, writer);
         try writer.writeAll(", .address_space = ");
 
         if (signature.address_space) |space| {
@@ -124,21 +187,23 @@ pub fn write_module(allocator: std.mem.Allocator, forms: []const isa.Instruction
         \\
         \\}};
         \\
-        \\pub const encoder_ranges: [{d}]Compact_Range = .{{
+        \\pub const encoder_ranges: [{d}][]const u16 = .{{
     , .{
         forms.len,
     });
     for (forms) |form| {
-        const offset = indexOf(isa.Encoder, encoders.items, form.encoders) orelse offset: {
-            const offset = encoders.items.len;
-            try encoders.appendSlice(allocator, form.encoders);
-            break :offset offset;
-        };
+        try writer.writeAll("\n    &.{");
+        for (0.., form.encoder_data) |i, encoder| {
+            const offset = indexOfScalarPos(isa.Encoder, encoders.items, 0, encoder) orelse offset: {
+                const offset = encoders.items.len;
+                try encoders.append(allocator, encoder);
+                break :offset offset;
+            };
 
-        try writer.print("\n    .{{ .offset = {}, .len = {} }},", .{
-            offset,
-            form.encoders.len,
-        });
+            if (i > 0) try writer.writeByte(',');
+            try writer.print(" {d}", .{ offset });
+        }
+        try writer.writeAll(" },");
     }
     try writer.print(
         \\
