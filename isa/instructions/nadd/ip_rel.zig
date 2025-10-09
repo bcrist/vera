@@ -1,19 +1,18 @@
 pub const spec =
-    \\ nadd .i ip + (imm)
-    \\ naddc .i ip + (imm)
-    \\ naddv .i ip + (imm)
-    \\ naddcv .i ip + (imm)
+    \\ nadd .i %ip + (imm)
+    \\ naddc .i %ip + (imm)
+    \\ nadd.vf .i %ip + (imm)
+    \\ naddc.vf .i %ip + (imm)
     ;
 
 pub const encoding = .{
-    opcodes.LSB.alu_16,
-    opcodes.mnemonic_encoder(opcodes.ALU_16, .{ .suffix = "_ip_rel", .offset = 8 }),
-    Encoder.init(16, Int(.imm, i8)),
+    opcodes.mnemonic_encoder(opcodes.LSB, .{ .suffix = "_ip_rel" }),
+    Encoder.init(8, Int(.imm, i16)),
 };
 pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = 0;
 
 pub fn entry(c: *Cycle) void {
-    c.ip_read_to_d(.i8_from_dr, .@"32b");
+    c.ip_read_to_d(.i16_from_dr, .@"32b");
     c.d_to_l();
     c.l_to_sr(.temp_1);
     c.next(nadd);
@@ -23,12 +22,12 @@ pub fn nadd(c: *Cycle, mnemonic: isa.Mnemonic) void {
     c.reg_to_j();
     c.sr_to_k(.temp_1);
     c.k_minus_j_to_l(switch (mnemonic) {
-        .nadd, .naddv => .fresh,
-        .naddc, .naddcv => .cont,
+        .nadd, .@"nadd.vf" => .fresh,
+        .naddc, .@"naddc.vf" => .cont,
         else => unreachable,
     }, switch (mnemonic) {
         .nadd, .naddc => .flags,
-        .naddv, .naddcv => .flags__fault_on_overflow,
+        .@"nadd.vf", .@"naddc.vf" => .flags__fault_on_overflow,
         else => unreachable,
     });
     c.l_to_reg(true);

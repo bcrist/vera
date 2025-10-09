@@ -325,48 +325,48 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
 
                     if (want_compute) {
                         switch (pipe.cs.jsrc) {
-                            .zero => try writer.print("      JSRC={}", .{ pipe.cs.jsrc }),
-                            .jr => try writer.print("      JSRC=JR[{}]", .{ pipe.jri }),
-                            .sr1 => try writer.print("      JSRC=SR1[{}]", .{ pipe.cs.sr1ri }),
-                            .sr2 => try writer.print("      JSRC=SR2[{}]", .{ pipe.cs.sr2ri }),
+                            .zero => try writer.print("      JSRC={f}", .{ pipe.cs.jsrc }),
+                            .jr => try writer.print("      JSRC=JR[{f}]", .{ pipe.jri }),
+                            .sr1 => try writer.print("      JSRC=SR1[{f}]", .{ pipe.cs.sr1ri }),
+                            .sr2 => try writer.print("      JSRC=SR2[{f}]", .{ pipe.cs.sr2ri }),
                         }
                         switch (pipe.cs.ksrc) {
                             .zero, .krio, .krio_bit, .krio_bit_inv, .dr_byte_1_sx, .dr_byte_2_sx, .dr_byte_21_sx,
                             => try writer.print("  KSRC={}\n", .{ pipe.cs.ksrc }),
 
-                            .vao => try writer.print("  KSRC={} ({})\n", .{ pipe.cs.ksrc, pipe.cs.vao }),
-                            .kr => try writer.print("  KSRC=KR[{}]\n", .{ pipe.kri }),
-                            .sr1 => try writer.print("  KSRC=SR1[{}]\n", .{ pipe.cs.sr1ri }),
-                            .sr2 => try writer.print("  KSRC=SR2[{}]\n", .{ pipe.cs.sr2ri }),
+                            .constant => try writer.print("  KSRC={f} ({f})\n", .{ pipe.cs.ksrc, pipe.cs.constant }),
+                            .kr => try writer.print("  KSRC=KR[{f}]\n", .{ pipe.kri }),
+                            .sr1 => try writer.print("  KSRC=SR1[{f}]\n", .{ pipe.cs.sr1ri }),
+                            .sr2 => try writer.print("  KSRC=SR2[{f}]\n", .{ pipe.cs.sr2ri }),
                         }
 
-                        try writer.print("      UNIT={}  MODE={}\n", .{ pipe.cs.unit, pipe.cs.mode });
+                        try writer.print("      UNIT={f}  MODE={f}\n", .{ pipe.cs.unit, pipe.cs.mode });
                     }
 
-                    try writer.print("      LSRC={}\n", .{ pipe.cs.lsrc });
+                    try writer.print("      LSRC={f}\n", .{ pipe.cs.lsrc });
 
                     if (pipe.cs.dir != .none or pipe.cs.at_op != .none) {
-                        try writer.print("      VARI={}  VAO={}\n", .{ pipe.cs.vari, pipe.cs.vao });
-                        try writer.print("      DIR={}  WIDTH={}  SPACE={}  AT_OP={}\n", .{ pipe.cs.dir, pipe.cs.width, pipe.cs.space, pipe.cs.at_op });
+                        try writer.print("      VARI={f}  VAO_SRC={f} ({f})\n", .{ pipe.cs.vari, pipe.cs.vao_src, pipe.constant });
+                        try writer.print("      DIR={f}  WIDTH={f}  SPACE={f}  AT_OP={f}\n", .{ pipe.cs.dir, pipe.cs.width, pipe.cs.space, pipe.cs.at_op });
                     }
 
                     if (pipe.cs.sr1wsrc != .no_write) {
                         if (pipe.cs.sr1wsrc == .self) {
-                            try writer.print("      write SR1[{}] -> SR1[{}]\n", .{ pipe.cs.sr1ri, pipe.cs.sr1wi });
+                            try writer.print("      write SR1[{f}] -> SR1[{f}]\n", .{ pipe.cs.sr1ri, pipe.cs.sr1wi });
                         } else {
-                            try writer.print("      write {} -> SR1[{}]\n", .{ pipe.cs.sr1wsrc, pipe.cs.sr1wi });
+                            try writer.print("      write {f} -> SR1[{f}]\n", .{ pipe.cs.sr1wsrc, pipe.cs.sr1wi });
                         }
                     }
                     if (pipe.cs.sr2wsrc != .no_write) {
                         if (pipe.cs.sr2wsrc == .self) {
-                            try writer.print("      write SR2[{}] -> SR2[{}]\n", .{ pipe.cs.sr2ri, pipe.cs.sr2wi });
+                            try writer.print("      write SR2[{f}] -> SR2[{f}]\n", .{ pipe.cs.sr2ri, pipe.cs.sr2wi });
                         } else {
-                            try writer.print("      write {} -> SR2[{}]\n", .{ pipe.cs.sr2wsrc, pipe.cs.sr2wi });
+                            try writer.print("      write {f} -> SR2[{f}]\n", .{ pipe.cs.sr2wsrc, pipe.cs.sr2wi });
                         }
                     }
 
                     if (pipe.cs.gprw) {
-                        try writer.print("      write .l -> reg[{}]", .{ pipe.wi });
+                        try writer.print("      write .l -> reg[{f}]", .{ pipe.wi });
                         if (pipe.cs.tiw) {
                             try writer.writeAll("  TIW=true");
                         }
@@ -383,17 +383,17 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
                     }
 
                     if (pipe.cs.flag_op != .hold) {
-                        try writer.print("      FLAG_OP={}\n", .{ pipe.cs.flag_op });
+                        try writer.print("      FLAG_OP={f}\n", .{ pipe.cs.flag_op });
                     }
 
                     if (pipe.cs.special != .none) {
-                        try writer.print("      SPECIAL={}\n", .{ pipe.cs.special });
+                        try writer.print("      SPECIAL={f}\n", .{ pipe.cs.special });
                     }
 
                     if (options.uca) {
-                        try writer.print("      SEQ_OP={}  NEXT={}  ALLOW_INT={}  POWER={}\n", .{ pipe.cs.seq_op, pipe.cs.next, pipe.cs.allow_int, pipe.cs.power });
+                        try writer.print("      SEQ_OP={f}  NEXT={f}  ALLOW_INT={f}  POWER={f}\n", .{ pipe.cs.seq_op, pipe.cs.next, pipe.cs.allow_int, pipe.cs.power });
                     } else {
-                        try writer.print("      SEQ_OP={}  ALLOW_INT={}  POWER={}\n", .{ pipe.cs.seq_op, pipe.cs.allow_int, pipe.cs.power });
+                        try writer.print("      SEQ_OP={f}  ALLOW_INT={f}  POWER={f}\n", .{ pipe.cs.seq_op, pipe.cs.allow_int, pipe.cs.power });
                     }
                 }
 
@@ -404,7 +404,7 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
                         var buf: [16]u8 = undefined;
 
                         if (i < arch.reg.sr1.Index.count) {
-                            const index_name = try std.fmt.bufPrint(&buf, "{}", .{ arch.reg.sr1.Index.init(@intCast(i)) });
+                            const index_name = try std.fmt.bufPrint(&buf, "{f}", .{ arch.reg.sr1.Index.init(@intCast(i)) });
                             try writer.splatByteAll(' ', 20 - index_name.len);
                             try writer.writeAll(index_name);
                             try writer.print("={}", .{ self.state.registers[pipe.rsn.raw()].sr1[i] });
@@ -413,7 +413,7 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
                         }
 
                         if (i < arch.reg.sr2.Index.count) {
-                            const index_name = try std.fmt.bufPrint(&buf, "{}", .{ arch.reg.sr2.Index.init(@intCast(i)) });
+                            const index_name = try std.fmt.bufPrint(&buf, "{f}", .{ arch.reg.sr2.Index.init(@intCast(i)) });
                             try writer.splatByteAll(' ', 16 - index_name.len);
                             try writer.writeAll(index_name);
                             try writer.print("={}", .{ self.state.registers[pipe.rsn.raw()].sr2[i] });
@@ -427,7 +427,7 @@ pub fn Simulator(comptime pipeline: Pipeline) type {
 
                     for (0..options.reg) |i| {
                         const ri: arch.Register_Index = @truncate(pipe.ti.raw() -% i);
-                        try writer.print("      r{:<2} ({X:0>2}): {}", .{ i, ri, self.state.registers[pipe.rsn.raw()].reg[ri] });
+                        try writer.print("      r{:<2} ({X:0>2}): {f}", .{ i, ri, self.state.registers[pipe.rsn.raw()].reg[ri] });
                         if (pipe.wi.raw() == ri and pipe.cs.gprw) {
                             try writer.writeAll(" WI");
                         }

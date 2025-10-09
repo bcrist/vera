@@ -556,8 +556,8 @@ fn resolve_push_pop_directive_length(a: *Assembler, s: Source_File.Slices, insn_
         .params = &.{
             .{
                 .signature = Expression.Type.constant().param_signature(),
-                .base_register = .init(0),
-                .offset_register = .init(0),
+                .base_gpr_offset = .init(0),
+                .offset_gpr_offset = .init(0),
                 .constant = stack_size,
             },
         },
@@ -687,8 +687,8 @@ pub fn resolve_expression_constant(a: *Assembler, s: Source_File.Slices, ip: u32
         .literal_current_address => {
             var value = ip;
             switch (s.expr.items(.resolved_type)[expr_handle]) {
-                .raw, .data, .insn => |bot| if (bot.base == .sr and bot.base.sr == .ip) { value = 0; },
-                .stack => |bot| if (bot.base == .sr and bot.base.sr == .sp) { value = 0; },
+                .raw, .data, .insn => |bot| if (bot.base == .sym and bot.base.sym == .ip) { value = 0; },
+                .stack => |bot| if (bot.base == .sym and bot.base.sym == .sp) { value = 0; },
                 else => {},
             }
             const constant = Constant.init_int(value);
@@ -907,7 +907,7 @@ pub fn resolve_expression_constant(a: *Assembler, s: Source_File.Slices, ip: u32
             const result = constant.clone_with_signedness(a.gpa, &a.constant_temp, .unsigned);
             expr_resolved_constants[expr_handle] = result.intern(a.arena, a.gpa, &a.constants);
         },
-        .remove_signedness_cast, .data_address_cast, .insn_address_cast, .stack_address_cast, .remove_address_cast,
+        .data_address_cast, .insn_address_cast, .stack_address_cast, .remove_address_cast,
          => |inner_expr| {
             expr_resolved_constants[expr_handle] = resolve_expression_constant(a, s, ip, inner_expr);
         },
@@ -942,7 +942,7 @@ fn resolve_symbol_ref_expr_constant(a: *Assembler, s: Source_File.Slices, ip: u3
             const target_file = a.get_source(target_insn_ref.file);
             var value: i64 = target_file.instructions.items(.address)[target_insn_ref.instruction];
             if (s.expr.items(.resolved_type)[expr_handle].base_offset_type()) |bot| {
-                if (bot.base == .sr and bot.base.sr == .ip) {
+                if (bot.base == .sym and bot.base.sym == .ip) {
                     value -= ip;
                 }
             }
@@ -1135,8 +1135,8 @@ pub fn encode_page_data(a: *Assembler, file: *Source_File) void {
                     .params = &.{
                         .{
                             .signature = Expression.Type.constant().param_signature(),
-                            .base_register = .init(0),
-                            .offset_register = .init(0),
+                            .base_gpr_offset = .init(0),
+                            .offset_gpr_offset = .init(0),
                             .constant = stack_size,
                         },
                     },

@@ -19,6 +19,7 @@ const CLI_Option = enum {
     uc_csv_path,
     id_rom_path,
     id_csv_path,
+    summary,
 };
 
 const cli_options = std.StaticStringMap(CLI_Option).initComptime(.{
@@ -31,6 +32,7 @@ const cli_options = std.StaticStringMap(CLI_Option).initComptime(.{
     .{ "--uc-csv", .uc_csv_path },
     .{ "--id-rom", .id_rom_path },
     .{ "--id-csv", .id_csv_path },
+    .{ "--summary", .summary },
 });
 
 const ROM_Format = enum {
@@ -53,6 +55,7 @@ pub fn main() !void {
     var uc_csv_path: ?[]const u8 = null;
     var id_csv_path: ?[]const u8 = null;
     var id_rom_path: ?[]const u8 = null;
+    var show_summary: bool = false;
 
     var arg_iter = try std.process.argsWithAllocator(temp.allocator());
     _ = arg_iter.next(); // ignore exe name
@@ -68,6 +71,7 @@ pub fn main() !void {
                 .uc_csv_path => uc_csv_path = try arena.allocator().dupe(u8, arg_iter.next() orelse expected_output_path("--uc-csv")),
                 .id_rom_path => id_rom_path = try arena.allocator().dupe(u8, arg_iter.next() orelse expected_output_path("--id-rom")),
                 .id_csv_path => id_csv_path = try arena.allocator().dupe(u8, arg_iter.next() orelse expected_output_path("--id-csv")),
+                .summary => show_summary = true,
             }
         } else {
             var buf: [64]u8 = undefined;
@@ -147,34 +151,88 @@ pub fn main() !void {
 
         @import("instructions/val/reg.zig"),
         @import("instructions/val/imm.zig"),
+        @import("instructions/val/sr.zig"),
+        @import("instructions/val/sr_rel.zig"),
+        @import("instructions/val/sr_reg.zig"),
 
+        @import("instructions/set.zig"),
+        @import("instructions/drop.zig"),
+
+        @import("instructions/b/reg.zig"),
+        @import("instructions/b/imm.zig"),
+        @import("instructions/b/ip_rel.zig"),
+
+        @import("instructions/b.cc.zig"),
+
+        @import("instructions/call/reg.zig"),
+        @import("instructions/call/imm.zig"),
+        @import("instructions/call/ip_rel.zig"),
+
+        @import("instructions/call.ptr/reg.zig"),
+        @import("instructions/call.ptr/sp_rel.zig"),
+        @import("instructions/call.ptr/bp_rel.zig"),
+        @import("instructions/call.ptr/kxp_rel.zig"),
+        @import("instructions/call.ptr/uxp_rel.zig"),
+
+        @import("instructions/ld/reg.zig"),
+        @import("instructions/ld/ip_rel.zig"),
+        @import("instructions/ld/sp_rel.zig"),
+        @import("instructions/ld/kxp_rel.zig"),
+        @import("instructions/ld/uxp_rel.zig"),
+        @import("instructions/ld/bp_rel.zig"),
+        @import("instructions/ld/sp_reg.zig"),
+        @import("instructions/ld/bp_reg.zig"),
+
+        @import("instructions/st/reg.zig"),
+        @import("instructions/st/ip_rel.zig"),
+        @import("instructions/st/sp_rel.zig"),
+        @import("instructions/st/kxp_rel.zig"),
+        @import("instructions/st/uxp_rel.zig"),
+        @import("instructions/st/bp_rel.zig"),
+        @import("instructions/st/sp_reg.zig"),
+        @import("instructions/st/bp_reg.zig"),
+
+        @import("instructions/ldg/reg.zig"),
+        @import("instructions/ldg/uxp_rel.zig"),
+        @import("instructions/ldg/kxp_rel.zig"),
+
+        @import("instructions/stg/reg.zig"),
+        @import("instructions/stg/uxp_rel.zig"),
+        @import("instructions/stg/kxp_rel.zig"),
     });
 
     processor.microcode.assign_slots();
 
     const uc = processor.microcode.generate_microcode(gpa);
     const uc_fn_names = processor.microcode.generate_microcode_fn_names(gpa);
-
-    var microcode_address_usage: usize = 0;
-    for (uc, 0..) |maybe_cs, addr| {
-        _ = addr;
-        if (maybe_cs) |cs| {
-            _ = cs;
-            microcode_address_usage += 1;
-        }
-    }
-
     const decode = processor.decode_rom.generate_rom_data(gpa, &processor.microcode);
 
-    var insn_decode_usage: usize = 0;
-    for (decode) |result| {
-        if (result.entry != .invalid_instruction) {
-            insn_decode_usage += 1;
+    if (show_summary) {
+        var microcode_address_usage: usize = 0;
+        for (uc, 0..) |maybe_cs, addr| {
+            _ = addr;
+            if (maybe_cs) |cs| {
+                _ = cs;
+                microcode_address_usage += 1;
+            }
         }
-    }
 
-    log.info("Microcode Slot Usage: {} ({d:.1}%)", .{ microcode_address_usage / 16, @as(f32, @floatFromInt(microcode_address_usage)) / 655.36 });
-    log.info("Instruction Decode Space Usage: {} ({d:.1}%)", .{ insn_decode_usage, @as(f32, @floatFromInt(insn_decode_usage)) / 655.36 });
+        var insn_decode_usage: usize = 0;
+        for (decode) |result| {
+            if (result.entry != .invalid_instruction) {
+                insn_decode_usage += 1;
+            }
+        }
+
+        var lsb_usage: usize = 0;
+        for (std.enums.values(opcodes.LSB)) |_| {
+            lsb_usage += 1;
+        }
+
+        log.info("Microcode Slot Usage: {} ({d:.1}%)", .{ microcode_address_usage / 16, @as(f32, @floatFromInt(microcode_address_usage)) / 655.36 });
+        log.info("Instruction Decode Space Usage: {} ({d:.1}%)", .{ insn_decode_usage, @as(f32, @floatFromInt(insn_decode_usage)) / 655.36 });
+        log.info("LSB Usage: {} ({d:.1}%)", .{ lsb_usage, @as(f32, @floatFromInt(lsb_usage)) / 2.56 });
+    }
 
     if (db_path) |path| {
         var f = try std.fs.cwd().createFile(path, .{});
@@ -370,6 +428,7 @@ const log = std.log.scoped(.compile);
 
 const faults = @import("handlers/faults.zig");
 const documentation = @import("compile/documentation.zig");
+const opcodes = @import("instructions/opcodes.zig");
 const iedb_data_module_gen = @import("compile/iedb_data_module_gen.zig");
 const isa = @import("isa");
 const arch = @import("arch");

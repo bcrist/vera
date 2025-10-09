@@ -156,7 +156,7 @@ pub const Token = struct {
                 var end: usize = 1;
                 while (end < remaining.len) : (end += 1) {
                     switch (remaining[end]) {
-                        'A'...'Z', 'a'...'z', '0'...'9', '_', '.', 128...255 => {
+                        'A'...'Z', 'a'...'z', '0'...'9', '_', '.', '%', 128...255 => {
                             consume_linespace = false;
                         },
                         '\\' => {
@@ -276,7 +276,7 @@ pub fn lex(allocator: std.mem.Allocator, source: []const u8) Token_List {
             .kind = undefined,
         };
         token.kind = switch (source[i]) {
-            'A'...'Z', 'a'...'z', '_', '.', 128...255 => .id,
+            'A'...'Z', 'a'...'z', '_', '.', '%', 128...255 => .id,
             '\n' => .newline,
             '0'...'9' => .int_literal,
             ',' => .comma,

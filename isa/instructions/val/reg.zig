@@ -1,10 +1,25 @@
-pub const spec = "val r(reg)";
-pub const encoding = .{
-    opcodes.LSB.misc_reg,
-    Encoder.init(8, opcodes.Misc_Reg.val_reg),
-    Encoder.init(11, Reg(.reg)),
+
+pub const forms = .{
+    struct {
+        pub const spec = "val %(reg)";
+        pub const encoding = .{
+            opcodes.LSB.misc_reg,
+            Encoder.init(8, opcodes.Misc_Reg.val_reg),
+            Encoder.init(11, Reg(.reg)),
+        };
+        pub const krio = Reg(.reg);
+    },
+    struct {
+        pub const spec = "dupe";
+        pub const encoding = .{
+            opcodes.LSB.misc_reg,
+            Encoder.init(8, opcodes.Misc_Reg.val_reg),
+            Encoder.init(11, @as(u5, 0)),
+        };
+        pub const krio = @as(u5, 0);
+    },
 };
-pub const krio = Reg(.reg);
+
 pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = 1;
 
 pub fn entry(c: *Cycle) void {

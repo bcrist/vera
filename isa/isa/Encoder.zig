@@ -124,6 +124,22 @@ pub fn init(bit_offset: Instruction.Encoded.Offset_Bits, what: anytype) Encoder 
     };
 }
 
+pub fn init_dont_care(bit_offset: Instruction.Encoded.Offset_Bits, bits: anytype) Encoder {
+    const T = @TypeOf(bits);
+    const info = @typeInfo(T).int;
+    const domain: Domain = .{ .int = .{
+        .signedness = info.signedness,
+        .bits = info.bits,
+        .multiple = 1,
+    }};
+    return .{
+        .value = .{ .constant_dont_care = bits },
+        .domain = domain,
+        .bit_offset = bit_offset,
+        .bit_count = domain.min_bits(),
+    };
+}
+
 pub fn eql(a: Encoder, b: Encoder) bool {
     return a.bit_offset == b.bit_offset and a.bit_count == b.bit_count and a.domain.eql(b.domain) and a.value.eql(b.value);
 }
@@ -159,6 +175,7 @@ pub const Value_Iterator = struct {
 /// Represents the transform between logical values (as appearing in assembly language programs) and raw values (extracted from set of machine code bits and mapped by a Domain)
 pub const Value = union (enum) {
     constant: i64,
+    constant_dont_care: i64, // same as .constant when encoding, but ignored when decoding
     placeholder: Placeholder,
     negate: *const Value,
     xor: struct {
@@ -172,7 +189,7 @@ pub const Value = union (enum) {
 
     pub fn get_placeholder(self: Value) ?Placeholder {
         return switch (self) {
-            .constant => null,
+            .constant, .constant_dont_care => null,
             .placeholder => |info| info,
             .negate => |inner| inner.get_placeholder(),
             .xor => |info| info.inner.get_placeholder(),
@@ -182,7 +199,7 @@ pub const Value = union (enum) {
 
     pub fn evaluate(self: Value, params: []const Parameter) i64 {
         return switch (self) {
-            .constant => |v| v,
+            .constant, .constant_dont_care => |v| v,
             .placeholder => |info| info.evaluate(params),
             .negate => |inner| -inner.evaluate(params),
             .xor => |info| info.inner.evaluate(params) ^ info.mask,
@@ -193,6 +210,7 @@ pub const Value = union (enum) {
     pub fn assign(self: Value, value: i64, out: []Parameter) bool {
         return switch (self) {
             .constant => |v| v == value,
+            .constant_dont_care => true,
             .placeholder => |info| info.assign(value, out),
             .negate => |inner| inner.assign(-value, out),
             .xor => |info| info.inner.assign(value ^ info.mask, out),
@@ -203,7 +221,7 @@ pub const Value = union (enum) {
     /// Convert a "logical" value (as would appear in asm) to a "raw" value that can be encoded by a Domain
     pub fn raw_from_value(self: Value, logical: i64) i64 {
         return switch (self) {
-            .constant => |v| v,
+            .constant, .constant_dont_care => |v| v,
             .placeholder => logical,
             .negate => |inner| inner.raw_from_value(-logical),
             .xor => |info| info.inner.raw_from_value(logical ^ info.mask),
@@ -214,7 +232,7 @@ pub const Value = union (enum) {
     /// Convert a "raw" value directly decoded by a Domain to a "logical" value as would appear in asm
     pub fn value_from_raw(self: Value, raw: i64) i64 {
         return switch (self) {
-            .constant => |v| v,
+            .constant, .constant_dont_care => |v| v,
             .placeholder => raw,
             .negate => |inner| -inner.value_from_raw(raw),
             .xor => |info| info.inner.value_from_raw(raw) ^ info.mask,
@@ -224,7 +242,7 @@ pub const Value = union (enum) {
 
     pub fn is_constant(self: Value) bool {
         return switch (self) {
-            .constant => true,
+            .constant, .constant_dont_care => true,
             .placeholder => false,
             .negate => |inner| inner.is_constant(),
             .xor => |info| info.inner.is_constant(),
@@ -238,6 +256,7 @@ pub const Value = union (enum) {
         if (atag != btag) return false;
         return switch (a) {
             .constant => |c| c == b.constant,
+            .constant_dont_care => |c| c == b.constant_dont_care,
             .placeholder => |info| info.eql(b.placeholder),
             .negate => |info| info.eql(b.negate.*),
             .xor => |info| info.mask == b.xor.mask and info.inner.eql(b.xor.inner.*),

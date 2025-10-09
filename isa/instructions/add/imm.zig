@@ -3,8 +3,8 @@ pub const forms = .{
         pub const spec = 
             \\add (imm)
             \\addc (imm)
-            \\addv (imm)
-            \\addcv (imm)
+            \\add.vf (imm)
+            \\addc.vf (imm)
             ;
 
         pub const encoding = .{
@@ -20,8 +20,8 @@ pub const forms = .{
         pub const spec =
             \\ sub (imm)
             \\ subc (imm)
-            \\ subv (imm)
-            \\ subcv (imm)
+            \\ sub.vf (imm)
+            \\ subc.vf (imm)
             ;
 
         pub const encoding = .{
@@ -35,8 +35,8 @@ pub const forms = .{
             return switch (mnemonic) {
                 .sub => .add_i16,
                 .subc => .addc_i16,
-                .subv => .addv_i16,
-                .subcv => .addcv_i16,
+                .@"sub.vf" => .@"add.vf_i16",
+                .@"subc.vf" => .@"addc.vf_i16",
                 else => unreachable,
             };
         }
@@ -58,12 +58,12 @@ pub const forms = .{
     },
     struct {
         pub const spec =
-            \\ addv 1
-            \\ subv -1
-            \\ incv
+            \\ add.vf 1
+            \\ sub.vf -1
+            \\ inc.vf
             ;
         
-        pub const encoding = opcodes.LSB.incv;
+        pub const encoding = opcodes.LSB.@"inc.vf";
         pub const krio: arch.bus.K.Read_Index_Offset.Raw_Signed = 1;
         pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = 0;
 
@@ -84,12 +84,12 @@ pub const forms = .{
     },
     struct {
         pub const spec =
-            \\ addv -1
-            \\ subv 1
-            \\ decv
+            \\ add.vf -1
+            \\ sub.vf 1
+            \\ dec.vf
             ;
         
-        pub const encoding = opcodes.LSB.decv;
+        pub const encoding = opcodes.LSB.@"dec.vf";
         pub const krio: arch.bus.K.Read_Index_Offset.Raw_Signed = -1;
         pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = 0;
 
@@ -109,11 +109,11 @@ pub const forms = .{
     },
     struct {
         pub const spec =
-            \\ addcv 0
-            \\ subcv 0
+            \\ addc.vf 0
+            \\ subc.vf 0
             ;
         
-        pub const encoding = opcodes.LSB.addcv_0;
+        pub const encoding = opcodes.LSB.@"addc.vf_0";
         pub const krio: arch.bus.K.Read_Index_Offset.Raw_Signed = 0;
         pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = 0;
 
@@ -139,14 +139,14 @@ pub fn add_krio(c: *Cycle, mnemonic: isa.Mnemonic) void {
 
 fn j_plus_k_to_l(c: *Cycle, mnemonic: isa.Mnemonic) void {
     c.j_plus_k_to_l(switch (mnemonic) {
-        .add, .addv,
-        .sub, .subv,
-        .inc, .incv,
-        .dec, .decv,
+        .add, .@"add.vf",
+        .sub, .@"sub.vf",
+        .inc, .@"inc.vf",
+        .dec, .@"dec.vf",
         => .fresh,
 
-        .addc, .addcv,
-        .subc, .subcv,
+        .addc, .@"addc.vf",
+        .subc, .@"subc.vf",
         => .cont,
 
         else => unreachable,
@@ -156,9 +156,9 @@ fn j_plus_k_to_l(c: *Cycle, mnemonic: isa.Mnemonic) void {
         .inc, .dec,
         => .flags,
 
-        .addv, .addcv,
-        .subv, .subcv,
-        .incv, .decv,
+        .@"add.vf", .@"addc.vf",
+        .@"sub.vf", .@"subc.vf",
+        .@"inc.vf", .@"dec.vf",
         => .flags__fault_on_overflow,
 
         else => unreachable,

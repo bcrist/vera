@@ -1,8 +1,8 @@
 pub const spec = 
-    \\ ssbl
-    \\ ssbt
-    \\ szbl
-    \\ szbt
+    \\ ssb.l
+    \\ ssb.t
+    \\ szb.l
+    \\ szb.t
     ;
 
 pub const encoding = .{
@@ -17,12 +17,12 @@ pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
     c.zero_to_j();
     c.reg_to_k();
     c.saturate_k_to_l(switch (mnemonic) {
-        .ssbl, .ssbt => .ones,
-        .szbl, .szbt => .zeroes,
+        .@"ssb.l", .@"ssb.t" => .ones,
+        .@"szb.l", .@"szb.t" => .zeroes,
         else => unreachable,
     }, switch (mnemonic) {
-        .ssbl, .szbl => .leading,
-        .ssbt, .szbt => .trailing,
+        .@"ssb.l", .@"szb.l" => .leading,
+        .@"ssb.t", .@"szb.t" => .trailing,
         else => unreachable,
     }, .flags);
     c.l_to_reg(true);

@@ -15,8 +15,8 @@ pub fn print_form(form: Instruction.Form, writer: *std.io.Writer) !void {
 
         const index = Parameter.Index.init(@intCast(raw_index));
 
-        var base_register: ?arch.bus.K.Read_Index_Offset = null;
-        var offset_register: ?arch.bus.K.Read_Index_Offset = null;
+        var base_gpr_offset : ?arch.bus.K.Read_Index_Offset = null;
+        var offset_gpr_offset: ?arch.bus.K.Read_Index_Offset = null;
         var constant: ?i64 = null;
 
         for (form.constraints) |constraint| {
@@ -26,8 +26,8 @@ pub fn print_form(form: Instruction.Form, writer: *std.io.Writer) !void {
                         const c = constraint.right.constant;
                         switch (info.kind) {
                             .param_constant => constant = c,
-                            .param_base_register => base_register = .init(@intCast(c)),
-                            .param_offset_register => offset_register = .init(@intCast(c)),
+                            .param_base_gpr_offset => base_gpr_offset = .init(@intCast(c)),
+                            .param_offset_gpr_offset => offset_gpr_offset = .init(@intCast(c)),
                         }
                     }
                 }
@@ -38,8 +38,8 @@ pub fn print_form(form: Instruction.Form, writer: *std.io.Writer) !void {
             .index = index,
             .encoders = form.encoders(),
             .constraints = form.constraints,
-            .base_register = base_register,
-            .offset_register = offset_register,
+            .base_gpr_offset = base_gpr_offset,
+            .offset_gpr_offset = offset_gpr_offset,
             .constant = constant,
         }, writer);
     }
@@ -85,8 +85,8 @@ pub fn print_instruction_signature(signature: Instruction.Signature, writer: *st
 
 pub fn print_parameter(param: Parameter, insn_address: ?u32, writer: *std.io.Writer) !void {
     try print_parameter_signature(param.signature, .{
-        .base_register = param.base_register,
-        .offset_register = param.offset_register,
+        .base_gpr_offset = param.base_gpr_offset,
+        .offset_gpr_offset = param.offset_gpr_offset,
         .constant = param.constant,
         .insn_address = insn_address,
     }, writer);
@@ -96,8 +96,8 @@ pub const Print_Parameter_Signature_Extra = struct {
     index: ?Parameter.Index = null,
     encoders: Instruction.Form.Encoder_Iterator = .{},
     constraints: []const Constraint = &.{},
-    base_register: ?arch.bus.K.Read_Index_Offset = null,
-    offset_register: ?arch.bus.K.Read_Index_Offset = null,
+    base_gpr_offset: ?arch.bus.K.Read_Index_Offset = null,
+    offset_gpr_offset: ?arch.bus.K.Read_Index_Offset = null,
     constant: ?i64 = null,
     insn_address: ?u32 = null,
 };
@@ -107,18 +107,18 @@ pub fn print_parameter_signature(signature: Parameter.Signature, extra: Print_Pa
         try writer.writeByte(' ');
     }
 
-    try print_parameter_kind(signature.base, .param_base_register, .{
+    try print_parameter_kind(signature.base, .param_base_gpr_offset, .{
         .index = extra.index,
         .encoders = extra.encoders,
         .constraints = extra.constraints,
-        .register = extra.base_register,
+        .gpr_offset = extra.base_gpr_offset,
         .constant = extra.constant,
     }, writer);
 
     if (signature.offset == .constant) {
         if (extra.constant) |k| {
             try print_offset(k, writer);
-            if (signature.base == .sr and signature.base.sr == .ip) {
+            if (signature.base == .sym and signature.base.sym == .ip) {
                 if (extra.insn_address) |address| {
                     const target = address + k;
                     try writer.print(" // 0x{X}", .{ target });
@@ -130,11 +130,11 @@ pub fn print_parameter_signature(signature: Parameter.Signature, extra: Print_Pa
 
     if (signature.offset != .none) {
         try writer.writeAll(" + ");
-        try print_parameter_kind(signature.offset, .param_offset_register, .{
+        try print_parameter_kind(signature.offset, .param_offset_gpr_offset, .{
             .index = extra.index,
             .encoders = extra.encoders,
             .constraints = extra.constraints,
-            .register = extra.offset_register,
+            .gpr_offset = extra.offset_gpr_offset,
             .constant = extra.constant,
         }, writer);
     }
@@ -144,7 +144,7 @@ pub const Print_Parameter_Kind_Extra = struct {
     index: ?Parameter.Index = null,
     encoders: Instruction.Form.Encoder_Iterator = .{},
     constraints: []const Constraint = &.{},
-    register: ?arch.bus.K.Read_Index_Offset = null,
+    gpr_offset: ?arch.bus.K.Read_Index_Offset = null,
     constant: ?i64 = null,
 };
 pub fn print_parameter_kind(kind: Parameter.Kind, register_kind: Placeholder.Kind, extra: Print_Parameter_Kind_Extra, writer: *std.io.Writer) !void {
@@ -155,22 +155,17 @@ pub fn print_parameter_kind(kind: Parameter.Kind, register_kind: Placeholder.Kin
         } else {
             try print_placeholder_list(.param_constant, extra.index, extra.encoders, extra.constraints, writer);
         },
-        .reg => |sign| {
-            try writer.writeByte('r');
-            if (extra.register) |reg| {
-                try writer.print("{}", .{ reg.raw() });
+        .gpr => {
+            try writer.writeByte('%');
+            if (extra.gpr_offset) |gpr_offset| {
+                try writer.print("{}", .{ gpr_offset.raw() });
             } else {
                 try print_placeholder_list(register_kind, extra.index, extra.encoders, extra.constraints, writer);
             }
-            if (sign) |s| {
-                try writer.writeAll(switch (s) {
-                    .signed => " .signed",
-                    .unsigned => " .unsigned",
-                });
-            }
         },
-        .sr => |sr| {
-            try writer.writeAll(@tagName(sr));
+        .sym => |sr| {
+            try writer.writeByte('%');
+            try writer.writeAll(sr.name());
         }
     }
 }

@@ -1,18 +1,17 @@
 pub const spec =
-    \\ and .d bp + (imm)
-    \\ or .d bp + (imm)
-    \\ xor .d bp + (imm)
+    \\ and .d %bp + (imm)
+    \\ or .d %bp + (imm)
+    \\ xor .d %bp + (imm)
     ;
 
 pub const encoding = .{
-    opcodes.LSB.alu_16,
-    opcodes.mnemonic_encoder(opcodes.ALU_16, .{ .suffix = "_bp_rel", .offset = 8 }),
-    Encoder.init(16, Int(.imm, i8)),
+    opcodes.mnemonic_encoder(opcodes.LSB, .{ .suffix = "_bp_rel" }),
+    Encoder.init(8, Int(.imm, i16)),
 };
 pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = 0;
 
 pub fn entry(c: *Cycle) void {
-    c.read_to_d(.bp, .i8_from_dr, .@"32b", .data);
+    c.read_to_d(.bp, .i16_from_dr, .@"32b", .data);
     c.d_to_l();
     c.l_to_sr(.temp_1);
     c.next(logic);

@@ -3,8 +3,8 @@ kind: Kind,
 name: []const u8,
 
 pub const Kind = enum {
-    param_base_register,
-    param_offset_register,
+    param_base_gpr_offset,
+    param_offset_gpr_offset,
     param_constant,
 };
 
@@ -13,8 +13,8 @@ pub fn evaluate(self: Placeholder, params: []const Parameter) i64 {
     if (params.len <= index) return 0; // this is part of a "don't care" encoder
     return switch (self.kind) {
         .param_constant => params[index].constant,
-        .param_base_register => params[index].base_register.raw(),
-        .param_offset_register => params[index].offset_register.raw(),
+        .param_base_gpr_offset => params[index].base_gpr_offset.raw(),
+        .param_offset_gpr_offset => params[index].offset_gpr_offset.raw(),
     };
 }
 
@@ -23,13 +23,13 @@ pub fn assign(self: Placeholder, value: i64, out: []Parameter) bool {
     if (out.len <= index) return true; // this is part of a "don't care" encoder
     switch (self.kind) {
         .param_constant => out[index].constant = value,
-        .param_base_register => {
-            if (value < 0 or value >= arch.reg.gpr.count) return false;
-            out[index].base_register = .init(@intCast(value));
+        .param_base_gpr_offset => {
+            if (value < 0 or value > arch.bus.K.Read_Index_Offset.max) return false;
+            out[index].base_gpr_offset = .init(@intCast(value));
         },
-        .param_offset_register => {
-            if (value < 0 or value >= arch.reg.gpr.count) return false;
-            out[index].offset_register = .init(@intCast(value));
+        .param_offset_gpr_offset => {
+            if (value < 0 or value > arch.bus.K.Read_Index_Offset.max) return false;
+            out[index].offset_gpr_offset = .init(@intCast(value));
         },
     }
     return true;

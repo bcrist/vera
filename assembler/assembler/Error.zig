@@ -175,7 +175,7 @@ fn get_expression_context(expr: Expression.Handle, range: ?lex.Token.Range, toke
         .directive_symbol_def, .directive_symbol_ref,
         .local_label_def, .negate, .reg_to_index,
         .complement, .signed_cast, .unsigned_cast,
-        .remove_signedness_cast, .absolute_address_cast,
+        .absolute_address_cast,
         .data_address_cast, .insn_address_cast,
         .stack_address_cast, .remove_address_cast,
         .index_to_reg,

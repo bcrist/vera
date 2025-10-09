@@ -1,20 +1,19 @@
 pub const spec =
-    \\ add .s sp + (imm)
-    \\ addc .s sp + (imm)
-    \\ addv .s sp + (imm)
-    \\ addcv .s sp + (imm)
+    \\ add .s %sp + (imm)
+    \\ addc .s %sp + (imm)
+    \\ add.vf .s %sp + (imm)
+    \\ addc.vf .s %sp + (imm)
     ;
 
 pub const encoding = .{
-    opcodes.LSB.alu_16,
-    opcodes.mnemonic_encoder(opcodes.ALU_16, .{ .suffix = "_sp_rel", .offset = 8 }),
-    Encoder.init(16, Int_Mult(.imm, i8, 4)),
+    opcodes.mnemonic_encoder(opcodes.LSB, .{ .suffix = "_sp_rel" }),
+    Encoder.init(8, Int(.imm, i16)),
 };
 
 pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = 0;
 
 pub fn entry(c: *Cycle) void {
-    c.read_to_d(.sp, .i8_x4_from_dr, .@"32b", .stack);
+    c.read_to_d(.sp, .i16_from_dr, .@"32b", .stack);
     c.d_to_l();
     c.l_to_sr(.temp_1);
     c.next(add);

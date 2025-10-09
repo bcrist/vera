@@ -1,5 +1,32 @@
 pub const Rom = [Address.count]Control_Signals;
 
+pub const Constant = enum (i6) {
+    _,
+
+    pub inline fn init(raw_value: Raw) Constant {
+        return @enumFromInt(raw_value);
+    }
+
+    pub inline fn init_unsigned(raw_value: Raw_Unsigned) Constant {
+        return .init(@bitCast(raw_value));
+    }
+
+    pub inline fn raw(self: Constant) Raw {
+        return @intFromEnum(self);
+    }
+
+    pub inline fn raw_unsigned(self: Constant) Raw_Unsigned {
+        return @bitCast(self.raw());
+    }
+
+    pub const format = fmt.format_enum_dec;
+
+    pub const Raw = meta.Backing(Constant);
+    pub const Raw_Unsigned = std.meta.Int(.unsigned, @bitSizeOf(Raw));
+    pub const max = std.math.maxInt(i6);
+    pub const min = std.math.minInt(i6);
+};
+
 pub const Address = packed struct (u16) {
     flags: Flags,
     slot: Slot,
@@ -156,13 +183,13 @@ pub const Flags_With_Carry = packed struct (u4) {
         try writer.writeByte(if (self.c) 'C' else '.');
     }
 
-    pub inline fn zero(self: Flags_With_Carry) bool { return self.z; }
-    pub inline fn negative(self: Flags_With_Carry) bool { return self.n; }
-    pub inline fn positive(self: Flags_With_Carry) bool { return !self.z and !self.n; }
-    pub inline fn carry(self: Flags_With_Carry) bool { return self.c; }
-    pub inline fn kernel(self: Flags_With_Carry) bool { return self.k; }
-    pub inline fn unsigned_less_than(self: Flags_With_Carry) bool { return !self.c and !self.z; } // checking z here isn't actually necessary, but makes the intention clear
-    pub inline fn unsigned_greater_than(self: Flags_With_Carry) bool { return self.c and !self.z; }
+    pub fn zero(self: Flags_With_Carry) bool { return self.z; }
+    pub fn negative(self: Flags_With_Carry) bool { return self.n; }
+    pub fn positive(self: Flags_With_Carry) bool { return !self.z and !self.n; }
+    pub fn carry(self: Flags_With_Carry) bool { return self.c; }
+    pub fn kernel(self: Flags_With_Carry) bool { return self.k; }
+    pub fn unsigned_less_than(self: Flags_With_Carry) bool { return !self.c; }
+    pub fn unsigned_greater_than(self: Flags_With_Carry) bool { return self.c and !self.z; }
 
     pub const Raw = meta.Backing(Flags_With_Carry);
 };
@@ -173,11 +200,11 @@ pub const Flags_With_Overflow = packed struct (u4) {
     z: bool,
     k: bool,
 
-    pub inline fn init(raw_value: Raw) Flags_With_Carry {
+    pub inline fn init(raw_value: Raw) Flags_With_Overflow {
         return @bitCast(raw_value);
     }
 
-    pub inline fn raw(self: Flags_With_Carry) Raw {
+    pub inline fn raw(self: Flags_With_Overflow) Raw {
         return @bitCast(self);
     }
 
@@ -188,26 +215,27 @@ pub const Flags_With_Overflow = packed struct (u4) {
         try writer.writeByte(if (self.v) 'V' else '.');
     }
 
-    pub inline fn zero(self: Flags_With_Carry) bool { return self.z; }
-    pub inline fn negative(self: Flags_With_Carry) bool { return self.n; }
-    pub inline fn positive(self: Flags_With_Carry) bool { return !self.z and !self.n; }
-    pub inline fn overflow(self: Flags_With_Carry) bool { return self.v; }
-    pub inline fn kernel(self: Flags_With_Carry) bool { return self.k; }
-    pub inline fn signed_less_than(self: Flags_With_Carry) bool { return !self.z and self.n != self.v; }
-    pub inline fn signed_greater_than(self: Flags_With_Carry) bool { return !self.z and self.n == self.v; }
+    pub fn zero(self: Flags_With_Overflow) bool { return self.z; }
+    pub fn negative(self: Flags_With_Overflow) bool { return self.n; }
+    pub fn positive(self: Flags_With_Overflow) bool { return !self.z and !self.n; }
+    pub fn overflow(self: Flags_With_Overflow) bool { return self.v; }
+    pub fn kernel(self: Flags_With_Overflow) bool { return self.k; }
+    pub fn signed_less_than(self: Flags_With_Overflow) bool { return !self.z and self.n != self.v; }
+    pub fn signed_greater_than(self: Flags_With_Overflow) bool { return !self.z and self.n == self.v; }
 
     pub const Raw = meta.Backing(Flags_With_Overflow);
 };
 
 pub const Setup_Microcode_Entry = packed struct (u32) {
-    vao: addr.Virtual.Offset,
+    constant: uc.Constant,
+    vao_src: addr.Virtual.Offset_Source,
     vari: addr.Virtual.Base,
     sr1ri: reg.sr1.Index,
     sr2ri: reg.sr2.Index,
     jsrc: bus.J.Source,
     ksrc: bus.K.Source,
     special: misc.Special_Op,
-    _unused: u4 = 0,
+    _unused: u2 = 0,
 
     pub inline fn init(raw_value: Raw) Setup_Microcode_Entry {
         return @bitCast(raw_value);
@@ -551,6 +579,7 @@ const Control_Signal = std.meta.FieldEnum(Control_Signals);
 
 const Control_Signals = @import("Control_Signals.zig");
 const compute = @import("compute.zig");
+const uc = @import("microcode.zig");
 const bus = @import("bus.zig");
 const reg = @import("reg.zig");
 const misc = @import("misc.zig");

@@ -112,8 +112,8 @@ pub fn config(self: *@This()) void {
     _ = self.vari_rsn_decoder.height(75).y().attach_between(self.sr1b.top(), self.sr2b.bottom(), 0.6);
     _ = self.sr2b.height(sram_height).top().attach_to_offset(self.sr1b.bottom(), 25);
     _ = self.va_base_mux.y().attach_between(self.sr1b.bottom(), self.sr2b.top(), 0.5);
-    _ = self.va_offset_mux.top().attach_to_offset(self.va_base_mux.bottom(), 60);
-    _ = self.va_adder.y().attach_between(self.va_base_mux.bottom(), self.va_offset_mux.top(), 0.5);
+    _ = self.va_offset_mux.top().attach_to_offset(self.va_base_mux.bottom(), 80);
+    _ = self.va_adder.y().attach_between(self.va_base_mux.y(), self.va_offset_mux.y(), 0.5);
     _ = self.at_group_decode.height(100).top().attach_to_offset(self.va_adder.bottom(), 110);
     _ = self.microcode.height(200).top().attach_to_offset(self.at_group_decode.bottom(), 15);
 
@@ -168,7 +168,7 @@ pub fn config(self: *@This()) void {
         const km_krio_bit = self.k_mux.left_side(@tagName(arch.bus.K.Source.krio_bit));
         const km_krio_sx = self.k_mux.left_side(@tagName(arch.bus.K.Source.krio_sx));
         const km_krio_zx = self.k_mux.left_side(@tagName(arch.bus.K.Source.krio_zx));
-        const km_vao = self.k_mux.left_side(@tagName(arch.bus.K.Source.vao));
+        const km_constant = self.k_mux.left_side(@tagName(arch.bus.K.Source.constant));
         const km_dr_byte_21 = self.k_mux.left_side(@tagName(arch.bus.K.Source.dr_byte_21_sx));
         const km_dr_byte_2 = self.k_mux.left_side(@tagName(arch.bus.K.Source.dr_byte_2_sx));
         const km_dr_byte_1 = self.k_mux.left_side(@tagName(arch.bus.K.Source.dr_byte_1_sx));
@@ -216,12 +216,12 @@ pub fn config(self: *@This()) void {
             .length(-25)
             .turn().end_at(krio_bit_wire.y());
 
-        _ = km_vao.wire_h(.{ .bits = @bitSizeOf(arch.bus.K) })
+        _ = km_constant.wire_h(.{ .bits = @bitSizeOf(arch.bus.K) })
             .length(-60)
             .small_box("sx", .left)
-            .change_bits(@bitSizeOf(arch.addr.Virtual.Offset))
+            .change_bits(@bitSizeOf(arch.microcode.Constant))
             .change_class("control")
-            .label("VAO", .{})
+            .label("CONSTANT", .{})
             .bit_mark()
             .end_at_mutable_point(self.input_box.right_side(""));
 
@@ -233,7 +233,7 @@ pub fn config(self: *@This()) void {
             .label("DR[23:8]", .{})
             .label("", .{})
             .bit_mark_at(0.4)
-            .end_at_mutable_point(self.k_dr_joiner.right_side(""));
+            .end_at(self.k_dr_joiner.right_side("").x());
 
         _ = km_dr_byte_2.wire_h(.{ .bits = @bitSizeOf(arch.bus.K) })
             .length(-60)
@@ -243,7 +243,7 @@ pub fn config(self: *@This()) void {
             .label("DR[23:16]", .{})
             .label("", .{})
             .bit_mark_at(0.25)
-            .end_at_mutable_point(self.k_dr_joiner.right_side(""));
+            .end_at(self.k_dr_joiner.right_side("").x());
 
         _ = km_dr_byte_1.wire_h(.{ .bits = @bitSizeOf(arch.bus.K) })
             .length(-25)
@@ -253,7 +253,7 @@ pub fn config(self: *@This()) void {
             .label("DR[15:8]", .{})
             .label("", .{})
             .bit_mark_at(0.4)
-            .end_at_mutable_point(self.k_dr_joiner.right_side(""));
+            .end_at(self.k_dr_joiner.right_side("").x());
         
         _ = self.k_dr_joiner.left_side("")
             .wire_h(.{ .bits = @bitSizeOf(arch.reg.DR), .class = "reg" })
@@ -452,11 +452,7 @@ pub fn config(self: *@This()) void {
         .wire_h(.{ .bits = @bitSizeOf(arch.addr.Virtual) })
         .bit_mark()
         .turn_between(self.va_offset_mux.right(), self.va_adder.left(), 0.5)
-        .length(10)
-        .small_box("sx", .down)
-        .change_bits(16)
         .turn()
-        .bit_mark()
         .end_at_point(self.va_offset_mux.right_side(""));
     _ = self.va_adder.right_side("")
         .wire_h(.{ .bits = @bitSizeOf(arch.addr.Virtual) })
@@ -483,29 +479,19 @@ pub fn config(self: *@This()) void {
 
     // va_offset_mux
     {
-        const vm_i8_from_dr = self.va_offset_mux.left_side(@tagName(arch.addr.Virtual.Offset.i8_from_dr));
-        const vm_i8_x4_from_dr = self.va_offset_mux.left_side(@tagName(arch.addr.Virtual.Offset.i8_x4_from_dr));
-        const vm_i16_from_dr = self.va_offset_mux.left_side(@tagName(arch.addr.Virtual.Offset.i16_from_dr));
-        const vm_else = self.va_offset_mux.left_side("else");
+        const vm_zero = self.va_offset_mux.left_side(@tagName(arch.addr.Virtual.Offset_Source.zero));
+        const vm_i8_from_dr = self.va_offset_mux.left_side(@tagName(arch.addr.Virtual.Offset_Source.i8_from_dr));
+        const vm_i16_from_dr = self.va_offset_mux.left_side(@tagName(arch.addr.Virtual.Offset_Source.i16_from_dr));
+        const vm_constant = self.va_offset_mux.left_side(@tagName(arch.addr.Virtual.Offset_Source.constant));
 
-        _ = vm_i8_from_dr.wire_h(.{ .bits = 16, .dir = .junction_end })
-            .length(-85)
-            .bit_mark()
-            .small_box("sx", .left)
-            .change_bits(8)
-            .change_class("reg")
-            .length(-65)
-            .turn()
-            .end_at(vm_i8_x4_from_dr.y());
-            
-        _ = vm_i8_x4_from_dr.wire_h(.{ .bits = 16 })
+        _ = vm_zero.wire_h(.{ .bits = 32 })
+            .length(-40)
+            .label("0", .{});
+
+        _ = vm_i8_from_dr.wire_h(.{ .bits = 32 })
             .length(-50)
             .bit_mark()
             .small_box("sx", .left)
-            .change_bits(10)
-            .bit_mark()
-            .length(-45)
-            .small_box("<<2", .left)
             .change_bits(8)
             .change_class("reg")
             .bit_mark()
@@ -513,32 +499,38 @@ pub fn config(self: *@This()) void {
             .label("", .{})
             .end_at_mutable_point(self.va_dr_joiner.right_side(""));
 
-        _ = vm_i16_from_dr.wire_h(.{ .bits = 16, .class = "reg" })
+        _ = vm_i16_from_dr.wire_h(.{ .bits = 32 })
+            .length(-85)
+            .bit_mark()
+            .small_box("sx", .left)
+            .change_bits(16)
+            .change_class("reg")
             .bit_mark()
             .label("DR[23:8]", .{})
             .label("", .{})
             .end_at_mutable_point(self.va_dr_joiner.right_side(""));
 
-        const vao_wire = self.va_offset_mux.bottom_side("")
-            .wire_v(.{ .bits = @bitSizeOf(arch.addr.Virtual.Offset), .class = "control" })
-            .length(35)
-            .turn()
-            .bit_mark()
-            .label("VAO", .{})
-            .end_at_mutable_point(self.input_box.right_side(""));
-
-        _ = vm_else.wire_h(.{ .bits = 16, .dir = .junction_end })
+        _ = vm_constant.wire_h(.{ .bits = 32 })
             .length(-50)
             .bit_mark()
             .small_box("sx", .left)
-            .change_bits(@bitSizeOf(arch.addr.Virtual.Offset))
+            .change_bits(@bitSizeOf(arch.microcode.Constant))
             .change_class("control")
-            .length(-25)
-            .turn()
-            .end_at(vao_wire.y());
+            .bit_mark()
+            .label("CONSTANT", .{})
+            .end_at_mutable_point(self.input_box.right_side(""));
         
-        _ = self.va_dr_joiner.height(40).y().attach_between(vm_i16_from_dr.y(), vm_i8_x4_from_dr.y(), 0.5);
+        _ = self.va_offset_mux.bottom_side("")
+            .wire_v(.{ .bits = @bitSizeOf(arch.addr.Virtual.Offset_Source), .class = "control" })
+            .length(35)
+            .turn()
+            .bit_mark()
+            .label("VAO_SRC", .{})
+            .end_at_mutable_point(self.input_box.right_side(""));
+
+        _ = self.va_dr_joiner.height(40).y().attach_between(vm_i16_from_dr.y(), vm_i8_from_dr.y(), 0.5);
     }
+
     _ = self.va_dr_joiner.left_side("")
         .wire_h(.{ .bits = @bitSizeOf(arch.reg.DR), .class = "reg" })
         .label("DR", .{})

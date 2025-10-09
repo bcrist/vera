@@ -94,13 +94,13 @@ pub const gpr = struct {
 
 pub const sr1 = struct {
     pub const Index = enum (u4) {
-        one = 0,            // 0x0000_0001 (must never be overwritten)
-        rp = 1,             // return pointer
-        sp = 2,             // stack pointer
-        bp = 3,             // stack base pointer
-        // 4 unused
-        // 5 unused
-        // 6 unused
+        rp = 0,             // return pointer
+        one = 1,            // 0x0000_0001 (must never be overwritten)
+        two = 2,            // 0x0000_0010 (must never be overwritten)
+        sp = 3,             // stack pointer
+        fp = 4,             // frame pointer
+        bp = 5,             // base/source pointer
+        dp = 6,             // data/dest pointer
         temp_1 = 7,
         int_flags = 8,      // Upon entering an interrupt handler, the flags register is stored here
         // 9 unused
@@ -151,8 +151,9 @@ pub const sr2 = struct {
         next_ip = 3,        // when next instruction is loaded before the last cycle of the current instruction, the next IP is kept here.
         kxp = 4,            // kernel context pointer
         uxp = 5,            // user context pointer
-        // 6 unused
+        axp = 6,            // aux context pointer
         temp_2 = 7,
+        // 8-15 unused
         _,
 
         pub inline fn init(raw_value: Raw) Index {
@@ -188,10 +189,13 @@ pub const sr2 = struct {
 
 pub const sr = struct {
     pub const Any_Index = enum (u5) {
-        one = raw_from_sr1(.one),
         rp = raw_from_sr1(.rp),
+        one = raw_from_sr1(.one),
+        two = raw_from_sr1(.two),
         sp = raw_from_sr1(.sp),
+        fp = raw_from_sr1(.fp),
         bp = raw_from_sr1(.bp),
+        dp = raw_from_sr1(.dp),
         temp_1 = raw_from_sr1(.temp_1),
         int_flags = raw_from_sr1(.int_flags),
         fault_d = raw_from_sr1(.fault_d),
@@ -204,6 +208,7 @@ pub const sr = struct {
         next_ip = raw_from_sr2(.next_ip),
         kxp = raw_from_sr2(.kxp),
         uxp = raw_from_sr2(.uxp),
+        axp = raw_from_sr2(.axp),
         temp_2 = raw_from_sr2(.temp_2),
 
         pub inline fn init(raw_value: Raw) Any_Index {
@@ -451,8 +456,8 @@ pub const Flags = packed struct (u32) {
         zn_from_l = 1,
         compute = 2,
         compute_no_set_z = 3,
-        clear_bits = 4, // bit mask comes from VAO
-        set_bits = 5,   // bit mask comes from VAO
+        clear_bits = 4, // bit mask comes from microcode constant
+        set_bits = 5,   // bit mask comes from microcode constant
         load_zncv = 6,
         load = 7,
 

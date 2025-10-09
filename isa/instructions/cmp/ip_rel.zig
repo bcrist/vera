@@ -1,18 +1,17 @@
 pub const spec =
-    \\ cmp .i ip + (imm)
-    \\ cmpc .i ip + (imm)
+    \\ cmp .i %ip + (imm)
+    \\ cmpc .i %ip + (imm)
     ;
 
 pub const encoding = .{
-    opcodes.LSB.alu_16,
-    opcodes.mnemonic_encoder(opcodes.ALU_16, .{ .suffix = "_ip_rel", .offset = 8 }),
-    Encoder.init(16, Int(.imm, i8)),
+    opcodes.mnemonic_encoder(opcodes.LSB, .{ .suffix = "_ip_rel" }),
+    Encoder.init(8, Int(.imm, i16)),
 };
 
 pub const wio: arch.reg.gpr.Write_Index_Offset.Raw = -1;
 
 pub fn entry(c: *Cycle) void {
-    c.ip_read_to_d(.i8_from_dr, .@"32b");
+    c.ip_read_to_d(.i16_from_dr, .@"32b");
     c.d_to_l();
     c.l_to_sr(.temp_1);
     c.next(cmp);

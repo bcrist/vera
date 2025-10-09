@@ -367,8 +367,8 @@ fn build_instruction_parameter(
     };
     self.params_temp.append(self.gpa, isa.Parameter{
         .signature = resolved_type.param_signature(),
-        .base_register = resolved_type.param_base_register(),
-        .offset_register = resolved_type.param_offset_register(),
+        .base_gpr_offset = resolved_type.param_base_gpr_offset(),
+        .offset_gpr_offset = resolved_type.param_offset_gpr_offset(),
         .constant = constant_value,
     }) catch @panic("OOM");
     return true;

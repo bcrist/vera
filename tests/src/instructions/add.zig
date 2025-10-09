@@ -58,10 +58,10 @@ test "add 123" {
     // TODO test carry/overflow flags more
 
     try debug_log.expect(.{},
-        \\   175 .zero: reg 0 = 0x0000007B
-        \\   179 .zero: reg 0 = 0x0000007C
-        \\   183 .zero: reg 1 = 0x00000222
-        \\   187 .zero: reg 0 = 0x0000029E
+        \\   243 .zero: reg 0 = 0x0000007B
+        \\   247 .zero: reg 0 = 0x0000007C
+        \\   251 .zero: reg 1 = 0x00000222
+        \\   255 .zero: reg 0 = 0x0000029E
         \\
     );
 

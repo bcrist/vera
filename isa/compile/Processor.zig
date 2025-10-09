@@ -216,7 +216,7 @@ fn process_instruction(
             }
         );
 
-        self.decode_rom.add_entry(addr, @truncate(iter.undefined_bits), .{
+        self.decode_rom.add_entry(&self.microcode, addr, @truncate(iter.undefined_bits), .{
             .form = maybe_form,
             .slot_handle = slot_handle,
             .wio = wio,
@@ -482,7 +482,7 @@ pub const Initial_Word_Encoding_Iterator = struct {
 
     fn constraint_value(self: Initial_Word_Encoding_Iterator, val: isa.Encoder.Value) ?i64 {
         return switch (val) {
-            .constant => |k| k,
+            .constant, .constant_dont_care => |k| k,
             .placeholder => |info| self.value(info.name),
             .negate => |inner| self.constraint_value(inner.*), // This doesn't apply its transformation because self.value() already accounts for it.
             .xor => |info| self.constraint_value(info.inner.*), // This doesn't apply its transformation because self.value() already accounts for it.
@@ -733,7 +733,7 @@ pub const Slot_Info = struct {
                         a.* = ctx.signature.?.params;
                     } else if (Arg == arch.bus.K.Read_Index_Offset) {
                         a.* = ctx.initial_krio.?;
-                    } else if (Arg == arch.Write_Index) {
+                    } else if (Arg == arch.reg.gpr.Write_Index) {
                         a.* = ctx.initial_wio.?;
                     } else {
                         if (@hasField(Arg, "signature")) {
@@ -901,7 +901,7 @@ fn finalize_instruction_signature(self: *Processor, signature: isa.Instruction.S
 
 fn dupe_inner_values(arena: std.mem.Allocator, value: *isa.Encoder.Value) void {
     switch (value.*) {
-        .constant, .placeholder => {},
+        .constant, .constant_dont_care, .placeholder => {},
         .negate => |inner| {
             const new_inner = arena.create(isa.Encoder.Value) catch @panic("OOM");
             new_inner.* = inner.*;
@@ -925,7 +925,7 @@ fn dupe_inner_values(arena: std.mem.Allocator, value: *isa.Encoder.Value) void {
 
 fn fixup_placeholder_value(value: *isa.Encoder.Value, parsed_encoders: []const isa.Encoder) void {
     switch (value.*) {
-        .constant => {},
+        .constant, .constant_dont_care => {},
         .placeholder => |*info| fixup_placeholder(info, parsed_encoders),
         .negate => |inner| fixup_placeholder_value(@constCast(inner), parsed_encoders), // TODO refactor to avoid @constCast
         .xor => |info| fixup_placeholder_value(@constCast(info.inner), parsed_encoders), // TODO refactor to avoid @constCast
@@ -955,7 +955,7 @@ fn find_placeholder(needle: []const u8, haystack: []const isa.Encoder) ?isa.Plac
 
 fn get_placeholder_name(value: isa.Encoder.Value) ?[]const u8 {
     return switch (value) {
-        .constant => null,
+        .constant, .constant_dont_care => null,
         .placeholder => |info| info.name,
         .negate => |inner| get_placeholder_name(inner.*),
         .xor => |info| get_placeholder_name(info.inner.*),
@@ -965,7 +965,7 @@ fn get_placeholder_name(value: isa.Encoder.Value) ?[]const u8 {
 
 fn get_placeholder(val: isa.Encoder.Value) ?isa.Placeholder {
     return switch (val) {
-        .constant => null,
+        .constant, .constant_dont_care => null,
         .placeholder => |info| info,
         .negate => |inner| get_placeholder(inner.*),
         .xor => |info| get_placeholder(info.inner.*),
@@ -975,7 +975,7 @@ fn get_placeholder(val: isa.Encoder.Value) ?isa.Placeholder {
 
 fn is_placeholder(needle: []const u8, value: isa.Encoder.Value) bool {
     return switch (value) {
-        .constant => false,
+        .constant, .constant_dont_care => false,
         .placeholder => |info| std.mem.eql(u8, info.name, needle),
         .negate => |inner| is_placeholder(needle, inner.*),
         .xor => |info| is_placeholder(needle, info.inner.*),

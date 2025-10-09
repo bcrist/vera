@@ -3,8 +3,8 @@ pub const forms = .{
         pub const spec =
             \\ nadd (imm)
             \\ naddc (imm)
-            \\ naddv (imm)
-            \\ naddcv (imm)
+            \\ nadd.vf (imm)
+            \\ naddc.vf (imm)
             ;
 
         pub const encoding = .{
@@ -19,20 +19,20 @@ pub const forms = .{
         pub const spec =
             \\ nadd 0
             \\ naddc 0
-            \\ naddv 0
-            \\ naddcv 0
+            \\ nadd.vf 0
+            \\ naddc.vf 0
             \\ neg
             \\ negc
-            \\ negv
-            \\ negcv
+            \\ neg.vf
+            \\ negc.vf
             ;
         
         pub fn encoding(mnemonic: isa.Mnemonic) opcodes.LSB {
             return switch (mnemonic) {
                 .nadd, .neg => .neg,
                 .naddc, .negc => .negc,
-                .naddv, .negv => .negv,
-                .naddcv, .negcv => .negcv,
+                .@"nadd.vf", .@"neg.vf" => .@"neg.vf",
+                .@"naddc.vf", .@"negc.vf" => .@"negc.vf",
                 else => unreachable,
             };
         }
@@ -62,11 +62,11 @@ pub fn nadd_krio(c: *Cycle, mnemonic: isa.Mnemonic) void {
 fn k_minus_j_to_l(c: *Cycle, mnemonic: isa.Mnemonic) void {
     c.k_minus_j_to_l(switch (mnemonic) {
         .nadd, .neg,
-        .naddv, .negv,
+        .@"nadd.vf", .@"neg.vf",
         => .fresh,
 
         .naddc, .negc,
-        .naddcv, .negcv,
+        .@"naddc.vf", .@"negc.vf",
         => .cont,
 
         else => unreachable,
@@ -75,8 +75,8 @@ fn k_minus_j_to_l(c: *Cycle, mnemonic: isa.Mnemonic) void {
         .naddc, .negc,
         => .flags,
 
-        .naddv, .negv,
-        .naddcv, .negcv,
+        .@"nadd.vf", .@"neg.vf",
+        .@"naddc.vf", .@"negc.vf",
         => .flags__fault_on_overflow,
         
         else => unreachable,

@@ -74,11 +74,11 @@ pub const K = enum (u32) {
         krio_sx = 5,
         krio_bit = 6,
         krio_bit_inv = 7,
-        vao = 8,
+        constant = 8,
         kr = 9,
         sr1 = 10,
         sr2 = 11,
-        // 12 -> vao
+        // 12 -> constant
         // 13 -> kr
         // 14 -> sr1
         // 15 -> sr2

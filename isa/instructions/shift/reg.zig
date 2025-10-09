@@ -1,10 +1,10 @@
 pub const spec =
-    \\ shl r(reg)
-    \\ shlv r(reg)
-    \\ shr r(reg)
-    \\ shrv r(reg)
-    \\ shrs r(reg)
-    \\ shrsv r(reg)
+    \\ shl %(reg)
+    \\ shl.vf %(reg)
+    \\ shr %(reg)
+    \\ shr.vf %(reg)
+    \\ shrs %(reg)
+    \\ shrs.vf %(reg)
     ;
 
 pub const encoding = .{
@@ -19,13 +19,13 @@ pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
     c.reg_to_j();
     c.reg_to_k();
     c.j_shift_k_to_l(switch (mnemonic) {
-        .shl, .shlv => .shl,
-        .shr, .shrv => .shr,
-        .shrs, .shrsv => .shrs,
+        .shl, .@"shl.vf" => .shl,
+        .shr, .@"shr.vf" => .shr,
+        .shrs, .@"shrs.vf" => .shrs,
         else => unreachable,
     }, .fresh, switch (mnemonic) {
         .shl, .shr, .shrs => .flags,
-        .shlv, .shrv, .shrsv => .flags__fault_on_overflow,
+        .@"shl.vf", .@"shr.vf", .@"shrs.vf" => .flags__fault_on_overflow,
         else => unreachable,
     });
     c.l_to_reg(true);

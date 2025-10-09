@@ -315,7 +315,7 @@ pub fn simulate_setup(self: *Pipeline_State, registers: *const arch.reg.File) vo
     };
 
     const vari = self.cs.vari;
-    const vao = self.cs.vao;
+    const constant = self.cs.constant;
 
     const va_base = if (vari.to_sr1()) |sr1ri|
         registers[vari_read_rsn].sr1[sr1ri.raw()].raw()
@@ -323,11 +323,11 @@ pub fn simulate_setup(self: *Pipeline_State, registers: *const arch.reg.File) vo
         registers[vari_read_rsn].sr2[sr2ri.raw()].raw()
     else unreachable;
 
-    const va_offset: u32 = switch (vao) {
+    const va_offset: u32 = switch (self.cs.vao_src) {
+        .zero => 0,
+        .constant => @bitCast(@as(i32, constant.raw())),
         .i16_from_dr => bits.sx(u32, self.dr.@"signed[23:8]"()),
         .i8_from_dr => bits.sx(u32, self.dr.@"signed[23:16]"()),
-        .i8_x4_from_dr => bits.sx(u32, self.dr.@"signed[23:16]"() * 4),
-        else => @bitCast(@as(i32, vao.raw())),
     };
 
     const read_rsn: arch.reg.RSN.Raw = switch (self.cs.special) {
@@ -357,7 +357,7 @@ pub fn simulate_setup(self: *Pipeline_State, registers: *const arch.reg.File) vo
         .krio_sx => @bitCast(@as(i32, self.krio.raw())),
         .krio_bit => @as(u32, 1) << self.krio.raw(),
         .krio_bit_inv => ~(@as(u32, 1) << self.krio.raw()),
-        .vao => @bitCast(@as(i32, vao.raw())),
+        .constant => @bitCast(@as(i32, constant.raw())),
         .kr => registers[read_rsn].reg[self.kri.raw()].raw(),
         .sr1 => sr1d.raw(),
         .sr2 => sr2d.raw(),
@@ -396,17 +396,18 @@ pub fn simulate_compute(self: *Pipeline_State, translations: *const at.File) voi
 
     switch (self.cs.special) {
         .none => {},
-        .set_guard => {},
-        .check_guard => {},
-        .load_fucs_from_l => {},
-        .load_rsn_from_l => {},
         .read_from_other_rsn => {},
         .write_to_other_rsn => {},
         .read_and_write_other_rsn => {},
+        .load_rsn_from_l => {},
+        .load_rsn_from_l__read_from_other_rsn => {},
+        .load_rsn_from_l__write_to_other_rsn => {},
+        .load_rsn_from_l__read_and_write_other_rsn => {},
+        .set_guard => {},
+        .check_guard => {},
+        .load_fucs_from_l => {},
         .load_vabor_from_d => {},
-
         .fault_on_overflow => if (self.compute_result.vout) self.flags.insert(.overflow_fault),
-
         .trigger_fault => self.flags.insert(.insn_fault),
         _ => self.report(.{ .corrupted_microcode = "SPECIAL" }),
     }
@@ -511,7 +512,7 @@ fn compute_shift(mode: arch.compute.Mode.Shift, j: arch.bus.J, k: arch.bus.K, ca
     }
 
     return if (raw_k != k5) .{
-        .value = .init(0),
+        .value = .init(bits.sx(arch.bus.L.Raw, cin)),
         .cout = 0 != if (raw_k == 32) cout else cin,
         .vout = raw_j != 0 or (raw_k != 32 and 0 != cin),
     } else .{
@@ -1008,7 +1009,7 @@ pub fn simulate_transact(self: *Pipeline_State,
                 self.flags.setPresent(.overflow, self.compute_result.vout);
             },
             .clear_bits => {
-                const w = arch.reg.Flags.Writable.init(bits.zx(u32, self.cs.vao.raw()));
+                const w = arch.reg.Flags.Writable.init(bits.zx(u32, self.cs.constant.raw()));
                 if (w.z) self.flags.remove(.zero);
                 if (w.n) self.flags.remove(.negative);
                 if (w.c) self.flags.remove(.carry);
@@ -1017,7 +1018,7 @@ pub fn simulate_transact(self: *Pipeline_State,
                 if (w.bus_override) self.flags.remove(.bus_override);
             },
             .set_bits => {
-                const w = arch.reg.Flags.Writable.init(bits.zx(u32, self.cs.vao.raw()));
+                const w = arch.reg.Flags.Writable.init(bits.zx(u32, self.cs.constant.raw()));
                 if (w.z) self.flags.insert(.zero);
                 if (w.n) self.flags.insert(.negative);
                 if (w.c) self.flags.insert(.carry);

@@ -1,3 +1,4 @@
+constant: microcode.Constant,
 jsrc: bus.J.Source,
 ksrc: bus.K.Source,
 sr1ri: reg.sr1.Index,
@@ -11,7 +12,7 @@ mode: compute.Mode,
 flag_op: reg.Flags.Op,
 lsrc: bus.L.Source,
 vari: addr.Virtual.Base,
-vao: addr.Virtual.Offset,
+vao_src: addr.Virtual.Offset_Source,
 space: addr.Space,
 at_op: addr.translation.Op,
 dsrc: bus.D.Source,
@@ -27,6 +28,7 @@ seq_op: misc.Sequencer_Op,
 next: microcode.Slot,
 
 pub const defaults: Control_Signals = .{
+    .constant = .init(0),
     .jsrc = .zero,
     .ksrc = .zero,
     .sr1ri = .init(0),
@@ -40,7 +42,7 @@ pub const defaults: Control_Signals = .{
     .flag_op = .hold,
     .lsrc = .compute_or_d,
     .vari = .zero,
-    .vao = .zero,
+    .vao_src = .zero,
     .space = .physical,
     .at_op = .none,
     .dsrc = .system,
@@ -57,6 +59,7 @@ pub const defaults: Control_Signals = .{
 };
 
 pub const zeroes: Control_Signals = .{
+    .constant = .init(0),
     .jsrc = .init(0),
     .ksrc = .init(0),
     .sr1ri = .init(0),
@@ -70,7 +73,7 @@ pub const zeroes: Control_Signals = .{
     .flag_op = .init(0),
     .lsrc = .init(0),
     .vari = .init(0),
-    .vao = .init(0),
+    .vao_src = .init(0),
     .space = .init(0),
     .at_op = .init(0),
     .dsrc = .init(0),

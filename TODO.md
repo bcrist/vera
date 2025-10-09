@@ -1,3 +1,8 @@
+[isa] sr1.two may not be needed
+[isa] FP/DP/AXP relative instructions
+[isa] Maybe IP/SP/BP + offset instructions should use .no_flags__fault_on_overflow?
+[arch] may not need arch.addr.Virtual.Offset_Source.i8_from_dr?
+
 [isa] conditional load/store instructions - equivalent to a conditional jump just before, but 1 cycle faster when the load does need to happen
 [isa] "select" instructions - rough equivalent of cmov; pop top two register stack values, then re-add one or the other based on condition
 
@@ -23,7 +28,6 @@
 
 [assembler] .dw/.dd => .dh/.dw (words are 32 bit now)
 [assembler] Need more robust checking for page alignment faults since we now load 24b for instructions
-[assembler] Fix EDB loading
 [assembler] CLI
 [assembler] Consider allowing things that expect constant expressions to also accept absolute addresses (.db/.dw/.dd, length casts, etc.)
 [assembler] Don't allow branches across .push/.pop boundaries

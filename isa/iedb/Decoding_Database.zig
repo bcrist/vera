@@ -230,8 +230,8 @@ pub const Decoder = struct {
         for (param_signatures, params) |param_signature, *param| {
             param.* = .{
                 .signature = param_signature,
-                .base_register = .init(0),
-                .offset_register = .init(0),
+                .base_gpr_offset = .init(0),
+                .offset_gpr_offset = .init(0),
                 .constant = 0,
             };
         }

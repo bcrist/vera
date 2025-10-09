@@ -1,14 +1,3 @@
-pub const Special_Register = enum {
-    ip,
-    sp,
-    rp,
-    bp,
-    uxp,
-    kxp,
-    asn,
-    stat,
-};
-
 pub const Address_Space = enum {
     data,
     insn,
@@ -34,60 +23,60 @@ pub const Mnemonic = enum (u128) {
     val = raw_mnemonic("val"),
 
     add = raw_mnemonic("add"),
-    addv = raw_mnemonic("addv"),
     addc = raw_mnemonic("addc"),
-    addcv = raw_mnemonic("addcv"),
+    @"add.vf" = raw_mnemonic("add.vf"),
+    @"addc.vf" = raw_mnemonic("addc.vf"),
 
     sub = raw_mnemonic("sub"),
-    subv = raw_mnemonic("subv"),
     subc = raw_mnemonic("subc"),
-    subcv = raw_mnemonic("subcv"),
+    @"sub.vf" = raw_mnemonic("sub.vf"),
+    @"subc.vf" = raw_mnemonic("subc.vf"),
 
     nadd = raw_mnemonic("nadd"),
-    naddv = raw_mnemonic("naddv"),
     naddc = raw_mnemonic("naddc"),
-    naddcv = raw_mnemonic("naddcv"),
+    @"nadd.vf" = raw_mnemonic("nadd.vf"),
+    @"naddc.vf" = raw_mnemonic("naddc.vf"),
 
     shl = raw_mnemonic("shl"),
-    shlv = raw_mnemonic("shlv"),
+    @"shl.vf" = raw_mnemonic("shl.vf"),
     shlc = raw_mnemonic("shlc"),
 
     shr = raw_mnemonic("shr"),
-    shrv = raw_mnemonic("shrv"),
     shrc = raw_mnemonic("shrc"),
     shrs = raw_mnemonic("shrs"),
-    shrsv = raw_mnemonic("shrsv"),
+    @"shr.vf" = raw_mnemonic("shr.vf"),
+    @"shrs.vf" = raw_mnemonic("shrs.vf"),
 
     inc = raw_mnemonic("inc"),
-    incv = raw_mnemonic("incv"),
     dec = raw_mnemonic("dec"),
-    decv = raw_mnemonic("decv"),
+    @"inc.vf" = raw_mnemonic("inc.vf"),
+    @"dec.vf" = raw_mnemonic("dec.vf"),
     cmp = raw_mnemonic("cmp"),
     cmpc = raw_mnemonic("cmpc"),
 
     neg = raw_mnemonic("neg"),
-    negv = raw_mnemonic("negv"),
     negc = raw_mnemonic("negc"),
-    negcv = raw_mnemonic("negcv"),
+    @"neg.vf" = raw_mnemonic("neg.vf"),
+    @"negc.vf" = raw_mnemonic("negc.vf"),
 
     csb = raw_mnemonic("csb"),
-    csbl = raw_mnemonic("csbl"),
-    csbt = raw_mnemonic("csbt"),
     ssb = raw_mnemonic("ssb"),
-    ssbl = raw_mnemonic("ssbl"),
-    ssbt = raw_mnemonic("ssbt"),
+    @"csb.l" = raw_mnemonic("csb.l"),
+    @"csb.t" = raw_mnemonic("csb.t"),
+    @"ssb.l" = raw_mnemonic("ssb.l"),
+    @"ssb.t" = raw_mnemonic("ssb.t"),
 
     czb = raw_mnemonic("czb"),
-    czbl = raw_mnemonic("czbl"),
-    czbt = raw_mnemonic("czbt"),
     szb = raw_mnemonic("szb"),
-    szbl = raw_mnemonic("szbl"),
-    szbt = raw_mnemonic("szbt"),
+    @"czb.l" = raw_mnemonic("czb.l"),
+    @"czb.t" = raw_mnemonic("czb.t"),
+    @"szb.l" = raw_mnemonic("szb.l"),
+    @"szb.t" = raw_mnemonic("szb.t"),
 
     sx = raw_mnemonic("sx"),
-    sxv = raw_mnemonic("sxv"),
     zx = raw_mnemonic("zx"),
-    zxv = raw_mnemonic("zxv"),
+    @"sx.vf" = raw_mnemonic("sx.vf"),
+    @"zx.vf" = raw_mnemonic("zx.vf"),
 
     @"xor" = raw_mnemonic("xor"),
     @"or" = raw_mnemonic("or"),
@@ -138,6 +127,45 @@ pub const Mnemonic = enum (u128) {
 };
 
 fn raw_mnemonic(text: []const u8) u128 {
+    @setEvalBranchQuota(5000);
+    var bytes: [16]u8 = @splat(0);
+    const len = @min(text.len, bytes.len);
+    for (bytes[0..len], text[0..len]) |*out, in| {
+        const lower = std.ascii.toLower(in);
+        out.* = switch (lower) {
+            0 => break,
+            'a'...'z', '0'...'9', '_', '.' => lower,
+            else => '?',
+        };
+    }
+    return std.mem.bytesToValue(u128, &bytes);
+}
+
+pub const Symbolic_Register = enum (u64) {
+    rsn = raw_symbolic_register("rsn"),
+    rp = raw_symbolic_register("rp"),
+    sp = raw_symbolic_register("sp"),
+    bp = raw_symbolic_register("bp"),
+    ip = raw_symbolic_register("ip"),
+    asn = raw_symbolic_register("asn"),
+    kxp = raw_symbolic_register("kxp"),
+    uxp = raw_symbolic_register("uxp"),
+    _,
+
+    pub fn init(text: []const u8) Symbolic_Register {
+        return @enumFromInt(raw_mnemonic(text));
+    }
+
+    pub fn name(self: *const Symbolic_Register) []const u8 {
+        return std.mem.sliceTo(std.mem.asBytes(self), 0);
+    }
+
+    pub fn format(self: Symbolic_Register, writer: *std.io.Writer) !void {
+        try writer.writeAll(self.name());
+    }
+};
+
+fn raw_symbolic_register(text: []const u8) u64 {
     @setEvalBranchQuota(2000);
     var bytes: [16]u8 = @splat(0);
     const len = @min(text.len, bytes.len);

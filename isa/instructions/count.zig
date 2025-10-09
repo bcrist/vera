@@ -1,10 +1,10 @@
 pub const spec = 
     \\ csb
-    \\ csbl
-    \\ csbt
+    \\ csb.l
+    \\ csb.t
     \\ czb
-    \\ czbl
-    \\ czbt
+    \\ czb.l
+    \\ czb.t
     ;
 
 pub const encoding = .{
@@ -19,13 +19,13 @@ pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
     c.reg_to_j();
     c.reg_to_k();
     c.count_j_to_l(switch (mnemonic) {
-        .csb, .csbl, .csbt => .ones,
-        .czb, .czbl, .czbt => .zeroes,
+        .csb, .@"csb.l", .@"csb.t" => .ones,
+        .czb, .@"czb.l", .@"czb.t" => .zeroes,
         else => unreachable,
     }, switch (mnemonic) {
         .csb, .czb => .all,
-        .csbl, .czbl => .leading,
-        .csbt, .czbt => .trailing,
+        .@"csb.l", .@"czb.l" => .leading,
+        .@"csb.t", .@"czb.t" => .trailing,
         else => unreachable,
     }, .fresh, .flags);
     c.l_to_reg(true);

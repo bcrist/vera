@@ -42,7 +42,7 @@ fn trace_references_in_expr(a: *Assembler, s: Source_File.Slices, insn_handle: I
             trace_references_in_expr(a, s, insn_handle, binary.right);
         },
 
-        .negate, .complement, .signed_cast, .unsigned_cast, .remove_signedness_cast,
+        .negate, .complement, .signed_cast, .unsigned_cast,
         .data_address_cast, .insn_address_cast, .stack_address_cast, .remove_address_cast, .local_label_def,
         .index_to_reg, .reg_to_index, .absolute_address_cast, .crlf_cast, .lf_cast => |inner_expr| {
             trace_references_in_expr(a, s, insn_handle, inner_expr);

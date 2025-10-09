@@ -142,16 +142,20 @@ pub const Sequencer_Op = enum (u2) {
 
 pub const Special_Op = enum (u4) {
     none = 0,
-    set_guard = 1,
-    check_guard = 2,
-    load_fucs_from_l = 3,
+    read_from_other_rsn = 1, // note: never affects virtual address base
+    write_to_other_rsn = 2,
+    read_and_write_other_rsn = 3, // note: never affects virtual address base
     load_rsn_from_l = 4,
-    read_from_other_rsn = 5, // note: never affects virtual address base
-    write_to_other_rsn = 6,
-    read_and_write_other_rsn = 7, // note: never affects virtual address base
-    fault_on_overflow = 8,
-    load_vabor_from_d = 9, // VABOR = Virtual address/bus override register
-    // 10...14 unused
+    load_rsn_from_l__read_from_other_rsn = 5, // note: never affects virtual address base
+    load_rsn_from_l__write_to_other_rsn = 6,
+    load_rsn_from_l__read_and_write_other_rsn = 7, // note: never affects virtual address base
+    set_guard = 8,
+    check_guard = 9,
+    // 10 unused
+    // 11 unused
+    load_vabor_from_d = 12, // VABOR = Virtual address/bus override register
+    load_fucs_from_l = 13,
+    fault_on_overflow = 14,
     trigger_fault = 15,
     _,
 

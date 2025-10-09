@@ -176,7 +176,7 @@ fn parse_prefix_operator(self: *Parser) ?Operator_Info {
                 return .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .stack_address_cast };
             } else if (self.try_keyword(".raw")) {
                 return .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .remove_address_cast };
-            } else if (self.try_keyword(".r")) {
+            } else if (self.try_keyword(".reg")) {
                 return .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .index_to_reg };
             } else if (self.try_keyword(".idx")) {
                 return .{ .token = t, .left_bp = 1, .right_bp = 1, .expr = .reg_to_index };
@@ -224,8 +224,6 @@ fn parse_operator(self: *Parser) ?Operator_Info {
                 break :info .{ .token = t, .left_bp = 50, .right_bp = null, .expr = .signed_cast };
             } else if (self.try_keyword(".unsigned")) {
                 break :info .{ .token = t, .left_bp = 50, .right_bp = null, .expr = .unsigned_cast };
-            } else if (self.try_keyword(".without_signedness")) {
-                break :info .{ .token = t, .left_bp = 50, .right_bp = null, .expr = .remove_signedness_cast };
             } else {
                 self.next_token = begin;
                 return null;
@@ -352,34 +350,21 @@ fn parse_string_literal(self: *Parser) ?Expression.Handle {
 fn parse_register_literal(self: *Parser) ?Expression.Handle {
     const begin = self.next_token;
     self.skip_linespace();
-    if (self.try_token(.id)) {
-        const token = self.next_token - 1;
+    if (self.token_kinds[self.next_token] == .id) {
+        const token = self.next_token;
         const id = self.token_span(token);
-        if (is_gpr_literal(id)) {
-            return self.add_terminal_expression(.literal_reg, token);
-        }
-        if (id.len >= 2 and id.len <= 4) {
-            var buf = [_]u8 {0} ** 4;
-            const lower = std.ascii.lowerString(&buf, id);
-            if (lower[1] == 'p') {
-                if (std.mem.eql(u8, lower, "ip")) {
-                    return self.add_typed_terminal_expression(.literal_reg, token, Expression.Type.sr(.ip));
-                } else if (std.mem.eql(u8, lower, "sp")) {
-                    return self.add_typed_terminal_expression(.literal_reg, token, Expression.Type.sr(.sp));
-                } else if (std.mem.eql(u8, lower, "rp")) {
-                    return self.add_typed_terminal_expression(.literal_reg, token, Expression.Type.sr(.rp));
-                } else if (std.mem.eql(u8, lower, "bp")) {
-                    return self.add_typed_terminal_expression(.literal_reg, token, Expression.Type.sr(.bp));
+        if (id[0] == '%') {
+            self.next_token += 1;
+            const offset = std.fmt.parseUnsigned(arch.bus.K.Read_Index_Offset.Raw, id[1..], 10) catch {
+                var sr = isa.Symbolic_Register.init(id[1..]);
+                if (sr.name().len + 1 < id.len) {
+                    if (!self.sync_to_end_of_line) {
+                        self.record_error_rel("Symbolic register name too long", -1);
+                    }
                 }
-            } else if (std.mem.eql(u8, lower, "uxp")) {
-                return self.add_typed_terminal_expression(.literal_reg, token, Expression.Type.sr(.uxp));
-            } else if (std.mem.eql(u8, lower, "kxp")) {
-                return self.add_typed_terminal_expression(.literal_reg, token, Expression.Type.sr(.kxp));
-            } else if (std.mem.eql(u8, lower, "stat")) {
-                return self.add_typed_terminal_expression(.literal_reg, token, Expression.Type.sr(.stat));
-            } else if (std.mem.eql(u8, lower, "asn")) {
-                return self.add_typed_terminal_expression(.literal_reg, token, Expression.Type.sr(.asn));
-            }
+                return self.add_typed_terminal_expression(.literal_reg, token, Expression.Type.symbolic_reg(sr));
+            };
+            return self.add_typed_terminal_expression(.literal_reg, token, Expression.Type.gpr(.init(offset)));
         }
     }
     self.next_token = begin;
@@ -395,18 +380,6 @@ fn parse_special_literal(self: *Parser) ?Expression.Handle {
     }
     self.next_token = begin;
     return null;
-}
-
-fn is_gpr_literal(id: []const u8) bool {
-    if (id.len < 2) return false;
-    switch (id[0]) {
-        'r', 'R' => {
-            const index = std.fmt.parseUnsigned(arch.bus.K.Read_Index_Offset.Raw, id[1..], 10) catch return false;
-            if (index != 0 and id[1] == '0') return false; // don't treat R01, r000010, etc. as register names
-            return true;
-        },
-        else => return false,
-    }
 }
 
 fn parse_label(self: *Parser) ?Expression.Handle {
@@ -572,7 +545,6 @@ fn add_terminal_expression(self: *Parser, kind: Expression.Kind, token: Token.Ha
         .truncate,
         .signed_cast,
         .unsigned_cast,
-        .remove_signedness_cast,
         .absolute_address_cast,
         .data_address_cast,
         .insn_address_cast,
@@ -595,7 +567,6 @@ fn add_unary_expression(self: *Parser, kind: Expression.Kind, token: Token.Handl
         .complement => .{ .complement = inner },
         .signed_cast => .{ .signed_cast = inner },
         .unsigned_cast => .{ .unsigned_cast = inner },
-        .remove_signedness_cast => .{ .remove_signedness_cast = inner },
         .absolute_address_cast => .{ .absolute_address_cast = inner },
         .data_address_cast => .{ .data_address_cast = inner },
         .insn_address_cast => .{ .insn_address_cast = inner },
@@ -660,7 +631,6 @@ fn add_binary_expression(self: *Parser, kind: Expression.Kind, token: Token.Hand
         .complement,
         .signed_cast,
         .unsigned_cast,
-        .remove_signedness_cast,
         .literal_int,
         .literal_str,
         .literal_reg,

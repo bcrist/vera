@@ -695,9 +695,9 @@ pub fn config(self: *@This()) void {
         .end_at_mutable_point(self.input_box.right_side(""));
 
     _ = self.flag_write_control.left_side("")
-        .wire_h(.{ .bits = @bitSizeOf(arch.addr.Virtual.Offset), .class = "control" })
+        .wire_h(.{ .bits = @bitSizeOf(arch.microcode.Constant), .class = "control" })
         .bit_mark()
-        .label("VAO", .{})
+        .label("CONSTANT", .{})
         .end_at_mutable_point(self.input_box.right_side(""));
 
     _ = self.flag_write_control.left_side("")

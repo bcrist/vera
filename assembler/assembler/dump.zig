@@ -90,7 +90,7 @@ pub fn dump(a: *Assembler, writer: *std.io.Writer) !void {
                 },
 
                 .directive_symbol_def, .directive_symbol_ref,
-                .signed_cast, .unsigned_cast, .remove_signedness_cast,
+                .signed_cast, .unsigned_cast,
                 .negate, .complement, .absolute_address_cast, .local_label_def,
                 .data_address_cast, .insn_address_cast, .stack_address_cast, .remove_address_cast,
                 .reg_to_index, .index_to_reg, .crlf_cast, .lf_cast
@@ -171,8 +171,8 @@ pub fn dump(a: *Assembler, writer: *std.io.Writer) !void {
 
 fn print_expression_type(expr_type: Expression.Type, writer: *std.io.Writer) !void {
     try isa.fmt.print_parameter_signature(expr_type.param_signature(), .{
-        .base_register = expr_type.param_base_register(),
-        .offset_register = expr_type.param_offset_register(),
+        .base_gpr_offset = expr_type.param_base_gpr_offset(),
+        .offset_gpr_offset = expr_type.param_offset_gpr_offset(),
     }, writer);
 }
 

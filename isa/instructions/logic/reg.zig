@@ -11,9 +11,9 @@ pub const forms = .{
     },
     struct {
         pub const spec =
-            \\ and r(reg)
-            \\ or r(reg)
-            \\ xor r(reg)
+            \\ and %(reg)
+            \\ or %(reg)
+            \\ xor %(reg)
             ;
 
         pub const encoding = .{

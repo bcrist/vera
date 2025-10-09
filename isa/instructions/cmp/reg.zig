@@ -11,8 +11,8 @@ pub const forms = .{
     },
     struct {
         pub const spec = 
-            \\ cmp r(reg)
-            \\ cmpc r(reg)
+            \\ cmp %(reg)
+            \\ cmpc %(reg)
             ;
 
         pub const encoding = .{

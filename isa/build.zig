@@ -1,4 +1,6 @@
 pub fn build(b: *std.Build) void {
+    const optimize = b.standardOptimizeOption(.{});
+
     const arch = b.dependency("arch", .{}).module("arch");
     const bits = b.dependency("bit_helper", .{}).module("bits");
     const sx = b.dependency("sx", .{}).module("sx");
@@ -23,7 +25,7 @@ pub fn build(b: *std.Build) void {
         .root_module = b.createModule(.{
             .root_source_file = b.path("compile.zig"),
             .target = b.graph.host,
-            .optimize = .Debug,
+            .optimize = optimize,
             .imports = &.{
                 .{ .name = "arch", .module = arch },
                 .{ .name = "isa", .module = isa },
@@ -62,6 +64,12 @@ pub fn build(b: *std.Build) void {
     const uc_csv = compile.addOutputFileArg("microcode.csv");
     compile.addArg("--id-csv");
     const id_csv = compile.addOutputFileArg("insn_decode.csv");
+
+    if (b.option(bool, "summary", "Print microcode/decode usage when compiling ROM data") orelse false) {
+        compile.addArg("--summary");
+        b.getInstallStep().dependOn(&compile.step);
+        compile.has_side_effects = true;
+    }
 
     b.getInstallStep().dependOn(&b.addInstallFile(iedb_data_zig_source, "iedb_data.zig").step);
     b.getInstallStep().dependOn(&b.addInstallFile(uc_csv, "microcode.csv").step);

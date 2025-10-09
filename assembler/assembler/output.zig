@@ -547,8 +547,8 @@ fn add_listing_for_chunk(a: *Assembler, listing: *Listing, chunk: Source_File.Ch
                     .params = &.{
                         .{
                             .signature = Expression.Type.constant().param_signature(),
-                            .base_register = .init(0),
-                            .offset_register = .init(0),
+                            .base_gpr_offset = .init(0),
+                            .offset_gpr_offset = .init(0),
                             .constant = stack_size,
                         },
                     },

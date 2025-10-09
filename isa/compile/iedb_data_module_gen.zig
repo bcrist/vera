@@ -44,17 +44,9 @@ pub fn write_module(allocator: std.mem.Allocator, unsorted_forms: []const isa.In
             }
 
             switch (a) {
-                .none, .constant => {},
-                .reg => |maybe_signedness| if (!std.meta.eql(maybe_signedness, b.reg)) {
-                    if (maybe_signedness) |as| {
-                        if (b.reg) |bs| {
-                            return @intFromEnum(as) < @intFromEnum(bs);
-                        }
-                        return false;
-                    }
-                    return true;
-                },
-                .sr => |sr| if (sr != b.sr) {
+                .none, .constant, .gpr => {},
+                .sym => |sr| if (sr != b.sym) {
+                    return @intFromEnum(sr) < @intFromEnum(b.sym);
                 },
             }
 
@@ -276,20 +268,19 @@ pub fn write_module(allocator: std.mem.Allocator, unsorted_forms: []const isa.In
 }
 
 fn write_param_kind(kind: isa.Parameter.Kind, writer: *std.io.Writer) !void {
+    const named_symbolic_registers = isa.lex.case_insensitive_enum_map(isa.Symbolic_Register, .{}, .{});
     switch (kind) {
-        .none, .constant => {
+        .none, .constant, .gpr => {
             try writer.writeByte('.');
             try writer.writeAll(@tagName(kind));
         },
-        .reg => |maybe_sign| {
-            if (maybe_sign) |sign| {
-                try writer.print(".{{ .reg = .{t} }}", .{ sign });
+        .sym => |sr| {
+            const name = sr.name();
+            if (named_symbolic_registers.has(name)) {
+                try writer.print(".{{ .sym = .{f} }}", .{ std.zig.fmtId(name) });
             } else {
-                try writer.writeAll(".{ .reg = null }");
+                try writer.print(".{{ .sym = .init(\"{f}\") }}", .{ std.zig.fmtString(name) });
             }
-        },
-        .sr => |sr| {
-            try writer.print(".{{ .sr = .{t} }}", .{ sr });
         },
     }
 }
@@ -298,7 +289,7 @@ fn write_encoder_value(value: isa.Encoder.Value, maybe_loose_values: ?Loose_Valu
     try writer.print(".{{ .{t} = ", .{ value });
 
     switch (value) {
-        .constant => |c| {
+        .constant, .constant_dont_care => |c| {
             try writer.print("{d}", .{ c });
         },
         .placeholder => |info| {

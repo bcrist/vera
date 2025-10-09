@@ -138,7 +138,7 @@ fn constraint_restriction(self: *Placeholder_Restrictions_Iterator, constraint_i
 
 fn render_placeholder(value: Encoder.Value, negate: bool, writer: *std.io.Writer) !void {
     switch (value) {
-        .constant => |v| {
+        .constant, .constant_dont_care => |v| {
             const final_v = if (negate) -v else v;
             try fmt.print_constant(final_v, writer);
         },

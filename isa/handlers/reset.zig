@@ -36,11 +36,16 @@ pub fn init_rsn_0123_zero(c: *Cycle) void {
 pub fn init_rsn_0123_one(c: *Cycle) void {
     c.address(.zero, 1);
     c.virtual_address_to_sr(.one);
+    c.next(init_rsn_0123_two);
+}
+pub fn init_rsn_0123_two(c: *Cycle) void {
+    c.address(.zero, 2);
+    c.virtual_address_to_sr(.two);
     c.next(rsn_30_33);
 }
 
 pub fn rsn_30_33(c: *Cycle) void {
-    // we can't jump directly from RSN 0-4 to RSN 60-64 because VAO is always signed when used as K,
+    // we can't jump directly from RSN 0-4 to RSN 60-64 because the microcode constant is always signed when used as K,
     // so we add 30 this cycle and another 30 next cycle:
     c.sr_to_j(.temp_2);
     c.literal_to_k(30);
@@ -67,10 +72,14 @@ pub fn init_sr_zero_one(c: *Cycle, flags: Flags) void {
         c.next(load_reset_vector);
     } else {
         c.sr2_to_sr2_alt(.zero, .zero);
-        c.address(.zero, 1);
-        c.virtual_address_to_sr_alt(.one);
-        c.next(rsn_minus_4);
+        c.sr1_to_sr1_alt(.one, .one);
+        c.next(init_sr_two);
     }
+}
+
+pub fn init_sr_two(c: *Cycle) void {
+    c.sr1_to_sr1_alt(.two, .two);
+    c.next(rsn_minus_4);
 }
 
 pub fn rsn_minus_4(c: *Cycle) void {

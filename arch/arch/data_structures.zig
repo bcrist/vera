@@ -5,7 +5,9 @@ pub const Context_State = extern struct {
     reg: [reg.gpr.count]reg.gpr.Value.Raw,
     rp: reg.sr1.Value.Raw,
     sp: reg.sr1.Value.Raw,
+    fp: reg.sr1.Value.Raw,
     bp: reg.sr1.Value.Raw,
+    dp: reg.sr1.Value.Raw,
     temp_1: reg.sr1.Value.Raw,
     int_flags: reg.sr1.Value.Raw,
     fault_status: reg.sr1.Value.Raw,
@@ -17,6 +19,7 @@ pub const Context_State = extern struct {
     next_ip: reg.sr2.Value.Raw,
     kxp: reg.sr2.Value.Raw,
     uxp: reg.sr2.Value.Raw,
+    axp: reg.sr2.Value.Raw,
     temp_2: reg.sr2.Value.Raw,
 };
 

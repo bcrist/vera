@@ -121,7 +121,7 @@ pub fn finish(cycle: *Cycle) void {
 
     switch (cycle.signals.ksrc) {
         .zero => {},
-        .vao => cycle.ensure_set(.vao),
+        .constant => cycle.ensure_set(.constant),
         .krio_sx, .krio_zx, .krio_bit, .krio_bit_inv => cycle.validate_krio(),
         .kr => cycle.validate_kr(),
         .sr1 => cycle.ensure_set(.sr1ri),
@@ -177,7 +177,7 @@ pub fn finish(cycle: *Cycle) void {
     switch (cycle.signals.flag_op) {
         .hold, .zn_from_l => {},
         .compute, .compute_no_set_z => cycle.validate_compute_mode(),
-        .clear_bits, .set_bits => cycle.ensure_set(.vao),
+        .clear_bits, .set_bits => cycle.ensure_set(.constant),
         .load_zncv, .load => cycle.ensure_set(.lsrc),
     }
 
@@ -214,17 +214,17 @@ pub fn finish(cycle: *Cycle) void {
         .check_guard => {},
         .load_fucs_from_l => {},
         .load_rsn_from_l => {},
-        .read_from_other_rsn => {
+        .load_rsn_from_l__read_from_other_rsn, .read_from_other_rsn => {
             if (cycle.flags.contains(.disallow_read_from_other_rsn)) {
                 cycle.warn("Cycle contains a read from both the default and alternate RSNs", .{});
             }
         },
-        .write_to_other_rsn => {
+        .load_rsn_from_l__write_to_other_rsn, .write_to_other_rsn => {
             if (cycle.flags.contains(.disallow_write_to_other_rsn)) {
                 cycle.warn("Cycle contains a write to both the default and alternate RSNs", .{});
             }
         },
-        .read_and_write_other_rsn => {
+        .load_rsn_from_l__read_and_write_other_rsn, .read_and_write_other_rsn => {
             if (cycle.flags.contains(.disallow_read_from_other_rsn)) {
                 cycle.warn("Cycle contains a read from both the default and alternate RSNs", .{});
             }
@@ -297,7 +297,10 @@ fn validate_compute_mode(cycle: *Cycle) void {
 
 fn validate_address(cycle: *Cycle) void {
     cycle.ensure_set(.vari);
-    cycle.ensure_set(.vao);
+    cycle.ensure_set(.vao_src);
+    if (cycle.signals.vao_src == .constant) {
+        cycle.ensure_set(.constant);
+    }
     cycle.ensure_set(.at_op);
     cycle.ensure_set(.space);
     cycle.ensure_set(.dsrc);
@@ -364,17 +367,40 @@ fn require_write_to_default_rsn(c: *Cycle) void {
 
 fn require_read_from_other_rsn(c: *Cycle) void {
     switch (c.signals.special) {
-        .read_and_write_other_rsn => {},
+        .read_from_other_rsn => {},
         .write_to_other_rsn => c.signals.special = .read_and_write_other_rsn,
+        .read_and_write_other_rsn => {},
+        .load_rsn_from_l => c.signals.special = .load_rsn_from_l__read_from_other_rsn,
+        .load_rsn_from_l__read_from_other_rsn => {},
+        .load_rsn_from_l__write_to_other_rsn => c.signals.special = .load_rsn_from_l__read_and_write_other_rsn,
+        .load_rsn_from_l__read_and_write_other_rsn => {},
         else => c.set_control_signal(.special, .read_from_other_rsn),
     }
 }
 
 fn require_write_to_other_rsn(c: *Cycle) void {
     switch (c.signals.special) {
-        .read_and_write_other_rsn => {},
         .read_from_other_rsn => c.signals.special = .read_and_write_other_rsn,
+        .write_to_other_rsn => {},
+        .read_and_write_other_rsn => {},
+        .load_rsn_from_l => c.signals.special = .load_rsn_from_l__write_to_other_rsn,
+        .load_rsn_from_l__read_from_other_rsn => c.signals.special = .load_rsn_from_l__read_and_write_other_rsn,
+        .load_rsn_from_l__write_to_other_rsn => {},
+        .load_rsn_from_l__read_and_write_other_rsn => {},
         else => c.set_control_signal(.special, .write_to_other_rsn),
+    }
+}
+
+fn require_load_rsn_from_l(c: *Cycle) void {
+    switch (c.signals.special) {
+        .read_from_other_rsn => c.signals.special = .load_rsn_from_l__read_from_other_rsn,
+        .write_to_other_rsn => c.signals.special = .load_rsn_from_l__write_to_other_rsn,
+        .read_and_write_other_rsn => c.signals.special = .load_rsn_from_l__read_and_write_other_rsn,
+        .load_rsn_from_l => {},
+        .load_rsn_from_l__read_from_other_rsn => {},
+        .load_rsn_from_l__write_to_other_rsn => {},
+        .load_rsn_from_l__read_and_write_other_rsn => {},
+        else => c.set_control_signal(.special, .load_rsn_from_l),
     }
 }
 
@@ -557,11 +583,11 @@ pub fn saturate_k(c: *Cycle, what: Bit_Count_Polarity, dir: Bit_Count_Direction,
 }
 
 pub fn enable_flags(c: *Cycle, flags: arch.reg.Flags.Writable) void {
-    c.set_control_signal(.vao, arch.addr.Virtual.Offset.init_unsigned(@intCast(flags.raw())));
+    c.set_control_signal(.constant, arch.microcode.Constant.init_unsigned(@intCast(flags.raw())));
     c.set_control_signal(.flag_op, .set_bits);
 }
 pub fn disable_flags(c: *Cycle, flags: arch.reg.Flags.Writable) void {
-    c.set_control_signal(.vao, arch.addr.Virtual.Offset.init_unsigned(@intCast(flags.raw())));
+    c.set_control_signal(.constant, arch.microcode.Constant.init_unsigned(@intCast(flags.raw())));
     c.set_control_signal(.flag_op, .clear_bits);
 }
 
@@ -686,14 +712,14 @@ pub fn literal_to_k(c: *Cycle, literal: i64) void {
         return;
     }
 
-    if (literal >= arch.addr.Virtual.Offset.min and literal <= arch.addr.Virtual.Offset.max) {
-        const vao = arch.addr.Virtual.Offset.init(@intCast(literal));
-        c.set_control_signal(.vao, vao);
+    if (literal >= arch.microcode.Constant.min and literal <= arch.microcode.Constant.max) {
+        const constant = arch.microcode.Constant.init(@intCast(literal));
+        c.set_control_signal(.constant, constant);
     } else {
         c.warn("Could not encode literal {} for K", .{ literal });
-        c.set_control_signal(.vao, .zero);
+        c.set_control_signal(.constant, arch.microcode.Constant.init(0));
     }
-    c.set_control_signal(.ksrc, .vao);
+    c.set_control_signal(.ksrc, .constant);
 }
 
 pub fn krio_to_k(c: *Cycle, ext: Zero_Or_Sign_Extension) void {
@@ -1045,7 +1071,7 @@ pub fn l_to_dr(c: *Cycle) void {
 }
 
 pub fn l_to_rsn(c: *Cycle) void {
-    c.set_control_signal(.special, .load_rsn_from_l);
+    c.require_load_rsn_from_l();
 }
 
 pub fn l_to_fucs(c: *Cycle) void {
@@ -1095,27 +1121,30 @@ pub fn invalidate_address_translation_from_l(c: *Cycle, base: arch.addr.Virtual.
 }
 
 pub fn address(c: *Cycle, base: arch.addr.Virtual.Base, offset: anytype) void {
-    const vao: arch.addr.Virtual.Offset = switch (@typeInfo(@TypeOf(offset))) {
-        .int, .comptime_int => vao: {
-            if (offset >= arch.addr.Virtual.Offset.min and offset <= arch.addr.Virtual.Offset.max) {
-                break :vao arch.addr.Virtual.Offset.init(@intCast(offset));
-            } else if (c.initial_encoding_word) |dr| {
-                if (dr.byte2_i8() == offset and c.flags.contains(.initial_dr2_valid)) {
-                    break :vao .i8_from_dr;
-                } else if (dr.byte2_i8() * 4 == offset and c.flags.contains(.initial_dr2_valid)) {
-                    break :vao .i8_x4_from_dr;
-                } else if (dr.byte21_i16() == offset and c.flags.contains(.initial_dr1_valid) and c.flags.contains(.initial_dr2_valid)) {
-                    break :vao .i16_from_dr;
-                }
-            }
-            c.warn("Could not encode address offset {}", .{ offset });
-            break :vao .zero;
-        },
-        .enum_literal => offset,
-        else => unreachable,
-    };
     c.set_control_signal(.vari, base);
-    c.set_control_signal(.vao, vao);
+    switch (@typeInfo(@TypeOf(offset))) {
+        .int, .comptime_int => {
+            if (offset == 0) {
+                c.set_control_signal(.vao_src, .zero);
+            } else if (c.initial_dr.@"signed[23:16]"() == offset and c.flags.contains(.initial_dr2_valid)) {
+                c.set_control_signal(.vao_src, .i8_from_dr);
+            } else if (c.initial_dr.@"signed[23:8]"() == offset and c.flags.contains(.initial_dr1_valid) and c.flags.contains(.initial_dr2_valid)) {
+                c.set_control_signal(.vao_src, .i16_from_dr);
+            } else if (offset >= arch.microcode.Constant.min and offset <= arch.microcode.Constant.max) {
+                const constant = arch.microcode.Constant.init(@intCast(offset));
+                c.set_control_signal(.vao_src, .constant);
+                c.set_control_signal(.constant, constant);
+            } else {
+                c.warn("Could not encode address offset {}", .{ offset });
+                c.set_control_signal(.vao_src, .constant);
+                c.set_control_signal(.constant, arch.microcode.Constant.init(0));
+            }
+        },
+        .enum_literal => {
+            c.set_control_signal(.vao_src, offset);
+        },
+        else => unreachable,
+    }
 }
 
 pub fn read_to_d(c: *Cycle, base: arch.addr.Virtual.Base, offset: anytype, width: arch.bus.D.Width, space: arch.addr.Space) void {
@@ -1226,13 +1255,11 @@ pub fn load_and_exec_next_insn(c: *Cycle) void {
     }
 }
 
-pub fn call_or_branch(c: *Cycle, base: arch.addr.Virtual.Base, offset: anytype, mnemonic: isa.Mnemonic) void {
-    if (isa.branch_kind(mnemonic, .none) == .call) {
-        c.sr_to_j(.ip);
-        c.literal_to_k(c.encoding_len.?);
-        c.j_plus_k_to_l(.zx, .fresh, .no_flags);
-        c.l_to_sr(.rp);
-    }
+pub fn call(c: *Cycle, base: arch.addr.Virtual.Base, offset: anytype) void {
+    c.sr_to_j(.ip);
+    c.literal_to_k(c.encoding_len.?);
+    c.j_plus_k_to_l(.fresh, .no_flags);
+    c.l_to_sr(.rp);
     c.branch(base, offset);
 }
 

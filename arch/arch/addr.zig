@@ -35,9 +35,12 @@ pub const Virtual = packed struct (u32) {
 
     pub const Base = enum (u4) {
         one = raw_from_sr1(.one),
+        two = raw_from_sr1(.two),
         rp = raw_from_sr1(.rp),
         sp = raw_from_sr1(.sp),
+        fp = raw_from_sr1(.fp),
         bp = raw_from_sr1(.bp),
+        dp = raw_from_sr1(.dp),
         temp_1 = raw_from_sr1(.temp_1),
         zero = raw_from_sr2(.zero),
         ip = raw_from_sr2(.ip),
@@ -45,8 +48,8 @@ pub const Virtual = packed struct (u32) {
         next_ip = raw_from_sr2(.next_ip),
         kxp = raw_from_sr2(.kxp),
         uxp = raw_from_sr2(.uxp),
+        axp = raw_from_sr2(.axp),
         temp_2 = raw_from_sr2(.temp_2),
-        _,
 
         pub inline fn init(raw_value: Base.Raw) Base {
             return @enumFromInt(raw_value);
@@ -92,41 +95,23 @@ pub const Virtual = packed struct (u32) {
         pub const count = std.math.maxInt(Base.Raw) + 1;
     };
 
-    pub const Offset = enum (i6) {
-        zero = 0,
-        one = 1,
-        two = 2,
-        three = 3,
-        four = 4,
-        five = 5,
-        six = 6,
-        i16_from_dr = std.math.minInt(i6),
-        i8_from_dr = std.math.minInt(i6) + 1,
-        i8_x4_from_dr = std.math.minInt(i6) + 2,
-        _,
+    pub const Offset_Source = enum (u2) {
+        zero,
+        constant,
+        i8_from_dr,
+        i16_from_dr,
 
-        pub inline fn init(raw_value: Offset.Raw) Offset {
+        pub inline fn init(raw_value: Offset_Source.Raw) Offset_Source {
             return @enumFromInt(raw_value);
         }
 
-        pub inline fn init_unsigned(raw_value: Offset.Raw_Unsigned) Offset {
-            return .init(@bitCast(raw_value));
-        }
-
-        pub inline fn raw(self: Offset) Offset.Raw {
+        pub inline fn raw(self: Offset_Source) Offset_Source.Raw {
             return @intFromEnum(self);
-        }
-
-        pub inline fn raw_unsigned(self: Offset) Offset.Raw_Unsigned {
-            return @bitCast(self.raw());
         }
 
         pub const format = fmt.format_enum_dec;
 
-        pub const Raw = meta.Backing(Offset);
-        pub const Raw_Unsigned = std.meta.Int(.unsigned, @bitSizeOf(Offset.Raw));
-        pub const max = std.math.maxInt(i6);
-        pub const min = Offset.i8_x4_from_dr.raw() + 1;
+        pub const Raw = meta.Backing(Offset_Source);
     };
 };
 

@@ -281,18 +281,7 @@ pub fn try_resolve_expr_type(a: *Assembler, s: Source_File.Slices, expr_handle: 
                 expr_resolved_types[expr_handle] = .poison;
             }
         },
-        .literal_reg => {
-            // SFR types are preassigned when parsed, so we can assume we're dealing with a GPR name.
-            const token_handle = s.expr.items(.token)[expr_handle];
-            const token = s.file.tokens.get(token_handle);
-            const name = token.span(s.file.source);
-            const offset = std.fmt.parseUnsigned(arch.bus.K.Read_Index_Offset.Raw, name[1..], 10) catch unreachable;
-            const reg_type: Expression.Type = switch (name[0]) {
-                'r', 'R' => Expression.Type.reg(.init(offset), null),
-                else => unreachable,
-            };
-            expr_resolved_types[expr_handle] = reg_type;
-        },
+        .literal_reg => unreachable, // should have been assigned a type while parsing
         .literal_current_address => {
             const token_handle = s.expr.items(.token)[expr_handle];
             const block_handle = s.file.find_block_by_token(token_handle);
@@ -303,9 +292,9 @@ pub fn try_resolve_expr_type(a: *Assembler, s: Source_File.Slices, expr_handle: 
                     => unreachable,
 
                     .section => Expression.Type.absolute_address(.data),
-                    .boot, .code, .kcode, .entry, .kentry => Expression.Type.relative_address(.insn, Expression.Type.sr(.ip)),
-                    .data, .kdata, .@"const", .kconst => Expression.Type.relative_address(.data, Expression.Type.sr(.ip)),
-                    .stack => Expression.Type.relative_address(.stack, Expression.Type.sr(.sp)),
+                    .boot, .code, .kcode, .entry, .kentry => Expression.Type.relative_address(.insn, Expression.Type.symbolic_reg(.ip)),
+                    .data, .kdata, .@"const", .kconst => Expression.Type.relative_address(.data, Expression.Type.symbolic_reg(.ip)),
+                    .stack => Expression.Type.relative_address(.stack, Expression.Type.symbolic_reg(.sp)),
                 } catch unreachable;
             } else {
                 // Block does not have a section handle, so it's an .info section by default
@@ -337,7 +326,7 @@ pub fn try_resolve_expr_type(a: *Assembler, s: Source_File.Slices, expr_handle: 
         // unary operators:
         .negate, .complement, .crlf_cast, .lf_cast,
         .index_to_reg, .reg_to_index,
-        .signed_cast, .unsigned_cast, .remove_signedness_cast,
+        .signed_cast, .unsigned_cast,
         .absolute_address_cast, .data_address_cast, .insn_address_cast, .stack_address_cast, .remove_address_cast,
         => |inner_expr| {
             const inner_type = expr_resolved_types[inner_expr];
@@ -377,7 +366,7 @@ pub fn try_resolve_expr_type(a: *Assembler, s: Source_File.Slices, expr_handle: 
                             return true;
                         };
 
-                        expr_resolved_types[expr_handle] = Expression.Type.reg(.init(offset), null);
+                        expr_resolved_types[expr_handle] = Expression.Type.gpr(.init(offset));
                         return true;
                     }
 
@@ -388,7 +377,7 @@ pub fn try_resolve_expr_type(a: *Assembler, s: Source_File.Slices, expr_handle: 
 
                 .reg_to_index => {
                     if (inner_type.simple_base()) |base| {
-                        if (base.register_offset()) |offset| {
+                        if (base.gpr_offset()) |offset| {
                             const constant = Constant.init_int(offset.raw());
                             s.expr.items(.resolved_constant)[expr_handle] = constant.intern(a.arena, a.gpa, &a.constants);
                             expr_resolved_types[expr_handle] = Expression.Type.constant();
@@ -401,42 +390,22 @@ pub fn try_resolve_expr_type(a: *Assembler, s: Source_File.Slices, expr_handle: 
                     return true;
                 },
 
-                .signed_cast, .unsigned_cast, .remove_signedness_cast => {
+                .signed_cast, .unsigned_cast => {
                     if (inner_type.is_constant()) {
-                        if (info == .remove_signedness_cast) {
-                            a.record_expr_error(s.file.handle, expr_handle, "Operand must be a GPR expression", .{});
-                            expr_resolved_types[expr_handle] = .poison;
-                        } else {
-                            expr_resolved_types[expr_handle] = Expression.Type.constant();
-                        }
+                        expr_resolved_types[expr_handle] = Expression.Type.constant();
                         return true;
-                    } else if (inner_type.simple_base()) |base| {
-                        switch (base) {
-                            .reg => |reg| {
-                                const signedness: ?std.builtin.Signedness = switch (info) {
-                                    .signed_cast => .signed,
-                                    .unsigned_cast => .unsigned,
-                                    .remove_signedness_cast => null,
-                                    else => unreachable,
-                                };
-
-                                expr_resolved_types[expr_handle] = Expression.Type.reg(reg.offset, signedness);
-                                return true;
-                            },
-                            else => {},
-                        }
                     }
-                    a.record_expr_error(s.file.handle, expr_handle, "Operand must be a constant or GPR expression", .{});
+                    a.record_expr_error(s.file.handle, expr_handle, "Operand must be a constant expression", .{});
                     expr_resolved_types[expr_handle] = .poison;
                     return true;
                 },
 
                 .absolute_address_cast => {
                     if (inner_type.base_offset_type()) |bot| {
-                        if (bot.base == .sr and bot.base.sr == .ip) {
+                        if (bot.base == .sym and bot.base.sym == .ip) {
                             var builder: Expression.Type_Builder = .{};
                             builder.add(inner_type);
-                            builder.subtract(Expression.Type.sr(.ip));
+                            builder.subtract(Expression.Type.symbolic_reg(.ip));
                             expr_resolved_types[expr_handle] = builder.build() catch unreachable;
                             return true;
                         }
@@ -571,10 +540,10 @@ fn try_resolve_symbol_type(a: *Assembler, s: Source_File.Slices, expr_handle: Ex
                     => unreachable,
 
                     .section => Expression.Type.absolute_address(.data),
-                    .boot, .code, .kcode, .entry, .kentry => Expression.Type.relative_address(.insn, Expression.Type.sr(.ip)),
-                    .data, .kdata, .@"const", .kconst => Expression.Type.relative_address(.data, Expression.Type.sr(.ip)),
+                    .boot, .code, .kcode, .entry, .kentry => Expression.Type.relative_address(.insn, Expression.Type.symbolic_reg(.ip)),
+                    .data, .kdata, .@"const", .kconst => Expression.Type.relative_address(.data, Expression.Type.symbolic_reg(.ip)),
 
-                    .stack => Expression.Type.relative_address(.stack, Expression.Type.sr(.sp)), // maybe this should be unreachable?
+                    .stack => Expression.Type.relative_address(.stack, Expression.Type.symbolic_reg(.sp)), // maybe this should be unreachable?
                 } catch unreachable;
             } else {
                 // Block does not have a section handle, so it's an .info section by default
@@ -584,7 +553,7 @@ fn try_resolve_symbol_type(a: *Assembler, s: Source_File.Slices, expr_handle: Ex
             return true;
         },
         .stack => {
-            expr_resolved_types[expr_handle] = Expression.Type.relative_address(.stack, Expression.Type.sr(.sp)) catch unreachable;
+            expr_resolved_types[expr_handle] = Expression.Type.relative_address(.stack, Expression.Type.symbolic_reg(.sp)) catch unreachable;
             expr_flags[expr_handle].insert(.constant_depends_on_layout);
         },
         .not_found => {
@@ -915,7 +884,7 @@ fn check_org_params(a: *Assembler, s: Source_File.Slices, insn_handle: Instructi
     if (params[0]) |address_expr| {
         const expr_type = expr_resolved_types[address_expr];
         if (expr_type.base_offset_type()) |bot| {
-            if (bot.base == .sr and bot.base.sr == .ip and bot.offset == .constant) {
+            if (bot.base == .sym and bot.base.sym == .ip and bot.offset == .constant) {
                 a.record_expr_error(s.file.handle, address_expr, "Expected absolute address, not relative; try using '@'", .{});
             } else if (bot.base != .constant) {
                 a.record_expr_error(s.file.handle, address_expr, "Expected constant or absolute address", .{});

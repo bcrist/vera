@@ -91,6 +91,51 @@ pub fn get_slot_data(self: *const Microcode_Builder, handle: Slot_Data.Handle) S
     return self.slot_data.items[handle.raw()];
 }
 
+pub fn print_differences(self: *const Microcode_Builder, a: Slot_Data.Handle, b: Slot_Data.Handle, w: *std.io.Writer) !void {
+    if (a == b) return;
+    try w.print("Handle:      {d: >30} != {d}\n", .{ a.raw(), b.raw() });
+
+    const da = self.get_slot_data(a);
+    const db = self.get_slot_data(b);
+
+    if (!std.meta.eql(da.forced_slot, db.forced_slot)) {
+        try w.print("Forced Slot: {?d: >30} != {?d}\n", .{ da.forced_slot, db.forced_slot });
+    }
+    for (0.., da.cycles, db.cycles) |raw_flags, cha, chb| {
+        if (cha != chb) {
+            const flags = arch.microcode.Flags.init(@intCast(raw_flags));
+            try w.print("Cycle {f}:  {d: >30} != {d}\n", .{ flags, cha.raw(), chb.raw() });
+
+            const print_cycle = for (da.cycles[0..raw_flags], db.cycles[0..raw_flags]) |prev_cha, prev_chb| {
+                if (prev_cha == cha and prev_chb == chb) break false;
+            } else true;
+
+            if (print_cycle) {
+                try self.print_cycle_differences(cha, chb, w);
+            }
+        }
+    }
+}
+pub fn print_cycle_differences(self: *const Microcode_Builder, a: Cycle_Handle, b: Cycle_Handle, w: *std.io.Writer) !void {
+    if (a == b) return;
+    const ca = self.cycles.items[a.raw()];
+    const cb = self.cycles.items[b.raw()];
+
+    inline for (@typeInfo(arch.Control_Signals).@"struct".fields) |field| {
+        const sa = @field(ca.signals, field.name);
+        const sb = @field(cb.signals, field.name);
+        if (comptime std.mem.eql(u8, field.name, "mode")) {
+            if (sa.raw() != sb.raw()) {
+                try w.print("{s}: {f: >30} != {f}\n", .{ field.name, sa, sb });
+            }
+        } else if (sa != sb) {
+            try w.print("{s}: {f: >30} != {f}\n", .{ field.name, sa, sb });
+        }
+    }
+
+    // TODO check differences in next_func/instruction_signature/next_slot
+}
+
 pub fn complete_loop(self: *Microcode_Builder, handle: Cycle_Handle, next: Slot_Data.Handle) void {
     const cycle = &self.cycles.items[@intFromEnum(handle)];
     std.debug.assert(cycle.next_func != null);

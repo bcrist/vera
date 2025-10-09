@@ -1,8 +1,8 @@
 pub const spec = 
     \\ sx (bits)
     \\ zx (bits)
-    \\ sxv (bits)
-    \\ zxv (bits)
+    \\ sx.vf (bits)
+    \\ zx.vf (bits)
     ;
 
 pub const encoding = .{
@@ -18,12 +18,12 @@ pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
     c.zero_to_j();
     c.krio_bit_to_k();
     c.j_ext_k_to_l(switch (mnemonic) {
-        .sx, .sxv => .sx,
-        .zx, .zxv => .zx,
+        .sx, .@"sx.vf" => .sx,
+        .zx, .@"zx.vf" => .zx,
         else => unreachable,
     }, switch (mnemonic) {
         .sx, .zx => .flags,
-        .sxv, .zxv => .flags__fault_on_overflow,
+        .@"sx.vf", .@"zx.vf" => .flags__fault_on_overflow,
         else => unreachable,
     });
     c.l_to_reg(true);

@@ -3,8 +3,8 @@ pub const forms = .{
         pub const spec = 
             \\ sub
             \\ subc
-            \\ subv
-            \\ subcv
+            \\ sub.vf
+            \\ subc.vf
             ;
 
         pub const encoding = opcodes.mnemonic_encoder(opcodes.LSB, .{});
@@ -13,10 +13,10 @@ pub const forms = .{
     },
     struct {
         pub const spec = 
-            \\ sub r(reg)
-            \\ subc r(reg)
-            \\ subv r(reg)
-            \\ subcv r(reg)
+            \\ sub %(reg)
+            \\ subc %(reg)
+            \\ sub.vf %(reg)
+            \\ subc.vf %(reg)
             ;
 
         pub const encoding = .{
@@ -34,12 +34,12 @@ pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
     c.reg_to_j();
     c.reg_to_k();
     c.j_minus_k_to_l(switch (mnemonic) {
-        .sub, .subv => .fresh,
-        .subc, .subcv => .cont,
+        .sub, .@"sub.vf" => .fresh,
+        .subc, .@"subc.vf" => .cont,
         else => unreachable,
     }, switch (mnemonic) {
         .sub, .subc => .flags,
-        .subv, .subcv => .flags__fault_on_overflow,
+        .@"sub.vf", .@"subc.vf" => .flags__fault_on_overflow,
         else => unreachable,
     });
     c.l_to_reg(true);

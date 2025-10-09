@@ -13,6 +13,12 @@ constraints: []const Constraint,
 encoder_data: []const Encoder,
 encoder_indices: []const u16, // if empty, use all encoders in `encoder_data`
 
+// TODO ip_loads: []const Load_Info,
+// information about any loads the instruction might do that use the current IP as base and a constant offset.
+// The assembler can use these to ensure that alignment faults / page alignment faults won't be generated
+// TODO these restrictions should be noted somehow when printing suggested instructions or other places that use Placeholder.Restrictions_Iterator
+
+
 // TODO priority: u32, // When assembling, if multiple Forms match a particular instruction, the one with the priority closest to 0 is selected.
 
 
@@ -130,9 +136,9 @@ pub fn encode(self: Form, insn: Instruction, default_value: Instruction.Encoded.
 
 pub fn matches_data(self: Form, data: Instruction.Encoded.Data) bool {
     var temp: [Parameter.Index.count]Parameter = undefined;
-    var decoded_base_register = [_]bool { false } ** Parameter.Index.count;
-    var decoded_offset_register = [_]bool { false } ** Parameter.Index.count;
-    var decoded_constant = [_]bool { false } ** Parameter.Index.count;
+    var decoded_base_gpr_offset: [Parameter.Index.count]bool = @splat(false);
+    var decoded_offset_gpr_offset: [Parameter.Index.count]bool = @splat(false);
+    var decoded_constant: [Parameter.Index.count]bool = @splat(false);
 
     var encoder_iter = self.encoders();
     while (encoder_iter.next()) |enc| {
@@ -152,18 +158,18 @@ pub fn matches_data(self: Form, data: Instruction.Encoded.Data) bool {
                         decoded_constant[index] = true;
                     }
                 },
-                .param_base_register => {
-                    if (decoded_base_register[index]) {
-                        if (old.base_register != new.base_register) return false;
+                .param_base_gpr_offset => {
+                    if (decoded_base_gpr_offset[index]) {
+                        if (old.base_gpr_offset != new.base_gpr_offset) return false;
                     } else {
-                        decoded_base_register[index] = true;
+                        decoded_base_gpr_offset[index] = true;
                     }
                 },
-                .param_offset_register => {
-                    if (decoded_offset_register[index]) {
-                        if (old.offset_register != new.offset_register) return false;
+                .param_offset_gpr_offset => {
+                    if (decoded_offset_gpr_offset[index]) {
+                        if (old.offset_gpr_offset != new.offset_gpr_offset) return false;
                     } else {
-                        decoded_offset_register[index] = true;
+                        decoded_offset_gpr_offset[index] = true;
                     }
                 },
             }
@@ -181,8 +187,8 @@ pub fn matches_data(self: Form, data: Instruction.Encoded.Data) bool {
                 const index = info.param.raw();
                 const already_decoded = switch (info.kind) {
                     .param_constant => decoded_constant[index],
-                    .param_base_register => decoded_base_register[index],
-                    .param_offset_register => decoded_offset_register[index],
+                    .param_base_gpr_offset => decoded_base_gpr_offset[index],
+                    .param_offset_gpr_offset => decoded_offset_gpr_offset[index],
                 };
                 if (already_decoded) continue;
             }
@@ -199,7 +205,7 @@ pub fn matches_data(self: Form, data: Instruction.Encoded.Data) bool {
 }
 
 pub fn decode_params(self: Form, data: Instruction.Encoded.Data, params: []Parameter) void {
-    // N.B. this assumes that .base_register, .offset_register, and .constant have been set to 0 for all parameters
+    // N.B. this assumes that .base_gpr_offset, .offset_gpr_offset, and .constant have been set to 0 for all parameters
 
     std.debug.assert(self.signature.params.len == params.len);
 

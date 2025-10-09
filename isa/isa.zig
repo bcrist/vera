@@ -5,7 +5,7 @@ pub const Placeholder = @import("isa/Placeholder.zig");
 pub const Constraint = @import("isa/Constraint.zig");
 
 pub const Mnemonic = enums.Mnemonic;
-pub const Special_Register = enums.Special_Register;
+pub const Symbolic_Register = enums.Symbolic_Register;
 pub const Address_Space = enums.Address_Space;
 const enums = @import("isa/enums.zig");
 

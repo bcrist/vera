@@ -21,7 +21,7 @@ pub fn deinit(self: *Decode_ROM_Builder) void {
     self.allocator.free(self.entries);
 }
 
-pub fn add_entry(self: *Decode_ROM_Builder, addr: arch.insn_decode.Address, undefined_bits: arch.insn_decode.Address.Raw, entry: Entry) void {
+pub fn add_entry(self: *Decode_ROM_Builder, mb: *const Microcode_Builder, addr: arch.insn_decode.Address, undefined_bits: arch.insn_decode.Address.Raw, entry: Entry) void {
     std.debug.assert(entry.slot_handle != null);
     var iter = bits.undefined_bits_iterator(undefined_bits, 0);
     while (iter.next()) |extra_bits| {
@@ -36,22 +36,18 @@ pub fn add_entry(self: *Decode_ROM_Builder, addr: arch.insn_decode.Address, unde
                 var buf: [32768]u8 = undefined;
                 var w = std.io.Writer.fixed(&buf);
 
-                if (existing_handle != entry.slot_handle) {
-                    w.print("Handle: {d: >30} != {d}\n", .{ existing_handle.raw(), entry.slot_handle.?.raw() }) catch @panic("IO Error");
+                if (existing_handle != entry.slot_handle.?) {
+                    mb.print_differences(existing_handle, entry.slot_handle.?, &w) catch @panic("IO Error");
                 }
                 if (existing.wio != entry.wio) {
-                    w.print("WIO:    {d: >30} != {d}\n", .{ existing.wio.raw(), entry.wio.raw() }) catch @panic("IO Error");
+                    w.print("WIO:         {d: >30} != {d}\n", .{ existing.wio.raw(), entry.wio.raw() }) catch @panic("IO Error");
                 }
                 if (existing.krio != entry.krio) {
-                    w.print("KRIO:   {d: >30} != {d}\n", .{ existing.krio.raw(), entry.krio.raw() }) catch @panic("IO Error");
+                    w.print("KRIO:        {d: >30} != {d}\n", .{ existing.krio.raw(), entry.krio.raw() }) catch @panic("IO Error");
                 }
                 if (existing.cv != entry.cv) {
-                    w.print("CV:     {s: >30} != {s}\n", .{ @tagName(existing.cv), @tagName(entry.cv) }) catch @panic("IO Error");
+                    w.print("CV:          {s: >30} != {s}\n", .{ @tagName(existing.cv), @tagName(entry.cv) }) catch @panic("IO Error");
                 }
-
-                // inline for (std.enums.values(hw.Control_Signal)) |field| {
-                //     if (@field(existing.
-                // }
 
                 std.debug.panic("Decode address 0x{X} already used:\n{s}", .{ addr.raw(), w.buffered() });
             }

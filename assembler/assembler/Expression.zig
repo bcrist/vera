@@ -27,7 +27,6 @@ pub const Info = union (enum) {
     complement: Unary,
     signed_cast: Unary,
     unsigned_cast: Unary,
-    remove_signedness_cast: Unary,
     absolute_address_cast: Unary,
     data_address_cast: Unary,
     insn_address_cast: Unary,
@@ -110,14 +109,14 @@ pub const Type = union (enum) {
         };
     }
 
-    pub fn param_base_register(self: Type) arch.bus.K.Read_Index_Offset {
+    pub fn param_base_gpr_offset(self: Type) arch.bus.K.Read_Index_Offset {
         const bot = self.base_offset_type() orelse return .init(0);
-        return bot.base.register_offset() orelse .init(0);
+        return bot.base.gpr_offset() orelse .init(0);
     }
 
-    pub fn param_offset_register(self: Type) arch.bus.K.Read_Index_Offset {
+    pub fn param_offset_gpr_offset(self: Type) arch.bus.K.Read_Index_Offset {
         const bot = self.base_offset_type() orelse return .init(0);
-        return bot.offset.register_offset() orelse .init(0);
+        return bot.offset.gpr_offset() orelse .init(0);
     }
 
     pub fn simple_base(self: Type) ?Term_Type {
@@ -144,19 +143,16 @@ pub const Type = union (enum) {
         }};
     }
 
-    pub fn sr(which: Special_Register) Type {
+    pub fn symbolic_reg(which: Symbolic_Register) Type {
         return .{ .raw = .{
-            .base = .{ .sr = which },
+            .base = .{ .sym = which },
             .offset = .none,
         }};
     }
 
-    pub fn reg(offset: arch.bus.K.Read_Index_Offset, signedness: ?Signedness) Type {
+    pub fn gpr(offset: arch.bus.K.Read_Index_Offset) Type {
         return .{ .raw = .{
-            .base = .{ .reg = .{
-                .offset = offset,
-                .signedness = signedness,
-            }},
+            .base = .{ .gpr = offset },
             .offset = .none,
         }};
     }
@@ -212,29 +208,24 @@ pub const Base_Offset_Type = struct {
 pub const Term_Type = union (enum) {
     none,
     constant,
-    reg: Indexed_Register_Type,
-    sr: Special_Register,
+    gpr: arch.bus.K.Read_Index_Offset,
+    sym: Symbolic_Register,
 
     pub fn param_kind(self: Term_Type) Parameter.Kind {
         return switch (self) {
             .none => .none,
             .constant => .constant,
-            .reg => |reg| .{ .reg = reg.signedness },
-            .sr => |sr| .{ .sr = sr },
+            .gpr => .gpr,
+            .sym => |sr| .{ .sym = sr },
         };
     }
 
-    pub fn register_offset(self: Term_Type) ?arch.bus.K.Read_Index_Offset {
+    pub fn gpr_offset(self: Term_Type) ?arch.bus.K.Read_Index_Offset {
         return switch (self) {
-            .none, .constant, .sr => null,
-            .reg => |reg| reg.offset,
+            .none, .constant, .sym => null,
+            .gpr => |offset| offset,
         };
     }
-};
-
-pub const Indexed_Register_Type = struct {
-    signedness: ?Signedness,
-    offset: arch.bus.K.Read_Index_Offset,
 };
 
 pub const Type_Builder = struct {
@@ -352,13 +343,13 @@ pub const Type_Builder = struct {
         return null;
     }
 
-    fn get_priority(t: Term_Type) u8 {
+    fn get_priority(t: Term_Type) u64 {
         // higher priority will be placed in the base slot, lower in offset
         return switch (t) {
             .none => 0,
             .constant => 1,
-            .reg => |r| @as(u8, 0x10) + r.offset.raw(),
-            .sr => |r| @as(u8, 0x40) + @intFromEnum(r),
+            .gpr => |offset| @as(u64, 0x10) + offset.raw(),
+            .sym => |sr| @as(u64, 0x40) + @intFromEnum(sr),
         };
     }
 };
@@ -366,7 +357,7 @@ pub const Type_Builder = struct {
 const Expression = @This();
 const Constant = @import("Constant.zig");
 const Instruction = @import("Instruction.zig");
-const Special_Register = isa.Special_Register;
+const Symbolic_Register = isa.Symbolic_Register;
 const Address_Space = isa.Address_Space;
 const Parameter = isa.Parameter;
 const lex = isa.lex;

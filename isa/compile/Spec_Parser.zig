@@ -121,27 +121,27 @@ fn add_constant(self: *Spec_Parser, index: isa.Parameter.Index, constant: i64) v
     }) catch @panic("OOM");
 }
 
-fn add_base_register(self: *Spec_Parser, index: isa.Parameter.Index, reg: arch.reg.gpr.Index) void {
+fn add_base_register(self: *Spec_Parser, index: isa.Parameter.Index, reg: arch.bus.K.Read_Index_Offset) void {
     self.temp_constraints.append(self.allocator, .{
         .kind = .equal,
         .left = .{ .placeholder = .{
             .param = index,
-            .kind = .param_base_register,
+            .kind = .param_base_gpr_offset,
             .name = "",
         }},
-        .right = .{ .constant = reg },
+        .right = .{ .constant = reg.raw() },
     }) catch @panic("OOM");
 }
 
-fn add_offset_register(self: *Spec_Parser, index: isa.Parameter.Index, reg: arch.reg.gpr.Index) void {
+fn add_offset_register(self: *Spec_Parser, index: isa.Parameter.Index, reg: arch.bus.K.Read_Index_Offset) void {
     self.temp_constraints.append(self.allocator, .{
         .kind = .equal,
         .left = .{ .placeholder = .{
             .param = index,
-            .kind = .param_offset_register,
+            .kind = .param_offset_gpr_offset,
             .name = "",
         }},
-        .right = .{ .constant = reg },
+        .right = .{ .constant = reg.raw() },
     }) catch @panic("OOM");
 }
 
@@ -175,10 +175,10 @@ fn add_placeholder_constant(self: *Spec_Parser, index: isa.Parameter.Index, plac
     self.add_placeholder(index, placeholder, .param_constant);
 }
 fn add_placeholder_base_register(self: *Spec_Parser, index: isa.Parameter.Index, placeholder: []const u8) void {
-    self.add_placeholder(index, placeholder, .param_base_register);
+    self.add_placeholder(index, placeholder, .param_base_gpr_offset);
 }
 fn add_placeholder_offset_register(self: *Spec_Parser, index: isa.Parameter.Index, placeholder: []const u8) void {
-    self.add_placeholder(index, placeholder, .param_offset_register);
+    self.add_placeholder(index, placeholder, .param_offset_gpr_offset);
 }
 
 
@@ -198,19 +198,19 @@ pub fn parse_mnemonic(self: *Spec_Parser) ?isa.Mnemonic {
 
 fn parse_base_register(self: *Spec_Parser, addr_space: ?isa.Address_Space) bool {
     const param_index: isa.Parameter.Index = .init(@intCast(self.temp_param_signatures.items.len));
-    if (self.parse_sr()) |sr| {
-        self.add_signature(addr_space, .{ .sr = sr }, .none);
+    if (self.parse_symbolic_register()) |sr| {
+        self.add_signature(addr_space, .{ .sym = sr }, .none);
 
     } else if (self.parse_literal_reg()) |reg_index| {
         self.add_base_register(param_index, reg_index);
-        self.add_signature(addr_space, .{ .reg = self.parse_signedness() }, .none);
+        self.add_signature(addr_space, .gpr, .none);
 
     } else if (self.parse_first_placeholder_reg()) |placeholder| {
         self.add_placeholder_base_register(param_index, placeholder);
         while (self.parse_additional_placeholder()) |p| {
             self.add_placeholder_base_register(param_index, p);
         }
-        self.add_signature(addr_space, .{ .reg = self.parse_signedness() }, .none);
+        self.add_signature(addr_space, .gpr, .none);
 
     } else {
         return false;
@@ -237,19 +237,19 @@ fn parse_offset(self: *Spec_Parser) void {
             }
             self.temp_param_signatures.items[param_index.raw()].offset = .constant;
 
-        } else if (self.parse_sr()) |sr| {
-            self.temp_param_signatures.items[param_index.raw()].offset = .{ .sr = sr };
+        } else if (self.parse_symbolic_register()) |sr| {
+            self.temp_param_signatures.items[param_index.raw()].offset = .{ .sym = sr };
 
         } else if (self.parse_literal_reg()) |reg_index| {
             self.add_offset_register(param_index, reg_index);
-            self.temp_param_signatures.items[param_index.raw()].offset = .{ .reg = self.parse_signedness() };
+            self.temp_param_signatures.items[param_index.raw()].offset = .gpr;
 
         } else if (self.parse_first_placeholder_reg()) |placeholder| {
             self.add_placeholder_offset_register(param_index, placeholder);
             while (self.parse_additional_placeholder()) |p| {
                 self.add_placeholder_offset_register(param_index, p);
             }
-            self.temp_param_signatures.items[param_index.raw()].offset = .{ .reg = self.parse_signedness() };
+            self.temp_param_signatures.items[param_index.raw()].offset = .gpr;
 
         } else {
             self.record_error("Expected offset constant or register");
@@ -331,22 +331,6 @@ fn parse_addr_space(self: *Spec_Parser) ?isa.Address_Space {
     return null;
 }
 
-fn parse_signedness(self: *Spec_Parser) ?std.builtin.Signedness {
-   const map = std.StaticStringMapWithEql(std.builtin.Signedness, std.ascii.eqlIgnoreCase).initComptime(.{
-        .{ ".unsigned", .unsigned },
-        .{ ".signed", .signed },
-    });
-
-    const begin = self.next_token;
-    self.skip_linespace();
-    if (self.try_token(.id)) {
-        const str = self.token_span(self.next_token - 1);
-        if (map.get(str)) |signedness| return signedness;
-    }
-    self.next_token = begin;
-    return null;
-}
-
 fn parse_first_placeholder(self: *Spec_Parser) ?[]const u8 {
     const begin = self.next_token;
 
@@ -381,25 +365,38 @@ fn parse_additional_placeholder(self: *Spec_Parser) ?[]const u8 {
     }
 }
 
-fn parse_sr(self: *Spec_Parser) ?isa.Special_Register {
-    const map = isa.lex.case_insensitive_enum_map(isa.Special_Register, .{}, .{});
+fn parse_symbolic_register(self: *Spec_Parser) ?isa.Symbolic_Register {
     const begin = self.next_token;
     self.skip_linespace();
     if (self.try_token(.id)) {
         const id = self.token_span(self.next_token - 1);
-        if (map.get(id)) |sr| return sr;
+        if (id[0] == '%') {
+            if (id.len > 1 and std.ascii.isDigit(id[1])) {
+                self.next_token = begin;
+                return null;
+            }
+            if (self.token_kinds[self.next_token] == .paren_open) {
+                self.next_token = begin;
+                return null;
+            }
+            var sr = isa.Symbolic_Register.init(id[1..]);
+            if (sr.name().len + 1 < id.len) {
+                self.record_error("Symbolic register name too long");
+            }
+            return sr;
+        }
     }
     self.next_token = begin;
     return null;
 }
 
-fn parse_literal_reg(self: *Spec_Parser) ?arch.reg.gpr.Index {
+fn parse_literal_reg(self: *Spec_Parser) ?arch.bus.K.Read_Index_Offset {
     if (self.token_kinds[self.next_token] == .id) {
         const id = self.token_span(self.next_token);
-        if (id.len >= 1 and std.ascii.toLower(id[0]) == 'r') {
-            const index = std.fmt.parseUnsigned(arch.reg.gpr.Index, id[1..], 10) catch return null;
+        if (id[0] == '%') {
+            const register_offset = std.fmt.parseUnsigned(arch.bus.K.Read_Index_Offset.Raw, id[1..], 10) catch return null;
             self.next_token += 1;
-            return index;
+            return .init(register_offset);
         }
     }
     return null;
@@ -409,7 +406,7 @@ fn parse_first_placeholder_reg(self: *Spec_Parser) ?[]const u8 {
     const begin = self.next_token;
     if (self.try_token(.id)) {
         const id = self.token_span(self.next_token - 1);
-        if (id.len == 1 and std.ascii.toLower(id[0]) == 'r') {
+        if (std.mem.eql(u8, id, "%")) {
             if (self.parse_first_placeholder()) |placeholder| return placeholder;
         }
     }

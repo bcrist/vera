@@ -3,8 +3,8 @@ pub const forms = .{
         pub const spec =
             \\ nadd
             \\ naddc
-            \\ naddv
-            \\ naddcv
+            \\ nadd.vf
+            \\ naddc.vf
             ;
         pub const encoding = opcodes.mnemonic_encoder(opcodes.LSB, .{});
         pub const krio: arch.bus.K.Read_Index_Offset.Raw = 1;
@@ -12,10 +12,10 @@ pub const forms = .{
     },
     struct {
         pub const spec =
-            \\ nadd r(reg)
-            \\ naddc r(reg)
-            \\ naddv r(reg)
-            \\ naddcv r(reg)
+            \\ nadd %(reg)
+            \\ naddc %(reg)
+            \\ nadd.vf %(reg)
+            \\ naddc.vf %(reg)
             ;
 
         pub const encoding = .{
@@ -33,12 +33,12 @@ pub fn entry(c: *Cycle, mnemonic: isa.Mnemonic) void {
     c.reg_to_j();
     c.reg_to_k();
     c.k_minus_j_to_l(switch (mnemonic) {
-        .nadd, .naddv => .fresh,
-        .naddc, .naddcv => .cont,
+        .nadd, .@"nadd.vf" => .fresh,
+        .naddc, .@"naddc.vf" => .cont,
         else => unreachable,
     }, switch (mnemonic) {
         .nadd, .naddc => .flags,
-        .naddv, .naddcv => .flags__fault_on_overflow,
+        .@"nadd.vf", .@"naddc.vf" => .flags__fault_on_overflow,
         else => unreachable,
     });
     c.l_to_reg(true);

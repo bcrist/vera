@@ -557,19 +557,26 @@ pub fn config(self: *@This()) void {
         const after_shift_cols = self.d.columns();
         _ = after_shift_cols.center().attach_between(self.shift.right(), self.shift_output_select.left(), 0.5);
 
+        const cin_wire_v = self.shift_cin.right_side("")
+            .wire_h(.{ })
+            .turn_at(before_shift_cols.push());
+        const cin_wire = cin_wire_v.turn_and_end_at(self.shift.left_side_upper("Cin"));
+
         _ = self.shift_cin.right_side("")
             .wire_h(.{})
             .turn_at(after_shift_cols.push())
             .turn_and_end_at(self.shift_output_select.left_side_upper("reverse bits"));
-        _ = self.shift.right_side("")
-            .wire_h(.{ .bits = @bitSizeOf(arch.bus.J) })
-            .bit_mark()
-            .end_at(self.shift_output_select.left());
 
-        const cin_wire = self.shift_cin.right_side("")
-            .wire_h(.{ })
-            .turn_at(before_shift_cols.push())
-            .turn_and_end_at(self.shift.left_side_upper("Cin"));
+        _ = self.shift_output_select.left_side("")
+            .wire_h(.{ .dir = .junction_end })
+            .turn_at(after_shift_cols.push())
+            .turn_at_offset(self.shift.top(), -50)
+            .end_at(cin_wire_v.x());
+        
+        _ = self.shift_output_select.left_side("")
+            .wire_h(.{ .bits = @bitSizeOf(arch.bus.J) })
+            .bit_mark_at(0.75)
+            .end_at(self.shift.right_side("").x());
 
         _ = self.shift.left_side_upper("")
             .wire_h(.{ .bits = @bitSizeOf(arch.bus.J) })
@@ -592,14 +599,13 @@ pub fn config(self: *@This()) void {
 
         _ = self.shift.right_side_lower("Cout")
             .wire_h(.{})
-            .turn_at(after_shift_cols.push())
+            .turn_at(after_shift_cols.get(1))
             .turn_and_end_at(self.shift_flag_logic.left_side(""));
         _ = self.shift.right_side_lower("overflow")
             .wire_h(.{})
             .turn_at(after_shift_cols.push())
             .turn_and_end_at(self.shift_flag_logic.left_side(""));
         _ = self.shift.right_side_lower("");
-
 
         _ = self.shift_k_decoder.right_side("");
         const k_over_31_wire = self.shift_flag_logic.left_side("")
@@ -624,7 +630,7 @@ pub fn config(self: *@This()) void {
             .turn_at(before_shift_cols.push())
             .turn_and_end_at(self.shift_flag_logic.left_side(""));
 
-        _ = self.shift_output_select.left_side_lower("force 0")
+        _ = self.shift_output_select.left_side_lower("force Cin")
             .wire_h(.{ .dir = .junction_end })
             .turn_at(after_shift_cols.get(0))
             .end_at(k_over_31_wire.y());
