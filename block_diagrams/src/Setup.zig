@@ -430,13 +430,13 @@ pub fn config(self: *@This()) void {
         .end_at_mutable_point(self.vari_joiner.right_side(""));
     _ = self.va_base_mux.left_side("0")
         .wire_h(.{ .bits = @bitSizeOf(arch.reg.sr1.Value) })
-        .turn_between(self.sr1b.right(), self.va_base_mux.left(), 0.5)
+        .turn()
         .turn()
         .bit_mark()
         .end_at_point(self.sr1b.right_side(""));
     _ = self.va_base_mux.left_side("1")
         .wire_h(.{ .bits = @bitSizeOf(arch.reg.sr2.Value) })
-        .turn_between(self.sr2b.right(), self.va_base_mux.left(), 0.5)
+        .turn()
         .turn()
         .bit_mark()
         .end_at_point(self.sr2b.right_side(""));
@@ -445,13 +445,13 @@ pub fn config(self: *@This()) void {
     _ = self.va_adder.left_side_upper("")
         .wire_h(.{ .bits = @bitSizeOf(arch.addr.Virtual) })
         .bit_mark()
-        .turn_between(self.va_base_mux.right(), self.va_adder.left(), 0.5)
+        .turn()
         .turn()
         .end_at_point(self.va_base_mux.right_side(""));
     _ = self.va_adder.left_side_lower("")
         .wire_h(.{ .bits = @bitSizeOf(arch.addr.Virtual) })
         .bit_mark()
-        .turn_between(self.va_offset_mux.right(), self.va_adder.left(), 0.5)
+        .turn()
         .turn()
         .end_at_point(self.va_offset_mux.right_side(""));
     _ = self.va_adder.right_side("")

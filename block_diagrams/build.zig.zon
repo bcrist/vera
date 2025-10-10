@@ -15,8 +15,8 @@
             .path = "../microsim",
         },
         .zbox = .{
-            .url = "git+https://github.com/bcrist/zbox#2d99c481adc0433fa9c1dea18d42509aa1525f09",
-            .hash = "zbox-1.2.0-tae9Nw49AgD5YEHDKA71yRX9O7WbMHVlaOhCPA0E15Pb",
+            .url = "git+https://github.com/bcrist/zbox#56972bc274bcfcd895fa8f4a55c6e83d6027bd9c",
+            .hash = "zbox-1.2.1-tae9N3A_AgAaxKa0B1TJcD1rAPm0qBwo6Q8GKJcz8nZ3",
         },
     },
 }

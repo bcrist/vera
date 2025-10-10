@@ -42,8 +42,8 @@
             .hash = "srec-1.1.0-o9cTmBQVAADA3Z2kUr1ZuFzRJc5nmUDcHUKIloneolet",
         },
         .Temp_Allocator = .{
-            .url = "git+https://github.com/bcrist/zig-tempallocator#88164409c68f1b766df08d93728f1ff62929be71",
-            .hash = "Temp_Allocator-1.0.3-tT3p3OQwAADyXdF18H0zjXuId3fPBjPUN-DK5glT4DQr",
+            .url = "git+https://github.com/bcrist/zig-tempallocator#d9faee944780c0359fd5e3db70cb447cd5a9c3b0",
+            .hash = "Temp_Allocator-1.0.4-tT3p3NsxAABo7Tjdl7ZgD6zu_-E9SuokqOzUNxaZ-TDC",
         },
         .meta = .{
             .url = "git+https://github.com/bcrist/zig-meta#00758f3af9dffa2c38ae7af1536119cf8990da8e",
