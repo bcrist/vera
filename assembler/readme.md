@@ -100,9 +100,9 @@ Examples:
 ```asm
 label:
 label2: // label and comment
-C R0 -> X2 // instruction and comment
+	val %2 // instruction and comment
 	// indentation is not significant:
-	PARK
+	park
 
 // Label with multi-line directive
 label3: .dw 1, 2, \
@@ -206,9 +206,9 @@ For cases where the initial contents of a memory location don't matter, it can b
 If no byte/half/word count is provided, it defaults to 1.
 
 # Stack Blocks
-The `.stack` directive creates new named block which can only contain data directives.  Addresses within the stack block always start at 0, and are considered relative to `SP`, not `IP`.  All labels within stack blocks are considered private, and have type `.s SP + constant`.
+The `.stack` directive creates new named block which can only contain data directives.  Addresses within the stack block always start at 0, and are considered relative to `%sp`, not `%ip`.  All labels within stack blocks are considered private, and have type `.s %sp + constant`.
 
-Unlike [data section blocks](#Data%20Sections)], stack blocks are never written to the output, so typically [Zero Data Directives](#Zero%20Data%20Directives) would be used rather than plain [Data Directives](#Data%20Directives).
+Unlike [data section blocks](#Data%20Sections), stack blocks are never written to the output, so typically [Zero Data Directives](#Zero%20Data%20Directives) would be used rather than plain [Data Directives](#Data%20Directives).
 
 ## Push Directives
 The name assigned to a stack block is part of a different namespace from both section names and symbols, and is file-local.  Elsewhere in the same file, a `.push` directive is used to add a stack block as a stack frame.  A `FRAME` instruction is synthesized which subtracts the size of the stack block from the current stack pointer.  All the private labels from the stack block then become available to the following lexical scope.
@@ -224,17 +224,13 @@ Control flow is not allowed to jump across `.push` or `.pop` directives.  The as
 When an instruction has both source and destination parameters, the sources appear first (on the left) and destinations after (on the right) and the comma separating them is replaced with an `->` operator.  In some cases the arrow operator can also appear before the first parameter or after the last parameter if the source or destination are implicit.  A very select few instructions use multiple arrows when the instruction involves multiple separate writes.
 
 ## Register literals
-* General Purpose Registers: `R0`-`R31`
-	* `R0` is the top of the register stack, `R31` is the bottom.
-* Special registers:
-	* `IP` - Instruction Pointer
-	* `RP` - Return Pointer
-	* `SP` - Stack Pointer
-	* `BP` - Base Pointer
-	* `KXP` - Kernel Context Pointer
-	* `UXP` - User Context Pointer
-	* `ASN` - Address Space Number
-	* `STAT` - Status Register
+* General Purpose Registers: `%0`-`%31`
+	* `%0` is the top of the register stack, `%31` is the bottom.
+	* Note that while the register stack contains 64 slots, register values deeper than 32 levels can't be directly read by hardware, therefore the offset is limited to the range of 0-31.
+* Special named registers:
+    * `%` followed by an identifier denotes a special register or instruction disambiguator, for example:
+		* `%ip` - Instruction Pointer
+		* `%sp` - Stack Pointer
 
 These literals are considered keywords and can never refer to a label or named expression.  [Symbol Directives](#Symbol%20Directives) must be used if it's necessary to use these names in those cases.
 
@@ -259,7 +255,7 @@ Integer literals are always considered unsigned values (they will be zero extend
 Strings can be though of as little-endian, base-256 integers.  As such, integers and strings can generally be used interchangeably as needed, except for [Symbol Directives](#Symbol%20Directives) which must use string literals.
 
 ## Current address literal
-`$` resolves to the address of the current line's label (or if there is none, the address it would have if it existed).  In code sections, it is equivalent to `.i IP`.  In data and stack sections, the `IP` register would normally not be used, but `$` can still be used to compute distances from the current line
+`$` resolves to the address of the current line's label (or if there is none, the address it would have if it existed).  In code sections, it is equivalent to `.i %ip`.  In data and stack sections, the `%ip` register would normally not be used, but `$` can still be used to compute distances from the current line
 
 ## Symbols
 Symbols are names which represent values defined elsewhere in the program.  
@@ -360,7 +356,7 @@ This unary prefix transforms an IP-relative address to an absolute address.  The
 @ expr
 ```
 
-There isn't a dedicated operator which represents the inverse operation (absolute to IP-relative address), but it can still be performed with the somewhat wordy form `IP + expr - .raw @$`.  This isn't typically needed since labels usually resolve to IP-relative addresses.
+There isn't a dedicated operator which represents the inverse operation (absolute to IP-relative address), but it can still be performed with the somewhat wordy form `%ip + expr - .raw @$`.  This isn't typically needed since labels usually resolve to IP-relative addresses.
 
 ## Address Space Casts
 These unary prefix operators add or remove the address space associated with an address.  The original expression must not already have an address space, except for `.raw`, which removes it.
@@ -397,30 +393,20 @@ Changes the signedness of a constant or GPR expression.
 ```
 expr .signed
 expr .unsigned
-expr .without_signedness
 ```
 
 Note that when used on a constant, it does not change the bit width, so it may change the value:
  * Negative values will become positive with `.unsigned`
  * Positive values without a 0 in the MSB will become negative with `.signed`
 
-`.without_signedness` has an effect on GPR expressions.  An instruction that takes an unspecified signedness register as a parameter will also accept either a signed or unsigned version, but an instruction that requires a signed or unsigned register parameter will not take a register expression with unspecified signedness.
-
 ## Index to GPR
 Converts a constant to a GPR expression:
 ```
-.rb index  // result is B0-B15
-.r index   // result is R0-R15
-.rx index  // result is X0-X15
+.reg 1   // result is %1
 ```
 
 ## Index from GPR
 Converts a GPR expression to an index:
 ```
-.idx reg // result is 0-15
+.idx %1 // result is integer constant 1
 ```
-
-## Arrow Operator
-When a parameter begins with `->` it signifies that the parameters on the left are inputs, while the parameters on the right are outputs.  This token can take the place of the comma that normally separates different parameters, but it can also appear before the first parameter, where a comma cannot.
-
-The arrow has no effect on the parameters, but it will affect what instruction encodings are considered valid for the instruction.  Some instruction encodings may require multiple arrows.
