@@ -218,7 +218,8 @@ Multiple stack blocks may be pushed, either using separate `.push` directives, o
 ## Pop Directives
 When a stack block is pushed within a chunk, there must be a `.pop` directive with that block's name before the end of the chunk.  Stack blocks must be popped in the reverse order that they were pushed, but multiple names can be specified to a single `.pop` directive, and the relative ordering of names within a `.pop` directive's parameters does not matter, as long as they can be rearranged to match the last pushed names.
 
-Control flow is not allowed to jump across `.push` or `.pop` directives.  The assembler will check for this on a best-effort basis.
+Control flow is not allowed to jump across `.push` or `.pop` directives.
+The assembler will check for this on a best-effort basis. (TODO verify this claim)
 
 # Expressions
 When an instruction has both source and destination parameters, the sources appear first (on the left) and destinations after (on the right) and the comma separating them is replaced with an `->` operator.  In some cases the arrow operator can also appear before the first parameter or after the last parameter if the source or destination are implicit.  A very select few instructions use multiple arrows when the instruction involves multiple separate writes.

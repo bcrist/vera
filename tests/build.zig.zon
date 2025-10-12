@@ -17,6 +17,9 @@
         .microsim = .{
             .path = "../microsim",
         },
+        .boards = .{
+            .path = "../boards",
+        },
         .bit_helper = .{
             .url = "git+https://github.com/bcrist/zig-bithelper#01fe5f519f54ab42c649096573c45ddaa351e1d5",
             .hash = "bit_helper-1.0.1-C8c75iguAABAXw3jPh9pvNp-RPvblh1vV7MbQ1w99fFF",
@@ -48,6 +51,14 @@
         .meta = .{
             .url = "git+https://github.com/bcrist/zig-meta#00758f3af9dffa2c38ae7af1536119cf8990da8e",
             .hash = "meta-0.0.1-ZzooiQALAAC0bhdWXxn2uec-vwtEBcUtHbpyj1hwjaDv",
+        },
+        .lc4k = .{
+            .url = "git+https://github.com/bcrist/zig-lc4k#3f8e9f4a66cf954f6537a061e4cccf36a330f5bd",
+            .hash = "lc4k-0.2.6-5R47QrOCEwBnc2Dzf2M9W8y6mg5nM2CNSiGwQSTx9GPv",
+        },
+        .zoink = .{
+            .url = "git+https://github.com/bcrist/zoink#05f756fad09f695c93e87719810f91bc7b11e6e9",
+            .hash = "zoink-0.0.1-mnf-NcbIDADVRCci7WfhOZUfw3ILMqgaXwTdbPrLfOTl",
         },
     },
 }

@@ -5,6 +5,9 @@ pub fn build(b: *std.Build) void {
     const arch = b.dependency("arch", .{}).module("arch");
     const assembler = b.dependency("assembler", .{}).module("assembler");
     const microsim = b.dependency("microsim", .{});
+    const boards = b.dependency("boards", .{});
+    const lc4k = b.dependency("lc4k", .{}).module("lc4k");
+    const zoink = b.dependency("zoink", .{}).module("zoink");
 
     all_tests = b.step("test", "run all tests");
 
@@ -74,6 +77,28 @@ pub fn build(b: *std.Build) void {
             .{ .name = "assembler", .module = assembler },
             .{ .name = "microsim", .module = microsim.module("microsim") },
             .{ .name = "Simulator_Data", .module = microsim.module("Simulator_Data") },
+        },
+    }));
+
+    add_test(b, "boards", b.createModule(.{
+        .root_source_file = b.path("src/boards.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "arch", .module = arch },
+            .{ .name = "boards", .module = boards.module("address_translator") },
+            .{ .name = "zoink", .module = zoink },
+        },
+    }));
+
+    add_test(b, "cpld", b.createModule(.{
+        .root_source_file = b.path("src/cpld.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "arch", .module = arch },
+            .{ .name = "cpld_popcount", .module = boards.module("cpld_popcount") },
+            .{ .name = "lc4k", .module = lc4k },
         },
     }));
 }

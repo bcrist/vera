@@ -687,11 +687,6 @@ pub fn config(self: *@This()) void {
             .end_at_mutable_point(self.input_box.right_side(""));
 
         _ = self.cx_k_xor.left_side("")
-            .wire_h(.{ .bits = @bitSizeOf(arch.bus.K) })
-            .bit_mark()
-            .label("K", .{})
-            .end_at_mutable_point(self.input_box.right_side(""));
-        _ = self.cx_k_xor.left_side("")
             .wire_h(.{ .class = "control" })
             .turn_at(mode_cols.push())
             .turn_and_end_at(self.cx_mode_joiner.right_side(""))
@@ -699,6 +694,11 @@ pub fn config(self: *@This()) void {
                 @bitOffsetOf(arch.compute.Mode.Count_Extend, "invert_k")
             }, .{})
             .label("", .{});
+        _ = self.cx_k_xor.left_side("")
+            .wire_h(.{ .bits = @bitSizeOf(arch.bus.K) })
+            .bit_mark()
+            .label("K", .{})
+            .end_at_mutable_point(self.input_box.right_side(""));
 
         const k_xor_wire = self.cx_k_xor.right_side("")
             .wire_h(.{ .bits = @bitSizeOf(arch.bus.K) })
