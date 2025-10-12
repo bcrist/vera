@@ -23,8 +23,19 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(exe);
-    b.getInstallStep().dependOn(&b.addRunArtifact(exe).step);
+    // b.installArtifact(exe);
+    const generate = b.addRunArtifact(exe);
+    const pipeline = generate.addOutputFileArg("pipeline.svg");
+    const decode = generate.addOutputFileArg("decode.svg");
+    const setup = generate.addOutputFileArg("setup.svg");
+    const compute = generate.addOutputFileArg("compute.svg");
+    const transact = generate.addOutputFileArg("transact.svg");
+
+    b.getInstallStep().dependOn(&b.addInstallFile(pipeline, "pipeline.svg").step);
+    b.getInstallStep().dependOn(&b.addInstallFile(decode, "decode.svg").step);
+    b.getInstallStep().dependOn(&b.addInstallFile(setup, "setup.svg").step);
+    b.getInstallStep().dependOn(&b.addInstallFile(compute, "compute.svg").step);
+    b.getInstallStep().dependOn(&b.addInstallFile(transact, "transact.svg").step);
 }
 
 const std = @import("std");

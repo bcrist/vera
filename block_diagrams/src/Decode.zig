@@ -19,12 +19,7 @@ pub fn init(d: *Drawing, input_box: *Box, output_box: *Box) @This() {
         .d = d,
         .input_box = input_box,
         .output_box = output_box,
-        .v_extents = .{
-            .input_min = d.some_y(),
-            .input_max = d.some_y(),
-            .output_min = d.some_y(),
-            .output_max = d.some_y(),
-        },
+        .v_extents = .init(d),
 
         .microcode = d.box(.{ .label = "\u{B5}code" }),
         .sequencer = d.box(.{ .label = "Sequencer" }),
@@ -355,11 +350,11 @@ pub fn config(self: *@This()) void {
     // v_extents
     ///////////////////////////////////////////////////////////////////
 
-    _ = self.v_extents.input_min.attach_to(ti_wire.y());
-    _ = self.v_extents.input_max.attach_to(last_fault_wire.y());
+    _ = self.v_extents.input.min.attach_to(ti_wire.y());
+    _ = self.v_extents.input.max.attach_to(last_fault_wire.y());
 
-    _ = self.v_extents.output_min.attach_to(wi_overflow_wire.y());
-    _ = self.v_extents.output_max.attach_to(seq_exec_mode_wire.y());
+    _ = self.v_extents.output.min.attach_to(wi_overflow_wire.y());
+    _ = self.v_extents.output.max.attach_to(seq_exec_mode_wire.y());
 }
 
 const X_Ref = zbox.X_Ref;
