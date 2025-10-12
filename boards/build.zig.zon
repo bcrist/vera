@@ -20,8 +20,8 @@
             .hash = "zoink-0.0.1-mnf-NcbIDADVRCci7WfhOZUfw3ILMqgaXwTdbPrLfOTl",
         },
         .lc4k = .{
-            .url = "git+https://github.com/bcrist/zig-lc4k#3f8e9f4a66cf954f6537a061e4cccf36a330f5bd",
-            .hash = "lc4k-0.2.6-5R47QrOCEwBnc2Dzf2M9W8y6mg5nM2CNSiGwQSTx9GPv",
+            .url = "git+https://github.com/bcrist/zig-lc4k#bba8a1ece0acbb9e03bf315b63631371bab005e6",
+            .hash = "lc4k-0.2.9-5R47QhWFEwBiuU4ZGpVQVr7d5g89QGBw02OIKtRMSZDS",
         },
     },
 }
